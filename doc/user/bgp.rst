@@ -3569,17 +3569,20 @@ For more information, see ``man 7 arp``.
 Enabling EVPN
 ^^^^^^^^^^^^^
 
-EVPN should be enabled on the BGP instance corresponding to the VRF acting as
-the underlay for the VXLAN tunneling. In most circumstances this will be the
-default VRF. The command to enable EVPN for a BGP instance is
-``advertise-all-vni`` which lives under ``address-family l2vpn evpn``:
+.. clicmd:: advertise-all-vni
 
-.. code-block:: frr
+   This command defines the VRF to be used as the underlay for EVPN-VXLAN and enables EVPN. In most
+   cases, this will be the default VRF. It is mandatory for EVPN-VXLAN to work.
 
-   router bgp 65001
-    !
-    address-family l2vpn evpn
-     advertise-all-vni
+   This command can only be configured in a single VRF. Any attempt to configure it in multiple VRFs
+   will be rejected (e.g. ``% Please unconfigure EVPN in VRF default``)
+
+   .. code-block:: frr
+
+      router bgp 65001
+       !
+       address-family l2vpn evpn
+        advertise-all-vni
 
 A more comprehensive configuration example can be found in the :ref:`evpn` page.
 
