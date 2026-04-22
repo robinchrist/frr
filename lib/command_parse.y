@@ -86,6 +86,7 @@
 %token <string> IPV4_PREFIX
 %token <string> IPV6
 %token <string> IPV6_PREFIX
+%token <string> IPV6_ZONEID
 %token <string> VARIABLE
 %token <string> RANGE
 %token <string> MAC
@@ -253,6 +254,11 @@ placeholder_token_real:
 | IPV6_PREFIX
 {
   $$ = new_token_node (ctx, IPV6_PREFIX_TKN, $1, doc_next(ctx));
+  XFREE (MTYPE_LEX, $1);
+}
+| IPV6_ZONEID
+{
+  $$ = new_token_node (ctx, IPV6_ZONEID_TKN, $1, doc_next(ctx));
   XFREE (MTYPE_LEX, $1);
 }
 | VARIABLE

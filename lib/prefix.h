@@ -498,6 +498,7 @@ static inline int ipv6_martian(const struct in6_addr *addr)
 
 	return 0;
 }
+extern bool inet6_pton_zoneid(const char *input, struct in6_addr *out, char zoneid[IFNAMSIZ]);
 
 extern int macstr2prefix_evpn(const char *str, struct prefix_evpn *p);
 

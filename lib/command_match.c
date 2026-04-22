@@ -55,7 +55,7 @@ static enum match_type match_ipv4(const char *);
 
 static enum match_type match_ipv4_prefix(const char *);
 
-static enum match_type match_ipv6_prefix(const char *, bool);
+static enum match_type match_ipv6_prefix(const char *, bool, bool);
 
 static enum match_type match_range(struct cmd_token *, const char *);
 
@@ -535,6 +535,7 @@ static enum match_type min_match_level(enum cmd_token_type type)
 	case IPV4_PREFIX_TKN:
 	case IPV6_TKN:
 	case IPV6_PREFIX_TKN:
+	case IPV6_ZONEID_TKN:
 	case MAC_TKN:
 	case MAC_PREFIX_TKN:
 	case FORK_TKN:
@@ -565,6 +566,7 @@ static int score_precedence(enum cmd_token_type type)
 	case IPV4_PREFIX_TKN:
 	case IPV6_TKN:
 	case IPV6_PREFIX_TKN:
+	case IPV6_ZONEID_TKN:
 	case MAC_TKN:
 	case MAC_PREFIX_TKN:
 	case RANGE_TKN:
@@ -692,9 +694,11 @@ static enum match_type match_token(struct cmd_token *token, char *input_token)
 	case IPV4_PREFIX_TKN:
 		return match_ipv4_prefix(input_token);
 	case IPV6_TKN:
-		return match_ipv6_prefix(input_token, false);
+		return match_ipv6_prefix(input_token, false, false);
 	case IPV6_PREFIX_TKN:
-		return match_ipv6_prefix(input_token, true);
+		return match_ipv6_prefix(input_token, true, false);
+	case IPV6_ZONEID_TKN:
+		return match_ipv6_prefix(input_token, false, true);
 	case RANGE_TKN:
 		return match_range(token, input_token);
 	case VARIABLE_TKN:
@@ -858,22 +862,51 @@ static enum match_type match_ipv4_prefix(const char *str)
 #define STATE_SLASH     6
 #define STATE_MASK      7
 
-static enum match_type match_ipv6_prefix(const char *str, bool prefix)
+/* Try to match an IPv6 address or prefix, optionally with zone id
+ * accepted formats depend on the parameters
+ * 
+ * if prefix is true, str must be an ipv6 prefix (e.g. 2001:DB8::/32)
+ * note that prefix together with zoneid might not give sensible results
+ * 
+ * if zoneid is true, str must be a link local(!) ipv6 address with zone id
+ * (e.g. fe80::1%eth0) or multicast address with zone id (e.g. ff00::1%eth0)
+ * note that zoneid together with prefix might not give sensible results
+ *
+ * note that in prefix mode, invalid addresses might slip through!
+ */
+static enum match_type match_ipv6_prefix(const char *str, bool prefix, bool zoneid)
 {
 	int state = STATE_START;
 	int colons = 0, nums = 0, double_colon = 0;
 	int mask;
 	const char *sp = NULL, *start = str;
+	size_t spanlen;
 	char *endptr = NULL;
 
 	if (str == NULL)
 		return partly_match;
 
-	if (strspn(str, prefix ? IPV6_PREFIX_STR : IPV6_ADDR_STR)
-	    != strlen(str))
+	spanlen = strspn(str, prefix ? IPV6_PREFIX_STR : IPV6_ADDR_STR);
+	if (spanlen != strlen(str)) {
+		/* We haven't matched the entire string - but that might be fine
+		 * For the sake of simplicity, matching ipv6 addresses with zone ids
+		 * (<ipv6addr>%<zone_id>) re-uses the normal ipv6 allowed characters
+		 * So check whether we should match zone ids, and check whether this
+		 * string *could* make up an address with zone id (denoted by the "%" 
+		 * after the address
+		 * otherwise, err out as no match
+		 */
+		if (!zoneid || str[spanlen] != '%')
+			return no_match;
+	}
+	/* In zoneid mode, we only accept link-local (fe80..) or multicast
+     * (ff..) addresses for now
+     */
+	if (zoneid && strncasecmp(start, "fe80:", MIN(strlen(start), 5))
+	    && strncasecmp(start, "ff", MIN(strlen(start), 2)))
 		return no_match;
 
-	while (*str != '\0' && state != STATE_MASK) {
+	while (*str != '\0' && *str != '%' && state != STATE_MASK) {
 		switch (state) {
 		case STATE_START:
 			if (*str == ':') {
@@ -963,12 +996,31 @@ static enum match_type match_ipv6_prefix(const char *str, bool prefix)
 		str++;
 	}
 
-	if (!prefix) {
+	if (zoneid) {
+		char until_percent[spanlen + 1];
+		struct sockaddr_in6 sin6_dummy;
+		int ret;
+
+		memcpy(until_percent, start, spanlen);
+		until_percent[spanlen] = '\0';
+		ret = inet_pton(AF_INET6, until_percent, &sin6_dummy.sin6_addr);
+
+		if (ret == 0)
+			return start[spanlen] ? no_match : partly_match;
+		if (!start[spanlen] || !start[spanlen + 1])
+			return partly_match;
+
+		/* check zone ID validity? NB: zone ID (usually interface) may not exist */
+		return exact_match;
+	} else if (!prefix) {
 		struct sockaddr_in6 sin6_dummy;
 		int ret = inet_pton(AF_INET6, start, &sin6_dummy.sin6_addr);
 		return ret == 1 ? exact_match : partly_match;
 	}
 
+	/* TODO: if !prefix, the address part is not validated by inet_pton,
+     * so invalid addresses might slip through?
+     */
 	if (state < STATE_MASK)
 		return partly_match;
 
