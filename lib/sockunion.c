@@ -33,6 +33,45 @@ const char *inet_sutop(const union sockunion *su, char *str)
 	return str;
 }
 
+ /* Extended version of str2sockunion that additionally supports IPv6 addresses
+  * with zoneid (usually interface name) in the format <ipv6addr>%<zoneid>
+  * For supported address format, see str2sockunion() and inet_pton(3).
+  * output is placed in su and zoneid, returns 0 on success, -1 on failure.
+  */
+int str2sockunion_zoneid(const char *str, union sockunion *su, char zoneid[IFNAMSIZ])
+{
+	const char *percent;
+	size_t zidlen, addrlen;
+
+	zoneid[0] = '\0';
+	percent = strchr(str, '%');
+	if (!percent)
+		return str2sockunion(str, su);
+
+	if (!strchr(str, ':'))
+		return -1;
+
+	addrlen = percent - str;
+
+	char addr[addrlen + 1];
+	memcpy(addr, str, addrlen);
+	addr[addrlen] = '\0';
+
+	percent++;
+	zidlen = strlen(percent);
+	if (!*percent || zidlen >= IFNAMSIZ)
+		return -1;
+
+	memcpy(zoneid, percent, zidlen);
+	zoneid[zidlen] = '\0';
+
+	return str2sockunion(addr, su);
+}
+
+ /* Converts a string representing an IPv4 address or IPv6 address to a sockunion
+  * For supported address format, see inet_pton(3).
+  * output is placed in su, returns 0 on success, -1 on failure.
+  */
 int str2sockunion(const char *str, union sockunion *su)
 {
 	int ret;
