@@ -509,6 +509,18 @@ static void bgp_accept(struct event *event)
 	/* Check remote IP address */
 	peer = peer_lookup(bgp, &su);
 
+	if (!peer && su.sa.sa_family == AF_INET6) {
+		/* IPv6 (Link Local) peer may be configured with or without zone id in address;
+		 * this results in differing hash entries
+		 * Linux only supports interface name as zone id, so we only use that for now
+		 */
+		struct interface *ifp;
+
+		ifp = if_lookup_by_index(su.sin6.sin6_scope_id, bgp->vrf_id);
+		if (ifp)
+			peer = peer_lookup_with_zoneid(bgp, &su, ifp->name);
+	}
+
 	if (!peer) {
 		struct peer *dynamic_peer = peer_lookup_dynamic_neighbor(bgp, &su);
 
