@@ -2195,6 +2195,9 @@ void bgp_recalculate_all_bestpaths(struct bgp *bgp)
  * the original peer's su and conf_if, so that we can appropriately
  * track the bgp->peerhash( ie we don't want to remove the current
  * one from the config ).
+ *
+ * Note that conf_if denotes an interface neighbor for auto discovery
+ * IPv6 addresses with zone IDs (that usually are interfaces) are totally independent!
  */
 struct peer *peer_create(union sockunion *su, const char *conf_if, struct bgp *bgp, as_t local_as,
 			 as_t remote_as, enum peer_asn_type as_type, struct peer_group *group,
@@ -2207,7 +2210,7 @@ struct peer *peer_create(union sockunion *su, const char *conf_if, struct bgp *b
 	safi_t safi;
 
 	peer = peer_new(bgp, su, dir);
-	if (conf_if) {
+	if (conf_if && !su) {
 		peer->conf_if = XSTRDUP(MTYPE_PEER_CONF_IF, conf_if);
 		if (!su)
 			bgp_peer_conf_if_to_su_update(peer->connection);
@@ -2404,16 +2407,16 @@ void peer_as_change(struct peer *peer, as_t as, enum peer_asn_type as_type,
 
 /* If peer does not exist, create new one.  If peer already exists,
    set AS number to the peer.  */
-int peer_remote_as(struct bgp *bgp, union sockunion *su, const char *conf_if,
-		   as_t *as, enum peer_asn_type as_type, const char *as_str)
+static int peer_remote_as_common(struct bgp *bgp, union sockunion *su, const char *conf_if,
+		   const char *zoneid, as_t *as, enum peer_asn_type as_type, const char *as_str)
 {
 	struct peer *peer;
 	as_t local_as;
 
-	if (conf_if)
+	if (conf_if && !su)
 		peer = peer_lookup_by_conf_if(bgp, conf_if);
 	else
-		peer = peer_lookup(bgp, su);
+		peer = peer_lookup_with_zoneid(bgp, su, zoneid);
 
 	if (peer) {
 		/* Not allowed for a dynamic peer. */
@@ -2434,7 +2437,7 @@ int peer_remote_as(struct bgp *bgp, union sockunion *su, const char *conf_if,
 		 */
 		SET_FLAG(peer->flags_override, PEER_FLAG_REMOTE_AS);
 	} else {
-		if (conf_if)
+		if (conf_if && !su)
 			return BGP_ERR_NO_INTERFACE_CONFIG;
 
 		/* If the peer is not part of our confederation, and its not an
@@ -2451,6 +2454,18 @@ int peer_remote_as(struct bgp *bgp, union sockunion *su, const char *conf_if,
 	}
 
 	return 0;
+}
+
+int peer_remote_as_conf_if(struct bgp *bgp, union sockunion *su, const char *conf_if,
+		   as_t *as, enum peer_asn_type as_type, const char *as_str)
+{
+	return peer_remote_as_common(bgp, su, conf_if, NULL, as, as_type, as_str);
+}
+
+int peer_remote_as_zoneid(struct bgp *bgp, union sockunion *su, const char *zone_id,
+		   as_t *as, enum peer_asn_type as_type, const char *as_str)
+{
+	return peer_remote_as_common(bgp, su, NULL, zone_id, as, as_type, as_str);
 }
 
 const char *bgp_get_name_by_role(uint8_t role)
@@ -3581,8 +3596,8 @@ int peer_group_listen_range_del(struct peer_group *group, struct prefix *range)
 }
 
 /* Bind specified peer to peer group.  */
-int peer_group_bind(struct bgp *bgp, union sockunion *su, struct peer *peer,
-		    struct peer_group *group, as_t *as)
+int peer_group_bind(struct bgp *bgp, union sockunion *su, char zoneid[IFNAMSIZ],
+		    struct peer *peer, struct peer_group *group, as_t *as)
 {
 	int first_member = 0;
 	afi_t afi;
@@ -3591,7 +3606,7 @@ int peer_group_bind(struct bgp *bgp, union sockunion *su, struct peer *peer,
 
 	/* Lookup the peer.  */
 	if (!peer)
-		peer = peer_lookup(bgp, su);
+		peer = peer_lookup_with_zoneid(bgp, su, zoneid);
 
 	/* The peer exist, bind it to the peer-group */
 	if (peer) {
@@ -3687,7 +3702,7 @@ int peer_group_bind(struct bgp *bgp, union sockunion *su, struct peer *peer,
 			return BGP_ERR_PEER_GROUP_NO_REMOTE_AS;
 		}
 
-		peer = peer_create(su, NULL, bgp, bgp->as, group->conf->as, group->conf->as_type,
+		peer = peer_create(su, zoneid, bgp, bgp->as, group->conf->as, group->conf->as_type,
 				   group, true, NULL, CONNECTION_OUTGOING);
 
 		peer = peer_lock(peer); /* group->peer list reference */
@@ -4907,7 +4922,14 @@ struct peer *peer_lookup_by_hostname(struct bgp *bgp, const char *hostname)
 	return NULL;
 }
 
+/* Alias for peer_lookup_with_zoneid(bgp, su, NULL) */
 struct peer *peer_lookup(struct bgp *bgp, union sockunion *su)
+{
+	return peer_lookup_with_zoneid(bgp, su, NULL);
+}
+
+/* New variant of peer_lookup that additionally handles IPv6 addresses with Zone ID */
+struct peer *peer_lookup_with_zoneid(struct bgp *bgp, union sockunion *su, const char *zoneid)
 {
 	struct peer tmp_peer;
 	struct peer_connection connection;
@@ -9561,9 +9583,10 @@ struct peer *peer_lookup_in_view(struct vty *vty, struct bgp *bgp,
 	struct peer *peer;
 	union sockunion su;
 	struct peer_group *group;
+	char zoneid[IFNAMSIZ];
 
 	/* Get peer sockunion. */
-	ret = str2sockunion(ip_str, &su);
+	ret = str2sockunion_zoneid(ip_str, &su, zoneid);
 	if (ret < 0) {
 		peer = peer_lookup_by_conf_if(bgp, ip_str);
 		if (!peer) {
@@ -9595,7 +9618,7 @@ struct peer *peer_lookup_in_view(struct vty *vty, struct bgp *bgp,
 	}
 
 	/* Peer structure lookup. */
-	peer = peer_lookup(bgp, &su);
+	peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 	if (!peer) {
 		if (use_json) {
 			json_object *json_no = NULL;

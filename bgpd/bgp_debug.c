@@ -199,22 +199,25 @@ static struct peer *bgp_find_peer(struct vty *vty, const char *peer_str)
 	int ret;
 	union sockunion su;
 	struct peer *peer;
+	char zoneid[IFNAMSIZ];
 
 	if (!bgp) {
 		return NULL;
 	}
-	ret = str2sockunion(peer_str, &su);
+	ret = str2sockunion_zoneid(peer_str, &su, zoneid);
 
-	/* 'swpX' string */
-	if (ret < 0) {
-		peer = peer_lookup_by_conf_if(bgp, peer_str);
+	if(ret == 0)
+		return peer_lookup_with_zoneid(bgp, &su, zoneid);
 
-		if (!peer)
-			peer = peer_lookup_by_hostname(bgp, peer_str);
+	/* peer is not an ip address, assume it's an interface name for neighbor
+	 * auto discovery, or a hostname
+	 */
+	peer = peer_lookup_by_conf_if(bgp, peer_str);
 
-		return peer;
-	} else
-		return peer_lookup(bgp, &su);
+	if (!peer)
+		peer = peer_lookup_by_hostname(bgp, peer_str);
+
+	return peer;
 }
 
 static void bgp_debug_list_free(struct list **list)
@@ -835,12 +838,13 @@ DEFPY(debug_bgp_neighbor_events_detail,
 
 DEFUN (debug_bgp_neighbor_events_peer,
        debug_bgp_neighbor_events_peer_cmd,
-       "debug bgp neighbor-events <A.B.C.D|X:X::X:X|WORD>",
+       "debug bgp neighbor-events <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>",
        DEBUG_STR
        BGP_STR
        "BGP Neighbor Events\n"
        "BGP neighbor IP address to debug\n"
        "BGP IPv6 neighbor to debug\n"
+       "BGP IPv6 neighbor with zone id (usually interface) to debug\n"
        "BGP neighbor on interface to debug\n")
 {
 	int idx_peer = 3;
@@ -893,13 +897,14 @@ DEFUN (no_debug_bgp_neighbor_events,
 
 DEFUN (no_debug_bgp_neighbor_events_peer,
        no_debug_bgp_neighbor_events_peer_cmd,
-       "no debug bgp neighbor-events <A.B.C.D|X:X::X:X|WORD>",
+       "no debug bgp neighbor-events <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>",
        NO_STR
        DEBUG_STR
        BGP_STR
        "Neighbor Events\n"
        "BGP neighbor IP address to debug\n"
        "BGP IPv6 neighbor to debug\n"
+       "BGP IPv6 neighbor zone id (usually interface) to debug\n"
        "BGP neighbor on interface to debug\n")
 {
 	int idx_peer = 4;

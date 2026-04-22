@@ -937,13 +937,14 @@ static struct peer *peer_lookup_vty(struct vty *vty, const char *ip_str)
 	int ret;
 	union sockunion su;
 	struct peer *peer;
+	char zoneid[IFNAMSIZ];
 
 	if (!bgp) {
 		return NULL;
 	}
 
-	ret = str2sockunion(ip_str, &su);
-	if (ret < 0) {
+	ret = str2sockunion_zoneid(ip_str, &su, zoneid);
+	if (ret < 0) { /* Interface name or host name */
 		peer = peer_lookup_by_conf_if(bgp, ip_str);
 		if (!peer) {
 			if ((peer = peer_lookup_by_hostname(bgp, ip_str))
@@ -955,7 +956,7 @@ static struct peer *peer_lookup_vty(struct vty *vty, const char *ip_str)
 			}
 		}
 	} else {
-		peer = peer_lookup(bgp, &su);
+		peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 		if (!peer) {
 			vty_out(vty,
 				"%% Specify remote-as or peer-group commands first\n");
@@ -981,15 +982,16 @@ struct peer *peer_and_group_lookup_vty(struct vty *vty, const char *peer_str)
 	union sockunion su;
 	struct peer *peer = NULL;
 	struct peer_group *group = NULL;
+	char zoneid[IFNAMSIZ];
 
 	if (!bgp) {
 		return NULL;
 	}
 
-	ret = str2sockunion(peer_str, &su);
+	ret = str2sockunion_zoneid(peer_str, &su, zoneid);
 	if (ret == 0) {
 		/* IP address, locate peer. */
-		peer = peer_lookup(bgp, &su);
+		peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 	} else {
 		/* Not IP, could match either peer configured on interface or a
 		 * group. */
@@ -1302,9 +1304,10 @@ static int bgp_clear(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 	/* Clear specified neighbor. */
 	if (sort == clear_peer) {
 		union sockunion su;
+		char zoneid[IFNAMSIZ];
 
 		/* Make sockunion for lookup. */
-		ret = str2sockunion(arg, &su);
+		ret = str2sockunion_zoneid(arg, &su, zoneid);
 		if (ret < 0) {
 			peer = peer_lookup_by_conf_if(bgp, arg);
 			if (!peer) {
@@ -1317,7 +1320,7 @@ static int bgp_clear(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 				}
 			}
 		} else {
-			peer = peer_lookup(bgp, &su);
+			peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 			if (!peer) {
 				vty_out(vty,
 					"%% BGP: Unknown neighbor - \"%s\"\n",
@@ -3892,7 +3895,7 @@ DEFUN (no_bgp_graceful_restart_disable,
 
 DEFUN (bgp_neighbor_graceful_restart_set,
 	bgp_neighbor_graceful_restart_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
 	GR_NEIGHBOR_CMD
@@ -3921,7 +3924,7 @@ DEFUN (bgp_neighbor_graceful_restart_set,
 
 DEFUN (no_bgp_neighbor_graceful_restart,
 	no_bgp_neighbor_graceful_restart_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
@@ -3951,7 +3954,7 @@ DEFUN (no_bgp_neighbor_graceful_restart,
 
 DEFUN (bgp_neighbor_graceful_restart_helper_set,
 	bgp_neighbor_graceful_restart_helper_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-helper",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart-helper",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
 	GR_NEIGHBOR_HELPER_CMD
@@ -3980,7 +3983,7 @@ DEFUN (bgp_neighbor_graceful_restart_helper_set,
 
 DEFUN (no_bgp_neighbor_graceful_restart_helper,
 	no_bgp_neighbor_graceful_restart_helper_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-helper",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart-helper",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
@@ -4010,7 +4013,7 @@ DEFUN (no_bgp_neighbor_graceful_restart_helper,
 
 DEFUN (bgp_neighbor_graceful_restart_disable_set,
 	bgp_neighbor_graceful_restart_disable_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-disable",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart-disable",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
 	GR_NEIGHBOR_DISABLE_CMD
@@ -4040,7 +4043,7 @@ DEFUN (bgp_neighbor_graceful_restart_disable_set,
 
 DEFUN (no_bgp_neighbor_graceful_restart_disable,
 	no_bgp_neighbor_graceful_restart_disable_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-disable",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> graceful-restart-disable",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
@@ -4110,7 +4113,7 @@ static int bgp_peer_soft_reset(struct vty *vty, const char *peer_str, struct pee
 
 DEFPY (neighbor_graceful_shutdown,
        neighbor_graceful_shutdown_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor_str graceful-shutdown",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor_str graceful-shutdown",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -5343,6 +5346,7 @@ static int peer_remote_as_vty(struct vty *vty, const char *peer_str,
 	as_t as = 0;
 	enum peer_asn_type as_type = AS_SPECIFIED;
 	union sockunion su;
+	char zoneid[IFNAMSIZ];
 
 	if (as_str[0] == 'i') {
 		as = 0;
@@ -5361,14 +5365,14 @@ static int peer_remote_as_vty(struct vty *vty, const char *peer_str,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 	/* If peer is peer group or interface peer, call proper function. */
-	ret = str2sockunion(peer_str, &su);
+	ret = str2sockunion_zoneid(peer_str, &su, zoneid);
 	if (ret < 0) {
 		struct peer *peer;
 
 		/* Check if existing interface peer */
 		peer = peer_lookup_by_conf_if(bgp, peer_str);
 
-		ret = peer_remote_as(bgp, NULL, peer_str, &as, as_type, as_str);
+		ret = peer_remote_as_conf_if(bgp, NULL, peer_str, &as, as_type, as_str);
 
 		/* if not interface peer, check peer-group settings */
 		if (ret < 0 && !peer) {
@@ -5392,7 +5396,7 @@ static int peer_remote_as_vty(struct vty *vty, const char *peer_str,
 
 		/* if need start listening */
 		bgp_need_listening(bgp, vty);
-		ret = peer_remote_as(bgp, &su, NULL, &as, as_type, as_str);
+		ret = peer_remote_as_zoneid(bgp, &su, zoneid, &as, as_type, as_str);
 	}
 
 	return bgp_vty_return(vty, ret);
@@ -5463,7 +5467,7 @@ ALIAS(no_bgp_shutdown, no_bgp_shutdown_msg_cmd,
 
 DEFUN (neighbor_remote_as,
        neighbor_remote_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remote-as <ASNUM|internal|external|auto>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remote-as <ASNUM|internal|external|auto>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Specify a BGP neighbor\n"
@@ -5575,7 +5579,7 @@ static int peer_conf_interface_get(struct vty *vty, const char *conf_if,
 	peer = peer_lookup_by_conf_if(bgp, conf_if);
 	if (peer) {
 		if (as_str)
-			ret = peer_remote_as(bgp, NULL, conf_if, &as, as_type,
+			ret = peer_remote_as_conf_if(bgp, NULL, conf_if, &as, as_type,
 					     as_str);
 	} else {
 		peer = peer_create(NULL, conf_if, bgp, bgp->as, as, as_type, NULL, true, as_str,
@@ -5628,7 +5632,7 @@ static int peer_conf_interface_get(struct vty *vty, const char *conf_if,
 			return CMD_WARNING_CONFIG_FAILED;
 		}
 
-		ret = peer_group_bind(bgp, NULL, peer, group, &as);
+		ret = peer_group_bind(bgp, NULL, NULL, peer, group, &as);
 	}
 
 	/* if need start listening */
@@ -5746,7 +5750,7 @@ DEFUN (neighbor_peer_group,
 
 DEFUN (no_neighbor,
        no_neighbor_cmd,
-       "no neighbor <WORD|<A.B.C.D|X:X::X:X> [remote-as <ASNUM|internal|external|auto>]>",
+       "no neighbor <WORD|<A.B.C.D|X:X::X:X|X:X::X:X%ZI> [remote-as <ASNUM|internal|external|auto>]>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -5765,8 +5769,9 @@ DEFUN (no_neighbor,
 	struct peer *other;
 	afi_t afi;
 	int lr_count;
+	char zoneid[IFNAMSIZ];
 
-	ret = str2sockunion(argv[idx_peer]->arg, &su);
+	ret = str2sockunion_zoneid(argv[idx_peer]->arg, &su, zoneid);
 	if (ret < 0) {
 		/* look up for neighbor by interface name config. */
 		peer = peer_lookup_by_conf_if(bgp, argv[idx_peer]->arg);
@@ -5798,7 +5803,7 @@ DEFUN (no_neighbor,
 			return CMD_WARNING_CONFIG_FAILED;
 		}
 	} else {
-		peer = peer_lookup(bgp, &su);
+		peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 		if (peer) {
 			if (peer_dynamic_neighbor(peer)) {
 				vty_out(vty,
@@ -5936,7 +5941,7 @@ DEFUN (no_neighbor_interface_peer_group_remote_as,
 
 DEFUN (neighbor_local_as,
        neighbor_local_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> local-as ASNUM",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Specify a local-as number\n"
@@ -5964,7 +5969,7 @@ DEFUN (neighbor_local_as,
 
 DEFUN (neighbor_local_as_no_prepend,
        neighbor_local_as_no_prepend_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM no-prepend",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> local-as ASNUM no-prepend",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Specify a local-as number\n"
@@ -5993,7 +5998,7 @@ DEFUN (neighbor_local_as_no_prepend,
 
 DEFPY (neighbor_local_as_no_prepend_replace_as,
        neighbor_local_as_no_prepend_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM no-prepend replace-as [dual-as$dual_as]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> local-as ASNUM no-prepend replace-as [dual-as$dual_as]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Specify a local-as number\n"
@@ -6024,7 +6029,7 @@ DEFPY (neighbor_local_as_no_prepend_replace_as,
 
 DEFUN (no_neighbor_local_as,
        no_neighbor_local_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> local-as [ASNUM [no-prepend [replace-as] [dual-as]]]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> local-as [ASNUM [no-prepend [replace-as] [dual-as]]]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6049,7 +6054,7 @@ DEFUN (no_neighbor_local_as,
 
 DEFUN (neighbor_solo,
        neighbor_solo_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> solo",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> solo",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Solo peer - part of its own update group\n")
@@ -6068,7 +6073,7 @@ DEFUN (neighbor_solo,
 
 DEFUN (no_neighbor_solo,
        no_neighbor_solo_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> solo",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> solo",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6088,7 +6093,7 @@ DEFUN (no_neighbor_solo,
 
 DEFUN (neighbor_password,
        neighbor_password_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> password LINE",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> password LINE",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Set a password\n"
@@ -6109,7 +6114,7 @@ DEFUN (neighbor_password,
 
 DEFUN (no_neighbor_password,
        no_neighbor_password_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> password [LINE]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> password [LINE]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6130,7 +6135,7 @@ DEFUN (no_neighbor_password,
 
 DEFUN (neighbor_activate,
        neighbor_activate_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> activate",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> activate",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Enable the Address Family for this Neighbor\n")
@@ -6148,13 +6153,13 @@ DEFUN (neighbor_activate,
 }
 
 ALIAS_HIDDEN(neighbor_activate, neighbor_activate_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> activate",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> activate",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Enable the Address Family for this Neighbor\n")
 
 DEFUN (no_neighbor_activate,
        no_neighbor_activate_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> activate",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> activate",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6174,13 +6179,13 @@ DEFUN (no_neighbor_activate,
 }
 
 ALIAS_HIDDEN(no_neighbor_activate, no_neighbor_activate_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> activate",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> activate",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Enable the Address Family for this Neighbor\n")
 
 DEFUN (neighbor_set_peer_group,
        neighbor_set_peer_group_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> peer-group PGNAME",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Member of the peer-group\n"
@@ -6194,8 +6199,9 @@ DEFUN (neighbor_set_peer_group,
 	union sockunion su;
 	struct peer *peer;
 	struct peer_group *group;
+	char zoneid[IFNAMSIZ];
 
-	ret = str2sockunion(argv[idx_peer]->arg, &su);
+	ret = str2sockunion_zoneid(argv[idx_peer]->arg, &su, zoneid);
 	if (ret < 0) {
 		peer = peer_lookup_by_conf_if(bgp, argv[idx_peer]->arg);
 		if (!peer) {
@@ -6211,7 +6217,7 @@ DEFUN (neighbor_set_peer_group,
 		}
 
 		/* Disallow for dynamic neighbor. */
-		peer = peer_lookup(bgp, &su);
+		peer = peer_lookup_with_zoneid(bgp, &su, zoneid);
 		if (peer && peer_dynamic_neighbor(peer)) {
 			vty_out(vty,
 				"%% Operation not allowed on a dynamic neighbor\n");
@@ -6225,20 +6231,20 @@ DEFUN (neighbor_set_peer_group,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	ret = peer_group_bind(bgp, &su, peer, group, &as);
+	ret = peer_group_bind(bgp, &su, zoneid, peer, group, &as);
 
 	return bgp_vty_return(vty, ret);
 }
 
 ALIAS_HIDDEN(neighbor_set_peer_group, neighbor_set_peer_group_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> peer-group PGNAME",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Member of the peer-group\n"
 	     "Peer-group name\n")
 
 DEFUN (no_neighbor_set_peer_group,
        no_neighbor_set_peer_group_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> peer-group PGNAME",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6277,7 +6283,7 @@ DEFUN (no_neighbor_set_peer_group,
 }
 
 ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> peer-group PGNAME",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Member of the peer-group\n"
 	     "Peer-group name\n")
@@ -6285,7 +6291,7 @@ ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
 /* neighbor passive. */
 DEFUN (neighbor_passive,
        neighbor_passive_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> passive",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> passive",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Don't send open messages to this neighbor\n")
@@ -6296,7 +6302,7 @@ DEFUN (neighbor_passive,
 
 DEFUN (no_neighbor_passive,
        no_neighbor_passive_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> passive",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> passive",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6309,7 +6315,7 @@ DEFUN (no_neighbor_passive,
 /* neighbor shutdown. */
 DEFUN (neighbor_shutdown_msg,
        neighbor_shutdown_msg_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown message MSG...",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown message MSG...",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Administratively shut down this neighbor\n"
@@ -6334,13 +6340,13 @@ DEFUN (neighbor_shutdown_msg,
 }
 
 ALIAS(neighbor_shutdown_msg, neighbor_shutdown_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown",
       NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n")
 
 DEFUN (no_neighbor_shutdown_msg,
        no_neighbor_shutdown_msg_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown message MSG...",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown message MSG...",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6355,13 +6361,13 @@ DEFUN (no_neighbor_shutdown_msg,
 }
 
 ALIAS(no_neighbor_shutdown_msg, no_neighbor_shutdown_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown",
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n")
 
 DEFUN(neighbor_shutdown_rtt,
       neighbor_shutdown_rtt_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown rtt (1-65535) [count (1-255)]",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown rtt (1-65535) [count (1-255)]",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Administratively shut down this neighbor\n"
@@ -6392,7 +6398,7 @@ DEFUN(neighbor_shutdown_rtt,
 
 DEFUN(no_neighbor_shutdown_rtt,
       no_neighbor_shutdown_rtt_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown rtt [(1-65535) [count (1-255)]]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> shutdown rtt [(1-65535) [count (1-255)]]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -6420,7 +6426,7 @@ DEFUN(no_neighbor_shutdown_rtt,
 /* neighbor capability dynamic. */
 DEFUN (neighbor_capability_dynamic,
        neighbor_capability_dynamic_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability dynamic",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability dynamic",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Advertise capability to the peer\n"
@@ -6433,7 +6439,7 @@ DEFUN (neighbor_capability_dynamic,
 
 DEFUN (no_neighbor_capability_dynamic,
        no_neighbor_capability_dynamic_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability dynamic",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability dynamic",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6448,7 +6454,7 @@ DEFUN (no_neighbor_capability_dynamic,
 /* neighbor dont-capability-negotiate */
 DEFUN (neighbor_dont_capability_negotiate,
        neighbor_dont_capability_negotiate_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> dont-capability-negotiate",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> dont-capability-negotiate",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Do not perform capability negotiation\n")
@@ -6460,7 +6466,7 @@ DEFUN (neighbor_dont_capability_negotiate,
 
 DEFUN (no_neighbor_dont_capability_negotiate,
        no_neighbor_dont_capability_negotiate_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> dont-capability-negotiate",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> dont-capability-negotiate",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6474,7 +6480,7 @@ DEFUN (no_neighbor_dont_capability_negotiate,
 /* neighbor capability fqdn */
 DEFPY (neighbor_capability_fqdn,
        neighbor_capability_fqdn_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability fqdn",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor capability fqdn",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6531,7 +6537,7 @@ static void bgp_vty_capability_send_dynamic_peer_group(struct peer *peer, afi_t 
 /* neighbor capability extended next hop encoding */
 DEFUN (neighbor_capability_enhe,
        neighbor_capability_enhe_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability extended-nexthop",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability extended-nexthop",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Advertise capability to the peer\n"
@@ -6558,7 +6564,7 @@ DEFUN (neighbor_capability_enhe,
 
 DEFUN (no_neighbor_capability_enhe,
        no_neighbor_capability_enhe_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability extended-nexthop",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability extended-nexthop",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6596,7 +6602,7 @@ DEFUN (no_neighbor_capability_enhe,
 /* neighbor capability software-version */
 DEFPY(neighbor_capability_software_version,
       neighbor_capability_software_version_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability software-version [latest-encoding$latest_encoding]",
+      "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor capability software-version [latest-encoding$latest_encoding]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -6627,7 +6633,7 @@ DEFPY(neighbor_capability_software_version,
 /* neighbor capability link-local */
 DEFPY(neighbor_capability_link_local,
       neighbor_capability_link_local_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability link-local",
+      "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor capability link-local",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -6655,7 +6661,7 @@ DEFPY(neighbor_capability_link_local,
 /* RPKI strict mode */
 DEFPY(neighbor_rpki_strict,
       neighbor_rpki_strict_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor rpki strict",
+      "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor rpki strict",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -6708,7 +6714,7 @@ static int peer_af_flag_unset_vty(struct vty *vty, const char *peer_str,
 /* neighbor capability orf prefix-list. */
 DEFUN (neighbor_capability_orf_prefix,
        neighbor_capability_orf_prefix_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability orf prefix-list <both|send|receive>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Advertise capability to the peer\n"
@@ -6761,7 +6767,7 @@ DEFUN (neighbor_capability_orf_prefix,
 ALIAS_HIDDEN(
 	neighbor_capability_orf_prefix,
 	neighbor_capability_orf_prefix_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability orf prefix-list <both|send|receive>",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Advertise capability to the peer\n"
 	"Advertise ORF capability to the peer\n"
@@ -6772,7 +6778,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_capability_orf_prefix,
        no_neighbor_capability_orf_prefix_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability orf prefix-list <both|send|receive>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6826,7 +6832,7 @@ DEFUN (no_neighbor_capability_orf_prefix,
 ALIAS_HIDDEN(
 	no_neighbor_capability_orf_prefix,
 	no_neighbor_capability_orf_prefix_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> capability orf prefix-list <both|send|receive>",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Advertise capability to the peer\n"
 	"Advertise ORF capability to the peer\n"
@@ -6838,7 +6844,7 @@ ALIAS_HIDDEN(
 /* neighbor next-hop-self. */
 DEFUN (neighbor_nexthop_self,
        neighbor_nexthop_self_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Disable the next hop calculation for this neighbor\n")
@@ -6849,14 +6855,14 @@ DEFUN (neighbor_nexthop_self,
 }
 
 ALIAS_HIDDEN(neighbor_nexthop_self, neighbor_nexthop_self_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n")
 
 /* neighbor next-hop-self. */
 DEFUN (neighbor_nexthop_self_force,
        neighbor_nexthop_self_force_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self force",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self force",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Disable the next hop calculation for this neighbor\n"
@@ -6870,21 +6876,21 @@ DEFUN (neighbor_nexthop_self_force,
 
 ALIAS_HIDDEN(neighbor_nexthop_self_force,
 	     neighbor_nexthop_self_force_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self force",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self force",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n"
 	     "Set the next hop to self for reflected routes\n")
 
 ALIAS_HIDDEN(neighbor_nexthop_self_force,
 	     neighbor_nexthop_self_all_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self all",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self all",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n"
 	     "Set the next hop to self for reflected routes\n")
 
 DEFUN (no_neighbor_nexthop_self,
        no_neighbor_nexthop_self_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6897,13 +6903,13 @@ DEFUN (no_neighbor_nexthop_self,
 }
 
 ALIAS_HIDDEN(no_neighbor_nexthop_self, no_neighbor_nexthop_self_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n")
 
 DEFUN (no_neighbor_nexthop_self_force,
        no_neighbor_nexthop_self_force_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self force",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self force",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6918,14 +6924,14 @@ DEFUN (no_neighbor_nexthop_self_force,
 
 ALIAS_HIDDEN(no_neighbor_nexthop_self_force,
 	     no_neighbor_nexthop_self_force_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self force",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self force",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n"
 	     "Set the next hop to self for reflected routes\n")
 
 ALIAS_HIDDEN(no_neighbor_nexthop_self_force,
 	     no_neighbor_nexthop_self_all_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self all",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> next-hop-self all",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Disable the next hop calculation for this neighbor\n"
 	     "Set the next hop to self for reflected routes\n")
@@ -6933,7 +6939,7 @@ ALIAS_HIDDEN(no_neighbor_nexthop_self_force,
 /* neighbor as-override */
 DEFUN (neighbor_as_override,
        neighbor_as_override_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> as-override",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> as-override",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Override ASNs in outbound updates if aspath equals remote-as\n")
@@ -6944,13 +6950,13 @@ DEFUN (neighbor_as_override,
 }
 
 ALIAS_HIDDEN(neighbor_as_override, neighbor_as_override_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> as-override",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> as-override",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Override ASNs in outbound updates if aspath equals remote-as\n")
 
 DEFUN (no_neighbor_as_override,
        no_neighbor_as_override_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> as-override",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> as-override",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -6963,14 +6969,14 @@ DEFUN (no_neighbor_as_override,
 }
 
 ALIAS_HIDDEN(no_neighbor_as_override, no_neighbor_as_override_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> as-override",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> as-override",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Override ASNs in outbound updates if aspath equals remote-as\n")
 
 /* neighbor remove-private-AS. */
 DEFUN (neighbor_remove_private_as,
        neighbor_remove_private_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Remove private ASNs in outbound updates\n")
@@ -6982,13 +6988,13 @@ DEFUN (neighbor_remove_private_as,
 }
 
 ALIAS_HIDDEN(neighbor_remove_private_as, neighbor_remove_private_as_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n")
 
 DEFUN (neighbor_remove_private_as_all,
        neighbor_remove_private_as_all_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Remove private ASNs in outbound updates\n"
@@ -7002,14 +7008,14 @@ DEFUN (neighbor_remove_private_as_all,
 
 ALIAS_HIDDEN(neighbor_remove_private_as_all,
 	     neighbor_remove_private_as_all_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n"
 	     "Apply to all AS numbers\n")
 
 DEFUN (neighbor_remove_private_as_replace_as,
        neighbor_remove_private_as_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS replace-AS",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Remove private ASNs in outbound updates\n"
@@ -7023,14 +7029,14 @@ DEFUN (neighbor_remove_private_as_replace_as,
 
 ALIAS_HIDDEN(neighbor_remove_private_as_replace_as,
 	     neighbor_remove_private_as_replace_as_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS replace-AS",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n"
 	     "Replace private ASNs with our ASN in outbound updates\n")
 
 DEFUN (neighbor_remove_private_as_all_replace_as,
        neighbor_remove_private_as_all_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all replace-AS",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Remove private ASNs in outbound updates\n"
@@ -7046,7 +7052,7 @@ DEFUN (neighbor_remove_private_as_all_replace_as,
 ALIAS_HIDDEN(
 	neighbor_remove_private_as_all_replace_as,
 	neighbor_remove_private_as_all_replace_as_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all replace-AS",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Remove private ASNs in outbound updates\n"
 	"Apply to all AS numbers\n"
@@ -7054,7 +7060,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_remove_private_as,
        no_neighbor_remove_private_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7068,13 +7074,13 @@ DEFUN (no_neighbor_remove_private_as,
 
 ALIAS_HIDDEN(no_neighbor_remove_private_as,
 	     no_neighbor_remove_private_as_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n")
 
 DEFUN (no_neighbor_remove_private_as_all,
        no_neighbor_remove_private_as_all_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7089,14 +7095,14 @@ DEFUN (no_neighbor_remove_private_as_all,
 
 ALIAS_HIDDEN(no_neighbor_remove_private_as_all,
 	     no_neighbor_remove_private_as_all_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n"
 	     "Apply to all AS numbers\n")
 
 DEFUN (no_neighbor_remove_private_as_replace_as,
        no_neighbor_remove_private_as_replace_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS replace-AS",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7111,14 +7117,14 @@ DEFUN (no_neighbor_remove_private_as_replace_as,
 
 ALIAS_HIDDEN(no_neighbor_remove_private_as_replace_as,
 	     no_neighbor_remove_private_as_replace_as_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS replace-AS",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Remove private ASNs in outbound updates\n"
 	     "Replace private ASNs with our ASN in outbound updates\n")
 
 DEFUN (no_neighbor_remove_private_as_all_replace_as,
        no_neighbor_remove_private_as_all_replace_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all replace-AS",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7135,7 +7141,7 @@ DEFUN (no_neighbor_remove_private_as_all_replace_as,
 ALIAS_HIDDEN(
 	no_neighbor_remove_private_as_all_replace_as,
 	no_neighbor_remove_private_as_all_replace_as_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> remove-private-AS all replace-AS",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Remove private ASNs in outbound updates\n"
 	"Apply to all AS numbers\n"
@@ -7145,7 +7151,7 @@ ALIAS_HIDDEN(
 /* neighbor send-community. */
 DEFUN (neighbor_send_community,
        neighbor_send_community_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> send-community",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Send Community attribute to this neighbor\n")
@@ -7158,13 +7164,13 @@ DEFUN (neighbor_send_community,
 }
 
 ALIAS_HIDDEN(neighbor_send_community, neighbor_send_community_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> send-community",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Send Community attribute to this neighbor\n")
 
 DEFUN (no_neighbor_send_community,
        no_neighbor_send_community_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> send-community",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7178,14 +7184,14 @@ DEFUN (no_neighbor_send_community,
 }
 
 ALIAS_HIDDEN(no_neighbor_send_community, no_neighbor_send_community_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> send-community",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Send Community attribute to this neighbor\n")
 
 /* neighbor send-community extended. */
 DEFUN (neighbor_send_community_type,
        neighbor_send_community_type_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> send-community <both|all|extended|standard|large>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community <both|all|extended|standard|large>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Send Community attribute to this neighbor\n"
@@ -7233,7 +7239,7 @@ DEFUN (neighbor_send_community_type,
 
 ALIAS_HIDDEN(
 	neighbor_send_community_type, neighbor_send_community_type_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> send-community <both|all|extended|standard|large>",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community <both|all|extended|standard|large>",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Send Community attribute to this neighbor\n"
 	"Send Standard and Extended Community attributes\n"
@@ -7244,7 +7250,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_send_community_type,
        no_neighbor_send_community_type_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> send-community <both|all|extended|standard|large>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community <both|all|extended|standard|large>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7296,7 +7302,7 @@ DEFUN (no_neighbor_send_community_type,
 ALIAS_HIDDEN(
 	no_neighbor_send_community_type,
 	no_neighbor_send_community_type_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> send-community <both|all|extended|standard|large>",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> send-community <both|all|extended|standard|large>",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Send Community attribute to this neighbor\n"
 	"Send Standard and Extended Community attributes\n"
@@ -7307,7 +7313,7 @@ ALIAS_HIDDEN(
 
 DEFPY (neighbor_ecommunity_rpki,
        neighbor_ecommunity_rpki_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor send-community extended rpki",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor send-community extended rpki",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7334,7 +7340,7 @@ DEFPY (neighbor_ecommunity_rpki,
 /* neighbor soft-reconfig. */
 DEFUN (neighbor_soft_reconfiguration,
        neighbor_soft_reconfiguration_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> soft-reconfiguration inbound",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> soft-reconfiguration inbound",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Per neighbor soft reconfiguration\n"
@@ -7348,14 +7354,14 @@ DEFUN (neighbor_soft_reconfiguration,
 
 ALIAS_HIDDEN(neighbor_soft_reconfiguration,
 	     neighbor_soft_reconfiguration_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> soft-reconfiguration inbound",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> soft-reconfiguration inbound",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Per neighbor soft reconfiguration\n"
 	     "Allow inbound soft reconfiguration for this neighbor\n")
 
 DEFUN (no_neighbor_soft_reconfiguration,
        no_neighbor_soft_reconfiguration_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> soft-reconfiguration inbound",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> soft-reconfiguration inbound",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7370,14 +7376,14 @@ DEFUN (no_neighbor_soft_reconfiguration,
 
 ALIAS_HIDDEN(no_neighbor_soft_reconfiguration,
 	     no_neighbor_soft_reconfiguration_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> soft-reconfiguration inbound",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> soft-reconfiguration inbound",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Per neighbor soft reconfiguration\n"
 	     "Allow inbound soft reconfiguration for this neighbor\n")
 
 DEFUN (neighbor_route_reflector_client,
        neighbor_route_reflector_client_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-reflector-client",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Configure a neighbor as Route Reflector client\n")
@@ -7397,13 +7403,13 @@ DEFUN (neighbor_route_reflector_client,
 
 ALIAS_HIDDEN(neighbor_route_reflector_client,
 	     neighbor_route_reflector_client_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-reflector-client",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Configure a neighbor as Route Reflector client\n")
 
 DEFUN (no_neighbor_route_reflector_client,
        no_neighbor_route_reflector_client_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-reflector-client",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7417,14 +7423,14 @@ DEFUN (no_neighbor_route_reflector_client,
 
 ALIAS_HIDDEN(no_neighbor_route_reflector_client,
 	     no_neighbor_route_reflector_client_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-reflector-client",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Configure a neighbor as Route Reflector client\n")
 
 /* neighbor route-server-client. */
 DEFUN (neighbor_route_server_client,
        neighbor_route_server_client_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> route-server-client",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-server-client",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Configure a neighbor as Route Server client\n")
@@ -7442,13 +7448,13 @@ DEFUN (neighbor_route_server_client,
 
 ALIAS_HIDDEN(neighbor_route_server_client,
 	     neighbor_route_server_client_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> route-server-client",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-server-client",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Configure a neighbor as Route Server client\n")
 
 DEFUN (no_neighbor_route_server_client,
        no_neighbor_route_server_client_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> route-server-client",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-server-client",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7462,13 +7468,13 @@ DEFUN (no_neighbor_route_server_client,
 
 ALIAS_HIDDEN(no_neighbor_route_server_client,
 	     no_neighbor_route_server_client_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> route-server-client",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-server-client",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Configure a neighbor as Route Server client\n")
 
 DEFUN (neighbor_nexthop_local_unchanged,
        neighbor_nexthop_local_unchanged_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> nexthop-local unchanged",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> nexthop-local unchanged",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Configure treatment of outgoing link-local nexthop attribute\n"
@@ -7482,7 +7488,7 @@ DEFUN (neighbor_nexthop_local_unchanged,
 
 DEFUN (no_neighbor_nexthop_local_unchanged,
        no_neighbor_nexthop_local_unchanged_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> nexthop-local unchanged",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> nexthop-local unchanged",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7497,7 +7503,7 @@ DEFUN (no_neighbor_nexthop_local_unchanged,
 
 DEFUN (neighbor_attr_unchanged,
        neighbor_attr_unchanged_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> attribute-unchanged [{as-path|next-hop|med}]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> attribute-unchanged [{as-path|next-hop|med}]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "BGP attribute is propagated unchanged to this neighbor\n"
@@ -7580,7 +7586,7 @@ DEFUN (neighbor_attr_unchanged,
 
 ALIAS_HIDDEN(
 	neighbor_attr_unchanged, neighbor_attr_unchanged_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> attribute-unchanged [{as-path|next-hop|med}]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> attribute-unchanged [{as-path|next-hop|med}]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"BGP attribute is propagated unchanged to this neighbor\n"
 	"As-path attribute\n"
@@ -7589,7 +7595,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_attr_unchanged,
        no_neighbor_attr_unchanged_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> attribute-unchanged [{as-path|next-hop|med}]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> attribute-unchanged [{as-path|next-hop|med}]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7648,7 +7654,7 @@ DEFUN (no_neighbor_attr_unchanged,
 
 ALIAS_HIDDEN(
 	no_neighbor_attr_unchanged, no_neighbor_attr_unchanged_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> attribute-unchanged [{as-path|next-hop|med}]",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> attribute-unchanged [{as-path|next-hop|med}]",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"BGP attribute is propagated unchanged to this neighbor\n"
 	"As-path attribute\n"
@@ -7691,7 +7697,7 @@ static int peer_ebgp_multihop_unset_vty(struct vty *vty, const char *ip_str)
 /* neighbor ebgp-multihop. */
 DEFUN (neighbor_ebgp_multihop,
        neighbor_ebgp_multihop_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> ebgp-multihop",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Allow EBGP neighbors not on directly connected networks\n")
@@ -7702,7 +7708,7 @@ DEFUN (neighbor_ebgp_multihop,
 
 DEFUN (neighbor_ebgp_multihop_ttl,
        neighbor_ebgp_multihop_ttl_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop (1-255)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> ebgp-multihop (1-255)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Allow EBGP neighbors not on directly connected networks\n"
@@ -7716,7 +7722,7 @@ DEFUN (neighbor_ebgp_multihop_ttl,
 
 DEFUN (no_neighbor_ebgp_multihop,
        no_neighbor_ebgp_multihop_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop [(1-255)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> ebgp-multihop [(1-255)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7729,7 +7735,7 @@ DEFUN (no_neighbor_ebgp_multihop,
 
 DEFPY (neighbor_aigp,
        neighbor_aigp_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor aigp",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor aigp",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7774,7 +7780,7 @@ static int peer_role_set_vty(struct vty *vty, struct peer *peer,
 
 DEFPY(neighbor_role,
       neighbor_role_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Set session role\n"
@@ -7797,7 +7803,7 @@ DEFPY(neighbor_role,
 
 DEFPY(neighbor_role_strict,
       neighbor_role_strict_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role strict-mode",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role strict-mode",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Set session role\n"
@@ -7821,7 +7827,7 @@ DEFPY(neighbor_role_strict,
 
 DEFPY(no_neighbor_role,
       no_neighbor_role_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer> [strict-mode]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer> [strict-mode]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -7846,7 +7852,7 @@ DEFPY(no_neighbor_role,
 
 DEFPY (neighbor_oad,
        neighbor_oad_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor oad",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor oad",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7869,7 +7875,7 @@ DEFPY (neighbor_oad,
 /* disable-connected-check */
 DEFUN (neighbor_disable_connected_check,
        neighbor_disable_connected_check_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> <disable-connected-check|enforce-multihop>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> <disable-connected-check|enforce-multihop>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "one-hop away EBGP peer using loopback address\n"
@@ -7882,7 +7888,7 @@ DEFUN (neighbor_disable_connected_check,
 
 DEFUN (no_neighbor_disable_connected_check,
        no_neighbor_disable_connected_check_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> <disable-connected-check|enforce-multihop>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> <disable-connected-check|enforce-multihop>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -7896,7 +7902,7 @@ DEFUN (no_neighbor_disable_connected_check,
 
 DEFPY(neighbor_extended_link_bw,
       neighbor_extended_link_bw_cmd,
-      "[no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor extended-link-bandwidth",
+      "[no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor extended-link-bandwidth",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -7916,7 +7922,7 @@ DEFPY(neighbor_extended_link_bw,
 
 DEFPY(neighbor_nhc_attribute,
       neighbor_nhc_attribute_cmd,
-      "[no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor send-nexthop-characteristics",
+      "[no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor send-nexthop-characteristics",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -7937,7 +7943,7 @@ DEFPY(neighbor_nhc_attribute,
 /* disable-link-bw-encoding-ieee */
 DEFUN(neighbor_disable_link_bw_encoding_ieee,
       neighbor_disable_link_bw_encoding_ieee_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> disable-link-bw-encoding-ieee",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> disable-link-bw-encoding-ieee",
       NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Disable IEEE floating-point encoding for extended community bandwidth\n")
 {
@@ -7949,7 +7955,7 @@ DEFUN(neighbor_disable_link_bw_encoding_ieee,
 
 DEFUN(no_neighbor_disable_link_bw_encoding_ieee,
       no_neighbor_disable_link_bw_encoding_ieee_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> disable-link-bw-encoding-ieee",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> disable-link-bw-encoding-ieee",
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Disable IEEE floating-point encoding for extended community bandwidth\n")
 {
@@ -7962,7 +7968,7 @@ DEFUN(no_neighbor_disable_link_bw_encoding_ieee,
 /* extended-optional-parameters */
 DEFUN(neighbor_extended_optional_parameters,
       neighbor_extended_optional_parameters_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> extended-optional-parameters",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> extended-optional-parameters",
       NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Force the extended optional parameters format for OPEN messages\n")
 {
@@ -7974,7 +7980,7 @@ DEFUN(neighbor_extended_optional_parameters,
 
 DEFUN(no_neighbor_extended_optional_parameters,
       no_neighbor_extended_optional_parameters_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> extended-optional-parameters",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> extended-optional-parameters",
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Force the extended optional parameters format for OPEN messages\n")
 {
@@ -7987,7 +7993,7 @@ DEFUN(no_neighbor_extended_optional_parameters,
 /* enforce-first-as */
 DEFUN (neighbor_enforce_first_as,
        neighbor_enforce_first_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> enforce-first-as",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> enforce-first-as",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Enforce the first AS for EBGP routes\n")
@@ -8000,7 +8006,7 @@ DEFUN (neighbor_enforce_first_as,
 
 DEFUN (no_neighbor_enforce_first_as,
        no_neighbor_enforce_first_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> enforce-first-as",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> enforce-first-as",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8015,7 +8021,7 @@ DEFUN (no_neighbor_enforce_first_as,
 
 DEFUN (neighbor_description,
        neighbor_description_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> description LINE...",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> description LINE...",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Neighbor specific description\n"
@@ -8041,7 +8047,7 @@ DEFUN (neighbor_description,
 
 DEFUN (no_neighbor_description,
        no_neighbor_description_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> description",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> description",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8060,7 +8066,7 @@ DEFUN (no_neighbor_description,
 }
 
 ALIAS(no_neighbor_description, no_neighbor_description_comment_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> description LINE...",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> description LINE...",
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "Neighbor specific description\n"
       "Up to 80 characters describing this neighbor\n")
@@ -8104,7 +8110,7 @@ static int peer_update_source_vty(struct vty *vty, const char *peer_str,
 
 DEFUN (neighbor_update_source,
        neighbor_update_source_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> update-source <A.B.C.D|X:X::X:X|WORD>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> update-source <A.B.C.D|X:X::X:X|WORD>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Source of routing updates\n"
@@ -8118,7 +8124,7 @@ DEFUN (neighbor_update_source,
 
 DEFUN (no_neighbor_update_source,
        no_neighbor_update_source_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> update-source [<A.B.C.D|X:X::X:X|WORD>]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> update-source [<A.B.C.D|X:X::X:X|WORD>]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8155,7 +8161,7 @@ static int peer_default_originate_set_vty(struct vty *vty, const char *peer_str,
 /* neighbor default-originate. */
 DEFUN (neighbor_default_originate,
        neighbor_default_originate_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> default-originate",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Originate default route to this neighbor\n")
@@ -8167,13 +8173,13 @@ DEFUN (neighbor_default_originate,
 }
 
 ALIAS_HIDDEN(neighbor_default_originate, neighbor_default_originate_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> default-originate",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Originate default route to this neighbor\n")
 
 DEFUN (neighbor_default_originate_rmap,
        neighbor_default_originate_rmap_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> default-originate route-map RMAP_NAME",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate route-map RMAP_NAME",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Originate default route to this neighbor\n"
@@ -8190,7 +8196,7 @@ DEFUN (neighbor_default_originate_rmap,
 ALIAS_HIDDEN(
 	neighbor_default_originate_rmap,
 	neighbor_default_originate_rmap_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> default-originate route-map RMAP_NAME",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate route-map RMAP_NAME",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Originate default route to this neighbor\n"
 	"Route-map to specify criteria to originate default\n"
@@ -8198,7 +8204,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_default_originate,
        no_neighbor_default_originate_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> default-originate [route-map RMAP_NAME]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate [route-map RMAP_NAME]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8214,7 +8220,7 @@ DEFUN (no_neighbor_default_originate,
 
 ALIAS_HIDDEN(
 	no_neighbor_default_originate, no_neighbor_default_originate_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> default-originate [route-map RMAP_NAME]",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> default-originate [route-map RMAP_NAME]",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Originate default route to this neighbor\n"
 	"Route-map to specify criteria to originate default\n"
@@ -8248,7 +8254,7 @@ static int peer_port_vty(struct vty *vty, const char *ip_str, int afi,
 /* Set specified peer's BGP port.  */
 DEFUN (neighbor_port,
        neighbor_port_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> port (0-65535)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> port (0-65535)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Neighbor's BGP port\n"
@@ -8262,7 +8268,7 @@ DEFUN (neighbor_port,
 
 DEFUN (no_neighbor_port,
        no_neighbor_port_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> port [(0-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> port [(0-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8308,7 +8314,7 @@ static int peer_weight_unset_vty(struct vty *vty, const char *ip_str, afi_t afi,
 
 DEFUN (neighbor_weight,
        neighbor_weight_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> weight (0-65535)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> weight (0-65535)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Set default weight for routes from this neighbor\n"
@@ -8321,14 +8327,14 @@ DEFUN (neighbor_weight,
 }
 
 ALIAS_HIDDEN(neighbor_weight, neighbor_weight_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> weight (0-65535)",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> weight (0-65535)",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Set default weight for routes from this neighbor\n"
 	     "default weight\n")
 
 DEFUN (no_neighbor_weight,
        no_neighbor_weight_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> weight [(0-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> weight [(0-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8341,7 +8347,7 @@ DEFUN (no_neighbor_weight,
 }
 
 ALIAS_HIDDEN(no_neighbor_weight, no_neighbor_weight_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> weight [(0-65535)]",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> weight [(0-65535)]",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Set default weight for routes from this neighbor\n"
 	     "default weight\n")
@@ -8350,7 +8356,7 @@ ALIAS_HIDDEN(no_neighbor_weight, no_neighbor_weight_hidden_cmd,
 /* Override capability negotiation. */
 DEFUN (neighbor_override_capability,
        neighbor_override_capability_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> override-capability",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> override-capability",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Override capability negotiation result\n")
@@ -8362,7 +8368,7 @@ DEFUN (neighbor_override_capability,
 
 DEFUN (no_neighbor_override_capability,
        no_neighbor_override_capability_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> override-capability",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> override-capability",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8375,7 +8381,7 @@ DEFUN (no_neighbor_override_capability,
 
 DEFUN (neighbor_strict_capability,
        neighbor_strict_capability_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> strict-capability-match",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> strict-capability-match",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Strict capability negotiation match\n")
@@ -8388,7 +8394,7 @@ DEFUN (neighbor_strict_capability,
 
 DEFUN (no_neighbor_strict_capability,
        no_neighbor_strict_capability_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> strict-capability-match",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> strict-capability-match",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8436,7 +8442,7 @@ static int peer_timers_unset_vty(struct vty *vty, const char *ip_str)
 
 DEFUN (neighbor_timers,
        neighbor_timers_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> timers (0-65535) (0-65535)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> timers (0-65535) (0-65535)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "BGP per neighbor timers\n"
@@ -8453,7 +8459,7 @@ DEFUN (neighbor_timers,
 
 DEFUN (no_neighbor_timers,
        no_neighbor_timers_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> timers [(0-65535) (0-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> timers [(0-65535) (0-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8500,7 +8506,7 @@ static int peer_timers_connect_unset_vty(struct vty *vty, const char *ip_str)
 
 DEFUN (neighbor_timers_connect,
        neighbor_timers_connect_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> timers connect (1-65535)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> timers connect (1-65535)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "BGP per neighbor timers\n"
@@ -8515,7 +8521,7 @@ DEFUN (neighbor_timers_connect,
 
 DEFUN (no_neighbor_timers_connect,
        no_neighbor_timers_connect_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> timers connect [(1-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> timers connect [(1-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8529,7 +8535,7 @@ DEFUN (no_neighbor_timers_connect,
 
 DEFPY (neighbor_timers_delayopen,
        neighbor_timers_delayopen_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor timers delayopen (1-240)$interval",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor timers delayopen (1-240)$interval",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "BGP per neighbor timers\n"
@@ -8555,7 +8561,7 @@ DEFPY (neighbor_timers_delayopen,
 
 DEFPY (no_neighbor_timers_delayopen,
        no_neighbor_timers_delayopen_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor timers delayopen [(0-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor timers delayopen [(0-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8599,7 +8605,7 @@ static int peer_advertise_interval_vty(struct vty *vty, const char *ip_str,
 
 DEFUN (neighbor_advertise_interval,
        neighbor_advertise_interval_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> advertisement-interval (0-600)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> advertisement-interval (0-600)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Minimum interval between sending BGP routing updates\n"
@@ -8613,7 +8619,7 @@ DEFUN (neighbor_advertise_interval,
 
 DEFUN (no_neighbor_advertise_interval,
        no_neighbor_advertise_interval_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> advertisement-interval [(0-600)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> advertisement-interval [(0-600)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8723,7 +8729,7 @@ DEFUN (no_neighbor_interface,
 
 DEFUN (neighbor_distribute_list,
        neighbor_distribute_list_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> distribute-list ACCESSLIST_NAME <in|out>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> distribute-list ACCESSLIST_NAME <in|out>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Filter updates to/from this neighbor\n"
@@ -8754,7 +8760,7 @@ DEFUN (neighbor_distribute_list,
 
 ALIAS_HIDDEN(
 	neighbor_distribute_list, neighbor_distribute_list_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> distribute-list ACCESSLIST_NAME <in|out>",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> distribute-list ACCESSLIST_NAME <in|out>",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Filter updates to/from this neighbor\n"
 	"IP Access-list name\n"
@@ -8763,7 +8769,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_distribute_list,
        no_neighbor_distribute_list_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> distribute-list ACCESSLIST_NAME <in|out>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> distribute-list ACCESSLIST_NAME <in|out>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8793,7 +8799,7 @@ DEFUN (no_neighbor_distribute_list,
 
 ALIAS_HIDDEN(
 	no_neighbor_distribute_list, no_neighbor_distribute_list_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> distribute-list ACCESSLIST_NAME <in|out>",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> distribute-list ACCESSLIST_NAME <in|out>",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Filter updates to/from this neighbor\n"
 	"IP Access-list name\n"
@@ -8850,7 +8856,7 @@ static int peer_prefix_list_unset_vty(struct vty *vty, const char *ip_str,
 
 DEFUN (neighbor_prefix_list,
        neighbor_prefix_list_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> prefix-list WORD <in|out>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> prefix-list WORD <in|out>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Filter updates to/from this neighbor\n"
@@ -8867,7 +8873,7 @@ DEFUN (neighbor_prefix_list,
 }
 
 ALIAS_HIDDEN(neighbor_prefix_list, neighbor_prefix_list_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> prefix-list WORD <in|out>",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> prefix-list WORD <in|out>",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Filter updates to/from this neighbor\n"
 	     "Name of a prefix list\n"
@@ -8876,7 +8882,7 @@ ALIAS_HIDDEN(neighbor_prefix_list, neighbor_prefix_list_hidden_cmd,
 
 DEFUN (no_neighbor_prefix_list,
        no_neighbor_prefix_list_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> prefix-list WORD <in|out>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> prefix-list WORD <in|out>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8893,7 +8899,7 @@ DEFUN (no_neighbor_prefix_list,
 }
 
 ALIAS_HIDDEN(no_neighbor_prefix_list, no_neighbor_prefix_list_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> prefix-list WORD <in|out>",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> prefix-list WORD <in|out>",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Filter updates to/from this neighbor\n"
 	     "Name of a prefix list\n"
@@ -8947,7 +8953,7 @@ static int peer_aslist_unset_vty(struct vty *vty, const char *ip_str, afi_t afi,
 
 DEFUN (neighbor_filter_list,
        neighbor_filter_list_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Establish BGP filters\n"
@@ -8964,7 +8970,7 @@ DEFUN (neighbor_filter_list,
 }
 
 ALIAS_HIDDEN(neighbor_filter_list, neighbor_filter_list_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Establish BGP filters\n"
 	     "AS path access-list name\n"
@@ -8973,7 +8979,7 @@ ALIAS_HIDDEN(neighbor_filter_list, neighbor_filter_list_hidden_cmd,
 
 DEFUN (no_neighbor_filter_list,
        no_neighbor_filter_list_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -8990,7 +8996,7 @@ DEFUN (no_neighbor_filter_list,
 }
 
 ALIAS_HIDDEN(no_neighbor_filter_list, no_neighbor_filter_list_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> filter-list AS_PATH_FILTER_NAME <in|out>",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Establish BGP filters\n"
 	     "AS path access-list name\n"
@@ -9077,7 +9083,7 @@ DEFPY (bgp_def_originate_eval,
 
 DEFPY (neighbor_advertise_map,
        neighbor_advertise_map_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor advertise-map RMAP_NAME$advertise_str <exist-map|non-exist-map>$exist RMAP_NAME$condition_str",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor advertise-map RMAP_NAME$advertise_str <exist-map|non-exist-map>$exist RMAP_NAME$condition_str",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9098,7 +9104,7 @@ DEFPY (neighbor_advertise_map,
 }
 
 ALIAS_HIDDEN(neighbor_advertise_map, neighbor_advertise_map_hidden_cmd,
-	     "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor advertise-map RMAP_NAME$advertise_str <exist-map|non-exist-map>$exist RMAP_NAME$condition_str",
+	     "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor advertise-map RMAP_NAME$advertise_str <exist-map|non-exist-map>$exist RMAP_NAME$condition_str",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Route-map to conditionally advertise routes\n"
 	     "Name of advertise map\n"
@@ -9157,7 +9163,7 @@ static int peer_route_map_unset_vty(struct vty *vty, const char *ip_str,
 
 DEFUN (neighbor_route_map,
        neighbor_route_map_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> route-map RMAP_NAME <in|out>",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-map RMAP_NAME <in|out>",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Apply route map to neighbor\n"
@@ -9174,7 +9180,7 @@ DEFUN (neighbor_route_map,
 }
 
 ALIAS_HIDDEN(neighbor_route_map, neighbor_route_map_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> route-map RMAP_NAME <in|out>",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-map RMAP_NAME <in|out>",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Apply route map to neighbor\n"
 	     "Name of route map\n"
@@ -9183,7 +9189,7 @@ ALIAS_HIDDEN(neighbor_route_map, neighbor_route_map_hidden_cmd,
 
 DEFUN (no_neighbor_route_map,
        no_neighbor_route_map_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> route-map RMAP_NAME <in|out>",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-map RMAP_NAME <in|out>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9200,7 +9206,7 @@ DEFUN (no_neighbor_route_map,
 }
 
 ALIAS_HIDDEN(no_neighbor_route_map, no_neighbor_route_map_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> route-map RMAP_NAME <in|out>",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> route-map RMAP_NAME <in|out>",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Apply route map to neighbor\n"
 	     "Name of route map\n"
@@ -9244,7 +9250,7 @@ static int peer_unsuppress_map_unset_vty(struct vty *vty, const char *ip_str,
 
 DEFUN (neighbor_unsuppress_map,
        neighbor_unsuppress_map_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> unsuppress-map WORD",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> unsuppress-map WORD",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Route-map to selectively unsuppress suppressed routes\n"
@@ -9258,14 +9264,14 @@ DEFUN (neighbor_unsuppress_map,
 }
 
 ALIAS_HIDDEN(neighbor_unsuppress_map, neighbor_unsuppress_map_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> unsuppress-map WORD",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> unsuppress-map WORD",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Route-map to selectively unsuppress suppressed routes\n"
 	     "Name of route map\n")
 
 DEFUN (no_neighbor_unsuppress_map,
        no_neighbor_unsuppress_map_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> unsuppress-map WORD",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> unsuppress-map WORD",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9279,7 +9285,7 @@ DEFUN (no_neighbor_unsuppress_map,
 }
 
 ALIAS_HIDDEN(no_neighbor_unsuppress_map, no_neighbor_unsuppress_map_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> unsuppress-map WORD",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> unsuppress-map WORD",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Route-map to selectively unsuppress suppressed routes\n"
 	     "Name of route map\n")
@@ -9336,7 +9342,7 @@ static int peer_maximum_prefix_unset_vty(struct vty *vty, const char *ip_str,
 /* Maximum number of prefix to be sent to the neighbor. */
 DEFUN(neighbor_maximum_prefix_out,
       neighbor_maximum_prefix_out_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix-out (1-4294967295)",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix-out (1-4294967295)",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Maximum number of prefixes to be sent to this peer\n"
@@ -9363,7 +9369,7 @@ DEFUN(neighbor_maximum_prefix_out,
 
 DEFUN(no_neighbor_maximum_prefix_out,
       no_neighbor_maximum_prefix_out_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix-out [(1-4294967295)]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix-out [(1-4294967295)]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -9390,7 +9396,7 @@ DEFUN(no_neighbor_maximum_prefix_out,
    each peer configuration. */
 DEFUN (neighbor_maximum_prefix,
        neighbor_maximum_prefix_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefix accept from this peer\n"
@@ -9411,7 +9417,7 @@ DEFUN (neighbor_maximum_prefix,
 }
 
 ALIAS_HIDDEN(neighbor_maximum_prefix, neighbor_maximum_prefix_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) [force]",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) [force]",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Maximum number of prefix accept from this peer\n"
 	     "maximum no. of prefix limit\n"
@@ -9419,7 +9425,7 @@ ALIAS_HIDDEN(neighbor_maximum_prefix, neighbor_maximum_prefix_hidden_cmd,
 
 DEFUN (neighbor_maximum_prefix_threshold,
        neighbor_maximum_prefix_threshold_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefix accept from this peer\n"
@@ -9444,7 +9450,7 @@ DEFUN (neighbor_maximum_prefix_threshold,
 ALIAS_HIDDEN(
 	neighbor_maximum_prefix_threshold,
 	neighbor_maximum_prefix_threshold_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefix accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9453,7 +9459,7 @@ ALIAS_HIDDEN(
 
 DEFUN (neighbor_maximum_prefix_warning,
        neighbor_maximum_prefix_warning_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) warning-only [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) warning-only [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefix accept from this peer\n"
@@ -9477,7 +9483,7 @@ DEFUN (neighbor_maximum_prefix_warning,
 ALIAS_HIDDEN(
 	neighbor_maximum_prefix_warning,
 	neighbor_maximum_prefix_warning_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) warning-only [force]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) warning-only [force]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefix accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9486,7 +9492,7 @@ ALIAS_HIDDEN(
 
 DEFUN (neighbor_maximum_prefix_threshold_warning,
        neighbor_maximum_prefix_threshold_warning_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefix accept from this peer\n"
@@ -9512,7 +9518,7 @@ DEFUN (neighbor_maximum_prefix_threshold_warning,
 ALIAS_HIDDEN(
 	neighbor_maximum_prefix_threshold_warning,
 	neighbor_maximum_prefix_threshold_warning_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefix accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9522,7 +9528,7 @@ ALIAS_HIDDEN(
 
 DEFUN (neighbor_maximum_prefix_restart,
        neighbor_maximum_prefix_restart_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) restart (1-65535) [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) restart (1-65535) [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefix accept from this peer\n"
@@ -9548,7 +9554,7 @@ DEFUN (neighbor_maximum_prefix_restart,
 ALIAS_HIDDEN(
 	neighbor_maximum_prefix_restart,
 	neighbor_maximum_prefix_restart_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) restart (1-65535) [force]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) restart (1-65535) [force]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefix accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9558,7 +9564,7 @@ ALIAS_HIDDEN(
 
 DEFUN (neighbor_maximum_prefix_threshold_restart,
        neighbor_maximum_prefix_threshold_restart_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Maximum number of prefixes to accept from this peer\n"
@@ -9587,7 +9593,7 @@ DEFUN (neighbor_maximum_prefix_threshold_restart,
 ALIAS_HIDDEN(
 	neighbor_maximum_prefix_threshold_restart,
 	neighbor_maximum_prefix_threshold_restart_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefixes to accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9598,7 +9604,7 @@ ALIAS_HIDDEN(
 
 DEFUN (no_neighbor_maximum_prefix,
        no_neighbor_maximum_prefix_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix [(1-4294967295) [(1-100)] [restart (1-65535)] [warning-only] [force]]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix [(1-4294967295) [(1-100)] [restart (1-65535)] [warning-only] [force]]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9618,7 +9624,7 @@ DEFUN (no_neighbor_maximum_prefix,
 
 ALIAS_HIDDEN(
 	no_neighbor_maximum_prefix, no_neighbor_maximum_prefix_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix [(1-4294967295) [(1-100)] [restart (1-65535)] [warning-only] [force]]",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> maximum-prefix [(1-4294967295) [(1-100)] [restart (1-65535)] [warning-only] [force]]",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Maximum number of prefixes to accept from this peer\n"
 	"maximum no. of prefix limit\n"
@@ -9631,7 +9637,7 @@ ALIAS_HIDDEN(
 /* "neighbor accept-own" */
 DEFPY (neighbor_accept_own,
        neighbor_accept_own_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor accept-own",
+       "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor accept-own",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9657,7 +9663,7 @@ DEFPY (neighbor_accept_own,
 /* "neighbor soo" */
 DEFPY (neighbor_soo,
        neighbor_soo_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor soo ASN:NN_OR_IP-ADDRESS:NN$soo",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor soo ASN:NN_OR_IP-ADDRESS:NN$soo",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Set the Site-of-Origin (SoO) extended community\n"
@@ -9693,7 +9699,7 @@ DEFPY (neighbor_soo,
 
 DEFPY (no_neighbor_soo,
        no_neighbor_soo_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor soo [ASN:NN_OR_IP-ADDRESS:NN$soo]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor soo [ASN:NN_OR_IP-ADDRESS:NN$soo]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9717,7 +9723,7 @@ DEFPY (no_neighbor_soo,
 /* "neighbor allowas-in" */
 DEFPY (neighbor_allowas_in,
        neighbor_allowas_in_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor allowas-in [route-map RMAP_NAME$rmap_name] [<(1-10)$allow_num|origin$origin_kw>]",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor allowas-in [route-map RMAP_NAME$rmap_name] [<(1-10)$allow_num|origin$origin_kw>]",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Accept as-path with my AS present in it\n"
@@ -9750,7 +9756,7 @@ DEFPY (neighbor_allowas_in,
 
 ALIAS_HIDDEN(
 	neighbor_allowas_in, neighbor_allowas_in_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor allowas-in [route-map RMAP_NAME$rmap_name] [<(1-10)$allow_num|origin$origin_kw>]",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor allowas-in [route-map RMAP_NAME$rmap_name] [<(1-10)$allow_num|origin$origin_kw>]",
 	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"Accept as-path with my AS present in it\n"
 	"Filter routes using route-map\n"
@@ -9760,7 +9766,7 @@ ALIAS_HIDDEN(
 
 DEFPY (no_neighbor_allowas_in,
        no_neighbor_allowas_in_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor allowas-in [route-map [RMAP_NAME]] [<(1-10)|origin>]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor allowas-in [route-map [RMAP_NAME]] [<(1-10)|origin>]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9785,7 +9791,7 @@ DEFPY (no_neighbor_allowas_in,
 
 ALIAS_HIDDEN(
 	no_neighbor_allowas_in, no_neighbor_allowas_in_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor allowas-in [route-map [RMAP_NAME]] [<(1-10)|origin>]",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor allowas-in [route-map [RMAP_NAME]] [<(1-10)|origin>]",
 	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	"allow local ASN appears in aspath attribute\n"
 	"Filter routes using route-map\n"
@@ -9795,7 +9801,7 @@ ALIAS_HIDDEN(
 
 DEFUN (neighbor_ttl_security,
        neighbor_ttl_security_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ttl-security hops (1-254)",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> ttl-security hops (1-254)",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "BGP ttl-security parameters\n"
@@ -9829,7 +9835,7 @@ DEFUN (neighbor_ttl_security,
 
 DEFUN (no_neighbor_ttl_security,
        no_neighbor_ttl_security_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> ttl-security hops (1-254)",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> ttl-security hops (1-254)",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9850,7 +9856,7 @@ DEFUN (no_neighbor_ttl_security,
 /* "neighbor encapsulation-srv6|encapsulation-mpls" */
 DEFPY (neighbor_encapsulation_srv6_or_mpls,
        neighbor_encapsulation_srv6_or_mpls_cmd,
-       "[no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str <encapsulation-srv6$srv6|encapsulation-mpls$mpls>",
+       "[no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$peer_str <encapsulation-srv6$srv6|encapsulation-mpls$mpls>",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9890,7 +9896,7 @@ DEFPY (neighbor_encapsulation_srv6_or_mpls,
 /* disable-addpath-rx */
 DEFUN(neighbor_disable_addpath_rx,
       neighbor_disable_addpath_rx_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> disable-addpath-rx",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> disable-addpath-rx",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Do not accept additional paths\n")
@@ -9909,7 +9915,7 @@ DEFUN(neighbor_disable_addpath_rx,
 
 DEFUN(no_neighbor_disable_addpath_rx,
       no_neighbor_disable_addpath_rx_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> disable-addpath-rx",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> disable-addpath-rx",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -9929,7 +9935,7 @@ DEFUN(no_neighbor_disable_addpath_rx,
 
 DEFUN (neighbor_addpath_tx_all_paths,
        neighbor_addpath_tx_all_paths_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-all-paths",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-all-paths",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Use addpath to advertise all paths to a neighbor\n")
@@ -9947,13 +9953,13 @@ DEFUN (neighbor_addpath_tx_all_paths,
 
 ALIAS_HIDDEN(neighbor_addpath_tx_all_paths,
 	     neighbor_addpath_tx_all_paths_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-all-paths",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-all-paths",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Use addpath to advertise all paths to a neighbor\n")
 
 DEFUN (no_neighbor_addpath_tx_all_paths,
        no_neighbor_addpath_tx_all_paths_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-all-paths",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-all-paths",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -9982,13 +9988,13 @@ DEFUN (no_neighbor_addpath_tx_all_paths,
 
 ALIAS_HIDDEN(no_neighbor_addpath_tx_all_paths,
 	     no_neighbor_addpath_tx_all_paths_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-all-paths",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-all-paths",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Use addpath to advertise all paths to a neighbor\n")
 
 DEFPY (neighbor_addpath_tx_best_selected_paths,
        neighbor_addpath_tx_best_selected_paths_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-tx-best-selected (1-6)$paths",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor addpath-tx-best-selected (1-6)$paths",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Use addpath to advertise best selected paths to a neighbor\n"
@@ -10007,7 +10013,7 @@ DEFPY (neighbor_addpath_tx_best_selected_paths,
 
 DEFPY (no_neighbor_addpath_tx_best_selected_paths,
        no_neighbor_addpath_tx_best_selected_paths_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-tx-best-selected [(1-6)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor addpath-tx-best-selected [(1-6)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -10027,7 +10033,7 @@ DEFPY (no_neighbor_addpath_tx_best_selected_paths,
 
 DEFUN (neighbor_addpath_tx_bestpath_per_as,
        neighbor_addpath_tx_bestpath_per_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-bestpath-per-AS",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-bestpath-per-AS",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Use addpath to advertise the bestpath per each neighboring AS\n")
@@ -10047,13 +10053,13 @@ DEFUN (neighbor_addpath_tx_bestpath_per_as,
 
 ALIAS_HIDDEN(neighbor_addpath_tx_bestpath_per_as,
 	     neighbor_addpath_tx_bestpath_per_as_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-bestpath-per-AS",
+	     "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-bestpath-per-AS",
 	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Use addpath to advertise the bestpath per each neighboring AS\n")
 
 DEFUN (no_neighbor_addpath_tx_bestpath_per_as,
        no_neighbor_addpath_tx_bestpath_per_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-bestpath-per-AS",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-bestpath-per-AS",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -10083,13 +10089,13 @@ DEFUN (no_neighbor_addpath_tx_bestpath_per_as,
 
 ALIAS_HIDDEN(no_neighbor_addpath_tx_bestpath_per_as,
 	     no_neighbor_addpath_tx_bestpath_per_as_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> addpath-tx-bestpath-per-AS",
+	     "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> addpath-tx-bestpath-per-AS",
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Use addpath to advertise the bestpath per each neighboring AS\n")
 
 DEFPY(
 	neighbor_aspath_loop_detection, neighbor_aspath_loop_detection_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor sender-as-path-loop-detection",
+	"neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor sender-as-path-loop-detection",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
 	"Detect AS loops before sending to neighbor\n")
@@ -10099,7 +10105,7 @@ DEFPY(
 
 DEFPY (neighbor_addpath_paths_limit,
        neighbor_addpath_paths_limit_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-rx-paths-limit (1-65535)$paths_limit",
+       "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor addpath-rx-paths-limit (1-65535)$paths_limit",
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
        "Paths Limit for Addpath to receive from the peer\n"
@@ -10127,7 +10133,7 @@ DEFPY (neighbor_addpath_paths_limit,
 
 DEFPY (no_neighbor_addpath_paths_limit,
        no_neighbor_addpath_paths_limit_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-rx-paths-limit [(1-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor addpath-rx-paths-limit [(1-65535)]",
        NO_STR
        NEIGHBOR_STR
        NEIGHBOR_ADDR_STR2
@@ -10157,7 +10163,7 @@ DEFPY (no_neighbor_addpath_paths_limit,
 DEFPY(
 	no_neighbor_aspath_loop_detection,
 	no_neighbor_aspath_loop_detection_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor sender-as-path-loop-detection",
+	"no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor sender-as-path-loop-detection",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
@@ -10168,7 +10174,7 @@ DEFPY(
 
 DEFPY(neighbor_path_attribute_discard,
       neighbor_path_attribute_discard_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute discard (1-255)...",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor path-attribute discard (1-255)...",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Manipulate path attributes from incoming UPDATE messages\n"
@@ -10196,7 +10202,7 @@ DEFPY(neighbor_path_attribute_discard,
 
 DEFPY(no_neighbor_path_attribute_discard,
       no_neighbor_path_attribute_discard_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute discard [(1-255)]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor path-attribute discard [(1-255)]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -10225,7 +10231,7 @@ DEFPY(no_neighbor_path_attribute_discard,
 
 DEFPY(neighbor_path_attribute_treat_as_withdraw,
       neighbor_path_attribute_treat_as_withdraw_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Manipulate path attributes from incoming UPDATE messages\n"
@@ -10253,7 +10259,7 @@ DEFPY(neighbor_path_attribute_treat_as_withdraw,
 
 DEFPY(no_neighbor_path_attribute_treat_as_withdraw,
       no_neighbor_path_attribute_treat_as_withdraw_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -10506,7 +10512,7 @@ DEFPY(sid_export,
 
 DEFPY(neighbor_damp,
       neighbor_damp_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor dampening [(1-45)$half [(1-20000)$reuse (1-20000)$suppress (1-255)$max]]",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor dampening [(1-45)$half [(1-20000)$reuse (1-20000)$suppress (1-255)$max]]",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Enable neighbor route-flap dampening\n"
@@ -10537,7 +10543,7 @@ DEFPY(neighbor_damp,
 
 DEFPY(no_neighbor_damp,
       no_neighbor_damp_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor dampening [HALF [REUSE SUPPRESS MAX]]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor dampening [HALF [REUSE SUPPRESS MAX]]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -10557,7 +10563,7 @@ DEFPY(no_neighbor_damp,
 
 DEFPY (show_ip_bgp_neighbor_damp_param,
        show_ip_bgp_neighbor_damp_param_cmd,
-       "show [ip] bgp [<ipv4|ipv6> [unicast]] neighbors <A.B.C.D|X:X::X:X|WORD>$neighbor dampening parameters [json]$json",
+       "show [ip] bgp [<ipv4|ipv6> [unicast]] neighbors <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor dampening parameters [json]$json",
        SHOW_STR
        IP_STR
        BGP_STR
@@ -12098,7 +12104,7 @@ static int bgp_clear_prefix(struct vty *vty, const char *view_name,
 /* one clear bgp command to rule them all */
 DEFUN (clear_ip_bgp_all,
        clear_ip_bgp_all_cmd,
-       "clear [ip] bgp [<view|vrf> VIEWVRFNAME] [<ipv4|ipv6|l2vpn> [<unicast|multicast|vpn|labeled-unicast|flowspec|evpn>]] <*|A.B.C.D$neighbor|X:X::X:X$neighbor|WORD$neighbor|ASNUM|external|peer-group PGNAME> [<soft [<in|out>]|in [prefix-filter]|out|message-stats|capabilities>]",
+       "clear [ip] bgp [<view|vrf> VIEWVRFNAME] [<ipv4|ipv6|l2vpn> [<unicast|multicast|vpn|labeled-unicast|flowspec|evpn>]] <*|A.B.C.D$neighbor|X:X::X:X$neighbor|X:X::X:X%ZI$neighbor|WORD$neighbor|ASNUM|external|peer-group PGNAME> [<soft [<in|out>]|in [prefix-filter]|out|message-stats|capabilities>]",
        CLEAR_STR
        IP_STR
        BGP_STR
@@ -12110,6 +12116,7 @@ DEFUN (clear_ip_bgp_all,
        "Clear all peers\n"
        "BGP IPv4 neighbor to clear\n"
        "BGP IPv6 neighbor to clear\n"
+       "BGP IPv6 neighbor with zone id (usually interface) to clear\n"
        "BGP neighbor on interface to clear\n"
        "Clear peers with the AS number in plain or dotted format\n"
        "Clear all external peers\n"
@@ -12160,6 +12167,9 @@ DEFUN (clear_ip_bgp_all,
 		clr_sort = clear_peer;
 		clr_arg = argv[idx]->arg;
 	} else if (argv_find(argv, argc, "X:X::X:X", &idx)) {
+		clr_sort = clear_peer;
+		clr_arg = argv[idx]->arg;
+	} else if (argv_find(argv, argc, "X:X::X:X%ZI", &idx)) {
 		clr_sort = clear_peer;
 		clr_arg = argv[idx]->arg;
 	} else if (argv_find(argv, argc, "peer-group", &idx)) {
@@ -15011,7 +15021,7 @@ int bgp_show_summary_vty(struct vty *vty, const char *name, afi_t afi,
 DEFPY(show_ip_bgp_summary, show_ip_bgp_summary_cmd,
       "show [ip] bgp [<view|vrf> VIEWVRFNAME] [" BGP_AFI_CMD_STR
       " [" BGP_SAFI_WITH_LABEL_CMD_STR
-      "]] [all$all] summary [established|failed] [<neighbor <A.B.C.D|X:X::X:X|WORD>|remote-as <ASNUM|internal|external>>] [terse] [wide] [json$uj]",
+      "]] [all$all] summary [established|failed] [<neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>|remote-as <ASNUM|internal|external>>] [terse] [wide] [json$uj]",
       SHOW_STR IP_STR BGP_STR BGP_INSTANCE_HELP_STR BGP_AFI_HELP_STR
 	      BGP_SAFI_WITH_LABEL_HELP_STR
       "Display the entries for all address families\n"
@@ -15019,6 +15029,7 @@ DEFPY(show_ip_bgp_summary, show_ip_bgp_summary_cmd,
       "Show only sessions in Established state\n"
       "Show only sessions not in Established state\n"
       "Show only the specified neighbor session\n"
+      "Neighbor to display information about\n"
       "Neighbor to display information about\n"
       "Neighbor to display information about\n"
       "Neighbor on BGP configured interface\n"
@@ -18600,7 +18611,7 @@ static int bgp_show_neighbor_vty(struct vty *vty, const char *name, enum show_ty
 
 /* "show [ip] bgp neighbors" commands.  */
 DEFPY(show_ip_bgp_neighbors, show_ip_bgp_neighbors_cmd,
-      "show [ip] bgp [<view|vrf> VIEWVRFNAME] [<ipv4|ipv6>] neighbors [<A.B.C.D|X:X::X:X|WORD>] [graceful-restart] [json$uj [brief$brief [established|failed]]]",
+      "show [ip] bgp [<view|vrf> VIEWVRFNAME] [<ipv4|ipv6>] neighbors [<A.B.C.D|X:X::X:X|WORD>] [graceful-restart] [json$uj [brief$brief [established|failed]]]", //FIXME
       SHOW_STR IP_STR BGP_STR BGP_INSTANCE_HELP_STR BGP_AF_STR BGP_AF_STR
       "Detailed information on TCP and BGP neighbor connections\n"
       "Neighbor to display information about\n"
@@ -20381,7 +20392,7 @@ static int peer_tcp_mss_vty(struct vty *vty, const char *peer_str,
 }
 
 DEFUN(neighbor_tcp_mss, neighbor_tcp_mss_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> tcp-mss (1-65535)",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> tcp-mss (1-65535)",
       NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "TCP max segment size\n"
       "TCP MSS value\n")
@@ -20396,7 +20407,7 @@ DEFUN(neighbor_tcp_mss, neighbor_tcp_mss_cmd,
 }
 
 DEFUN(no_neighbor_tcp_mss, no_neighbor_tcp_mss_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> tcp-mss [(1-65535)]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD> tcp-mss [(1-65535)]",
       NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
       "TCP max segment size\n"
       "TCP MSS value\n")
@@ -20410,7 +20421,7 @@ DEFUN(no_neighbor_tcp_mss, no_neighbor_tcp_mss_cmd,
 
 DEFPY(neighbor_ip_transparent,
       neighbor_ip_transparent_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor ip-transparent",
+      "[no$no] neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$neighbor ip-transparent",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -20567,7 +20578,7 @@ DEFPY(no_bgp_ls_distribute_bgp_fabric,
 
 DEFPY(neighbor_ls_local_link_id,
       neighbor_ls_local_link_id_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str local-link-id (1-4294967295)$link_id",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$peer_str local-link-id (1-4294967295)$link_id",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Configure local link ID for BGP-LS topology\n"
@@ -20601,7 +20612,7 @@ DEFPY(neighbor_ls_local_link_id,
 
 DEFPY(no_neighbor_ls_local_link_id,
       no_neighbor_ls_local_link_id_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str local-link-id [(1-4294967295)$link_id]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$peer_str local-link-id [(1-4294967295)$link_id]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
@@ -20634,7 +20645,7 @@ DEFPY(no_neighbor_ls_local_link_id,
 
 DEFPY(neighbor_ls_remote_link_id,
       neighbor_ls_remote_link_id_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str remote-link-id (1-4294967295)$link_id",
+      "neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$peer_str remote-link-id (1-4294967295)$link_id",
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
       "Configure remote link ID for BGP-LS topology\n"
@@ -20668,7 +20679,7 @@ DEFPY(neighbor_ls_remote_link_id,
 
 DEFPY(no_neighbor_ls_remote_link_id,
       no_neighbor_ls_remote_link_id_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str remote-link-id [(1-4294967295)$link_id]",
+      "no neighbor <A.B.C.D|X:X::X:X|X:X::X:X%ZI|WORD>$peer_str remote-link-id [(1-4294967295)$link_id]",
       NO_STR
       NEIGHBOR_STR
       NEIGHBOR_ADDR_STR2
