@@ -151,6 +151,18 @@ struct vrf_irt_node {
 	struct list *vrfs;
 };
 
+/*
+ * Wrapper struct for l3 RT's
+ */
+struct vrf_route_target {
+	/* flags based on config to determine how RTs are handled */
+	uint8_t flags;
+#define BGP_VRF_RT_AUTO (1 << 0)
+#define BGP_VRF_RT_WILD (1 << 1)
+
+	struct ecommunity *ecom;
+};
+
 
 #define RT_TYPE_IMPORT 1
 #define RT_TYPE_EXPORT 2
@@ -199,18 +211,6 @@ struct bgp_evpn_info {
 struct evpn_remote_ip {
 	struct ipaddr addr;
 	struct list *macip_path_list;
-};
-
-/*
- * Wrapper struct for l3 RT's
- */
-struct vrf_route_target {
-	/* flags based on config to determine how RTs are handled */
-	uint8_t flags;
-#define BGP_VRF_RT_AUTO (1 << 0)
-#define BGP_VRF_RT_WILD (1 << 1)
-
-	struct ecommunity *ecom;
 };
 
 static inline int is_vrf_rd_configured(struct bgp *bgp_vrf)
