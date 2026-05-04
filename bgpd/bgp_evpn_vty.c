@@ -6946,7 +6946,7 @@ DEFUN (show_bgp_vrf_l3vni_info,
 	return CMD_SUCCESS;
 }
 
-static int add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
+static int vrf_add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
 		  bool is_wildcard)
 {
 	/* Do nothing if we already have this route-target */
@@ -6967,7 +6967,7 @@ static int add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
 	return 0;
 }
 
-static int del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
+static int vrf_del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
 {
 	/* Verify we already have this route-target */
 	if (is_import) {
@@ -6987,7 +6987,7 @@ static int del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
 	return 0;
 }
 
-static int parse_rtlist(struct bgp *bgp, struct vty *vty, int argc,
+static int vrf_process_rtlist(struct bgp *bgp, struct vty *vty, int argc,
 			struct cmd_token **argv, int rt_idx, bool is_add,
 			bool is_import)
 {
@@ -7025,7 +7025,7 @@ static int parse_rtlist(struct bgp *bgp, struct vty *vty, int argc,
 		ecommunity_str(ecom);
 
 		if (is_add) {
-			if (add_rt(bgp, ecom, is_import, is_wildcard) != 0) {
+			if (vrf_add_rt(bgp, ecom, is_import, is_wildcard) != 0) {
 				vty_out(vty,
 					"%% RT specified already configured for this VRF: %s\n",
 					argv[i]->arg);
@@ -7034,7 +7034,7 @@ static int parse_rtlist(struct bgp *bgp, struct vty *vty, int argc,
 			}
 
 		} else {
-			if (del_rt(bgp, ecom, is_import) != 0) {
+			if (vrf_del_rt(bgp, ecom, is_import) != 0) {
 				vty_out(vty,
 					"%% RT specified does not match configuration for this VRF: %s\n",
 					argv[i]->arg);
@@ -7094,13 +7094,13 @@ DEFUN (bgp_evpn_vrf_rt,
 
 	/* Add/update the import route-target */
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_IMPORT)
-		tmp_ret = parse_rtlist(bgp, vty, argc, argv, 2, true, true);
+		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 2, true, true);
 
 	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
 		ret = tmp_ret;
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_EXPORT)
-		tmp_ret = parse_rtlist(bgp, vty, argc, argv, 2, true, false);
+		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 2, true, false);
 
 	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
 		ret = tmp_ret;
@@ -7209,13 +7209,13 @@ DEFUN (no_bgp_evpn_vrf_rt,
 	}
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_IMPORT)
-		tmp_ret = parse_rtlist(bgp, vty, argc, argv, 3, false, true);
+		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 3, false, true);
 
 	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
 		ret = tmp_ret;
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_EXPORT)
-		tmp_ret = parse_rtlist(bgp, vty, argc, argv, 3, false, false);
+		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 3, false, false);
 
 	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
 		ret = tmp_ret;
