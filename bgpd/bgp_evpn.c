@@ -172,7 +172,7 @@ static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val *rt)
 		return NULL;
 	}
 
-	irt = XCALLOC(MTYPE_BGP_EVPN_VRF_IMPORT_RT,
+	irt = XCALLOC(MTYPE_BGP_EVPN_VRF_IRT_NODE,
 		      sizeof(struct vrf_irt_node));
 
 	irt->rt = *rt;
@@ -200,12 +200,12 @@ static void vrf_irt_node_free(struct vrf_irt_node *irt)
 
 	hash_release(bgp_evpn->vrf_import_rt_hash, irt);
 	list_delete(&irt->vrfs);
-	XFREE(MTYPE_BGP_EVPN_VRF_IMPORT_RT, irt);
+	XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
 }
 
 static void hash_vrf_irt_node_free(struct vrf_irt_node *irt)
 {
-	XFREE(MTYPE_BGP_EVPN_VRF_IMPORT_RT, irt);
+	XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
 }
 
 /*
@@ -277,7 +277,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 {
 	struct evi_irt_node *irt;
 
-	irt = XCALLOC(MTYPE_BGP_EVPN_IMPORT_RT, sizeof(struct evi_irt_node));
+	irt = XCALLOC(MTYPE_BGP_EVPN_EVI_IRT_NODE, sizeof(struct evi_irt_node));
 
 	irt->rt = *rt;
 	irt->evis = list_new();
@@ -295,12 +295,12 @@ static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
 	hash_release(bgp->import_rt_hash, irt);
 	list_delete(&irt->evis);
-	XFREE(MTYPE_BGP_EVPN_IMPORT_RT, irt);
+	XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, irt);
 }
 
 static void hash_evi_irt_node_free(struct evi_irt_node *irt)
 {
-	XFREE(MTYPE_BGP_EVPN_IMPORT_RT, irt);
+	XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, irt);
 }
 
 /*
