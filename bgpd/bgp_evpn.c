@@ -282,7 +282,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 	irt->evis = list_new();
 
 	/* Add to hash */
-	(void)hash_get(bgp->import_rt_hash, irt, hash_alloc_intern);
+	(void)hash_get(bgp->evi_import_rt_hash, irt, hash_alloc_intern);
 
 	return irt;
 }
@@ -292,7 +292,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
  */
 static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
-	hash_release(bgp->import_rt_hash, irt);
+	hash_release(bgp->evi_import_rt_hash, irt);
 	list_delete(&irt->evis);
 	XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, irt);
 }
@@ -314,7 +314,7 @@ static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
 
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.rt, rt, ECOMMUNITY_SIZE);
-	irt = hash_lookup(bgp->import_rt_hash, &tmp);
+	irt = hash_lookup(bgp->evi_import_rt_hash, &tmp);
 	return irt;
 }
 
@@ -7789,7 +7789,7 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 		     (void (*)(struct hash_bucket *, void *))free_vni_entry,
 		     bgp);
 
-	hash_clean_and_free(&bgp->import_rt_hash,
+	hash_clean_and_free(&bgp->evi_import_rt_hash,
 			    (void (*)(void *))hash_evi_irt_node_free);
 
 	hash_clean_and_free(&bgp->vrf_import_rt_hash,
@@ -7830,7 +7830,7 @@ void bgp_evpn_init(struct bgp *bgp)
 	bgp->vni_svi_hash =
 		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
 			    "BGP VNI hash based on SVI ifindex");
-	bgp->import_rt_hash =
+	bgp->evi_import_rt_hash =
 		hash_create(evi_irt_node_hash_key_make, evi_irt_node_hash_cmp,
 			    "BGP Import RT Hash");
 	bgp->vrf_import_rt_hash =

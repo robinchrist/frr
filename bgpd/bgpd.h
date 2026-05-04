@@ -971,7 +971,7 @@ struct bgp {
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
 	/* Hash table of Import RTs to EVIs */
-	struct hash *import_rt_hash;
+	struct hash *evi_import_rt_hash;
 
 	/* Hash table of VRF import RTs to VRFs */
 	struct hash *vrf_import_rt_hash;

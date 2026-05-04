@@ -2520,7 +2520,7 @@ static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp,
 	args[1] = json;
 
 	hash_iterate(
-		bgp->import_rt_hash,
+		bgp->evi_import_rt_hash,
 		(void (*)(struct hash_bucket *, void *))show_import_rt_entry,
 		args);
 }
