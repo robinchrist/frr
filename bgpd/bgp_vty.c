@@ -12441,7 +12441,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 			char *ecom_str;
 			struct listnode *node, *nnode;
-			struct vrf_route_target *l3rt;
+			struct evpn_route_target *l3rt;
 			json_object *json_import_rt_list = NULL;
 
 			json_import_rt_list = json_object_new_array();
@@ -12486,7 +12486,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 			char *ecom_str;
 			struct listnode *node, *nnode;
-			struct vrf_route_target *l3rt;
+			struct evpn_route_target *l3rt;
 			json_object *json_export_rt_list = NULL;
 
 			json_export_rt_list = json_object_new_array();
@@ -12536,7 +12536,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 			char *ecom_str;
 			struct listnode *node, *nnode;
-			struct vrf_route_target *l3rt;
+			struct evpn_route_target *l3rt;
 
 			vty_out(vty, "Route Target Import\n");
 			for (ALL_LIST_ELEMENTS(bgp->vrf_import_rtl, node, nnode, l3rt)) {
@@ -12573,7 +12573,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 			char *ecom_str;
 			struct listnode *node, *nnode;
-			struct vrf_route_target *l3rt;
+			struct evpn_route_target *l3rt;
 
 			vty_out(vty, "Route Target Export\n");
 			for (ALL_LIST_ELEMENTS(bgp->vrf_export_rtl, node, nnode, l3rt)) {

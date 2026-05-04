@@ -367,7 +367,7 @@ static void display_l3vni(struct vty *vty, struct bgp *bgp_vrf,
 {
 	char *ecom_str;
 	struct listnode *node, *nnode;
-	struct vrf_route_target *l3rt;
+	struct evpn_route_target *l3rt;
 	struct bgp *bgp_evpn = NULL;
 	json_object *json_import_rtl = NULL;
 	json_object *json_export_rtl = NULL;
@@ -1017,7 +1017,7 @@ static void show_l3vni_entry(struct vty *vty, struct bgp *bgp,
 	char rt_buf[25];
 	char *ecom_str;
 	struct listnode *node, *nnode;
-	struct vrf_route_target *l3rt;
+	struct evpn_route_target *l3rt;
 	struct bgp *bgp_evpn;
 
 	if (!bgp->l3vni)
@@ -6811,7 +6811,7 @@ static bool bgp_evpn_vrf_rt_matches_existing(struct list *rtl,
 					     struct ecommunity *ecomtarget)
 {
 	struct listnode *node;
-	struct vrf_route_target *l3rt;
+	struct evpn_route_target *l3rt;
 
 	for (ALL_LIST_ELEMENTS_RO(rtl, node, l3rt)) {
 		if (ecommunity_match(l3rt->ecom, ecomtarget))
@@ -6838,7 +6838,7 @@ DEFUN (show_bgp_vrf_l3vni_info,
 	struct bgp *bgp = NULL;
 	struct listnode *node = NULL;
 	struct bgpevpn *vpn = NULL;
-	struct vrf_route_target *l3rt;
+	struct evpn_route_target *l3rt;
 	json_object *json = NULL;
 	json_object *json_vnis = NULL;
 	json_object *json_export_rts = NULL;
@@ -7788,7 +7788,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
 	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 		char *ecom_str;
 		struct listnode *node, *nnode;
-		struct vrf_route_target *l3rt;
+		struct evpn_route_target *l3rt;
 
 		for (ALL_LIST_ELEMENTS(bgp->vrf_import_rtl, node, nnode,
 				       l3rt)) {
@@ -7830,7 +7830,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
 	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 		char *ecom_str;
 		struct listnode *node, *nnode;
-		struct vrf_route_target *l3rt;
+		struct evpn_route_target *l3rt;
 
 		for (ALL_LIST_ELEMENTS(bgp->vrf_export_rtl, node, nnode,
 				       l3rt)) {

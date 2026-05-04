@@ -154,7 +154,7 @@ struct vrf_irt_node {
 /*
  * Wrapper struct for l3 RT's
  */
-struct vrf_route_target {
+struct evpn_route_target {
 	/* flags based on config to determine how RTs are handled */
 	uint8_t flags;
 #define BGP_VRF_RT_AUTO (1 << 0)
