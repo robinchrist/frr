@@ -235,12 +235,12 @@ static struct vrf_irt_node *lookup_vrf_irt_node(struct ecommunity_val *rt)
 /*
  * Is specified VRF present on the RT's list of "importing" VRFs?
  */
-static int is_vrf_present_in_irt_vrfs(struct list *vrfs, struct bgp *bgp_vrf)
+static int is_vrf_present_in_vrf_irt_node(struct vrf_irt_node *irt_node, struct bgp *bgp_vrf)
 {
 	struct listnode *node = NULL, *nnode = NULL;
 	struct bgp *tmp_bgp_vrf = NULL;
 
-	for (ALL_LIST_ELEMENTS(vrfs, node, nnode, tmp_bgp_vrf)) {
+	for (ALL_LIST_ELEMENTS(irt_node->vrfs, node, nnode, tmp_bgp_vrf)) {
 		if (tmp_bgp_vrf == bgp_vrf)
 			return 1;
 	}
@@ -509,7 +509,7 @@ static void map_vrf_to_rt(struct bgp *bgp_vrf, struct vrf_route_target *l3rt)
 
 		irt = lookup_vrf_irt_node(&eval_tmp);
 
-		if (irt && is_vrf_present_in_irt_vrfs(irt->vrfs, bgp_vrf))
+		if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
 			return; /* Already mapped. */
 
 		if (!irt)
@@ -3845,9 +3845,8 @@ static int is_route_matching_for_vrf(struct bgp *bgp_vrf,
 
 		/* See if this RT matches specified VNIs import RTs */
 		irt = lookup_vrf_irt_node(eval);
-		if (irt)
-			if (is_vrf_present_in_irt_vrfs(irt->vrfs, bgp_vrf))
-				return 1;
+		if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
+			return 1;
 
 		/* Also check for non-exact match. In this, we mask out the AS
 		 * and
@@ -3863,9 +3862,8 @@ static int is_route_matching_for_vrf(struct bgp *bgp_vrf,
 			mask_ecom_global_admin(&eval_tmp, eval);
 			irt = lookup_vrf_irt_node(&eval_tmp);
 		}
-		if (irt)
-			if (is_vrf_present_in_irt_vrfs(irt->vrfs, bgp_vrf))
-				return 1;
+		if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
+			return 1;
 	}
 
 	return 0;
