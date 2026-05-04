@@ -147,7 +147,7 @@ struct vrf_irt_node {
 	/* RT */
 	struct ecommunity_val rt;
 
-	/* List of VNIs importing routes matching this RT. */
+	/* List of EVIs importing routes matching this RT. */
 	struct list *vrfs;
 };
 
