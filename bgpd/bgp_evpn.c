@@ -383,7 +383,7 @@ bool is_route_injectable_into_evpn(struct bgp_path_info *pi)
 /*
  * Compare Route Targets.
  */
-int bgp_evpn_route_target_cmp(struct ecommunity *ecom1,
+int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
 			      struct ecommunity *ecom2)
 {
 	if (ecom1 && !ecom2)
@@ -413,7 +413,7 @@ int bgp_evpn_route_target_cmp(struct ecommunity *ecom1,
 static int evpn_vrf_route_target_cmp(struct vrf_route_target *rt1,
 				     struct vrf_route_target *rt2)
 {
-	return bgp_evpn_route_target_cmp(rt1->ecom, rt2->ecom);
+	return bgp_evpn_route_target_ecom_cmp(rt1->ecom, rt2->ecom);
 }
 
 void bgp_evpn_xxport_delete_ecomm(void *val)
@@ -6750,11 +6750,11 @@ struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 	/* Initialize route-target import and export lists */
 	vpn->import_rtl = list_new();
 	vpn->import_rtl->cmp =
-		(int (*)(void *, void *))bgp_evpn_route_target_cmp;
+		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	vpn->import_rtl->del = bgp_evpn_xxport_delete_ecomm;
 	vpn->export_rtl = list_new();
 	vpn->export_rtl->cmp =
-		(int (*)(void *, void *))bgp_evpn_route_target_cmp;
+		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	vpn->export_rtl->del = bgp_evpn_xxport_delete_ecomm;
 	bf_assign_index(bm->rd_idspace, vpn->rd_id);
 	derive_rd_rt_for_vni(bgp, vpn);

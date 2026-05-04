@@ -5205,7 +5205,7 @@ void bgp_evpn_mh_init(void)
 	bgp_mh_info->enable_ead_evi_tx = BGP_EVPN_MH_EAD_EVI_TX_DEF;
 	bgp_mh_info->ead_es_export_rtl = list_new();
 	bgp_mh_info->ead_es_export_rtl->cmp =
-		(int (*)(void *, void *))bgp_evpn_route_target_cmp;
+		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	bgp_mh_info->ead_es_export_rtl->del = bgp_evpn_xxport_delete_ecomm;
 
 	/* config knobs - XXX add cli to control it */
