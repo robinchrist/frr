@@ -132,12 +132,22 @@ DECLARE_LIST(zebra_l2_vni, struct bgpevpn, zl2vni);
  * RT linking to all EVIs that will import routes matching this RT.
  */
 struct evi_irt_node {
+	/* typesafe hash item */
+	struct evi_irt_nodes_item hash_item;
+
 	/* RT */
 	struct ecommunity_val rt;
 
 	/* List of EVIs importing routes matching this RT. */
 	struct list *evis;
 };
+
+extern int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
+				 const struct evi_irt_node *b);
+extern uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt);
+
+DECLARE_HASH(evi_irt_nodes, struct evi_irt_node, hash_item,
+	     evi_irt_node_hash_cmp, evi_irt_node_hash_key);
 
 /* Mapping of Import RT to VRFs.
  * The Import RTs of all VRFss are maintained in a hash table with each

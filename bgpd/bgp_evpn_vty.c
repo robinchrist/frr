@@ -265,20 +265,6 @@ static void display_import_rt(struct vty *vty, struct evi_irt_node *irt,
 	}
 }
 
-static void show_import_rt_entry(struct hash_bucket *bucket, void *args[])
-{
-	json_object *json = NULL;
-	struct vty *vty = NULL;
-	struct evi_irt_node *irt = (struct evi_irt_node *)bucket->data;
-
-	vty = args[0];
-	json = args[1];
-
-	display_import_rt(vty, irt, json);
-
-	return;
-}
-
 static void bgp_evpn_show_route_rd_header(struct vty *vty,
 					  struct bgp_dest *rd_dest,
 					  json_object *json, char *rd_str,
@@ -2514,15 +2500,10 @@ static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp,
 				 json_object *json)
 {
-	void *args[2];
+	struct evi_irt_node *irt;
 
-	args[0] = vty;
-	args[1] = json;
-
-	hash_iterate(
-		bgp->evi_import_rt_hash,
-		(void (*)(struct hash_bucket *, void *))show_import_rt_entry,
-		args);
+	frr_each (evi_irt_nodes, &bgp->evi_irt_nodes, irt)
+		display_import_rt(vty, irt, json);
 }
 
 /*
