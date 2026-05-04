@@ -251,7 +251,7 @@ static void display_import_rt(struct vty *vty, struct evi_irt_node *irt,
 			"\nList of VNIs importing routes with this route-target:\n");
 	}
 
-	for (ALL_LIST_ELEMENTS(irt->vnis, node, nnode, tmp_vpn)) {
+	for (ALL_LIST_ELEMENTS(irt->evis, node, nnode, tmp_vpn)) {
 		if (json)
 			json_object_array_add(
 				json_vnis, json_object_new_int(tmp_vpn->vni));

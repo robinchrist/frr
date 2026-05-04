@@ -280,7 +280,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 	irt = XCALLOC(MTYPE_BGP_EVPN_IMPORT_RT, sizeof(struct evi_irt_node));
 
 	irt->rt = *rt;
-	irt->vnis = list_new();
+	irt->evis = list_new();
 
 	/* Add to hash */
 	(void)hash_get(bgp->import_rt_hash, irt, hash_alloc_intern);
@@ -294,7 +294,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
 	hash_release(bgp->import_rt_hash, irt);
-	list_delete(&irt->vnis);
+	list_delete(&irt->evis);
 	XFREE(MTYPE_BGP_EVPN_IMPORT_RT, irt);
 }
 
@@ -322,12 +322,12 @@ static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
 /*
  * Is specified VNI present on the RT's list of "importing" VNIs?
  */
-static int is_vni_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgpevpn *vpn)
+static int is_evi_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgpevpn *vpn)
 {
 	struct listnode *node, *nnode;
 	struct bgpevpn *tmp_vpn;
 
-	for (ALL_LIST_ELEMENTS(irt_node->vnis, node, nnode, tmp_vpn)) {
+	for (ALL_LIST_ELEMENTS(irt_node->evis, node, nnode, tmp_vpn)) {
 		if (tmp_vpn == vpn)
 			return 1;
 	}
@@ -568,7 +568,7 @@ static void map_vni_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 		mask_ecom_global_admin(&eval_tmp, eval);
 
 	irt = lookup_evi_irt_node(bgp, &eval_tmp);
-	if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+	if (irt && is_evi_present_in_evi_irt_node(irt, vpn))
 		/* Already mapped. */
 		return;
 
@@ -576,7 +576,7 @@ static void map_vni_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 		irt = evi_irt_node_new(bgp, &eval_tmp);
 
 	/* Add VNI to the hash list for this RT. */
-	listnode_add(irt->vnis, vpn);
+	listnode_add(irt->evis, vpn);
 }
 
 /*
@@ -587,8 +587,8 @@ static void unmap_vni_from_rt(struct bgp *bgp, struct bgpevpn *vpn,
 			      struct evi_irt_node *irt)
 {
 	/* Delete VNI from hash list for this RT. */
-	listnode_delete(irt->vnis, vpn);
-	if (!listnode_head(irt->vnis)) {
+	listnode_delete(irt->evis, vpn);
+	if (!listnode_head(irt->evis)) {
 		evi_irt_node_free(bgp, irt);
 	}
 }
@@ -3909,7 +3909,7 @@ static int is_route_matching_for_vni(struct bgp *bgp, struct bgpevpn *vpn,
 
 		/* See if this RT matches specified VNIs import RTs */
 		irt = lookup_evi_irt_node(bgp, eval);
-		if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+		if (irt && is_evi_present_in_evi_irt_node(irt, vpn))
 			return 1;
 
 		/* Also check for non-exact match. In this, we mask out the AS
@@ -3926,7 +3926,7 @@ static int is_route_matching_for_vni(struct bgp *bgp, struct bgpevpn *vpn,
 			mask_ecom_global_admin(&eval_tmp, eval);
 			irt = lookup_evi_irt_node(bgp, &eval_tmp);
 		}
-		if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+		if (irt && is_evi_present_in_evi_irt_node(irt, vpn))
 			return 1;
 	}
 
@@ -4518,7 +4518,7 @@ static int bgp_evpn_install_uninstall_table(struct bgp *bgp, afi_t afi,
 				irt = in_vni_rt ? lookup_evi_irt_node(bgp, eval) : NULL;
 				if (irt)
 					install_uninstall_route_in_vnis(bgp, afi, safi, evp, pi,
-									irt->vnis, import);
+									irt->evis, import);
 			}
 
 			if (evp->prefix.route_type != BGP_EVPN_AD_ROUTE &&
@@ -4551,7 +4551,7 @@ static int bgp_evpn_install_uninstall_table(struct bgp *bgp, afi_t afi,
 
 			if (irt)
 				install_uninstall_route_in_vnis(
-					bgp, afi, safi, evp, pi, irt->vnis,
+					bgp, afi, safi, evp, pi, irt->evis,
 					import);
 			if (vrf_irt)
 				install_uninstall_route_in_vrfs(

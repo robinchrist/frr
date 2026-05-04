@@ -127,16 +127,16 @@ DECLARE_QOBJ_TYPE(bgpevpn);
 
 DECLARE_LIST(zebra_l2_vni, struct bgpevpn, zl2vni);
 
-/* Mapping of Import RT to VNIs.
- * The Import RTs of all VNIs are maintained in a hash table with each
- * RT linking to all VNIs that will import routes matching this RT.
+/* Mapping of Import RT to EVIs.
+ * The Import RTs of all EVIs are maintained in a hash table with each
+ * RT linking to all EVIs that will import routes matching this RT.
  */
 struct evi_irt_node {
 	/* RT */
 	struct ecommunity_val rt;
 
-	/* List of VNIs importing routes matching this RT. */
-	struct list *vnis;
+	/* List of EVIs importing routes matching this RT. */
+	struct list *evis;
 };
 
 /* Mapping of Import RT to VRFs.
