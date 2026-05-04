@@ -322,12 +322,12 @@ static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
 /*
  * Is specified VNI present on the RT's list of "importing" VNIs?
  */
-static int is_vni_present_in_irt_vnis(struct list *vnis, struct bgpevpn *vpn)
+static int is_vni_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgpevpn *vpn)
 {
 	struct listnode *node, *nnode;
 	struct bgpevpn *tmp_vpn;
 
-	for (ALL_LIST_ELEMENTS(vnis, node, nnode, tmp_vpn)) {
+	for (ALL_LIST_ELEMENTS(irt_node->vnis, node, nnode, tmp_vpn)) {
 		if (tmp_vpn == vpn)
 			return 1;
 	}
@@ -568,10 +568,9 @@ static void map_vni_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 		mask_ecom_global_admin(&eval_tmp, eval);
 
 	irt = lookup_evi_irt_node(bgp, &eval_tmp);
-	if (irt)
-		if (is_vni_present_in_irt_vnis(irt->vnis, vpn))
-			/* Already mapped. */
-			return;
+	if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+		/* Already mapped. */
+		return;
 
 	if (!irt)
 		irt = evi_irt_node_new(bgp, &eval_tmp);
@@ -3910,9 +3909,8 @@ static int is_route_matching_for_vni(struct bgp *bgp, struct bgpevpn *vpn,
 
 		/* See if this RT matches specified VNIs import RTs */
 		irt = lookup_evi_irt_node(bgp, eval);
-		if (irt)
-			if (is_vni_present_in_irt_vnis(irt->vnis, vpn))
-				return 1;
+		if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+			return 1;
 
 		/* Also check for non-exact match. In this, we mask out the AS
 		 * and
@@ -3928,9 +3926,8 @@ static int is_route_matching_for_vni(struct bgp *bgp, struct bgpevpn *vpn,
 			mask_ecom_global_admin(&eval_tmp, eval);
 			irt = lookup_evi_irt_node(bgp, &eval_tmp);
 		}
-		if (irt)
-			if (is_vni_present_in_irt_vnis(irt->vnis, vpn))
-				return 1;
+		if (irt && is_vni_present_in_evi_irt_node(irt, vpn))
+			return 1;
 	}
 
 	return 0;
