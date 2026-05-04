@@ -169,7 +169,7 @@ static void show_vrf_import_rt_entry(struct hash_bucket *bucket, void *args[])
 	display_vrf_import_rt(vty, irt, json);
 }
 
-static void display_import_rt(struct vty *vty, struct irt_node *irt,
+static void display_import_rt(struct vty *vty, struct evi_irt_node *irt,
 			      json_object *json)
 {
 	const uint8_t *pnt;
@@ -269,7 +269,7 @@ static void show_import_rt_entry(struct hash_bucket *bucket, void *args[])
 {
 	json_object *json = NULL;
 	struct vty *vty = NULL;
-	struct irt_node *irt = (struct irt_node *)bucket->data;
+	struct evi_irt_node *irt = (struct evi_irt_node *)bucket->data;
 
 	vty = args[0];
 	json = args[1];

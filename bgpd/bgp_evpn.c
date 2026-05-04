@@ -252,7 +252,7 @@ static int is_vrf_present_in_irt_vrfs(struct list *vrfs, struct bgp *bgp_vrf)
  */
 static unsigned int import_rt_hash_key_make(const void *p)
 {
-	const struct irt_node *irt = p;
+	const struct evi_irt_node *irt = p;
 	const uint8_t *pnt = irt->rt.val;
 
 	return jhash(pnt, 8, 0xdeadbeef);
@@ -263,8 +263,8 @@ static unsigned int import_rt_hash_key_make(const void *p)
  */
 static bool import_rt_hash_cmp(const void *p1, const void *p2)
 {
-	const struct irt_node *irt1 = p1;
-	const struct irt_node *irt2 = p2;
+	const struct evi_irt_node *irt1 = p1;
+	const struct evi_irt_node *irt2 = p2;
 
 	return (memcmp(irt1->rt.val, irt2->rt.val, ECOMMUNITY_SIZE) == 0);
 }
@@ -272,12 +272,12 @@ static bool import_rt_hash_cmp(const void *p1, const void *p2)
 /*
  * Create a new import_rt
  */
-static struct irt_node *import_rt_new(struct bgp *bgp,
+static struct evi_irt_node *import_rt_new(struct bgp *bgp,
 				      struct ecommunity_val *rt)
 {
-	struct irt_node *irt;
+	struct evi_irt_node *irt;
 
-	irt = XCALLOC(MTYPE_BGP_EVPN_IMPORT_RT, sizeof(struct irt_node));
+	irt = XCALLOC(MTYPE_BGP_EVPN_IMPORT_RT, sizeof(struct evi_irt_node));
 
 	irt->rt = *rt;
 	irt->vnis = list_new();
@@ -291,14 +291,14 @@ static struct irt_node *import_rt_new(struct bgp *bgp,
 /*
  * Free the import rt node
  */
-static void import_rt_free(struct bgp *bgp, struct irt_node *irt)
+static void import_rt_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
 	hash_release(bgp->import_rt_hash, irt);
 	list_delete(&irt->vnis);
 	XFREE(MTYPE_BGP_EVPN_IMPORT_RT, irt);
 }
 
-static void hash_import_rt_free(struct irt_node *irt)
+static void hash_import_rt_free(struct evi_irt_node *irt)
 {
 	XFREE(MTYPE_BGP_EVPN_IMPORT_RT, irt);
 }
@@ -307,11 +307,11 @@ static void hash_import_rt_free(struct irt_node *irt)
  * Function to lookup Import RT node - used to map a RT to set of
  * VNIs importing routes with that RT.
  */
-static struct irt_node *lookup_import_rt(struct bgp *bgp,
+static struct evi_irt_node *lookup_import_rt(struct bgp *bgp,
 					 struct ecommunity_val *rt)
 {
-	struct irt_node *irt;
-	struct irt_node tmp;
+	struct evi_irt_node *irt;
+	struct evi_irt_node tmp;
 
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.rt, rt, ECOMMUNITY_SIZE);
@@ -556,7 +556,7 @@ static void unmap_vrf_from_rt(struct bgp *bgp_vrf,
 static void map_vni_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 			  struct ecommunity_val *eval)
 {
-	struct irt_node *irt;
+	struct evi_irt_node *irt;
 	struct ecommunity_val eval_tmp;
 
 	/* If using "automatic" RT, we only care about the local-admin
@@ -585,7 +585,7 @@ static void map_vni_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
  * VNIs for this RT, then the RT hash is deleted.
  */
 static void unmap_vni_from_rt(struct bgp *bgp, struct bgpevpn *vpn,
-			      struct irt_node *irt)
+			      struct evi_irt_node *irt)
 {
 	/* Delete VNI from hash list for this RT. */
 	listnode_delete(irt->vnis, vpn);
@@ -3899,7 +3899,7 @@ static int is_route_matching_for_vni(struct bgp *bgp, struct bgpevpn *vpn,
 		uint8_t type, sub_type;
 		struct ecommunity_val *eval;
 		struct ecommunity_val eval_tmp;
-		struct irt_node *irt;
+		struct evi_irt_node *irt;
 
 		/* Only deal with RTs */
 		pnt = (ecom->val + (i * ecom->unit_size));
@@ -4490,7 +4490,7 @@ static int bgp_evpn_install_uninstall_table(struct bgp *bgp, afi_t afi,
 		uint8_t type, sub_type;
 		struct ecommunity_val *eval;
 		struct ecommunity_val eval_tmp;
-		struct irt_node *irt;	 /* import rt for l2vni */
+		struct evi_irt_node *irt;	 /* import rt for l2vni */
 		struct vrf_irt_node *vrf_irt; /* import rt for l3vni */
 		struct bgp_evpn_es *es;
 
@@ -6627,7 +6627,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
 
 	for (ALL_LIST_ELEMENTS(vpn->import_rtl, node, nnode, ecom)) {
 		for (i = 0; i < ecom->size; i++) {
-			struct irt_node *irt;
+			struct evi_irt_node *irt;
 			struct ecommunity_val eval_tmp;
 
 			eval = (struct ecommunity_val *)(ecom->val

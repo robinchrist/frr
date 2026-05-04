@@ -131,7 +131,7 @@ DECLARE_LIST(zebra_l2_vni, struct bgpevpn, zl2vni);
  * The Import RTs of all VNIs are maintained in a hash table with each
  * RT linking to all VNIs that will import routes matching this RT.
  */
-struct irt_node {
+struct evi_irt_node {
 	/* RT */
 	struct ecommunity_val rt;
 
