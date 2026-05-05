@@ -154,12 +154,22 @@ DECLARE_HASH(evi_irt_nodes, struct evi_irt_node, hash_item,
  * RT linking to all VRFs that will import routes matching this RT.
  */
 struct vrf_irt_node {
+	/* typesafe hash item */
+	struct vrf_irt_nodes_item hash_item;
+
 	/* RT */
 	struct ecommunity_val rt;
 
-	/* List of EVIs importing routes matching this RT. */
+	/* List of VRFs importing routes matching this RT. */
 	struct list *vrfs;
 };
+
+extern int vrf_irt_node_hash_cmp(const struct vrf_irt_node *a,
+				 const struct vrf_irt_node *b);
+extern uint32_t vrf_irt_node_hash_key(const struct vrf_irt_node *irt);
+
+DECLARE_HASH(vrf_irt_nodes, struct vrf_irt_node, hash_item,
+	     vrf_irt_node_hash_cmp, vrf_irt_node_hash_key);
 
 /*
  * Wrapper struct for l3 RT's

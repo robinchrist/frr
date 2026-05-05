@@ -24,6 +24,7 @@ PREDECL_LIST(zebra_l2_vni);
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
 PREDECL_HASH(evi_irt_nodes);
+PREDECL_HASH(vrf_irt_nodes);
 
 enum bgp_bp_install_type {
 	BGP_BP_INSTALL_ROUTE,
@@ -978,7 +979,7 @@ struct bgp {
 	struct evi_irt_nodes_head evi_irt_nodes;
 
 	/* Hash table of VRF import RTs to VRFs */
-	struct hash *vrf_import_rt_hash;
+	struct vrf_irt_nodes_head vrf_irt_nodes;
 
 	/* L3-VNI corresponding to this vrf */
 	vni_t l3vni;

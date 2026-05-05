@@ -157,18 +157,6 @@ static void display_vrf_import_rt(struct vty *vty, struct vrf_irt_node *irt,
 	}
 }
 
-static void show_vrf_import_rt_entry(struct hash_bucket *bucket, void *args[])
-{
-	json_object *json = NULL;
-	struct vty *vty = NULL;
-	struct vrf_irt_node *irt = (struct vrf_irt_node *)bucket->data;
-
-	vty = (struct vty *)args[0];
-	json = (struct json_object *)args[1];
-
-	display_vrf_import_rt(vty, irt, json);
-}
-
 static void display_import_rt(struct vty *vty, struct evi_irt_node *irt,
 			      json_object *json)
 {
@@ -2483,15 +2471,10 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgpevpn *vpn)
 static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 				     json_object *json)
 {
-	void *args[2];
+	struct vrf_irt_node *irt;
 
-	args[0] = vty;
-	args[1] = json;
-
-	hash_iterate(bgp_evpn->vrf_import_rt_hash,
-		     (void (*)(struct hash_bucket *,
-			       void *))show_vrf_import_rt_entry,
-		     args);
+	frr_each (vrf_irt_nodes, &bgp_evpn->vrf_irt_nodes, irt)
+		display_vrf_import_rt(vty, irt, json);
 }
 
 /*

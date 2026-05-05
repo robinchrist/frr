@@ -135,25 +135,20 @@ int vni_list_cmp(void *p1, void *p2)
 }
 
 /*
- * Make vrf import route target hash key.
+ * Hash key function for vrf import route target.
  */
-static unsigned int vrf_irt_node_hash_key_make(const void *p)
+uint32_t vrf_irt_node_hash_key(const struct vrf_irt_node *irt)
 {
-	const struct vrf_irt_node *irt = p;
-	const uint8_t *pnt = irt->rt.val;
-
-	return jhash(pnt, 8, 0x5abc1234);
+	return jhash(irt->rt.val, 8, 0x5abc1234);
 }
 
 /*
- * Comparison function for vrf import rt hash
+ * Comparison function for vrf import rt hash (0 == equal).
  */
-static bool vrf_irt_node_hash_cmp(const void *p1, const void *p2)
+int vrf_irt_node_hash_cmp(const struct vrf_irt_node *a,
+			  const struct vrf_irt_node *b)
 {
-	const struct vrf_irt_node *irt1 = p1;
-	const struct vrf_irt_node *irt2 = p2;
-
-	return (memcmp(irt1->rt.val, irt2->rt.val, ECOMMUNITY_SIZE) == 0);
+	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
 }
 
 /*
@@ -177,8 +172,8 @@ static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val *rt)
 	irt->rt = *rt;
 	irt->vrfs = list_new();
 
-	/* Add to hash */
-	(void)hash_get(bgp_evpn->vrf_import_rt_hash, irt, hash_alloc_intern);
+	/* Add to typesafe hash */
+	vrf_irt_nodes_add(&bgp_evpn->vrf_irt_nodes, irt);
 
 	return irt;
 }
@@ -197,24 +192,18 @@ static void vrf_irt_node_free(struct vrf_irt_node *irt)
 		return;
 	}
 
-	hash_release(bgp_evpn->vrf_import_rt_hash, irt);
+	vrf_irt_nodes_del(&bgp_evpn->vrf_irt_nodes, irt);
 	list_delete(&irt->vrfs);
-	XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
-}
-
-static void hash_vrf_irt_node_free(struct vrf_irt_node *irt)
-{
 	XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
 }
 
 /*
  * Function to lookup Import RT node - used to map a RT to set of
- * VNIs importing routes with that RT.
+ * VRFs importing routes with that RT.
  */
 static struct vrf_irt_node *lookup_vrf_irt_node(struct ecommunity_val *rt)
 {
 	struct bgp *bgp_evpn = NULL;
-	struct vrf_irt_node *irt;
 	struct vrf_irt_node tmp;
 
 	bgp_evpn = bgp_get_evpn();
@@ -227,8 +216,7 @@ static struct vrf_irt_node *lookup_vrf_irt_node(struct ecommunity_val *rt)
 
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.rt, rt, ECOMMUNITY_SIZE);
-	irt = hash_lookup(bgp_evpn->vrf_import_rt_hash, &tmp);
-	return irt;
+	return vrf_irt_nodes_find(&bgp_evpn->vrf_irt_nodes, &tmp);
 }
 
 /*
@@ -7789,8 +7777,17 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 		evi_irt_nodes_fini(&bgp->evi_irt_nodes);
 	}
 
-	hash_clean_and_free(&bgp->vrf_import_rt_hash,
-			    (void (*)(void *))hash_vrf_irt_node_free);
+	{
+		struct vrf_irt_node *irt;
+		uint32_t idx = 0;
+
+		while ((irt = vrf_irt_nodes_pop_all(&bgp->vrf_irt_nodes,
+						    &idx))) {
+			list_delete(&irt->vrfs);
+			XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
+		}
+		vrf_irt_nodes_fini(&bgp->vrf_irt_nodes);
+	}
 
 	hash_clean_and_free(&bgp->vni_svi_hash,
 			    (void (*)(void *))hash_evpn_free);
@@ -7828,9 +7825,7 @@ void bgp_evpn_init(struct bgp *bgp)
 		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
 			    "BGP VNI hash based on SVI ifindex");
 	evi_irt_nodes_init(&bgp->evi_irt_nodes);
-	bgp->vrf_import_rt_hash =
-		hash_create(vrf_irt_node_hash_key_make, vrf_irt_node_hash_cmp,
-			    "BGP VRF Import RT Hash");
+	vrf_irt_nodes_init(&bgp->vrf_irt_nodes);
 	bgp->vrf_import_rtl = list_new();
 	bgp->vrf_import_rtl->cmp =
 		(int (*)(void *, void *))evpn_route_target_cmp;
