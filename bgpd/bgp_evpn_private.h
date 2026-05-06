@@ -793,7 +793,7 @@ extern void bgp_evpn_derive_auto_rt_import(struct bgp *bgp,
 extern void bgp_evpn_derive_auto_rt_export(struct bgp *bgp,
 					   struct bgpevpn *vpn);
 extern void bgp_evpn_derive_auto_rd(struct bgp *bgp, struct bgpevpn *vpn);
-extern void bgp_evpn_derive_auto_rd_for_vrf(struct bgp *bgp);
+extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);
 extern struct bgpevpn *bgp_evpn_lookup_vni(struct bgp *bgp, vni_t vni);
 extern struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 		struct ipaddr *originator_ip,

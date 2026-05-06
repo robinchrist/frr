@@ -4648,7 +4648,7 @@ static void update_router_id_vrf(struct bgp *bgp_vrf)
 		return;
 
 	/* derive the RD for the VRF based on new router-id */
-	bgp_evpn_derive_auto_rd_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_derive_auto_rd(bgp_vrf);
 
 	/* update advertise ipv4|ipv6 routes as type-5 routes */
 	update_advertise_vrf_routes(bgp_vrf);
@@ -6645,7 +6645,7 @@ void bgp_evpn_derive_auto_rt_export(struct bgp *bgp, struct bgpevpn *vpn)
  * Derive RD automatically for VNI using passed information - it
  * is of the form RouterId:unique-id-for-vni.
  */
-void bgp_evpn_derive_auto_rd_for_vrf(struct bgp *bgp)
+void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp)
 {
 	if (is_vrf_rd_configured(bgp))
 		return;
@@ -7372,7 +7372,7 @@ int bgp_evpn_local_l3vni_add(vni_t l3vni, vrf_id_t vrf_id,
 		evpn_auto_rt_export_add_for_vrf(bgp_vrf);
 
 	/* auto derive RD */
-	bgp_evpn_derive_auto_rd_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_derive_auto_rd(bgp_vrf);
 
 	/* link all corresponding l2vnis */
 	hash_iterate(bgp_evpn->vnihash,
