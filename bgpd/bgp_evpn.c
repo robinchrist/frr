@@ -5505,7 +5505,7 @@ static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
 		list_delete_all_node(vpn->export_rtl);
 		bgp_evpn_derive_auto_rt_export(bgp, vpn);
 		if (is_vni_live(vpn))
-			bgp_evpn_handle_export_rt_change(bgp, vpn);
+			bgp_evpn_evi_handle_export_rt_change(bgp, vpn);
 	}
 }
 
@@ -6131,7 +6131,7 @@ void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt)
 /*
  * Handle change to export RT - update and advertise local routes.
  */
-int bgp_evpn_handle_export_rt_change(struct bgp *bgp, struct bgpevpn *vpn)
+int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	return update_routes_for_vni(bgp, vpn);
 }
