@@ -2320,7 +2320,7 @@ static void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 	/* If we have already advertise type-5 routes with a different RD, we
 	 * have to delete and withdraw them first
 	 */
-	bgp_evpn_handle_vrf_rd_change(bgp_vrf, 1);
+	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 1);
 
 	if (bgp_vrf->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp_vrf->vrf_prd_pretty);
@@ -2333,7 +2333,7 @@ static void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 	/* We have a new RD for VRF.
 	 * Advertise all type-5 routes again with the new RD
 	 */
-	bgp_evpn_handle_vrf_rd_change(bgp_vrf, 0);
+	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 0);
 }
 
 /*
@@ -2344,7 +2344,7 @@ static void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
 	/* If we have already advertise type-5 routes with a different RD, we
 	 * have to delete and withdraw them first
 	 */
-	bgp_evpn_handle_vrf_rd_change(bgp_vrf, 1);
+	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 1);
 
 	/* fall back to default RD */
 	UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_RD_CFGD);
@@ -2354,7 +2354,7 @@ static void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
 	/* We have a new RD for VRF.
 	 * Advertise all type-5 routes again with the new RD
 	 */
-	bgp_evpn_handle_vrf_rd_change(bgp_vrf, 0);
+	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 0);
 }
 
 /*

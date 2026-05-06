@@ -6136,7 +6136,7 @@ int bgp_evpn_handle_export_rt_change(struct bgp *bgp, struct bgpevpn *vpn)
 	return update_routes_for_vni(bgp, vpn);
 }
 
-void bgp_evpn_handle_vrf_rd_change(struct bgp *bgp_vrf, int withdraw)
+void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw)
 {
 	if (withdraw)
 		delete_withdraw_vrf_routes(bgp_vrf);
