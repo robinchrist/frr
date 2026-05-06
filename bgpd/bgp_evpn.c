@@ -5446,7 +5446,7 @@ static void evpn_auto_rt_import_add_for_vrf(struct bgp *bgp_vrf)
  */
 static void evpn_auto_rt_import_delete_for_vrf(struct bgp *bgp_vrf)
 {
-	evpn_rt_delete_auto(bgp_vrf, bgp_vrf->l3vni, bgp_vrf->vrf_import_rtl,
+	bgp_evpn_delete_auto_rt(bgp_vrf, bgp_vrf->l3vni, bgp_vrf->vrf_import_rtl,
 			    true);
 }
 
@@ -5463,7 +5463,7 @@ static void evpn_auto_rt_export_add_for_vrf(struct bgp *bgp_vrf)
  */
 static void evpn_auto_rt_export_delete_for_vrf(struct bgp *bgp_vrf)
 {
-	evpn_rt_delete_auto(bgp_vrf, bgp_vrf->l3vni, bgp_vrf->vrf_export_rtl,
+	bgp_evpn_delete_auto_rt(bgp_vrf, bgp_vrf->l3vni, bgp_vrf->vrf_export_rtl,
 			    true);
 }
 
@@ -5709,7 +5709,7 @@ static void rt_list_remove_node(struct list *rt_list, struct ecommunity *ecomdel
 		list_delete_node(rt_list, node_to_del);
 }
 
-void evpn_rt_delete_auto(struct bgp *bgp, vni_t vni, struct list *rtl,
+void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl,
 			 bool is_l3)
 {
 	struct ecommunity *ecom_auto;

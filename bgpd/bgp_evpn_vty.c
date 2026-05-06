@@ -2152,12 +2152,12 @@ DEFUN(no_evpnrt5_network,
 
 static void evpn_import_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	evpn_rt_delete_auto(bgp, vpn->vni, vpn->import_rtl, false);
+	bgp_evpn_delete_auto_rt(bgp, vpn->vni, vpn->import_rtl, false);
 }
 
 static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	evpn_rt_delete_auto(bgp, vpn->vni, vpn->export_rtl, false);
+	bgp_evpn_delete_auto_rt(bgp, vpn->vni, vpn->export_rtl, false);
 }
 
 /*
