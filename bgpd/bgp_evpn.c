@@ -658,7 +658,7 @@ static void form_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl,
  */
 static void derive_rd_rt_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	bgp_evpn_derive_auto_rd(bgp, vpn);
+	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
 	bgp_evpn_derive_auto_rt_import(bgp, vpn);
 	bgp_evpn_derive_auto_rt_export(bgp, vpn);
 }
@@ -4854,7 +4854,7 @@ static void update_router_id_vni(struct hash_bucket *bucket, struct bgp *bgp)
 	if (is_rd_configured(vpn))
 		return;
 
-	bgp_evpn_derive_auto_rd(bgp, vpn);
+	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
 	update_advertise_vni_routes(bgp, vpn);
 }
 
@@ -6657,7 +6657,7 @@ void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp)
  * Derive RD automatically for VNI using passed information - it
  * is of the form RouterId:unique-id-for-vni.
  */
-void bgp_evpn_derive_auto_rd(struct bgp *bgp, struct bgpevpn *vpn)
+void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	char buf[BGP_EVPN_PREFIX_RD_LEN];
 

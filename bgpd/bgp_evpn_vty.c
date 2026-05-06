@@ -2394,7 +2394,7 @@ static void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
 		bgp_evpn_evi_handle_rd_change(bgp, vpn, 1);
 
 	/* reset RD to default */
-	bgp_evpn_derive_auto_rd(bgp, vpn);
+	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
 
 	if (is_vni_live(vpn))
 		bgp_evpn_evi_handle_rd_change(bgp, vpn, 0);
