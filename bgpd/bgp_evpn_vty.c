@@ -6919,13 +6919,13 @@ static int vrf_add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
 		    bgp_evpn_vrf_rt_matches_existing(bgp->vrf_import_rtl, ecom))
 			return -1;
 
-		bgp_evpn_configure_import_rt_for_vrf(bgp, ecom, is_wildcard);
+		bgp_evpn_vrf_configure_import_rt(bgp, ecom, is_wildcard);
 	} else {
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD) &&
 		    bgp_evpn_vrf_rt_matches_existing(bgp->vrf_export_rtl, ecom))
 			return -1;
 
-		bgp_evpn_configure_export_rt_for_vrf(bgp, ecom);
+		bgp_evpn_vrf_configure_export_rt(bgp, ecom);
 	}
 
 	return 0;
@@ -6939,13 +6939,13 @@ static int vrf_del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
 						      ecom))
 			return -1;
 
-		bgp_evpn_unconfigure_import_rt_for_vrf(bgp, ecom);
+		bgp_evpn_vrf_unconfigure_import_rt(bgp, ecom);
 	} else {
 		if (!bgp_evpn_vrf_rt_matches_existing(bgp->vrf_export_rtl,
 						      ecom))
 			return -1;
 
-		bgp_evpn_unconfigure_export_rt_for_vrf(bgp, ecom);
+		bgp_evpn_vrf_unconfigure_export_rt(bgp, ecom);
 	}
 
 	return 0;
@@ -7099,10 +7099,10 @@ DEFPY (bgp_evpn_vrf_rt_auto,
 	}
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_IMPORT)
-		bgp_evpn_configure_import_auto_rt_for_vrf(bgp);
+		bgp_evpn_vrf_configure_import_auto_rt(bgp);
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_EXPORT)
-		bgp_evpn_configure_export_auto_rt_for_vrf(bgp);
+		bgp_evpn_vrf_configure_export_auto_rt(bgp);
 
 	return CMD_SUCCESS;
 }
@@ -7236,10 +7236,10 @@ DEFPY (no_bgp_evpn_vrf_rt_auto,
 	}
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_IMPORT)
-		bgp_evpn_unconfigure_import_auto_rt_for_vrf(bgp);
+		bgp_evpn_vrf_unconfigure_import_auto_rt(bgp);
 
 	if (rt_type == RT_TYPE_BOTH || rt_type == RT_TYPE_EXPORT)
-		bgp_evpn_unconfigure_export_auto_rt_for_vrf(bgp);
+		bgp_evpn_vrf_unconfigure_export_auto_rt(bgp);
 
 	return CMD_SUCCESS;
 }

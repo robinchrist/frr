@@ -5792,7 +5792,7 @@ static void unconfigure_export_rt_for_vrf_fini(struct bgp *bgp_vrf)
 	bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
 }
 
-void bgp_evpn_configure_import_rt_for_vrf(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
 					  struct ecommunity *ecomadd,
 					  bool is_wildcard)
 {
@@ -5821,7 +5821,7 @@ void bgp_evpn_configure_import_rt_for_vrf(struct bgp *bgp_vrf,
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
-void bgp_evpn_configure_import_auto_rt_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_configure_import_auto_rt(struct bgp *bgp_vrf)
 {
 	if (CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_AUTO_RT_CFGD))
 		return; /* Already configured */
@@ -5838,7 +5838,7 @@ void bgp_evpn_configure_import_auto_rt_for_vrf(struct bgp *bgp_vrf)
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
-void bgp_evpn_unconfigure_import_rt_for_vrf(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 					    struct ecommunity *ecomdel)
 {
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD))
@@ -5857,7 +5857,7 @@ void bgp_evpn_unconfigure_import_rt_for_vrf(struct bgp *bgp_vrf,
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
-void bgp_evpn_unconfigure_import_auto_rt_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf)
 {
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_AUTO_RT_CFGD))
 		return; /* Already un-configured */
@@ -5874,7 +5874,7 @@ void bgp_evpn_unconfigure_import_auto_rt_for_vrf(struct bgp *bgp_vrf)
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
-void bgp_evpn_configure_export_rt_for_vrf(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
 					  struct ecommunity *ecomadd)
 {
 	struct evpn_route_target *newrt;
@@ -5898,7 +5898,7 @@ void bgp_evpn_configure_export_rt_for_vrf(struct bgp *bgp_vrf,
 		bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
 }
 
-void bgp_evpn_configure_export_auto_rt_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_configure_export_auto_rt(struct bgp *bgp_vrf)
 {
 	if (CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_AUTO_RT_CFGD))
 		return; /* Already configured */
@@ -5913,7 +5913,7 @@ void bgp_evpn_configure_export_auto_rt_for_vrf(struct bgp *bgp_vrf)
 	bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
 }
 
-void bgp_evpn_unconfigure_export_rt_for_vrf(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_unconfigure_export_rt(struct bgp *bgp_vrf,
 					    struct ecommunity *ecomdel)
 {
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_RT_CFGD))
@@ -5928,7 +5928,7 @@ void bgp_evpn_unconfigure_export_rt_for_vrf(struct bgp *bgp_vrf,
 	unconfigure_export_rt_for_vrf_fini(bgp_vrf);
 }
 
-void bgp_evpn_unconfigure_export_auto_rt_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_unconfigure_export_auto_rt(struct bgp *bgp_vrf)
 {
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_AUTO_RT_CFGD))
 		return; /* Already un-configured */
