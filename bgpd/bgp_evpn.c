@@ -5467,7 +5467,7 @@ static void evpn_auto_rt_export_delete_for_vrf(struct bgp *bgp_vrf)
 			    true);
 }
 
-static void bgp_evpn_handle_export_rt_change_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_handle_export_rt_change_for_vrf(struct bgp *bgp_vrf)
 {
 	struct bgp *bgp_evpn = NULL;
 	struct listnode *node = NULL;
