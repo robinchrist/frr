@@ -777,7 +777,7 @@ extern int bgp_evpn_handle_export_rt_change(struct bgp *bgp,
 					    struct bgpevpn *vpn);
 extern void bgp_evpn_handle_autort_change(struct bgp *bgp);
 extern void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw);
-extern void bgp_evpn_handle_rd_change(struct bgp *bgp, struct bgpevpn *vpn,
+extern void bgp_evpn_evi_handle_rd_change(struct bgp *bgp, struct bgpevpn *vpn,
 				      int withdraw);
 void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 					      struct ecommunity *new_soo);

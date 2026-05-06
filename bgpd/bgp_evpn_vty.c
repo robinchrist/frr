@@ -2368,7 +2368,7 @@ static void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
 	 * need to re-advertise.
 	 */
 	if (is_vni_live(vpn))
-		bgp_evpn_handle_rd_change(bgp, vpn, 1);
+		bgp_evpn_evi_handle_rd_change(bgp, vpn, 1);
 
 	if (vpn->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, vpn->prd_pretty);
@@ -2378,7 +2378,7 @@ static void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
 	SET_FLAG(vpn->flags, VNI_FLAG_RD_CFGD);
 
 	if (is_vni_live(vpn))
-		bgp_evpn_handle_rd_change(bgp, vpn, 0);
+		bgp_evpn_evi_handle_rd_change(bgp, vpn, 0);
 }
 
 /*
@@ -2391,13 +2391,13 @@ static void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
 	 * to automatic value, need to re-advertise.
 	 */
 	if (is_vni_live(vpn))
-		bgp_evpn_handle_rd_change(bgp, vpn, 1);
+		bgp_evpn_evi_handle_rd_change(bgp, vpn, 1);
 
 	/* reset RD to default */
 	bgp_evpn_derive_auto_rd(bgp, vpn);
 
 	if (is_vni_live(vpn))
-		bgp_evpn_handle_rd_change(bgp, vpn, 0);
+		bgp_evpn_evi_handle_rd_change(bgp, vpn, 0);
 }
 
 /*

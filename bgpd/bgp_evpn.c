@@ -6151,7 +6151,7 @@ void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw)
  * of this VNI being deleted and withdrawn and the next will result
  * in the routes being re-advertised.
  */
-void bgp_evpn_handle_rd_change(struct bgp *bgp, struct bgpevpn *vpn,
+void bgp_evpn_evi_handle_rd_change(struct bgp *bgp, struct bgpevpn *vpn,
 			       int withdraw)
 {
 	if (withdraw)
