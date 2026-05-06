@@ -777,7 +777,7 @@ extern void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 extern void bgp_evpn_vrf_configure_import_auto_rt(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf);
 
-extern void bgp_evpn_handle_export_rt_change_for_vrf(struct bgp *bgp_vrf);
+extern void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf);
 
 extern int bgp_evpn_handle_export_rt_change(struct bgp *bgp,
 					    struct bgpevpn *vpn);

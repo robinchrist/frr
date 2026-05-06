@@ -5467,7 +5467,7 @@ static void evpn_auto_rt_export_delete_for_vrf(struct bgp *bgp_vrf)
 			    true);
 }
 
-void bgp_evpn_handle_export_rt_change_for_vrf(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 {
 	struct bgp *bgp_evpn = NULL;
 	struct listnode *node = NULL;
@@ -5789,7 +5789,7 @@ static void unconfigure_export_rt_for_vrf_fini(struct bgp *bgp_vrf)
 	if (list_isempty(bgp_vrf->vrf_export_rtl))
 		evpn_auto_rt_export_add_for_vrf(bgp_vrf);
 
-	bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 }
 
 void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
@@ -5895,7 +5895,7 @@ void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
 	SET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_RT_CFGD);
 
 	if (is_l3vni_live(bgp_vrf))
-		bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
+		bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 }
 
 void bgp_evpn_vrf_configure_export_auto_rt(struct bgp *bgp_vrf)
@@ -5910,7 +5910,7 @@ void bgp_evpn_vrf_configure_export_auto_rt(struct bgp *bgp_vrf)
 
 	evpn_auto_rt_export_add_for_vrf(bgp_vrf);
 
-	bgp_evpn_handle_export_rt_change_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 }
 
 void bgp_evpn_vrf_unconfigure_export_rt(struct bgp *bgp_vrf,
