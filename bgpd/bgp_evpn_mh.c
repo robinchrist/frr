@@ -1037,7 +1037,7 @@ bgp_evpn_type1_es_route_extcomm_build(struct bgp_evpn_es_frag *es_frag,
 					  es_evi)) {
 			if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 				continue;
-			for (ALL_LIST_ELEMENTS_RO(es_evi->vpn->export_rtl,
+			for (ALL_LIST_ELEMENTS_RO(es_evi->vpn->evi_export_rtl,
 						  rt_node, ecom))
 				bgp_attr_set_ecommunity(
 					attr, ecommunity_merge(attr->ecommunity,
@@ -1066,7 +1066,7 @@ static void bgp_evpn_type1_evi_route_extcomm_build(struct bgp_evpn_es *es,
 	bgp_attr_set_ecommunity(attr, ecommunity_dup(&ecom_encap));
 
 	/* Add export RTs for the L2-VNI */
-	for (ALL_LIST_ELEMENTS_RO(vpn->export_rtl, rt_node, ecom))
+	for (ALL_LIST_ELEMENTS_RO(vpn->evi_export_rtl, rt_node, ecom))
 		bgp_attr_set_ecommunity(
 			attr,
 			ecommunity_merge(bgp_attr_get_ecommunity(attr), ecom));

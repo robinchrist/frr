@@ -94,7 +94,7 @@ struct bgpevpn {
 
 	/* Import and Export RTs. */
 	struct list *evi_import_rtl;
-	struct list *export_rtl;
+	struct list *evi_export_rtl;
 
 	/*
 	 * EVPN route that uses gateway IP overlay index as its nexthop

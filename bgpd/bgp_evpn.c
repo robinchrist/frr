@@ -1126,7 +1126,7 @@ static void build_evpn_route_extcomm(struct bgpevpn *vpn, struct attr *attr,
 	attr->encap_tunneltype = tnl_type;
 
 	/* Add the export RTs for L2VNI */
-	for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode, ecom))
+	for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode, ecom))
 		bgp_attr_set_ecommunity(
 			attr,
 			ecommunity_merge(bgp_attr_get_ecommunity(attr), ecom));
@@ -5502,7 +5502,7 @@ static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
 			bgp_evpn_install_routes(bgp, vpn);
 	}
 	if (!is_export_rt_configured(vpn)) {
-		list_delete_all_node(vpn->export_rtl);
+		list_delete_all_node(vpn->evi_export_rtl);
 		bgp_evpn_derive_auto_rt_export(bgp, vpn);
 		if (is_vni_live(vpn))
 			bgp_evpn_evi_handle_export_rt_change(bgp, vpn);
@@ -6637,7 +6637,7 @@ void bgp_evpn_derive_auto_rt_import(struct bgp *bgp, struct bgpevpn *vpn)
  */
 void bgp_evpn_derive_auto_rt_export(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	form_auto_rt(bgp, vpn->vni, vpn->export_rtl, false);
+	form_auto_rt(bgp, vpn->vni, vpn->evi_export_rtl, false);
 	UNSET_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD);
 }
 
@@ -6727,10 +6727,10 @@ struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 	vpn->evi_import_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	vpn->evi_import_rtl->del = bgp_evpn_xxport_delete_ecomm;
-	vpn->export_rtl = list_new();
-	vpn->export_rtl->cmp =
+	vpn->evi_export_rtl = list_new();
+	vpn->evi_export_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
-	vpn->export_rtl->del = bgp_evpn_xxport_delete_ecomm;
+	vpn->evi_export_rtl->del = bgp_evpn_xxport_delete_ecomm;
 	bf_assign_index(bm->rd_idspace, vpn->rd_id);
 	derive_rd_rt_for_vni(bgp, vpn);
 
@@ -6768,7 +6768,7 @@ void bgp_evpn_free(struct bgp *bgp, struct bgpevpn *vpn)
 	bgp_table_unlock(vpn->mac_table);
 	bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
 	list_delete(&vpn->evi_import_rtl);
-	list_delete(&vpn->export_rtl);
+	list_delete(&vpn->evi_export_rtl);
 	bf_release_index(bm->rd_idspace, vpn->rd_id);
 	hash_release(bgp->vni_svi_hash, vpn);
 	hash_release(bgp->vnihash, vpn);

@@ -581,7 +581,7 @@ static void display_vni(struct vty *vty, struct bgpevpn *vpn, json_object *json)
 	else
 		vty_out(vty, "  Export Route Target:\n");
 
-	for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode, ecom)) {
+	for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode, ecom)) {
 		ecom_str = ecommunity_ecom2str(ecom,
 					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
@@ -1218,7 +1218,7 @@ static void show_vni_entry(struct hash_bucket *bucket, void *args[])
 	if (json)
 		json_object_object_add(json_vni, "importRTs", json_import_rtl);
 
-	for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode, ecom)) {
+	for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode, ecom)) {
 		ecom_str = ecommunity_ecom2str(ecom,
 					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
@@ -1226,7 +1226,7 @@ static void show_vni_entry(struct hash_bucket *bucket, void *args[])
 			json_object_array_add(json_export_rtl,
 					      json_object_new_string(ecom_str));
 		} else {
-			if (listcount(vpn->export_rtl) > 1)
+			if (listcount(vpn->evi_export_rtl) > 1)
 				snprintf(rt_buf, sizeof(rt_buf), "%s, ...",
 					 ecom_str);
 			else
@@ -2157,7 +2157,7 @@ static void evpn_import_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
 
 static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	bgp_evpn_delete_auto_rt(bgp, vpn->vni, vpn->export_rtl, false);
+	bgp_evpn_delete_auto_rt(bgp, vpn->vni, vpn->evi_export_rtl, false);
 }
 
 /*
@@ -2260,7 +2260,7 @@ static void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	/* If the auto route-target is in use we must remove it */
 	evpn_export_rt_delete_auto(bgp, vpn);
 
-	listnode_add_sort(vpn->export_rtl, ecomadd);
+	listnode_add_sort(vpn->evi_export_rtl, ecomadd);
 	SET_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD);
 
 	if (is_vni_live(vpn))
@@ -2279,9 +2279,9 @@ static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	/* Delete all export RTs */
 	if (ecomdel == NULL) {
 		/* Reset to default and process all routes. */
-		for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode, ecom)) {
+		for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode, ecom)) {
 			ecommunity_free(&ecom);
-			list_delete_node(vpn->export_rtl, node);
+			list_delete_node(vpn->evi_export_rtl, node);
 		}
 	}
 
@@ -2289,7 +2289,7 @@ static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	else {
 		node_to_del = NULL;
 
-		for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode, ecom)) {
+		for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode, ecom)) {
 			if (ecommunity_match(ecom, ecomdel)) {
 				ecommunity_free(&ecom);
 				node_to_del = node;
@@ -2298,11 +2298,11 @@ static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 		}
 
 		if (node_to_del)
-			list_delete_node(vpn->export_rtl, node_to_del);
+			list_delete_node(vpn->evi_export_rtl, node_to_del);
 	}
 
-	assert(vpn->export_rtl);
-	if (list_isempty(vpn->export_rtl)) {
+	assert(vpn->evi_export_rtl);
+	if (list_isempty(vpn->evi_export_rtl)) {
 		UNSET_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD);
 		bgp_evpn_derive_auto_rt_export(bgp, vpn);
 	}
@@ -3843,7 +3843,7 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 		}
 
 		if (is_export_rt_configured(vpn)) {
-			for (ALL_LIST_ELEMENTS(vpn->export_rtl, node, nnode,
+			for (ALL_LIST_ELEMENTS(vpn->evi_export_rtl, node, nnode,
 					       ecom)) {
 				ecom_str = ecommunity_ecom2str(
 					ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
@@ -7395,7 +7395,7 @@ DEFUN (bgp_evpn_vni_rt,
 
 		/* Do nothing if we already have this export route-target */
 		if (CHECK_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD) &&
-		    bgp_evpn_rt_matches_existing(vpn->export_rtl, ecomadd))
+		    bgp_evpn_rt_matches_existing(vpn->evi_export_rtl, ecomadd))
 			ecommunity_free(&ecomadd);
 		else
 			evpn_configure_export_rt(bgp, vpn, ecomadd);
@@ -7478,7 +7478,7 @@ DEFUN (no_bgp_evpn_vni_rt,
 		}
 		evpn_unconfigure_import_rt(bgp, vpn, ecomdel);
 	} else if (rt_type == RT_TYPE_EXPORT) {
-		if (!bgp_evpn_rt_matches_existing(vpn->export_rtl, ecomdel)) {
+		if (!bgp_evpn_rt_matches_existing(vpn->evi_export_rtl, ecomdel)) {
 			ecommunity_free(&ecomdel);
 			vty_out(vty,
 				"%% RT specified does not match configuration for this VNI\n");
@@ -7493,7 +7493,7 @@ DEFUN (no_bgp_evpn_vni_rt,
 			found_ecomdel = 1;
 		}
 
-		if (bgp_evpn_rt_matches_existing(vpn->export_rtl, ecomdel)) {
+		if (bgp_evpn_rt_matches_existing(vpn->evi_export_rtl, ecomdel)) {
 			evpn_unconfigure_export_rt(bgp, vpn, ecomdel);
 			found_ecomdel = 1;
 		}
