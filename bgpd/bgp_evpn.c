@@ -5496,7 +5496,7 @@ static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
 		if (is_vni_live(vpn))
 			bgp_evpn_uninstall_routes(bgp, vpn);
 		bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
-		list_delete_all_node(vpn->import_rtl);
+		list_delete_all_node(vpn->evi_import_rtl);
 		bgp_evpn_derive_auto_rt_import(bgp, vpn);
 		if (is_vni_live(vpn))
 			bgp_evpn_install_routes(bgp, vpn);
@@ -6575,7 +6575,7 @@ void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
 	struct listnode *node, *nnode;
 	struct ecommunity *ecom;
 
-	for (ALL_LIST_ELEMENTS(vpn->import_rtl, node, nnode, ecom)) {
+	for (ALL_LIST_ELEMENTS(vpn->evi_import_rtl, node, nnode, ecom)) {
 		for (i = 0; i < ecom->size; i++) {
 			eval = (struct ecommunity_val *)(ecom->val
 							 + (i
@@ -6595,7 +6595,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
 	struct listnode *node, *nnode;
 	struct ecommunity *ecom;
 
-	for (ALL_LIST_ELEMENTS(vpn->import_rtl, node, nnode, ecom)) {
+	for (ALL_LIST_ELEMENTS(vpn->evi_import_rtl, node, nnode, ecom)) {
 		for (i = 0; i < ecom->size; i++) {
 			struct evi_irt_node *irt;
 			struct ecommunity_val eval_tmp;
@@ -6625,7 +6625,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
  */
 void bgp_evpn_derive_auto_rt_import(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	form_auto_rt(bgp, vpn->vni, vpn->import_rtl, false);
+	form_auto_rt(bgp, vpn->vni, vpn->evi_import_rtl, false);
 	UNSET_FLAG(vpn->flags, VNI_FLAG_IMPRT_CFGD);
 
 	/* Map RT to VNI */
@@ -6723,10 +6723,10 @@ struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 	vpn->vxlan_flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
 	/* Initialize route-target import and export lists */
-	vpn->import_rtl = list_new();
-	vpn->import_rtl->cmp =
+	vpn->evi_import_rtl = list_new();
+	vpn->evi_import_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
-	vpn->import_rtl->del = bgp_evpn_xxport_delete_ecomm;
+	vpn->evi_import_rtl->del = bgp_evpn_xxport_delete_ecomm;
 	vpn->export_rtl = list_new();
 	vpn->export_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
@@ -6767,7 +6767,7 @@ void bgp_evpn_free(struct bgp *bgp, struct bgpevpn *vpn)
 	bgp_table_unlock(vpn->ip_table);
 	bgp_table_unlock(vpn->mac_table);
 	bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
-	list_delete(&vpn->import_rtl);
+	list_delete(&vpn->evi_import_rtl);
 	list_delete(&vpn->export_rtl);
 	bf_release_index(bm->rd_idspace, vpn->rd_id);
 	hash_release(bgp->vni_svi_hash, vpn);

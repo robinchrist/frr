@@ -93,7 +93,7 @@ struct bgpevpn {
 	struct in_addr mcast_grp;
 
 	/* Import and Export RTs. */
-	struct list *import_rtl;
+	struct list *evi_import_rtl;
 	struct list *export_rtl;
 
 	/*
