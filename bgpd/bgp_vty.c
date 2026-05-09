@@ -12440,12 +12440,11 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 			char *ecom_str;
-			struct listnode *node, *nnode;
 			struct evpn_route_target *l3rt;
 			json_object *json_import_rt_list = NULL;
 
 			json_import_rt_list = json_object_new_array();
-			for (ALL_LIST_ELEMENTS(bgp->vrf_import_rtl, node, nnode, l3rt)) {
+			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
 				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
 					continue;
 
@@ -12485,12 +12484,11 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		/* export route-target */
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 			char *ecom_str;
-			struct listnode *node, *nnode;
 			struct evpn_route_target *l3rt;
 			json_object *json_export_rt_list = NULL;
 
 			json_export_rt_list = json_object_new_array();
-			for (ALL_LIST_ELEMENTS(bgp->vrf_export_rtl, node, nnode, l3rt)) {
+			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
 				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
 					continue;
 
@@ -12535,11 +12533,10 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 			char *ecom_str;
-			struct listnode *node, *nnode;
 			struct evpn_route_target *l3rt;
 
 			vty_out(vty, "Route Target Import\n");
-			for (ALL_LIST_ELEMENTS(bgp->vrf_import_rtl, node, nnode, l3rt)) {
+			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
 				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
 					continue;
 
@@ -12572,11 +12569,10 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 		/* export route-target info */
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 			char *ecom_str;
-			struct listnode *node, *nnode;
 			struct evpn_route_target *l3rt;
 
 			vty_out(vty, "Route Target Export\n");
-			for (ALL_LIST_ELEMENTS(bgp->vrf_export_rtl, node, nnode, l3rt)) {
+			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
 				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
 					continue;
 

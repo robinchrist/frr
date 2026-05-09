@@ -175,6 +175,8 @@ DECLARE_HASH(vrf_irt_nodes, struct vrf_irt_node, hash_item,
  * Wrapper struct for l3 RT's
  */
 struct evpn_route_target {
+	struct evpn_route_target_list_item slnu_item;
+
 	/* flags based on config to determine how RTs are handled */
 	uint8_t flags;
 #define BGP_VRF_RT_AUTO (1 << 0)
@@ -187,6 +189,17 @@ struct evpn_route_target {
 #define RT_TYPE_IMPORT 1
 #define RT_TYPE_EXPORT 2
 #define RT_TYPE_BOTH   3
+
+extern int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
+				    struct ecommunity *ecom2);
+
+static inline int evpn_route_target_list_cmp(const struct evpn_route_target *a,
+			       const struct evpn_route_target *b)
+{
+	return bgp_evpn_route_target_ecom_cmp(a->ecom, b->ecom);
+}
+
+DECLARE_SORTLIST_NONUNIQ(evpn_route_target_list, struct evpn_route_target, slnu_item, evpn_route_target_list_cmp);
 
 #define EVPN_DAD_DEFAULT_TIME 180 /* secs */
 #define EVPN_DAD_DEFAULT_MAX_MOVES 5 /* default from RFC 7432 */
@@ -257,20 +270,20 @@ static inline void bgpevpn_get_rmac(struct bgpevpn *vpn, struct ethaddr *rmac)
 	memcpy(rmac, &vpn->bgp_vrf->rmac, sizeof(struct ethaddr));
 }
 
-static inline struct list *bgpevpn_get_vrf_export_rtl(struct bgpevpn *vpn)
+static inline struct evpn_route_target_list_head *bgpevpn_get_vrf_export_rtl(struct bgpevpn *vpn)
 {
 	if (!vpn->bgp_vrf)
 		return NULL;
 
-	return vpn->bgp_vrf->vrf_export_rtl;
+	return &vpn->bgp_vrf->vrf_export_rtl;
 }
 
-static inline struct list *bgpevpn_get_vrf_import_rtl(struct bgpevpn *vpn)
+static inline struct evpn_route_target_list_head *bgpevpn_get_vrf_import_rtl(struct bgpevpn *vpn)
 {
 	if (!vpn->bgp_vrf)
 		return NULL;
 
-	return vpn->bgp_vrf->vrf_import_rtl;
+	return &vpn->bgp_vrf->vrf_import_rtl;
 }
 
 extern void bgp_evpn_es_evi_vrf_ref(struct bgpevpn *vpn);
@@ -757,8 +770,9 @@ static inline bool bgp_evpn_is_path_local(struct bgp *bgp,
 
 extern void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, safi_t safi,
 						     struct bgp_path_info *originator, bool add);
-extern void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl,
-				bool is_l3);
+extern void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
+extern void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
+				  struct evpn_route_target_list_head *rtl);
 
 extern void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
 						 struct ecommunity *ecomadd);
@@ -858,8 +872,6 @@ extern int bgp_evpn_route_entry_install_if_vrf_match(struct bgp *bgp_vrf,
 						     int install);
 extern void bgp_evpn_import_type2_route(struct bgp_path_info *pi, int import);
 extern void bgp_evpn_xxport_delete_ecomm(void *val);
-extern int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
-				     struct ecommunity *ecom2);
 extern void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt);
 extern uint16_t bgp_deferred_path_selection(struct bgp *bgp, afi_t afi, safi_t safi,
 					    struct bgp_table *table, uint16_t cnt,

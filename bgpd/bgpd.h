@@ -20,6 +20,8 @@
 
 PREDECL_LIST(zebra_announce);
 PREDECL_LIST(zebra_l2_vni);
+PREDECL_SORTLIST_NONUNIQ(evpn_route_target_list);
+
 /* it's bit cursed that this is located here, but the include
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
@@ -1033,10 +1035,10 @@ struct bgp {
 	char *vrf_prd_pretty;
 
 	/* import rt list for the vrf instance */
-	struct list *vrf_import_rtl;
+	struct evpn_route_target_list_head vrf_import_rtl;
 
 	/* export rt list for the vrf instance */
-	struct list *vrf_export_rtl;
+	struct evpn_route_target_list_head vrf_export_rtl;
 
 	/* list of corresponding l2vnis (struct bgpevpn) */
 	struct list *l2vnis;
