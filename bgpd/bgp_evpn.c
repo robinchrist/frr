@@ -504,7 +504,7 @@ static void bgp_evpn_evi_map_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
  * Unmap specified VNI from specified RT. If there are no other
  * VNIs for this RT, then the RT hash is deleted.
  */
-static void unmap_vni_from_rt(struct bgp *bgp, struct bgpevpn *vpn,
+static void bgp_evpn_evi_unmap_from_rt(struct bgp *bgp, struct bgpevpn *vpn,
 			      struct evi_irt_node *irt)
 {
 	/* Delete VNI from hash list for this RT. */
@@ -797,7 +797,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
 
 			irt = lookup_evi_irt_node(bgp, &eval_tmp);
 			if (irt)
-				unmap_vni_from_rt(bgp, vpn, irt);
+				bgp_evpn_evi_unmap_from_rt(bgp, vpn, irt);
 		}
 	}
 }
