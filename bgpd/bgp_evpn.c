@@ -5687,7 +5687,7 @@ void bgp_evpn_advertise_type5_routes(struct bgp *bgp_vrf, afi_t afi,
 	}
 }
 
-static void rt_list_remove_node(struct list *rt_list, struct ecommunity *ecomdel)
+static void bgp_evpn_rt_list_remove_by_ecom(struct list *rt_list, struct ecommunity *ecomdel)
 {
 	struct listnode *node = NULL, *nnode = NULL, *node_to_del = NULL;
 	struct ecommunity *ecom = NULL;
@@ -5734,7 +5734,7 @@ void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
 	ecom_auto = ecommunity_new();
 	ecommunity_add_val(ecom_auto, &eval, false, false);
 
-	rt_list_remove_node(rtl, ecom_auto);
+	bgp_evpn_rt_list_remove_by_ecom(rtl, ecom_auto);
 
 	ecommunity_free(&ecom_auto);
 }
