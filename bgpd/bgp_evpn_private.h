@@ -32,6 +32,10 @@
 #define BGP_EVPN_TYPE4_V4_PSIZE 23
 #define BGP_EVPN_TYPE4_V6_PSIZE 35
 
+#define RT_TYPE_IMPORT 1
+#define RT_TYPE_EXPORT 2
+#define RT_TYPE_BOTH   3
+
 static const struct message bgp_evpn_route_type_str[] = { { BGP_EVPN_AD_ROUTE, "AD" },
 							  { BGP_EVPN_MAC_IP_ROUTE, "MACIP" },
 							  { BGP_EVPN_IMET_ROUTE, "IMET" },
@@ -185,11 +189,6 @@ struct evpn_route_target {
 	struct ecommunity *ecom;
 };
 
-
-#define RT_TYPE_IMPORT 1
-#define RT_TYPE_EXPORT 2
-#define RT_TYPE_BOTH   3
-
 extern int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
 				    struct ecommunity *ecom2);
 
@@ -200,6 +199,7 @@ static inline int evpn_route_target_list_cmp(const struct evpn_route_target *a,
 }
 
 DECLARE_SORTLIST_NONUNIQ(evpn_route_target_list, struct evpn_route_target, slnu_item, evpn_route_target_list_cmp);
+
 
 #define EVPN_DAD_DEFAULT_TIME 180 /* secs */
 #define EVPN_DAD_DEFAULT_MAX_MOVES 5 /* default from RFC 7432 */
