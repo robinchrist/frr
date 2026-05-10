@@ -402,15 +402,15 @@ static void bgp_evpn_route_target_del(struct evpn_route_target *rt)
 /*
  * Allocate a new l3 Route Target.
  */
-static struct evpn_route_target *evpn_vrf_rt_new(struct ecommunity *ecom)
+static struct evpn_route_target *bgp_evpn_route_target_new(struct ecommunity *ecom)
 {
-	struct evpn_route_target *l3rt;
+	struct evpn_route_target *rt;
 
-	l3rt = XCALLOC(MTYPE_BGP_EVPN_ROUTE_TARGET, sizeof(struct evpn_route_target));
+	rt = XCALLOC(MTYPE_BGP_EVPN_ROUTE_TARGET, sizeof(struct evpn_route_target));
 
-	l3rt->ecom = ecom;
+	rt->ecom = ecom;
 
-	return l3rt;
+	return rt;
 }
 
 /*
@@ -648,7 +648,7 @@ static void bgp_evpn_vrf_form_auto_rt(struct bgp *bgp, vni_t vni,
 		}
 
 	if (!ecom_found) {
-		newrt = evpn_vrf_rt_new(ecomadd);
+		newrt = bgp_evpn_route_target_new(ecomadd);
 		/* Label it as autoderived */
 		SET_FLAG(newrt->flags, BGP_VRF_RT_AUTO);
 		evpn_route_target_list_add(rtl, newrt);
@@ -5820,7 +5820,7 @@ void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
 {
 	struct evpn_route_target *newrt;
 
-	newrt = evpn_vrf_rt_new(ecomadd);
+	newrt = bgp_evpn_route_target_new(ecomadd);
 
 	if (is_wildcard)
 		SET_FLAG(newrt->flags, BGP_VRF_RT_WILD);
@@ -5901,7 +5901,7 @@ void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
 {
 	struct evpn_route_target *newrt;
 
-	newrt = evpn_vrf_rt_new(ecomadd);
+	newrt = bgp_evpn_route_target_new(ecomadd);
 
 	/* Remove the implicit auto-generated RT when transitioning to
 	 * configured RTs. If configured RTs already exist, the implicit auto
