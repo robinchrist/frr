@@ -770,7 +770,7 @@ static inline bool bgp_evpn_is_path_local(struct bgp *bgp,
 
 extern void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, safi_t safi,
 						     struct bgp_path_info *originator, bool add);
-extern void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
+extern void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
 extern void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
 				  struct evpn_route_target_list_head *rtl);
 

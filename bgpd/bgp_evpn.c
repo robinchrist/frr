@@ -5721,7 +5721,7 @@ static void bgp_evpn_route_target_list_remove_by_ecom(struct evpn_route_target_l
 	}
 }
 
-void bgp_evpn_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
+void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
 {
 	struct ecommunity *ecom_auto;
 	struct ecommunity_val eval;
