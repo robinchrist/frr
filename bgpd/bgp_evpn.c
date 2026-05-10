@@ -446,7 +446,7 @@ static void bgp_evpn_vrf_map_to_rt(struct bgp *bgp_vrf, struct evpn_route_target
  * VRFs for this RT, then the RT hash is deleted.
  * bgp_vrf: BGP VRF specific instance
  */
-static void unmap_vrf_from_rt(struct bgp *bgp_vrf,
+static void bgp_evpn_vrf_unmap_from_rt(struct bgp *bgp_vrf,
 			      struct evpn_route_target *l3rt)
 {
 	uint32_t i;
@@ -744,7 +744,7 @@ void bgp_evpn_unmap_vrf_from_its_rts(struct bgp *bgp_vrf)
 	struct evpn_route_target *l3rt;
 
 	frr_each (evpn_route_target_list, &bgp_vrf->vrf_import_rtl, l3rt)
-		unmap_vrf_from_rt(bgp_vrf, l3rt);
+		bgp_evpn_vrf_unmap_from_rt(bgp_vrf, l3rt);
 }
 
 /*
