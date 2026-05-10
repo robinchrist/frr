@@ -417,7 +417,7 @@ static struct evpn_route_target *bgp_evpn_route_target_new(struct ecommunity *ec
  * Map one RT to specified VRF.
  * bgp_vrf = BGP vrf instance
  */
-static void map_vrf_to_rt(struct bgp *bgp_vrf, struct evpn_route_target *l3rt)
+static void bgp_evpn_vrf_map_to_rt(struct bgp *bgp_vrf, struct evpn_route_target *l3rt)
 {
 	uint32_t i = 0;
 
@@ -733,7 +733,7 @@ void bgp_evpn_map_vrf_to_its_rts(struct bgp *bgp_vrf)
 	struct evpn_route_target *l3rt;
 
 	frr_each (evpn_route_target_list, &bgp_vrf->vrf_import_rtl, l3rt)
-		map_vrf_to_rt(bgp_vrf, l3rt);
+		bgp_evpn_vrf_map_to_rt(bgp_vrf, l3rt);
 }
 
 /*
