@@ -392,13 +392,11 @@ void bgp_evpn_xxport_delete_ecomm(void *val)
 /*
  * Delete l3 Route Target.
  */
-static void evpn_vrf_rt_del(void *val)
+static void bgp_evpn_route_target_del(struct evpn_route_target *rt)
 {
-	struct evpn_route_target *l3rt = val;
+	ecommunity_free(&rt->ecom);
 
-	ecommunity_free(&l3rt->ecom);
-
-	XFREE(MTYPE_BGP_EVPN_ROUTE_TARGET, l3rt);
+	XFREE(MTYPE_BGP_EVPN_ROUTE_TARGET, rt);
 }
 
 /*
@@ -5535,7 +5533,7 @@ static void update_autort_l3vni(struct bgp *bgp)
 		{
 			struct evpn_route_target *l3rt;
 			while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_import_rtl)))
-				evpn_vrf_rt_del(l3rt);
+				bgp_evpn_route_target_del(l3rt);
 		}
 
 		/* Map auto derive or configured RTs */
@@ -5546,7 +5544,7 @@ static void update_autort_l3vni(struct bgp *bgp)
 		{
 			struct evpn_route_target *l3rt;
 			while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_export_rtl)))
-				evpn_vrf_rt_del(l3rt);
+				bgp_evpn_route_target_del(l3rt);
 		}
 
 		evpn_auto_rt_export_delete_for_vrf(bgp);
@@ -5717,7 +5715,7 @@ static void evpn_route_target_list_remove_node(struct evpn_route_target_list_hea
 
 		if (ecommunity_match(l3rt->ecom, ecomdel)) {
 			evpn_route_target_list_del(rt_list, l3rt);
-			evpn_vrf_rt_del(l3rt);
+			bgp_evpn_route_target_del(l3rt);
 			break;
 		}
 	}
@@ -7478,7 +7476,7 @@ int bgp_evpn_local_l3vni_del(vni_t l3vni, vrf_id_t vrf_id)
 		if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 			struct evpn_route_target *l3rt;
 			while ((l3rt = evpn_route_target_list_pop(&bgp_vrf->vrf_import_rtl)))
-				evpn_vrf_rt_del(l3rt);
+				bgp_evpn_route_target_del(l3rt);
 		}
 	}
 
@@ -7487,7 +7485,7 @@ int bgp_evpn_local_l3vni_del(vni_t l3vni, vrf_id_t vrf_id)
 	    !CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)) {
 		struct evpn_route_target *l3rt;
 		while ((l3rt = evpn_route_target_list_pop(&bgp_vrf->vrf_export_rtl)))
-			evpn_vrf_rt_del(l3rt);
+			bgp_evpn_route_target_del(l3rt);
 	}
 
 	/* update all corresponding local mac-ip routes */
@@ -7830,10 +7828,10 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 	{
 		struct evpn_route_target *l3rt;
 		while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_import_rtl)))
-			evpn_vrf_rt_del(l3rt);
+			bgp_evpn_route_target_del(l3rt);
 		evpn_route_target_list_fini(&bgp->vrf_import_rtl);
 		while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_export_rtl)))
-			evpn_vrf_rt_del(l3rt);
+			bgp_evpn_route_target_del(l3rt);
 		evpn_route_target_list_fini(&bgp->vrf_export_rtl);
 	}
 
