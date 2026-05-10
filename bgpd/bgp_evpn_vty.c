@@ -2170,7 +2170,7 @@ static void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	 * install routes.
 	 */
 	if (is_vni_live(vpn))
-		bgp_evpn_uninstall_routes(bgp, vpn);
+		bgp_evpn_evi_uninstall_routes(bgp, vpn);
 
 	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
 	bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
@@ -2202,7 +2202,7 @@ static void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	 * automatic value.
 	 */
 	if (is_vni_live(vpn))
-		bgp_evpn_uninstall_routes(bgp, vpn);
+		bgp_evpn_evi_uninstall_routes(bgp, vpn);
 
 	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
 	bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);

@@ -5496,7 +5496,7 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
 
 	if (!is_import_rt_configured(vpn)) {
 		if (is_vni_live(vpn))
-			bgp_evpn_uninstall_routes(bgp, vpn);
+			bgp_evpn_evi_uninstall_routes(bgp, vpn);
 		bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
 		list_delete_all_node(vpn->evi_import_rtl);
 		bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
@@ -6234,7 +6234,7 @@ int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgpevpn *vpn)
  * Uninstall all routes installed for this VNI. Invoked upon change
  * to Import RT.
  */
-int bgp_evpn_uninstall_routes(struct bgp *bgp, struct bgpevpn *vpn)
+int bgp_evpn_evi_uninstall_routes(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	return uninstall_routes_for_vni(bgp, vpn);
 }
