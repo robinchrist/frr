@@ -664,7 +664,7 @@ static void derive_rd_rt_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
 	bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
-	bgp_evpn_derive_auto_rt_export(bgp, vpn);
+	bgp_evpn_evi_derive_export_auto_rt(bgp, vpn);
 }
 
 /*
@@ -5505,7 +5505,7 @@ static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
 	}
 	if (!is_export_rt_configured(vpn)) {
 		list_delete_all_node(vpn->evi_export_rtl);
-		bgp_evpn_derive_auto_rt_export(bgp, vpn);
+		bgp_evpn_evi_derive_export_auto_rt(bgp, vpn);
 		if (is_vni_live(vpn))
 			bgp_evpn_evi_handle_export_rt_change(bgp, vpn);
 	}
@@ -6655,7 +6655,7 @@ void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgpevpn *vpn)
 /*
  * Derive Export RT automatically for VNI.
  */
-void bgp_evpn_derive_auto_rt_export(struct bgp *bgp, struct bgpevpn *vpn)
+void bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	bgp_evpn_evi_form_auto_rt(bgp, vpn->vni, vpn->evi_export_rtl);
 	UNSET_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD);

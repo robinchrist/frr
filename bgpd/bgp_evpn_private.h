@@ -810,7 +810,7 @@ extern void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp,
 					    struct bgpevpn *vpn);
 extern void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp,
 					   struct bgpevpn *vpn);
-extern void bgp_evpn_derive_auto_rt_export(struct bgp *bgp,
+extern void bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp,
 					   struct bgpevpn *vpn);
 extern void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp, struct bgpevpn *vpn);
 extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);

@@ -2302,7 +2302,7 @@ static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	assert(vpn->evi_export_rtl);
 	if (list_isempty(vpn->evi_export_rtl)) {
 		UNSET_FLAG(vpn->flags, VNI_FLAG_EXPRT_CFGD);
-		bgp_evpn_derive_auto_rt_export(bgp, vpn);
+		bgp_evpn_evi_derive_export_auto_rt(bgp, vpn);
 	}
 
 	if (is_vni_live(vpn))
