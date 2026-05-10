@@ -32,9 +32,11 @@
 #define BGP_EVPN_TYPE4_V4_PSIZE 23
 #define BGP_EVPN_TYPE4_V6_PSIZE 35
 
-#define RT_TYPE_IMPORT 1
-#define RT_TYPE_EXPORT 2
-#define RT_TYPE_BOTH   3
+enum bgp_evpn_rt_direction {
+	BGP_EVPN_RT_DIRECTION_IMPORT = 1,
+	BGP_EVPN_RT_DIRECTION_EXPORT = 2,
+	BGP_EVPN_RT_DIRECTION_BOTH   = 3
+};
 
 static const struct message bgp_evpn_route_type_str[] = { { BGP_EVPN_AD_ROUTE, "AD" },
 							  { BGP_EVPN_MAC_IP_ROUTE, "MACIP" },
