@@ -7752,13 +7752,13 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 		frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
 
-			if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+			if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 				continue;
 
 			ecom_str = ecommunity_ecom2str(
 				l3rt->ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
-			if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_WILD)) {
+			if (l3rt->is_wildcard) {
 				char *vni_str = NULL;
 
 				vni_str = strchr(ecom_str, ':');
@@ -7792,7 +7792,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 		frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
 
-			if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+			if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 				continue;
 
 			ecom_str = ecommunity_ecom2str(

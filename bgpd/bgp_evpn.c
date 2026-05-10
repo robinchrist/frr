@@ -351,8 +351,8 @@ static void vrf_rt2ecom_val(struct ecommunity_val *to_eval,
 	 */
 	memcpy(to_eval, eval, ECOMMUNITY_SIZE);
 
-	if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO) ||
-	    CHECK_FLAG(l3rt->flags, BGP_VRF_RT_WILD))
+	if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL ||
+	    l3rt->is_wildcard)
 		mask_ecom_global_admin(to_eval, eval);
 }
 
@@ -573,8 +573,8 @@ static void bgp_evpn_vrf_form_auto_rt(struct bgp *bgp, vni_t vni,
 
 	if (!ecom_found) {
 		newrt = bgp_evpn_route_target_new(ecomadd);
-		/* Label it as autoderived */
-		SET_FLAG(newrt->flags, BGP_VRF_RT_AUTO);
+		/* FIXME: Adjust to proper type (implicit / explicit) in later commit */
+		newrt->origin = BGP_EVPN_RT_ORIGIN_AUTO_IMPLICIT;
 		evpn_route_target_list_add(rtl, newrt);
 	} else
 		ecommunity_free(&ecomadd);
@@ -847,7 +847,7 @@ static void bgp_evpn_route_target_list_remove_by_ecom(struct evpn_route_target_l
 	struct evpn_route_target *l3rt;
 
 	frr_each_safe(evpn_route_target_list, rt_list, l3rt) {
-		if (auto_only && !CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+		if (auto_only && l3rt->origin == BGP_EVPN_RT_ORIGIN_MANUAL)
 			continue;
 
 		if (ecommunity_match(l3rt->ecom, ecomdel)) {
@@ -922,7 +922,7 @@ static bool bgp_evpn_route_target_list_has_nonauto_rt(struct evpn_route_target_l
 	struct evpn_route_target *rt;
 
 	frr_each (evpn_route_target_list, rt_list, rt) {
-		if (!CHECK_FLAG(rt->flags, BGP_VRF_RT_AUTO))
+		if (rt->origin == BGP_EVPN_RT_ORIGIN_MANUAL)
 			return true;
 	}
 
@@ -960,7 +960,7 @@ void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
 	newrt = bgp_evpn_route_target_new(ecomadd);
 
 	if (is_wildcard)
-		SET_FLAG(newrt->flags, BGP_VRF_RT_WILD);
+		newrt->is_wildcard = 1;
 
 	bgp_evpn_vrf_rt_routes_unmap(bgp_vrf);
 

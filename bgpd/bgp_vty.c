@@ -12445,13 +12445,13 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 			json_import_rt_list = json_object_new_array();
 			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 					continue;
 
 				ecom_str = ecommunity_ecom2str(l3rt->ecom,
 							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_WILD)) {
+				if (l3rt->is_wildcard) {
 					char *vni_str = NULL;
 					char rt_str[32];
 
@@ -12489,7 +12489,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 			json_export_rt_list = json_object_new_array();
 			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 					continue;
 
 				ecom_str = ecommunity_ecom2str(l3rt->ecom,
@@ -12537,13 +12537,13 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 			vty_out(vty, "Route Target Import\n");
 			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 					continue;
 
 				ecom_str = ecommunity_ecom2str(l3rt->ecom,
 							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_WILD)) {
+				if (l3rt->is_wildcard) {
 					char *vni_str = NULL;
 
 					vni_str = strchr(ecom_str, ':');
@@ -12573,7 +12573,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 
 			vty_out(vty, "Route Target Export\n");
 			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
-				if (CHECK_FLAG(l3rt->flags, BGP_VRF_RT_AUTO))
+				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
 					continue;
 
 				ecom_str = ecommunity_ecom2str(l3rt->ecom,

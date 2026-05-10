@@ -38,6 +38,16 @@ enum bgp_evpn_rt_direction {
 	BGP_EVPN_RT_DIRECTION_BOTH   = 3
 };
 
+enum bgp_evpn_rt_origin {
+	/* implicitly generated auto route target (when no other route target is configured) */
+    BGP_EVPN_RT_ORIGIN_AUTO_IMPLICIT   = 0,
+	/* explicitly generated auto route target, e.g. `route-target import auto` in config */
+    BGP_EVPN_RT_ORIGIN_AUTO_EXPLICIT   = 1,
+	/* manually specified, e.g. regular `route-target import 123:456` in config */
+    BGP_EVPN_RT_ORIGIN_MANUAL          = 2,
+};
+
+
 static const struct message bgp_evpn_route_type_str[] = { { BGP_EVPN_AD_ROUTE, "AD" },
 							  { BGP_EVPN_MAC_IP_ROUTE, "MACIP" },
 							  { BGP_EVPN_IMET_ROUTE, "IMET" },
@@ -178,15 +188,24 @@ DECLARE_HASH(vrf_irt_nodes, struct vrf_irt_node, hash_item,
 	     vrf_irt_node_hash_cmp, vrf_irt_node_hash_key);
 
 /*
- * Wrapper struct for l3 RT's
+ * Struct for EVPN VRF / EVI route target configuration
+ * used for both import and export RTs
+ * For import, there are extra types vrf_irt_node / evi_irt_node stored in hash tables
+ * that are used in the route import process instead of this struct
  */
 struct evpn_route_target {
 	struct evpn_route_target_list_item slnu_item;
 
-	/* flags based on config to determine how RTs are handled */
-	uint8_t flags;
-#define BGP_VRF_RT_AUTO (1 << 0)
-#define BGP_VRF_RT_WILD (1 << 1)
+	/*
+	 * Indicates how the route target was configured (manual / implicit auto / explicit auto)
+	 * Use bgp_evpn_rt_origin
+ 	 */
+	uint8_t origin : 2;
+
+	/* Indicates whether the RT is a wildcard RT (*:1234 - matches any RT with local admin 1234)
+	 * only valid for import RTs
+	 */
+	uint8_t is_wildcard : 1;
 
 	struct ecommunity *ecom;
 };
