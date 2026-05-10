@@ -663,7 +663,7 @@ static void bgp_evpn_vrf_form_auto_rt(struct bgp *bgp, vni_t vni,
 static void derive_rd_rt_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
-	bgp_evpn_derive_auto_rt_import(bgp, vpn);
+	bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
 	bgp_evpn_derive_auto_rt_export(bgp, vpn);
 }
 
@@ -5499,7 +5499,7 @@ static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
 			bgp_evpn_uninstall_routes(bgp, vpn);
 		bgp_evpn_unmap_vni_from_its_rts(bgp, vpn);
 		list_delete_all_node(vpn->evi_import_rtl);
-		bgp_evpn_derive_auto_rt_import(bgp, vpn);
+		bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
 		if (is_vni_live(vpn))
 			bgp_evpn_install_routes(bgp, vpn);
 	}
@@ -6643,7 +6643,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
  * Derive Import RT automatically for VNI and map VNI to RT.
  * The mapping will be used during route processing.
  */
-void bgp_evpn_derive_auto_rt_import(struct bgp *bgp, struct bgpevpn *vpn)
+void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	bgp_evpn_evi_form_auto_rt(bgp, vpn->vni, vpn->evi_import_rtl);
 	UNSET_FLAG(vpn->flags, VNI_FLAG_IMPRT_CFGD);

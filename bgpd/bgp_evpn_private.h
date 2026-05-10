@@ -808,7 +808,7 @@ extern void bgp_evpn_unmap_vrf_from_its_rts(struct bgp *bgp_vrf);
 extern void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgpevpn *vpn);
 extern void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp,
 					    struct bgpevpn *vpn);
-extern void bgp_evpn_derive_auto_rt_import(struct bgp *bgp,
+extern void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp,
 					   struct bgpevpn *vpn);
 extern void bgp_evpn_derive_auto_rt_export(struct bgp *bgp,
 					   struct bgpevpn *vpn);

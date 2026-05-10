@@ -2235,7 +2235,7 @@ static void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	/* Reset to auto RT - this also rebuilds the RT to VNI mapping */
 	if (list_isempty(vpn->evi_import_rtl)) {
 		UNSET_FLAG(vpn->flags, VNI_FLAG_IMPRT_CFGD);
-		bgp_evpn_derive_auto_rt_import(bgp, vpn);
+		bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
 	}
 	/* Rebuild the RT to VNI mapping */
 	else
