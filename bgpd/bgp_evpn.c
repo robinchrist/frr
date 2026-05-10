@@ -5514,7 +5514,7 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
 /*
  * Handle autort change for L3VNI.
  */
-static void update_autort_l3vni(struct bgp *bgp)
+static void bgp_evpn_vrf_update_autorts(struct bgp *bgp)
 {
 	if ((CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD))
 	    && (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EXPORT_RT_CFGD)))
@@ -6053,7 +6053,7 @@ void bgp_evpn_handle_autort_change(struct bgp *bgp)
 			       void*))bgp_evpn_evi_update_autorts,
 		     bgp);
 	if (bgp->l3vni)
-		update_autort_l3vni(bgp);
+		bgp_evpn_vrf_update_autorts(bgp);
 }
 
 struct vni_gr_walk {
