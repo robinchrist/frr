@@ -4286,7 +4286,7 @@ int install_uninstall_routes_for_vni(struct bgp *bgp, struct bgpevpn *vpn, bool 
 /* Install any existing remote routes applicable for this VRF into VRF RIB. This
  * is invoked upon l3vni-add or l3vni import rt change
  */
-static int install_routes_for_vrf(struct bgp *bgp_vrf)
+int bgp_evpn_vrf_install_routes(struct bgp *bgp_vrf)
 {
 	return install_uninstall_routes_for_vrf(bgp_vrf, true);
 }
@@ -5537,7 +5537,7 @@ static void bgp_evpn_vrf_update_autorts(struct bgp *bgp)
 	/* install all remote routes belonging to this l3vni
 	 * into corresponding vrf
 	 */
-	install_routes_for_vrf(bgp);
+	bgp_evpn_vrf_install_routes(bgp);
 }
 
 /*
@@ -5739,7 +5739,7 @@ static void evpn_vrf_rt_routes_map(struct bgp *bgp_vrf)
 	/* map VRFs to its RTs and install routes matching this new RT */
 	if (is_l3vni_live(bgp_vrf)) {
 		bgp_evpn_map_vrf_to_its_rts(bgp_vrf);
-		install_routes_for_vrf(bgp_vrf);
+		bgp_evpn_vrf_install_routes(bgp_vrf);
 	}
 }
 
@@ -7395,7 +7395,7 @@ int bgp_evpn_local_l3vni_add(vni_t l3vni, vrf_id_t vrf_id,
 
 	/* install all remote routes belonging to this l3vni into corresponding
 	 * vrf */
-	install_routes_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_install_routes(bgp_vrf);
 
 	return 0;
 }
