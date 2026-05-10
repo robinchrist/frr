@@ -5704,7 +5704,7 @@ static void bgp_evpn_rt_list_remove_by_ecom(struct list *rt_list, struct ecommun
 		list_delete_node(rt_list, node_to_del);
 }
 
-static void evpn_route_target_list_remove_node(struct evpn_route_target_list_head *rt_list,
+static void bgp_evpn_route_target_list_remove_by_ecom(struct evpn_route_target_list_head *rt_list,
 				struct ecommunity *ecomdel, bool auto_only)
 {
 	struct evpn_route_target *l3rt;
@@ -5756,7 +5756,7 @@ void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
 	/* L3 RTs carry flags; when deleting an auto-derived L3 RT, do not
 	 * remove a user-configured RT with the same value.
 	 */
-	evpn_route_target_list_remove_node(rtl, ecom_auto, true);
+	bgp_evpn_route_target_list_remove_by_ecom(rtl, ecom_auto, true);
 
 	ecommunity_free(&ecom_auto);
 }
@@ -5869,7 +5869,7 @@ void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 	evpn_vrf_rt_routes_unmap(bgp_vrf);
 
 	/* Remove rt */
-	evpn_route_target_list_remove_node(&bgp_vrf->vrf_import_rtl, ecomdel, false);
+	bgp_evpn_route_target_list_remove_by_ecom(&bgp_vrf->vrf_import_rtl, ecomdel, false);
 
 	if (!rt_list_has_cfgd_rt(&bgp_vrf->vrf_import_rtl))
 		UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD);
@@ -5942,7 +5942,7 @@ void bgp_evpn_vrf_unconfigure_export_rt(struct bgp *bgp_vrf,
 		return; /* Already un-configured */
 
 	/* Remove rt */
-	evpn_route_target_list_remove_node(&bgp_vrf->vrf_export_rtl, ecomdel, false);
+	bgp_evpn_route_target_list_remove_by_ecom(&bgp_vrf->vrf_export_rtl, ecomdel, false);
 
 	if (!rt_list_has_cfgd_rt(&bgp_vrf->vrf_export_rtl))
 		UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_RT_CFGD);
