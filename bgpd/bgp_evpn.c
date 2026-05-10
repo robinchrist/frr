@@ -660,7 +660,7 @@ static void bgp_evpn_vrf_form_auto_rt(struct bgp *bgp, vni_t vni,
  * Derive RD and RT for a VNI automatically. Invoked at the time of
  * creation of a VNI.
  */
-static void derive_rd_rt_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
+static void bgp_evpn_evi_derive_rd_rt(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	bgp_evpn_evi_derive_auto_rd(bgp, vpn);
 	bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
@@ -6752,7 +6752,7 @@ struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	vpn->evi_export_rtl->del = bgp_evpn_xxport_delete_ecomm;
 	bf_assign_index(bm->rd_idspace, vpn->rd_id);
-	derive_rd_rt_for_vni(bgp, vpn);
+	bgp_evpn_evi_derive_rd_rt(bgp, vpn);
 
 	/* Initialize EVPN route tables. */
 	vpn->ip_table = bgp_table_init(bgp, AFI_L2VPN, SAFI_EVPN);
