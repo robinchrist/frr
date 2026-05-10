@@ -898,7 +898,7 @@ void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
 	ecommunity_free(&ecom_auto);
 }
 
-static void evpn_vrf_rt_routes_map(struct bgp *bgp_vrf)
+static void bgp_evpn_vrf_rt_routes_map(struct bgp *bgp_vrf)
 {
 	/* map VRFs to its RTs and install routes matching this new RT */
 	if (is_l3vni_live(bgp_vrf)) {
@@ -977,7 +977,7 @@ void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
 
 	SET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD);
 
-	evpn_vrf_rt_routes_map(bgp_vrf);
+	bgp_evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
 void bgp_evpn_vrf_configure_import_auto_rt(struct bgp *bgp_vrf)
@@ -994,7 +994,7 @@ void bgp_evpn_vrf_configure_import_auto_rt(struct bgp *bgp_vrf)
 
 	bgp_evpn_vrf_add_import_auto_rt(bgp_vrf);
 
-	evpn_vrf_rt_routes_map(bgp_vrf);
+	bgp_evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
 void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
@@ -1013,7 +1013,7 @@ void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 
 	bgp_evpn_vrf_unconfigure_import_rt_fini(bgp_vrf);
 
-	evpn_vrf_rt_routes_map(bgp_vrf);
+	bgp_evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
 void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf)
@@ -1030,7 +1030,7 @@ void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf)
 
 	bgp_evpn_vrf_unconfigure_import_rt_fini(bgp_vrf);
 
-	evpn_vrf_rt_routes_map(bgp_vrf);
+	bgp_evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
 void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
