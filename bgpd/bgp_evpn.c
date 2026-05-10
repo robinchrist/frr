@@ -5490,7 +5490,7 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 /*
  * Handle autort change for a given VNI.
  */
-static void update_autort_vni(struct hash_bucket *bucket, struct bgp *bgp)
+static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *bgp)
 {
 	struct bgpevpn *vpn = bucket->data;
 
@@ -6050,7 +6050,7 @@ void bgp_evpn_handle_autort_change(struct bgp *bgp)
 {
 	hash_iterate(bgp->vnihash,
 		     (void (*)(struct hash_bucket *,
-			       void*))update_autort_vni,
+			       void*))bgp_evpn_evi_update_autorts,
 		     bgp);
 	if (bgp->l3vni)
 		update_autort_l3vni(bgp);
