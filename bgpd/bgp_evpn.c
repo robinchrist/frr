@@ -5501,7 +5501,7 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
 		list_delete_all_node(vpn->evi_import_rtl);
 		bgp_evpn_evi_derive_import_auto_rt(bgp, vpn);
 		if (is_vni_live(vpn))
-			bgp_evpn_install_routes(bgp, vpn);
+			bgp_evpn_evi_install_routes(bgp, vpn);
 	}
 	if (!is_export_rt_configured(vpn)) {
 		list_delete_all_node(vpn->evi_export_rtl);
@@ -6225,7 +6225,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 /*
  * Install routes for this VNI. Invoked upon change to Import RT.
  */
-int bgp_evpn_install_routes(struct bgp *bgp, struct bgpevpn *vpn)
+int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	return install_routes_for_vni(bgp, vpn);
 }
