@@ -803,6 +803,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 					      struct ecommunity *new_soo);
 extern int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgpevpn *vpn);
 extern int bgp_evpn_evi_uninstall_routes(struct bgp *bgp, struct bgpevpn *vpn);
+extern int bgp_evpn_vrf_uninstall_routes(struct bgp *bgp_vrf);
 extern void bgp_evpn_map_vrf_to_its_rts(struct bgp *bgp_vrf);
 extern void bgp_evpn_unmap_vrf_from_its_rts(struct bgp *bgp_vrf);
 extern void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgpevpn *vpn);

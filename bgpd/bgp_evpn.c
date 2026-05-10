@@ -4292,7 +4292,7 @@ static int install_routes_for_vrf(struct bgp *bgp_vrf)
 }
 
 /* uninstall routes from l3vni vrf. */
-static int uninstall_routes_for_vrf(struct bgp *bgp_vrf)
+int bgp_evpn_vrf_uninstall_routes(struct bgp *bgp_vrf)
 {
 	return install_uninstall_routes_for_vrf(bgp_vrf, false);
 }
@@ -5495,7 +5495,7 @@ static void bgp_evpn_vrf_update_autorts(struct bgp *bgp)
 
 	if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_IMPORT_RT_CFGD)) {
 		if (is_l3vni_live(bgp))
-			uninstall_routes_for_vrf(bgp);
+			bgp_evpn_vrf_uninstall_routes(bgp);
 
 		/* Cleanup the RT to VRF mapping */
 		bgp_evpn_unmap_vrf_from_its_rts(bgp);
@@ -5747,7 +5747,7 @@ static void evpn_vrf_rt_routes_unmap(struct bgp *bgp_vrf)
 {
 	/* uninstall routes from vrf */
 	if (is_l3vni_live(bgp_vrf))
-		uninstall_routes_for_vrf(bgp_vrf);
+		bgp_evpn_vrf_uninstall_routes(bgp_vrf);
 
 	/* Cleanup the RT to VRF mapping */
 	bgp_evpn_unmap_vrf_from_its_rts(bgp_vrf);
@@ -7433,7 +7433,7 @@ int bgp_evpn_local_l3vni_del(vni_t l3vni, vrf_id_t vrf_id)
 	 * routes. This will uninstalling the routes from zebra and decremnt the
 	 * bgp info count.
 	 */
-	uninstall_routes_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_uninstall_routes(bgp_vrf);
 
 	/* delete/withdraw all type-5 routes */
 	delete_withdraw_vrf_routes(bgp_vrf);
