@@ -5792,7 +5792,7 @@ static bool bgp_evpn_route_target_list_has_nonauto_rt(struct evpn_route_target_l
 	return false;
 }
 
-static void unconfigure_import_rt_for_vrf_fini(struct bgp *bgp_vrf)
+static void bgp_evpn_vrf_unconfigure_import_rt_fini(struct bgp *bgp_vrf)
 {
 	if (!is_l3vni_live(bgp_vrf))
 		return; /* Nothing to do if no vni */
@@ -5874,7 +5874,7 @@ void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 	if (!bgp_evpn_route_target_list_has_nonauto_rt(&bgp_vrf->vrf_import_rtl))
 		UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD);
 
-	unconfigure_import_rt_for_vrf_fini(bgp_vrf);
+	bgp_evpn_vrf_unconfigure_import_rt_fini(bgp_vrf);
 
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
@@ -5891,7 +5891,7 @@ void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf)
 
 	UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_AUTO_RT_CFGD);
 
-	unconfigure_import_rt_for_vrf_fini(bgp_vrf);
+	bgp_evpn_vrf_unconfigure_import_rt_fini(bgp_vrf);
 
 	evpn_vrf_rt_routes_map(bgp_vrf);
 }
