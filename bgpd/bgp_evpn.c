@@ -5446,7 +5446,7 @@ static void bgp_evpn_vrf_add_import_auto_rt(struct bgp *bgp_vrf)
 /*
  * Delete AUTO import RT from BGP VRF - L3VNI
  */
-static void evpn_auto_rt_import_delete_for_vrf(struct bgp *bgp_vrf)
+static void bgp_evpn_vrf_delete_import_auto_rt(struct bgp *bgp_vrf)
 {
 	bgp_evpn_vrf_delete_auto_rt(bgp_vrf, bgp_vrf->l3vni,
 			      &bgp_vrf->vrf_import_rtl);
@@ -5528,7 +5528,7 @@ static void update_autort_l3vni(struct bgp *bgp)
 		bgp_evpn_unmap_vrf_from_its_rts(bgp);
 
 		/* Remove auto generated RT */
-		evpn_auto_rt_import_delete_for_vrf(bgp);
+		bgp_evpn_vrf_delete_import_auto_rt(bgp);
 
 		{
 			struct evpn_route_target *l3rt;
@@ -5833,7 +5833,7 @@ void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
 	 */
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_RT_CFGD) &&
 	    !CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_AUTO_RT_CFGD))
-		evpn_auto_rt_import_delete_for_vrf(bgp_vrf);
+		bgp_evpn_vrf_delete_import_auto_rt(bgp_vrf);
 
 	/* Add the newly configured RT to RT list */
 	evpn_route_target_list_add(&bgp_vrf->vrf_import_rtl, newrt);
@@ -5887,7 +5887,7 @@ void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf)
 	evpn_vrf_rt_routes_unmap(bgp_vrf);
 
 	/* remove auto-generated RT */
-	evpn_auto_rt_import_delete_for_vrf(bgp_vrf);
+	bgp_evpn_vrf_delete_import_auto_rt(bgp_vrf);
 
 	UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_IMPORT_AUTO_RT_CFGD);
 
