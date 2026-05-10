@@ -4291,37 +4291,10 @@ static int install_routes_for_vrf(struct bgp *bgp_vrf)
 	return install_uninstall_routes_for_vrf(bgp_vrf, true);
 }
 
-/*
- * Install any existing remote routes applicable for this VNI into its
- * routing table. This is invoked when a VNI becomes "live" or its Import
- * RT is changed.
- */
-static int install_routes_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
-{
-	/*
-	 * Install type-3 routes followed by type-2 routes - the ones applicable
-	 * for this VNI.
-	 */
-	return install_uninstall_routes_for_vni(bgp, vpn, true);
-}
-
 /* uninstall routes from l3vni vrf. */
 static int uninstall_routes_for_vrf(struct bgp *bgp_vrf)
 {
 	return install_uninstall_routes_for_vrf(bgp_vrf, false);
-}
-
-/*
- * Uninstall any existing remote routes for this VNI. One scenario in which
- * this is invoked is upon an import RT change.
- */
-static int uninstall_routes_for_vni(struct bgp *bgp, struct bgpevpn *vpn)
-{
-	/*
-	 * Uninstall type-2 routes followed by type-3 routes - the ones
-	 * applicable for this VNI.
-	 */
-	return install_uninstall_routes_for_vni(bgp, vpn, false);
 }
 
 /*
@@ -6223,20 +6196,30 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 }
 
 /*
- * Install routes for this VNI. Invoked upon change to Import RT.
+ * Install any existing remote routes applicable for this VNI into its
+ * routing table. This is invoked when a VNI becomes "live" or its Import
+ * RT is changed.
  */
 int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	return install_routes_for_vni(bgp, vpn);
+	/*
+	 * Install type-3 routes followed by type-2 routes - the ones applicable
+	 * for this EVI.
+	 */
+	return install_uninstall_routes_for_vni(bgp, vpn, true);
 }
 
 /*
- * Uninstall all routes installed for this VNI. Invoked upon change
- * to Import RT.
+ * Uninstall any existing remote routes for this EVI. One scenario in which
+ * this is invoked is upon an import RT change.
  */
 int bgp_evpn_evi_uninstall_routes(struct bgp *bgp, struct bgpevpn *vpn)
 {
-	return uninstall_routes_for_vni(bgp, vpn);
+	/*
+	 * Uninstall type-2 routes followed by type-3 routes - the ones
+	 * applicable for this EVI.
+	 */
+	return install_uninstall_routes_for_vni(bgp, vpn, false);
 }
 
 /*
