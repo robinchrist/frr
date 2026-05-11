@@ -2137,7 +2137,7 @@ static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
  * allowed for a VNI and any change to configuration is implemented as
  * a "replace" (similar to other configuration).
  */
-static void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+static void evpn_evi_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 				     struct ecommunity *ecomadd)
 {
 	/* If the auto route-target is in use we must remove it */
@@ -7280,7 +7280,7 @@ DEFUN (bgp_evpn_vni_rt,
 		    bgp_evpn_rt_matches_existing(vpn->evi_export_rtl, ecomadd))
 			ecommunity_free(&ecomadd);
 		else
-			evpn_configure_export_rt(bgp, vpn, ecomadd);
+			evpn_evi_configure_export_rt(bgp, vpn, ecomadd);
 	}
 
 	return CMD_SUCCESS;
