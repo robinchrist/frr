@@ -2243,7 +2243,7 @@ static void evpn_vrf_unconfigure_rd(struct bgp *bgp_vrf)
 /*
  * Configure RD for a VNI (vty handler)
  */
-static void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
+static void evpn_evi_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
 			      struct prefix_rd *rd, const char *rd_pretty)
 {
 	/* If the VNI is "live", we need to delete and withdraw this VNI's
@@ -6558,7 +6558,7 @@ DEFUN (bgp_evpn_vni_rd,
 		return CMD_SUCCESS;
 
 	/* Configure or update the RD. */
-	evpn_configure_rd(bgp, vpn, &prd, argv[1]->arg);
+	evpn_evi_configure_rd(bgp, vpn, &prd, argv[1]->arg);
 	return CMD_SUCCESS;
 }
 
