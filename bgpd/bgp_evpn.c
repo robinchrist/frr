@@ -595,7 +595,7 @@ static void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf,
 /*
  * Map one RT to specified VNI.
  */
-static void bgp_evpn_evi_map_to_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgpevpn *vpn,
 			  struct ecommunity_val *eval)
 {
 	struct evi_irt_node *irt;
@@ -885,7 +885,7 @@ void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgpevpn *vpn)
 			eval = (struct ecommunity_val *)(ecom->val
 							 + (i
 							    * ECOMMUNITY_SIZE));
-			bgp_evpn_evi_map_to_import_rt(bgp, vpn, eval);
+			bgp_evpn_evi_map_to_evi_irt_nodes(bgp, vpn, eval);
 		}
 	}
 }
