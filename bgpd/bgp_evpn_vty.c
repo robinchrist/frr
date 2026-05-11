@@ -2267,7 +2267,7 @@ static void evpn_evi_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Unconfigure RD for a VNI (vty handler)
  */
-static void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
+static void evpn_evi_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	/* If the VNI is "live", we need to delete and withdraw this VNI's
 	 * local routes with the prior RD first. Then, after resetting RD
@@ -2338,7 +2338,7 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgpevpn *vpn)
 
 	/* First, deal with the export side - RD and export RT changes. */
 	if (is_rd_configured(vpn))
-		evpn_unconfigure_rd(bgp, vpn);
+		evpn_evi_unconfigure_rd(bgp, vpn);
 	if (is_export_rt_configured(vpn))
 		evpn_evi_unconfigure_export_rt(bgp, vpn, NULL);
 
@@ -6601,7 +6601,7 @@ DEFUN (no_bgp_evpn_vni_rd,
 		return CMD_WARNING;
 	}
 
-	evpn_unconfigure_rd(bgp, vpn);
+	evpn_evi_unconfigure_rd(bgp, vpn);
 	return CMD_SUCCESS;
 }
 
@@ -6629,7 +6629,7 @@ DEFUN (no_bgp_evpn_vni_rd_without_val,
 		return CMD_WARNING;
 	}
 
-	evpn_unconfigure_rd(bgp, vpn);
+	evpn_evi_unconfigure_rd(bgp, vpn);
 	return CMD_SUCCESS;
 }
 
