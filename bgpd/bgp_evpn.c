@@ -1209,7 +1209,7 @@ void bgp_evpn_vrf_unconfigure_export_rt_manual(struct bgp *bgp_vrf,
 	bgp_evpn_vrf_unconfigure_export_rt_fini(bgp_vrf);
 }
 
-void bgp_evpn_vrf_unconfigure_export_auto_rt(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_unconfigure_export_auto_rt_explicit(struct bgp *bgp_vrf)
 {
 	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_EXPORT_AUTO_RT_CFGD))
 		return; /* Already un-configured */
