@@ -136,27 +136,95 @@ int vni_list_cmp(void *p1, void *p2)
 
 /* Roughly grouped route target functionality follows */
 
+void bgp_evpn_format_rt_ecom_val(char* buf, size_t buflen, struct ecommunity_val eval,
+						 bool is_wildcard) {
+
+
+	uint8_t type = eval.val[0];
+	/* should be 0x02 ECOMMUNITY_ROUTE_TARGET */
+	uint8_t subtype = eval.val[1];
+
+	if (is_wildcard) {
+		/* For wildcard RTs, we ignore type, sub-type and global-admin
+		 * The value is always in the last 4 bytes - even if the value
+		 * was 2-bytes (byte 6 / 7) before some masking operation,
+		 * byte 4 / 5 will be zeroed out, so we can always just format the
+		 * last 4 bytes.
+		 */
+		uint32_t local_admin_val;
+		ptr_get_be32(eval.val + 4, &local_admin_val);
+		snprintf(buf, buflen, "*:%u", local_admin_val);
+		return;
+	}
+
+	if(subtype != ECOMMUNITY_ROUTE_TARGET) {
+		snprintf(buf, buflen, "(Invalid RT, wrong subtype)");
+		return;
+	}
+
+	switch (type) {
+	case ECOMMUNITY_ENCODE_AS: {
+		uint16_t as2;
+		ptr_get_be16(eval.val + 2, &as2);
+		uint32_t local_admin_val;
+		ptr_get_be32(eval.val + 4, &local_admin_val);
+		snprintf(buf, buflen, "%u:%u", as2, local_admin_val);
+		break;
+	}
+
+	case ECOMMUNITY_ENCODE_AS4: {
+		uint32_t as4;
+		ptr_get_be32(eval.val + 2, &as4);
+		uint16_t local_admin_val;
+		ptr_get_be16(eval.val + 6, &local_admin_val);
+		snprintf(buf, buflen, "%u:%u", as4, local_admin_val);
+		break;
+	}
+
+	case ECOMMUNITY_ENCODE_IP: {
+		struct in_addr ip;
+		memcpy(&ip, eval.val + 2, 4);
+		uint16_t local_admin_val;
+		ptr_get_be16(eval.val + 6, &local_admin_val);
+		snprintfrr(buf, buflen, "%pI4:%u", &ip, local_admin_val);
+		break;
+	}
+
+	default:
+		snprintf(buf, buflen, "(Invalid RT, wrong type)");
+		break;
+	}
+}
+
 /*
  * Hash key function for vrf import route target.
  */
 uint32_t vrf_irt_node_hash_key(const struct vrf_irt_node *irt)
 {
-	return jhash(irt->rt.val, 8, 0x5abc1234);
+	uint32_t hashval = jhash_1word(irt->is_wildcard, 0x5abc1234);
+	return jhash(irt->rt.val, 8, hashval);
 }
 
 /*
- * Comparison function for vrf import rt hash (0 == equal).
+ * Key Comparison function for vrf_irt_node hash(-map)
+ * Does NOT compare values, only key (is_wildcard + RT value)
  */
 int vrf_irt_node_hash_cmp(const struct vrf_irt_node *a,
 			  const struct vrf_irt_node *b)
 {
+	/* Sort Wildcard RTs first */
+	if(a->is_wildcard != b->is_wildcard)
+		return a->is_wildcard ? -1 : 1;
+
 	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
 }
 
 /*
  * Create a new vrf import_rt in evpn instance
+ * May return NULL if EVPN is not yet active - called should not have called
+ * in this case anyway!
  */
-static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val *rt)
+static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val rt, bool is_wildcard)
 {
 	struct bgp *bgp_evpn = NULL;
 	struct vrf_irt_node *irt;
@@ -168,10 +236,10 @@ static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val *rt)
 		return NULL;
 	}
 
-	irt = XCALLOC(MTYPE_BGP_EVPN_VRF_IRT_NODE,
-		      sizeof(struct vrf_irt_node));
+	irt = XCALLOC(MTYPE_BGP_EVPN_VRF_IRT_NODE, sizeof(struct vrf_irt_node));
 
-	irt->rt = *rt;
+	irt->is_wildcard = is_wildcard;
+	irt->rt = rt;
 	irt->vrfs = list_new();
 
 	/* Add to typesafe hash */
@@ -241,15 +309,21 @@ static int is_vrf_present_in_vrf_irt_node(struct vrf_irt_node *irt_node, struct 
  */
 uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt)
 {
-	return jhash(irt->rt.val, 8, 0xdeadbeef);
+	uint32_t hashval = jhash_1word(irt->is_wildcard, 0xdeadbeef);
+	return jhash(irt->rt.val, 8, hashval);
 }
 
 /*
- * Comparison function for import rt hash (0 == equal).
+ * Comparison function for evi_irt_node hash(-map)
+ * Does NOT compare values, only key (is_wildcard + RT value)
  */
 int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
 			  const struct evi_irt_node *b)
 {
+	/* Sort Wildcard RTs first */
+	if(a->is_wildcard != b->is_wildcard)
+		return a->is_wildcard ? -1 : 1;
+
 	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
 }
 
@@ -257,13 +331,14 @@ int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
  * Create a new import_rt
  */
 static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
-					     struct ecommunity_val *rt)
+						 struct ecommunity_val rt, bool is_wildcard)
 {
 	struct evi_irt_node *irt;
 
 	irt = XCALLOC(MTYPE_BGP_EVPN_EVI_IRT_NODE, sizeof(struct evi_irt_node));
 
-	irt->rt = *rt;
+	irt->is_wildcard = is_wildcard;
+	irt->rt = rt;
 	irt->evis = list_new();
 
 	/* Add to typesafe hash */
@@ -332,28 +407,63 @@ static inline void mask_ecom_global_admin(struct ecommunity_val *dst,
 	}
 }
 
+static inline void bgp_evpn_vrf_rt_ecom_val_convert_to_wildcard(struct ecommunity_val* dst)
+{
+	uint8_t type;
+	uint8_t subtype;
+
+	/* Save old Type (Encode AS / AS4 / IP), will be masked off too */
+	type = dst->val[0];
+	subtype = dst->val[1];
+	if((type != ECOMMUNITY_ENCODE_AS && type != ECOMMUNITY_ENCODE_AS4 &&
+	   type != ECOMMUNITY_ENCODE_IP) || subtype != ECOMMUNITY_ROUTE_TARGET) {
+
+		/* Unexpected encoding type, do not attempt to mask */
+		return;
+	}
+
+	/*
+	 * Zeroize type and subtype, as wildcard RTs are not valid RTs themselves,
+	 * and we want to prevent any accidental leaking of those
+	 * or at least make it very obvious by making the entire community invalid
+	 */
+	dst->val[0] = 0;
+	dst->val[1] = 0;
+
+	/* Now zeroize the global administrator field */
+	if (type == ECOMMUNITY_ENCODE_AS) {
+		dst->val[2] = dst->val[3] = 0;
+	} else if (type == ECOMMUNITY_ENCODE_AS4 || type == ECOMMUNITY_ENCODE_IP) {
+		dst->val[2] = dst->val[3] = 0;
+		dst->val[4] = dst->val[5] = 0;
+	}
+
+}
+
 /*
  * Converts the RT to Ecommunity Value and adjusts masking based
  * on flags set for RT.
  */
-static void vrf_rt2ecom_val(struct ecommunity_val *to_eval,
-			    const struct evpn_route_target *l3rt, int iter)
+static struct ecommunity_val vrf_rt2ecom_val(const struct evpn_route_target *l3rt)
 {
-	const struct ecommunity_val *eval;
+	struct ecommunity_val eval;
 
-	eval = (const struct ecommunity_val *)(l3rt->ecom->val +
-					       (iter * ECOMMUNITY_SIZE));
+	assert(l3rt->ecom->size == 1);
+	assert(l3rt->ecom->unit_size == ECOMMUNITY_SIZE);
+
 	/* If using "automatic" or "wildcard *" RT,
 	 * we only care about the local-admin sub-field.
 	 * This is to facilitate using L3VNI(VRF-VNI)
 	 * as the RT for EBGP peering too and simplify
 	 * configurations by allowing any ASN via '*'.
 	 */
-	memcpy(to_eval, eval, ECOMMUNITY_SIZE);
+	memcpy(eval.val, l3rt->ecom->val, ECOMMUNITY_SIZE);
 
 	if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL ||
 	    l3rt->is_wildcard)
-		mask_ecom_global_admin(to_eval, eval);
+		bgp_evpn_vrf_rt_ecom_val_convert_to_wildcard(&eval);
+
+	return eval;
 }
 
 /*
@@ -417,28 +527,36 @@ static struct evpn_route_target *bgp_evpn_route_target_new(struct ecommunity *ec
  * Map one RT to specified VRF.
  * bgp_vrf = BGP vrf instance
  */
-static void bgp_evpn_vrf_map_to_rt(struct bgp *bgp_vrf, struct evpn_route_target *l3rt)
+static void bgp_evpn_vrf_map_to_rt(struct bgp *bgp_vrf, const struct evpn_route_target *l3rt)
 {
-	uint32_t i = 0;
+	struct vrf_irt_node *irt;
+	struct ecommunity_val eval_tmp;
 
-	for (i = 0; i < l3rt->ecom->size; i++) {
-		struct vrf_irt_node *irt = NULL;
-		struct ecommunity_val eval_tmp;
+	assert(l3rt->ecom->size == 1);
 
-		/* Adjust masking for value */
-		vrf_rt2ecom_val(&eval_tmp, l3rt, i);
-
-		irt = lookup_vrf_irt_node(&eval_tmp);
-
-		if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
-			return; /* Already mapped. */
-
-		if (!irt)
-			irt = vrf_irt_node_new(&eval_tmp);
-
-		/* Add VRF to the list for this RT. */
-		listnode_add(irt->vrfs, bgp_vrf);
+	/* should never happen, will be removed once evpn_route_target was converted to ecom_val */
+	if(l3rt->ecom->size != 1) {
+		return;
 	}
+
+	/* Convert configured route target to ecommunity value */
+	eval_tmp = vrf_rt2ecom_val(l3rt);
+
+	irt = lookup_vrf_irt_node(&eval_tmp);
+
+	if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
+		return; /* Already mapped. */
+
+	if (!irt)
+		irt = vrf_irt_node_new(eval_tmp, l3rt->is_wildcard);
+
+	if(!irt)
+		/* this should never happen, NULL is only returned if EVPN is not yet active */
+		return;
+
+	/* Add VRF to the list for this RT. */
+	listnode_add(irt->vrfs, bgp_vrf);
+
 }
 
 /*
@@ -447,28 +565,31 @@ static void bgp_evpn_vrf_map_to_rt(struct bgp *bgp_vrf, struct evpn_route_target
  * bgp_vrf: BGP VRF specific instance
  */
 static void bgp_evpn_vrf_unmap_from_rt(struct bgp *bgp_vrf,
-			      struct evpn_route_target *l3rt)
+			      const struct evpn_route_target *l3rt)
 {
-	uint32_t i;
+	struct vrf_irt_node *irt;
+	struct ecommunity_val eval_tmp;
 
-	for (i = 0; i < l3rt->ecom->size; i++) {
-		struct vrf_irt_node *irt;
-		struct ecommunity_val eval_tmp;
+	assert(l3rt->ecom->size == 1);
 
-		/* Adjust masking for value */
-		vrf_rt2ecom_val(&eval_tmp, l3rt, i);
-
-		irt = lookup_vrf_irt_node(&eval_tmp);
-
-		if (!irt)
-			return; /* Not mapped */
-
-		/* Delete VRF from list for this RT. */
-		listnode_delete(irt->vrfs, bgp_vrf);
-
-		if (!listnode_head(irt->vrfs))
-			vrf_irt_node_free(irt);
+	/* should never happen, will be removed once evpn_route_target was converted to ecom_val */
+	if(l3rt->ecom->size != 1) {
+		return;
 	}
+
+	/* Convert configured route target to ecommunity value */
+	eval_tmp = vrf_rt2ecom_val(l3rt);
+
+	irt = lookup_vrf_irt_node(&eval_tmp);
+
+	if (!irt)
+		return; /* Not mapped */
+
+	/* Delete VRF from list for this RT. */
+	listnode_delete(irt->vrfs, bgp_vrf);
+
+	if (!listnode_head(irt->vrfs))
+		vrf_irt_node_free(irt);
 }
 
 /*
@@ -484,8 +605,9 @@ static void bgp_evpn_evi_map_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 	 * sub-field.
 	 * This is to facilitate using VNI as the RT for EBGP peering too.
 	 */
+	bool rt_is_wildcard = !is_import_rt_configured(vpn);
 	memcpy(&eval_tmp, eval, ECOMMUNITY_SIZE);
-	if (!is_import_rt_configured(vpn))
+	if (rt_is_wildcard)
 		mask_ecom_global_admin(&eval_tmp, eval);
 
 	irt = lookup_evi_irt_node(bgp, &eval_tmp);
@@ -494,7 +616,7 @@ static void bgp_evpn_evi_map_to_rt(struct bgp *bgp, struct bgpevpn *vpn,
 		return;
 
 	if (!irt)
-		irt = evi_irt_node_new(bgp, &eval_tmp);
+		irt = evi_irt_node_new(bgp, eval_tmp, rt_is_wildcard);
 
 	/* Add VNI to the hash list for this RT. */
 	listnode_add(irt->evis, vpn);

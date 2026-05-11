@@ -151,9 +151,13 @@ struct evi_irt_node {
 	/* typesafe hash item */
 	struct evi_irt_nodes_item hash_item;
 
-	/* RT */
+	/* Key */
+	/* Whether the RT is a wildcard RT, if yes ecom val will be masked*/
+	bool is_wildcard;
+	/* (Potentially masked) actual RT value */
 	struct ecommunity_val rt;
 
+	/* Value */
 	/* List of EVIs importing routes matching this RT. */
 	struct list *evis;
 };
@@ -173,9 +177,13 @@ struct vrf_irt_node {
 	/* typesafe hash item */
 	struct vrf_irt_nodes_item hash_item;
 
-	/* RT */
+	/* Key */
+	/* Whether the RT is a wildcard RT, if yes ecom val will be masked*/
+	bool is_wildcard;
+	/* (Potentially masked) actual RT value */
 	struct ecommunity_val rt;
 
+	/* Value */
 	/* List of VRFs importing routes matching this RT. */
 	struct list *vrfs;
 };
@@ -791,6 +799,8 @@ static inline bool bgp_evpn_is_path_local(struct bgp *bgp,
 
 extern void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, safi_t safi,
 						     struct bgp_path_info *originator, bool add);
+extern void bgp_evpn_format_rt_ecom_val(char* buf, size_t buflen, struct ecommunity_val eval,
+						 bool is_wildcard);
 extern void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
 extern void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
 				  struct evpn_route_target_list_head *rtl);
