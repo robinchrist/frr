@@ -7118,7 +7118,7 @@ DEFPY (no_bgp_evpn_vrf_rt_auto,
 	}
 
 	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		bgp_evpn_vrf_unconfigure_import_auto_rt(bgp);
+		bgp_evpn_vrf_unconfigure_import_auto_rt_explicit(bgp);
 
 	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_EXPORT)
 		bgp_evpn_vrf_unconfigure_export_auto_rt(bgp);
