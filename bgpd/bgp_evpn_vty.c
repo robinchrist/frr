@@ -2222,7 +2222,7 @@ static void evpn_vrf_configure_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 /*
  * Unconfigure RD for VRF
  */
-static void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
+static void evpn_vrf_unconfigure_rd(struct bgp *bgp_vrf)
 {
 	/* If we have already advertise type-5 routes with a different RD, we
 	 * have to delete and withdraw them first
@@ -6502,7 +6502,7 @@ DEFUN (no_bgp_evpn_vrf_rd,
 		return CMD_WARNING;
 	}
 
-	evpn_unconfigure_vrf_rd(bgp_vrf);
+	evpn_vrf_unconfigure_rd(bgp_vrf);
 	return CMD_SUCCESS;
 }
 
@@ -6523,7 +6523,7 @@ DEFUN (no_bgp_evpn_vrf_rd_without_val,
 		return CMD_WARNING;
 	}
 
-	evpn_unconfigure_vrf_rd(bgp_vrf);
+	evpn_vrf_unconfigure_rd(bgp_vrf);
 	return CMD_SUCCESS;
 }
 
