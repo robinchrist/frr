@@ -2197,7 +2197,7 @@ static void evpn_evi_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Configure RD for VRF
  */
-static void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
+static void evpn_vrf_configure_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 				  const char *rd_pretty)
 {
 	/* If we have already advertise type-5 routes with a different RD, we
@@ -6466,7 +6466,7 @@ DEFUN (bgp_evpn_vrf_rd,
 		return CMD_SUCCESS;
 
 	/* Configure or update the RD. */
-	evpn_configure_vrf_rd(bgp_vrf, &prd, argv[1]->arg);
+	evpn_vrf_configure_rd(bgp_vrf, &prd, argv[1]->arg);
 	return CMD_SUCCESS;
 }
 
