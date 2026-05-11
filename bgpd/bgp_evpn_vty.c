@@ -2047,7 +2047,7 @@ static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
  * Configure the Import RTs for a VNI (vty handler). Caller expected to
  * check that this is a change.
  */
-static void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+static void evpn_evi_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
 				     struct ecommunity *ecomadd)
 {
 	/* If the VNI is "live", we need to uninstall routes using the current
@@ -7261,7 +7261,7 @@ DEFUN (bgp_evpn_vni_rt,
 		    bgp_evpn_rt_matches_existing(vpn->evi_import_rtl, ecomadd))
 			ecommunity_free(&ecomadd);
 		else
-			evpn_configure_import_rt(bgp, vpn, ecomadd);
+			evpn_evi_configure_import_rt(bgp, vpn, ecomadd);
 	}
 
 	/* Add/update the export route-target */
