@@ -1073,7 +1073,7 @@ static void bgp_evpn_vrf_unconfigure_export_rt_fini(struct bgp *bgp_vrf)
 	bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 }
 
-void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_configure_import_rt_manual(struct bgp *bgp_vrf,
 					  struct ecommunity *ecomadd,
 					  bool is_wildcard)
 {

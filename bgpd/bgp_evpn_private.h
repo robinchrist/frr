@@ -813,7 +813,7 @@ extern void bgp_evpn_vrf_unconfigure_export_rt(struct bgp *bgp_vrf,
 extern void bgp_evpn_vrf_configure_export_auto_rt(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_unconfigure_export_auto_rt(struct bgp *bgp_vrf);
 
-extern void bgp_evpn_vrf_configure_import_rt(struct bgp *bgp_vrf,
+extern void bgp_evpn_vrf_configure_import_rt_manual(struct bgp *bgp_vrf,
 						 struct ecommunity *ecomadd,
 						 bool is_wildcard);
 extern void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
