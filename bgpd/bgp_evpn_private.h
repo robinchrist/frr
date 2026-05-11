@@ -819,7 +819,7 @@ extern void bgp_evpn_vrf_configure_import_rt_manual(struct bgp *bgp_vrf,
 extern void bgp_evpn_vrf_unconfigure_import_rt(struct bgp *bgp_vrf,
 						   struct ecommunity *ecomdel);
 
-extern void bgp_evpn_vrf_configure_import_auto_rt(struct bgp *bgp_vrf);
+extern void bgp_evpn_vrf_configure_import_auto_rt_explicit(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_unconfigure_import_auto_rt(struct bgp *bgp_vrf);
 
 extern void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf);
