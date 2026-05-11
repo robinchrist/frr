@@ -2153,7 +2153,7 @@ static void evpn_evi_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Unconfigure the Export RT for a VNI (vty handler)
  */
-static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+static void evpn_evi_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 				       struct ecommunity *ecomdel)
 {
 	struct listnode *node, *nnode, *node_to_del;
@@ -2340,7 +2340,7 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgpevpn *vpn)
 	if (is_rd_configured(vpn))
 		evpn_unconfigure_rd(bgp, vpn);
 	if (is_export_rt_configured(vpn))
-		evpn_unconfigure_export_rt(bgp, vpn, NULL);
+		evpn_evi_unconfigure_export_rt(bgp, vpn, NULL);
 
 	/* Next, deal with the import side. */
 	if (is_import_rt_configured(vpn))
@@ -7366,7 +7366,7 @@ DEFUN (no_bgp_evpn_vni_rt,
 				"%% RT specified does not match configuration for this VNI\n");
 			return CMD_WARNING;
 		}
-		evpn_unconfigure_export_rt(bgp, vpn, ecomdel);
+		evpn_evi_unconfigure_export_rt(bgp, vpn, ecomdel);
 	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
 		found_ecomdel = 0;
 
@@ -7376,7 +7376,7 @@ DEFUN (no_bgp_evpn_vni_rt,
 		}
 
 		if (bgp_evpn_rt_matches_existing(vpn->evi_export_rtl, ecomdel)) {
-			evpn_unconfigure_export_rt(bgp, vpn, ecomdel);
+			evpn_evi_unconfigure_export_rt(bgp, vpn, ecomdel);
 			found_ecomdel = 1;
 		}
 
@@ -7441,7 +7441,7 @@ DEFUN (no_bgp_evpn_vni_rt_without_val,
 	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
 		evpn_evi_unconfigure_import_rt(bgp, vpn, NULL);
 	else
-		evpn_unconfigure_export_rt(bgp, vpn, NULL);
+		evpn_evi_unconfigure_export_rt(bgp, vpn, NULL);
 	return CMD_SUCCESS;
 }
 
