@@ -6821,7 +6821,7 @@ static int vrf_del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
 						      ecom))
 			return -1;
 
-		bgp_evpn_vrf_unconfigure_import_rt(bgp, ecom);
+		bgp_evpn_vrf_unconfigure_import_rt_manual(bgp, ecom);
 	} else {
 		if (!bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_export_rtl,
 						      ecom))
