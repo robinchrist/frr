@@ -1155,7 +1155,7 @@ void bgp_evpn_vrf_unconfigure_import_auto_rt_explicit(struct bgp *bgp_vrf)
 	bgp_evpn_vrf_rt_routes_map(bgp_vrf);
 }
 
-void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
+void bgp_evpn_vrf_configure_export_rt_manual(struct bgp *bgp_vrf,
 					  struct ecommunity *ecomadd)
 {
 	struct evpn_route_target *newrt;

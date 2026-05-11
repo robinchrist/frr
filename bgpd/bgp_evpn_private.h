@@ -805,7 +805,7 @@ extern void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list 
 extern void bgp_evpn_vrf_delete_auto_rt(struct bgp *bgp, vni_t vni,
 				  struct evpn_route_target_list_head *rtl);
 
-extern void bgp_evpn_vrf_configure_export_rt(struct bgp *bgp_vrf,
+extern void bgp_evpn_vrf_configure_export_rt_manual(struct bgp *bgp_vrf,
 						 struct ecommunity *ecomadd);
 extern void bgp_evpn_vrf_unconfigure_export_rt(struct bgp *bgp_vrf,
 						   struct ecommunity *ecomdel);

@@ -6807,7 +6807,7 @@ static int vrf_add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
 		    bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_export_rtl, ecom))
 			return -1;
 
-		bgp_evpn_vrf_configure_export_rt(bgp, ecom);
+		bgp_evpn_vrf_configure_export_rt_manual(bgp, ecom);
 	}
 
 	return 0;
