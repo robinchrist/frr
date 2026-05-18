@@ -4348,7 +4348,7 @@ int bgp_delete(struct bgp *bgp)
 	safi_t safi;
 	int i;
 	uint32_t vni_count;
-	struct bgpevpn *vpn = NULL;
+	struct bgp_evpn_evi *vpn = NULL;
 	struct graceful_restart_info *gr_info;
 	struct bgp *bgp_default = bgp_get_default();
 	struct bgp_clearing_info *cinfo;
