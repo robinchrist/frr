@@ -5006,17 +5006,17 @@ static int install_uninstall_route_in_vrfs(struct bgp *bgp_def, afi_t afi,
 }
 
 /*
- * Install or uninstall route in matching VNIs (list).
+ * Install or uninstall route in matching EVIs (list).
  */
-static int install_uninstall_route_in_vnis(struct bgp *bgp, afi_t afi,
+static int install_uninstall_route_in_evis(struct bgp *bgp, afi_t afi,
 					   safi_t safi, struct prefix_evpn *evp,
 					   struct bgp_path_info *pi,
-					   struct list *vnis, int install)
+					   struct list *evis, int install)
 {
 	struct bgp_evpn_evi *evi;
 	struct listnode *node, *nnode;
 
-	for (ALL_LIST_ELEMENTS(vnis, node, nnode, evi)) {
+	for (ALL_LIST_ELEMENTS(evis, node, nnode, evi)) {
 		int ret;
 
 		if (!is_vni_live(evi))
@@ -5029,7 +5029,7 @@ static int install_uninstall_route_in_vnis(struct bgp *bgp, afi_t afi,
 
 		if (ret) {
 			flog_err(EC_BGP_EVPN_FAIL,
-				 "%u: Failed to %s EVPN %s route in VNI %u",
+				 "%u: Failed to %s EVPN %s route in EVI with VNI %u",
 				 bgp->vrf_id, install ? "install" : "uninstall",
 				 evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE
 					 ? "MACIP"
@@ -5126,7 +5126,7 @@ static int bgp_evpn_install_uninstall_table(struct bgp *bgp, afi_t afi,
 			if (evp->prefix.route_type != BGP_EVPN_IP_PREFIX_ROUTE) {
 				irt = in_vni_rt ? lookup_evi_irt_node(bgp, eval) : NULL;
 				if (irt)
-					install_uninstall_route_in_vnis(bgp, afi, safi, evp, pi,
+					install_uninstall_route_in_evis(bgp, afi, safi, evp, pi,
 									irt->evis, import);
 			}
 
@@ -5159,7 +5159,7 @@ static int bgp_evpn_install_uninstall_table(struct bgp *bgp, afi_t afi,
 			}
 
 			if (irt)
-				install_uninstall_route_in_vnis(
+				install_uninstall_route_in_evis(
 					bgp, afi, safi, evp, pi, irt->evis,
 					import);
 			if (vrf_irt)
