@@ -784,7 +784,7 @@ static inline bool bgp_evpn_is_svi_macip_enabled(struct bgp_evpn_evi *vpn)
 {
 	struct bgp *bgp_evpn = NULL;
 
-	bgp_evpn = bgp_get_evpn();
+	bgp_evpn = bgp_get_evpn_master_instance();
 
 	return (bgp_evpn->evpn_info->advertise_svi_macip ||
 		vpn->advertise_svi_macip);

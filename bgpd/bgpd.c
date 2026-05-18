@@ -4028,8 +4028,12 @@ void bgp_set_evpn(struct bgp *bgp)
 		bgp_lock(bm->bgp_evpn);
 }
 
-/* Returns the BGP instance where EVPN is enabled, if any */
-struct bgp *bgp_get_evpn(void)
+/* Returns the BGP EVPN master instance if exists
+ * The master intsance is the one where `advertise-all-vni` is configured
+ * and serves a special role (it stores some "global EVPN info" such as
+ * import route target hash tables)
+ */
+struct bgp *bgp_get_evpn_master_instance(void)
 {
 	return bm->bgp_evpn;
 }
@@ -4371,7 +4375,7 @@ int bgp_delete(struct bgp *bgp)
 	 * Pop all VPNs yet to be processed for remote routes install if the
 	 * bgp-evpn instance is getting deleted
 	 */
-	if (bgp == bgp_get_evpn()) {
+	if (bgp == bgp_get_evpn_master_instance()) {
 		b_l2_cnt = zebra_l2_vni_count(&bm->zebra_l2_vni_head);
 		vni_count = b_l2_cnt;
 		while (vni_count) {

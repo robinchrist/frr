@@ -17,7 +17,7 @@ static inline int is_evpn_enabled(void)
 {
 	struct bgp *bgp = NULL;
 
-	bgp = bgp_get_evpn();
+	bgp = bgp_get_evpn_master_instance();
 	return bgp ? EVPN_ENABLED(bgp) : 0;
 }
 
@@ -99,7 +99,7 @@ static inline int is_route_parent_evpn(struct bgp_path_info *ri)
 	(pi->sub_type == BGP_ROUTE_IMPORTED && is_route_parent_evpn(pi))
 
 #define IS_L2VPN_AFI_IN_NON_DEFAULT_VRF(bgp, afi, safi)                                           \
-	(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bgp_get_evpn())
+	(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bgp_get_evpn_master_instance())
 
 /* Flag if the route path's family is EVPN. */
 static inline bool is_pi_family_evpn(struct bgp_path_info *pi)
@@ -111,7 +111,7 @@ static inline bool evpn_resolve_overlay_index(void)
 {
 	struct bgp *bgp = NULL;
 
-	bgp = bgp_get_evpn();
+	bgp = bgp_get_evpn_master_instance();
 	return bgp ? bgp->resolve_overlay_index : false;
 }
 

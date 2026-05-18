@@ -177,7 +177,7 @@ static FRR_NORETURN void bgp_exit(int status)
 	bgp_close();
 
 	bgp_default = bgp_get_default();
-	bgp_evpn = bgp_get_evpn();
+	bgp_evpn = bgp_get_evpn_master_instance();
 
 	/* reverse bgp_master_init */
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
