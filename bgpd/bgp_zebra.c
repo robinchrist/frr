@@ -1923,7 +1923,7 @@ static void bgp_handle_route_announcements_to_zebra(struct event *e)
 			if (is_evpn)
 				status =
 					evpn_zebra_install(table->bgp,
-							   dest->za_vpn,
+							   dest->za_evi,
 							   (const struct prefix_evpn
 								    *)
 								   bgp_dest_get_prefix(
@@ -1937,7 +1937,7 @@ static void bgp_handle_route_announcements_to_zebra(struct event *e)
 		} else {
 			if (is_evpn)
 				status = evpn_zebra_uninstall(
-					table->bgp, dest->za_vpn,
+					table->bgp, dest->za_evi,
 					(const struct prefix_evpn *)
 						bgp_dest_get_prefix(dest),
 					dest->za_bgp_pi, false);
@@ -1958,11 +1958,11 @@ static void bgp_handle_route_announcements_to_zebra(struct event *e)
 				 evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE
 					 ? "MACIP"
 					 : "IMET",
-				 dest->za_vpn->vni);
+				 dest->za_evi->vni);
 
 		bgp_path_info_unlock(dest->za_bgp_pi);
 		dest->za_bgp_pi = NULL;
-		dest->za_vpn = NULL;
+		dest->za_evi = NULL;
 		dest->za_inode = NULL;
 		bgp_dest_unlock_node(dest);
 		XFREE(MTYPE_BGP_BP_INSTALL_NODE, inode);
@@ -2035,7 +2035,7 @@ void bgp_zebra_update_fib_install_pending(struct bgp_dest *dest, struct bgp *bgp
  *                                     withdrawn.
  */
 void bgp_zebra_route_install(struct bgp_dest *dest, struct bgp_path_info *info,
-			     struct bgp *bgp, bool install, struct bgp_evpn_evi *vpn,
+			     struct bgp *bgp, bool install, struct bgp_evpn_evi *evi,
 			     bool is_sync)
 {
 	bool is_evpn = false;
@@ -2127,7 +2127,7 @@ void bgp_zebra_route_install(struct bgp_dest *dest, struct bgp_path_info *info,
 	}
 
 	if (is_evpn) {
-		dest->za_vpn = vpn;
+		dest->za_evi = evi;
 		dest->za_is_sync = is_sync;
 	}
 

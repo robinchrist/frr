@@ -465,7 +465,7 @@ static void bgp_evpn_es_route_table_purge(struct bgp_evpn_es *es)
  * ESR).
  */
 int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
-			     struct bgp_evpn_evi *vpn, afi_t afi, safi_t safi,
+			     struct bgp_evpn_evi *evi, afi_t afi, safi_t safi,
 			     struct bgp_dest *dest, struct attr *attr,
 			     struct bgp_path_info **ri, int *route_changed)
 {
@@ -520,8 +520,8 @@ int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 		if (evp->prefix.route_type == BGP_EVPN_AD_ROUTE) {
 			bgp_path_info_extra_get(tmp_pi);
 			bgp_labels.num_labels = 1;
-			if (vpn)
-				vni2label(vpn->vni, &bgp_labels.label[0]);
+			if (evi)
+				vni2label(evi->vni, &bgp_labels.label[0]);
 			if (!bgp_path_info_labels_same(tmp_pi,
 						       &bgp_labels.label[0],
 						       bgp_labels.num_labels)) {
@@ -560,10 +560,10 @@ int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
 			zlog_debug(
 				"local ES %s vni %u route-type %s nexthop %pI4 updated",
-				es ? es->esi_str : "Null", vpn ? vpn->vni : 0,
+				es ? es->esi_str : "Null", evi ? evi->vni : 0,
 				evp->prefix.route_type == BGP_EVPN_ES_ROUTE
 					? "esr"
-					: (vpn ? "ead-evi" : "ead-es"),
+					: (evi ? "ead-evi" : "ead-es"),
 				&attr->mp_nexthop_global_in);
 
 		if (es) {
@@ -577,7 +577,7 @@ int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 				IPV6_ADDR_COPY(&vtep_ip.ipaddr_v6, &attr->mp_nexthop_global);
 			}
 			frrtrace(4, frr_bgp, evpn_mh_local_ead_es_evi_route_upd, &es->esi,
-				 (vpn ? vpn->vni : 0), evp->prefix.route_type, &vtep_ip);
+				 (vpn ? evi->vni : 0), evp->prefix.route_type, &vtep_ip);
 		}
 	}
 
@@ -592,7 +592,7 @@ int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
  * ESR).
  */
 static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
-				    struct bgp_evpn_evi *vpn,
+				    struct bgp_evpn_evi *evi,
 				    struct bgp_evpn_es_frag *es_frag,
 				    struct prefix_evpn *p)
 {
@@ -604,9 +604,9 @@ static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
 	struct bgp_table *rt_table;
 	struct prefix_rd *prd;
 
-	if (vpn) {
-		rt_table = vpn->ip_table;
-		prd = &vpn->prd;
+	if (evi) {
+		rt_table = evi->ip_table;
+		prd = &evi->prd;
 	} else {
 		rt_table = es->route_table;
 		prd = &es_frag->prd;
@@ -623,14 +623,14 @@ static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
 		zlog_debug(
 			"local ES %s vni %u route-type %s nexthop %pIA delete",
-			es->esi_str, vpn ? vpn->vni : 0,
+			es->esi_str, evi ? evi->vni : 0,
 			p->prefix.route_type == BGP_EVPN_ES_ROUTE
 				? "esr"
-				: (vpn ? "ead-evi" : "ead-es"),
+				: (evi ? "ead-evi" : "ead-es"),
 			&es->originator_ip);
 
 	frrtrace(4, frr_bgp, evpn_mh_local_ead_es_evi_route_del, &es->esi,
-		 (vpn ? vpn->vni : 0), p->prefix.route_type, &es->originator_ip);
+		 (evi ? evi->vni : 0), p->prefix.route_type, &es->originator_ip);
 	/* Next, locate route node in the global EVPN routing table.
 	 * Note that this table is a 2-level tree (RD-level + Prefix-level)
 	 */
@@ -668,7 +668,7 @@ static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
  * Delete all EAD/EVI local routes for this VNI from the global routing table.
  * These routes are scheduled for withdraw from peers.
  */
-int delete_global_ead_evi_routes(struct bgp *bgp, struct bgp_evpn_evi *vpn)
+int delete_global_ead_evi_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	afi_t afi;
 	safi_t safi;
@@ -680,7 +680,7 @@ int delete_global_ead_evi_routes(struct bgp *bgp, struct bgp_evpn_evi *vpn)
 	safi = SAFI_EVPN;
 
 	/* Find the RD node for the VNI in the global table */
-	rdrn = bgp_node_lookup(bgp->rib[afi][safi], (struct prefix *)&vpn->prd);
+	rdrn = bgp_node_lookup(bgp->rib[afi][safi], (struct prefix *)&evi->prd);
 	if (rdrn && bgp_dest_has_bgp_path_info_data(rdrn)) {
 		table = bgp_dest_get_bgp_table_info(rdrn);
 
@@ -1037,7 +1037,7 @@ bgp_evpn_type1_es_route_extcomm_build(struct bgp_evpn_es_frag *es_frag,
 					  es_evi)) {
 			if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 				continue;
-			for (ALL_LIST_ELEMENTS_RO(es_evi->vpn->evi_export_rtl,
+			for (ALL_LIST_ELEMENTS_RO(es_evi->evi->evi_export_rtl,
 						  rt_node, ecom))
 				bgp_attr_set_ecommunity(
 					attr, ecommunity_merge(attr->ecommunity,
@@ -1048,7 +1048,7 @@ bgp_evpn_type1_es_route_extcomm_build(struct bgp_evpn_es_frag *es_frag,
 
 /* Extended communities associated with EAD-per-EVI */
 static void bgp_evpn_type1_evi_route_extcomm_build(struct bgp_evpn_es *es,
-		struct bgp_evpn_evi *vpn, struct attr *attr)
+		struct bgp_evpn_evi *evi, struct attr *attr)
 {
 	struct ecommunity ecom_encap;
 	struct ecommunity_val eval;
@@ -1066,7 +1066,7 @@ static void bgp_evpn_type1_evi_route_extcomm_build(struct bgp_evpn_es *es,
 	bgp_attr_set_ecommunity(attr, ecommunity_dup(&ecom_encap));
 
 	/* Add export RTs for the L2-VNI */
-	for (ALL_LIST_ELEMENTS_RO(vpn->evi_export_rtl, rt_node, ecom))
+	for (ALL_LIST_ELEMENTS_RO(evi->evi_export_rtl, rt_node, ecom))
 		bgp_attr_set_ecommunity(
 			attr,
 			ecommunity_merge(bgp_attr_get_ecommunity(attr), ecom));
@@ -1076,7 +1076,7 @@ static void bgp_evpn_type1_evi_route_extcomm_build(struct bgp_evpn_es *es,
  * vpn - valid for EAD-EVI routes and NULL for EAD-ES routes
  */
 static int bgp_evpn_type1_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
-				       struct bgp_evpn_evi *vpn,
+				       struct bgp_evpn_evi *evi,
 				       struct bgp_evpn_es_frag *es_frag,
 				       struct prefix_evpn *p)
 {
@@ -1097,27 +1097,27 @@ static int bgp_evpn_type1_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 	bgp_evpn_vtep_ip_to_attr_nh(&es->originator_ip, &attr);
 
 
-	if (vpn) {
+	if (evi) {
 		/* EAD-EVI route update */
 		/* MPLS label */
-		vni2label(vpn->vni, &(attr.label));
+		vni2label(evi->vni, &(attr.label));
 
 		/* Set up extended community */
-		bgp_evpn_type1_evi_route_extcomm_build(es, vpn, &attr);
+		bgp_evpn_type1_evi_route_extcomm_build(es, evi, &attr);
 
 		/* First, create (or fetch) route node within the VNI. */
-		dest = bgp_node_get(vpn->ip_table, (struct prefix *)p);
+		dest = bgp_node_get(evi->ip_table, (struct prefix *)p);
 
 		/* Create or update route entry. */
-		ret = bgp_evpn_mh_route_update(bgp, es, vpn, afi, safi, dest,
+		ret = bgp_evpn_mh_route_update(bgp, es, evi, afi, safi, dest,
 					       &attr, &pi, &route_changed);
 		if (ret != 0)
 			flog_err(
 				EC_BGP_ES_INVALID,
 				"%u Failed to update EAD-EVI route ESI: %s VNI %u VTEP %pIA",
-				bgp->vrf_id, es->esi_str, vpn->vni,
+				bgp->vrf_id, es->esi_str, evi->vni,
 				&es->originator_ip);
-		global_rd = &vpn->prd;
+		global_rd = &evi->prd;
 	} else {
 		/* EAD-ES route update */
 		/* MPLS label is 0 for EAD-ES route */
@@ -1134,7 +1134,7 @@ static int bgp_evpn_type1_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 		dest = bgp_node_get(es->route_table, (struct prefix *)p);
 
 		/* Create or update route entry. */
-		ret = bgp_evpn_mh_route_update(bgp, es, vpn, afi, safi, dest,
+		ret = bgp_evpn_mh_route_update(bgp, es, evi, afi, safi, dest,
 					       &attr, &pi, &route_changed);
 		if (ret != 0) {
 			flog_err(
@@ -1153,7 +1153,7 @@ static int bgp_evpn_type1_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 	 * this is just to set the flags correctly as local route in
 	 * the ES always wins.
 	 */
-	evpn_route_select_install(bgp, vpn, dest, pi);
+	evpn_route_select_install(bgp, evi, dest, pi);
 	bgp_dest_unlock_node(dest);
 
 	/* If this is a new route or some attribute has changed, export the
@@ -1166,7 +1166,7 @@ static int bgp_evpn_type1_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 
 		dest = bgp_evpn_global_node_get(bgp->rib[afi][safi], afi, safi,
 						p, global_rd, NULL);
-		bgp_evpn_mh_route_update(bgp, es, vpn, afi, safi, dest,
+		bgp_evpn_mh_route_update(bgp, es, evi, afi, safi, dest,
 					 attr_new, &global_pi, &route_changed);
 
 		/* Schedule for processing and unlock node. */
@@ -1209,26 +1209,26 @@ static void bgp_evpn_ead_es_route_update(struct bgp *bgp,
 
 static void bgp_evpn_ead_evi_route_update(struct bgp *bgp,
 					  struct bgp_evpn_es *es,
-					  struct bgp_evpn_evi *vpn,
+					  struct bgp_evpn_evi *evi,
 					  struct prefix_evpn *p)
 {
-	if (bgp_evpn_type1_route_update(bgp, es, vpn, NULL, p))
+	if (bgp_evpn_type1_route_update(bgp, es, evi, NULL, p))
 		flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 			 "EAD-EVI route creation failure for ESI %s VNI %u",
-			 es->esi_str, vpn->vni);
+			 es->esi_str, evi->vni);
 }
 
-void update_type1_routes_for_evi(struct bgp *bgp, struct bgp_evpn_evi *vpn)
+void update_type1_routes_for_evi(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	struct prefix_evpn p;
 	struct bgp_evpn_es *es;
 	struct bgp_evpn_es_evi *es_evi;
 
 
-	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &vpn->es_evi_rb_tree) {
+	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree) {
 		es = es_evi->es;
 
-		if (es_evi->vpn != vpn)
+		if (es_evi->evi != evi)
 			continue;
 
 		/* Update EAD-ES */
@@ -1239,7 +1239,7 @@ void update_type1_routes_for_evi(struct bgp *bgp, struct bgp_evpn_evi *vpn)
 		if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
 			build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
 						&es->esi, es->originator_ip);
-			bgp_evpn_ead_evi_route_update(bgp, es, vpn, &p);
+			bgp_evpn_ead_evi_route_update(bgp, es, evi, &p);
 		}
 	}
 }
@@ -1262,10 +1262,10 @@ static void bgp_evpn_ead_es_route_delete(struct bgp *bgp,
 
 static int bgp_evpn_ead_evi_route_delete(struct bgp *bgp,
 					 struct bgp_evpn_es *es,
-					 struct bgp_evpn_evi *vpn,
+					 struct bgp_evpn_evi *evi,
 					 struct prefix_evpn *p)
 {
-	return bgp_evpn_mh_route_delete(bgp, es, vpn, NULL, p);
+	return bgp_evpn_mh_route_delete(bgp, es, evi, NULL, p);
 }
 
 /* Generate EAD-EVI for all VNIs */
@@ -1291,7 +1291,7 @@ static void bgp_evpn_local_type1_evi_route_add(struct bgp *bgp,
 	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, evi_node, es_evi)) {
 		if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 			continue;
-		bgp_evpn_ead_evi_route_update(bgp, es, es_evi->vpn, &p);
+		bgp_evpn_ead_evi_route_update(bgp, es, es_evi->evi, &p);
 	}
 }
 
@@ -1316,7 +1316,7 @@ static void bgp_evpn_local_type1_evi_route_del(struct bgp *bgp,
 	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, evi_node, es_evi)) {
 		if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 			continue;
-		if (bgp_evpn_mh_route_delete(bgp, es, es_evi->vpn, NULL, &p))
+		if (bgp_evpn_mh_route_delete(bgp, es, es_evi->evi, NULL, &p))
 			flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 					"%u: Type4 route creation failure for ESI %s",
 					bgp->vrf_id, es->esi_str);
@@ -1971,7 +1971,7 @@ static void bgp_evpn_es_frag_evi_add(struct bgp_evpn_es_evi *es_evi)
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("es %s vni %d linked to frag %u", es->esi_str,
-			   es_evi->vpn->vni, es_frag->rd_id);
+			   es_evi->evi->vni, es_frag->rd_id);
 }
 
 /* UnLink the ES-EVI from the ES fragment */
@@ -1990,7 +1990,7 @@ static void bgp_evpn_es_frag_evi_del(struct bgp_evpn_es_evi *es_evi,
 	es_evi->es_frag = NULL;
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("es %s vni %d unlinked from frag %u", es->esi_str,
-			   es_evi->vpn->vni, es_frag->rd_id);
+			   es_evi->evi->vni, es_frag->rd_id);
 
 	list_delete_node(es_frag->es_evi_frag_list, &es_evi->es_frag_listnode);
 
@@ -2125,7 +2125,7 @@ static void bgp_evpn_es_free(struct bgp_evpn_es *es, const char *caller)
 		for (ALL_LIST_ELEMENTS(es->es_evi_list, node, next, es_evi)) {
 			if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 				zlog_debug("es %s cleanup ES-EVI VNI %u flags 0x%x", es->esi_str,
-					   es_evi->vpn->vni, es_evi->flags);
+					   es_evi->evi->vni, es_evi->flags);
 			bgp_evpn_es_evi_free(es_evi);
 		}
 		list_delete(&es->es_evi_list);
@@ -2250,7 +2250,7 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 	struct bgp_path_es_info *es_info;
 	struct bgp_path_info *pi;
 	struct bgp *bgp;
-	struct bgp_evpn_evi *vpn;
+	struct bgp_evpn_evi *evi;
 
 	if (!bgp_mh_info->suppress_l3_ecomm_on_inactive_es)
 		return;
@@ -2271,8 +2271,8 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 		if (!bgp_evpn_is_macip_path(pi))
 			continue;
 
-		vpn = bgp_evpn_lookup_vni(bgp, es_info->vni);
-		if (!vpn)
+		evi = bgp_evpn_lookup_vni(bgp, es_info->vni);
+		if (!evi)
 			continue;
 
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
@@ -2280,7 +2280,7 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 				"update path %d %pFX linked to es %s on oper chg",
 				es_info->vni, &pi->net->rn->p, es->esi_str);
 
-		bgp_evpn_update_type2_route_entry(bgp, vpn, pi->net, pi,
+		bgp_evpn_update_type2_route_entry(bgp, evi, pi->net, pi,
 						  __func__);
 	}
 }
@@ -3251,7 +3251,7 @@ void bgp_evpn_es_vrf_deref(struct bgp_evpn_es_evi *es_evi)
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("es-evi %s vni %u vrf %u de-ref",
-			   es_evi->es->esi_str, es_evi->vpn->vni,
+			   es_evi->es->esi_str, es_evi->evi->vni,
 			   es_vrf->bgp_vrf->vrf_id);
 
 	es_evi->es_vrf = NULL;
@@ -3283,7 +3283,7 @@ void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("es-evi %s vni %u vrf %u ref", es_evi->es->esi_str,
-			   es_evi->vpn->vni, bgp_vrf->vrf_id);
+			   es_evi->evi->vni, bgp_vrf->vrf_id);
 
 	/* find-create the new ES-VRF */
 	es_vrf = bgp_evpn_es_vrf_find(es, bgp_vrf);
@@ -3301,25 +3301,25 @@ void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
 /* When the L2-VNI is associated with a L3-VNI/VRF update all the
  * associated ES-EVI entries
  */
-void bgp_evpn_es_evi_vrf_deref(struct bgp_evpn_evi *vpn)
+void bgp_evpn_es_evi_vrf_deref(struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
-		zlog_debug("es-vrf de-ref for vni %u", vpn->vni);
+		zlog_debug("es-vrf de-ref for vni %u", evi->vni);
 
-	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &vpn->es_evi_rb_tree)
+	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree)
 		bgp_evpn_es_vrf_deref(es_evi);
 }
-void bgp_evpn_es_evi_vrf_ref(struct bgp_evpn_evi *vpn)
+void bgp_evpn_es_evi_vrf_ref(struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
-		zlog_debug("es-vrf ref for vni %u", vpn->vni);
+		zlog_debug("es-vrf ref for vni %u", evi->vni);
 
-	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &vpn->es_evi_rb_tree) {
-		bgp_evpn_es_vrf_ref(es_evi, vpn->bgp_vrf);
+	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree) {
+		bgp_evpn_es_vrf_ref(es_evi, evi->bgp_vrf);
 
 		/* Now that the VRF is updated for the ES-EVI, check if any local
 		 * route cleanup is required which was deferred earlier when the
@@ -3328,8 +3328,8 @@ void bgp_evpn_es_evi_vrf_ref(struct bgp_evpn_evi *vpn)
 		if (CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_SWEEP_LOCAL_ROUTES) && es_evi->es_vrf) {
 			if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
 				zlog_debug("es %s vni %u: executing deferred route cleanup for vrf %s",
-					   es_evi->es->esi_str, vpn->vni,
-					   vpn->bgp_vrf->name_pretty);
+					   es_evi->es->esi_str, evi->vni,
+					   evi->bgp_vrf->name_pretty);
 			UNSET_FLAG(es_evi->flags, BGP_EVPNES_EVI_SWEEP_LOCAL_ROUTES);
 			bgp_evpn_local_es_evi_uninstall_local_routes_in_vrfs(es_evi->es, es_evi);
 		}
@@ -3647,7 +3647,7 @@ bgp_evpn_es_evi_vtep_re_eval_active(struct bgp *bgp,
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("es %s evi %u vtep %pIA %s",
 			   evi_vtep->es_evi->es->esi_str,
-			   evi_vtep->es_evi->vpn->vni, &evi_vtep->vtep_ip,
+			   evi_vtep->es_evi->evi->vni, &evi_vtep->vtep_ip,
 			   new_active ? "active" : "inactive");
 
 	/* add VTEP to parent es */
@@ -3683,11 +3683,11 @@ bgp_evpn_es_evi_vtep_add(struct bgp *bgp, struct bgp_evpn_es_evi *es_evi,
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("add es %s evi %u vtep %pIA %s",
 			   evi_vtep->es_evi->es->esi_str,
-			   evi_vtep->es_evi->vpn->vni, &evi_vtep->vtep_ip,
+			   evi_vtep->es_evi->evi->vni, &evi_vtep->vtep_ip,
 			   ead_es ? "ead_es" : "ead_evi");
 
 	frrtrace(4, frr_bgp, evpn_mh_es_evi_vtep_add, &evi_vtep->es_evi->es->esi,
-		 evi_vtep->es_evi->vpn->vni, &evi_vtep->vtep_ip, ead_es);
+		 evi_vtep->es_evi->evi->vni, &evi_vtep->vtep_ip, ead_es);
 
 	if (ead_es)
 		SET_FLAG(evi_vtep->flags, BGP_EVPN_EVI_VTEP_EAD_PER_ES);
@@ -3710,11 +3710,11 @@ bgp_evpn_es_evi_vtep_del(struct bgp *bgp, struct bgp_evpn_es_evi *es_evi,
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("del es %s evi %u vtep %pIA %s", evi_vtep->es_evi->es->esi_str,
-			   evi_vtep->es_evi->vpn->vni, &evi_vtep->vtep_ip,
+			   evi_vtep->es_evi->evi->vni, &evi_vtep->vtep_ip,
 			   ead_es ? "ead_es" : "ead_evi");
 
 	frrtrace(4, frr_bgp, evpn_mh_es_evi_vtep_del, &evi_vtep->es_evi->es->esi,
-		 evi_vtep->es_evi->vpn->vni, &evi_vtep->vtep_ip, ead_es);
+		 evi_vtep->es_evi->evi->vni, &evi_vtep->vtep_ip, ead_es);
 
 	if (ead_es)
 		UNSET_FLAG(evi_vtep->flags, BGP_EVPN_EVI_VTEP_EAD_PER_ES);
@@ -3737,33 +3737,33 @@ RB_GENERATE(bgp_es_evi_rb_head, bgp_evpn_es_evi, rb_node, bgp_es_evi_rb_cmp);
 
 /* find the ES-EVI in the per-L2-VNI RB tree */
 static struct bgp_evpn_es_evi *bgp_evpn_es_evi_find(struct bgp_evpn_es *es,
-		struct bgp_evpn_evi *vpn)
+		struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi es_evi;
 
 	es_evi.es = es;
 
-	return RB_FIND(bgp_es_evi_rb_head, &vpn->es_evi_rb_tree, &es_evi);
+	return RB_FIND(bgp_es_evi_rb_head, &evi->es_evi_rb_tree, &es_evi);
 }
 
 /* allocate a new ES-EVI and insert it into the per-L2-VNI and per-ES
  * tables.
  */
 static struct bgp_evpn_es_evi *bgp_evpn_es_evi_new(struct bgp_evpn_es *es,
-		struct bgp_evpn_evi *vpn)
+		struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 
 	es_evi = XCALLOC(MTYPE_BGP_EVPN_ES_EVI, sizeof(*es_evi));
 	es_evi->es = es;
-	es_evi->vpn = vpn;
+	es_evi->evi = evi;
 	es_evi->flags = 0;
 
 	/* Initialise the VTEP list */
 	es_evi->es_evi_vtep_list = list_new();
 	if (!es_evi->es_evi_vtep_list) {
 		flog_err(EC_BGP_ES_CREATE, "Failed to create VTEP list for ES-EVI ES %s VNI %u",
-			 es->esi_str, vpn->vni);
+			 es->esi_str, evi->vni);
 		XFREE(MTYPE_BGP_EVPN_ES_EVI, es_evi);
 		return NULL;
 	}
@@ -3771,16 +3771,16 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_new(struct bgp_evpn_es *es,
 	es_evi->es_evi_vtep_list->cmp = bgp_evpn_es_evi_vtep_cmp;
 
 	/* insert into the VNI-ESI rb tree */
-	RB_INSERT(bgp_es_evi_rb_head, &vpn->es_evi_rb_tree, es_evi);
+	RB_INSERT(bgp_es_evi_rb_head, &evi->es_evi_rb_tree, es_evi);
 
 	/* add to the ES's VNI list */
 	listnode_init(&es_evi->es_listnode, es_evi);
 	listnode_add(es->es_evi_list, &es_evi->es_listnode);
 
-	bgp_evpn_es_vrf_ref(es_evi, vpn->bgp_vrf);
+	bgp_evpn_es_vrf_ref(es_evi, evi->bgp_vrf);
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
-		zlog_debug("Created ES-EVI for ES %s VNI %u", es->esi_str, vpn->vni);
+		zlog_debug("Created ES-EVI for ES %s VNI %u", es->esi_str, evi->vni);
 
 	return es_evi;
 }
@@ -3792,10 +3792,10 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_free_internal(struct bgp_evpn_es_
 							     bool force)
 {
 	struct bgp_evpn_es *es = es_evi->es;
-	struct bgp_evpn_evi *vpn = es_evi->vpn;
+	struct bgp_evpn_evi *evi = es_evi->evi;
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
-		zlog_debug("Freeing ES-EVI for ES %s VNI %u flags 0x%x%s", es->esi_str, vpn->vni,
+		zlog_debug("Freeing ES-EVI for ES %s VNI %u flags 0x%x%s", es->esi_str, evi->vni,
 			   es_evi->flags, force ? " (forced)" : "");
 
 	/* cannot free the element as long as there is a local or remote
@@ -3810,7 +3810,7 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_free_internal(struct bgp_evpn_es_
 	list_delete_node(es->es_evi_list, &es_evi->es_listnode);
 
 	/* remove from the VNI-ESI rb tree */
-	RB_REMOVE(bgp_es_evi_rb_head, &vpn->es_evi_rb_tree, es_evi);
+	RB_REMOVE(bgp_es_evi_rb_head, &evi->es_evi_rb_tree, es_evi);
 
 	/* free the VTEP list */
 	list_delete(&es_evi->es_evi_vtep_list);
@@ -3833,18 +3833,18 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_free(struct bgp_evpn_es_evi *es_e
 /* init local info associated with the ES-EVI */
 static void bgp_evpn_es_evi_local_info_set(struct bgp_evpn_es_evi *es_evi)
 {
-	struct bgp_evpn_evi *vpn = es_evi->vpn;
+	struct bgp_evpn_evi *evi = es_evi->evi;
 
 	if (CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 		return;
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("Setting local info for ES-EVI ES %s VNI %u", es_evi->es->esi_str,
-			   vpn->vni);
+			   evi->vni);
 
 	SET_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL);
 	listnode_init(&es_evi->l2vni_listnode, es_evi);
-	listnode_add(vpn->local_es_evi_list, &es_evi->l2vni_listnode);
+	listnode_add(evi->local_es_evi_list, &es_evi->l2vni_listnode);
 	bgp_evpn_es_frag_evi_add(es_evi);
 }
 
@@ -3852,10 +3852,10 @@ static void bgp_evpn_es_evi_local_info_set(struct bgp_evpn_es_evi *es_evi)
 static struct bgp_evpn_es_evi *
 bgp_evpn_es_evi_local_info_clear(struct bgp_evpn_es_evi *es_evi)
 {
-	struct bgp_evpn_evi *vpn = es_evi->vpn;
+	struct bgp_evpn_evi *evi = es_evi->evi;
 
 	UNSET_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL);
-	list_delete_node(vpn->local_es_evi_list, &es_evi->l2vni_listnode);
+	list_delete_node(evi->local_es_evi_list, &es_evi->l2vni_listnode);
 
 	return bgp_evpn_es_evi_free(es_evi);
 }
@@ -3900,7 +3900,7 @@ bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("del local es %s evi %u",
 				es_evi->es->esi_str,
-				es_evi->vpn->vni);
+				es_evi->evi->vni);
 
 	bgp = bgp_get_evpn_master_instance();
 
@@ -3915,12 +3915,12 @@ bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 		if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
 			build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
 					&es->esi, es->originator_ip);
-			if (bgp_evpn_ead_evi_route_delete(bgp, es, es_evi->vpn,
+			if (bgp_evpn_ead_evi_route_delete(bgp, es, es_evi->evi,
 							  &p))
 				flog_err(EC_BGP_EVPN_ROUTE_DELETE,
 					"%u: EAD-EVI route deletion failure for ESI %s VNI %u",
 					bgp->vrf_id, es->esi_str,
-					es_evi->vpn->vni);
+					es_evi->evi->vni);
 		}
 	}
 
@@ -3929,7 +3929,7 @@ bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 
 int bgp_evpn_local_es_evi_del(struct bgp *bgp, esi_t *esi, vni_t vni)
 {
-	struct bgp_evpn_evi *vpn;
+	struct bgp_evpn_evi *evi;
 	struct bgp_evpn_es *es;
 	struct bgp_evpn_es_evi *es_evi;
 	char buf[ESI_STR_LEN];
@@ -3944,8 +3944,8 @@ int bgp_evpn_local_es_evi_del(struct bgp *bgp, esi_t *esi, vni_t vni)
 		return -1;
 	}
 
-	vpn = bgp_evpn_lookup_vni(bgp, vni);
-	if (!vpn) {
+	evi = bgp_evpn_lookup_vni(bgp, vni);
+	if (!evi) {
 		flog_err(
 				EC_BGP_ES_CREATE,
 				"%u: Failed to deref VNI %d from ESI %s; VNI not present",
@@ -3953,7 +3953,7 @@ int bgp_evpn_local_es_evi_del(struct bgp *bgp, esi_t *esi, vni_t vni)
 		return -1;
 	}
 
-	es_evi = bgp_evpn_es_evi_find(es, vpn);
+	es_evi = bgp_evpn_es_evi_find(es, evi);
 	if (!es_evi) {
 		flog_err(
 				EC_BGP_ES_CREATE,
@@ -3969,7 +3969,7 @@ int bgp_evpn_local_es_evi_del(struct bgp *bgp, esi_t *esi, vni_t vni)
 /* Create ES-EVI and advertise the corresponding EAD routes */
 int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni)
 {
-	struct bgp_evpn_evi *vpn;
+	struct bgp_evpn_evi *evi;
 	struct prefix_evpn p;
 	struct bgp_evpn_es *es;
 	struct bgp_evpn_es_evi *es_evi;
@@ -3985,8 +3985,8 @@ int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni)
 		return -1;
 	}
 
-	vpn = bgp_evpn_lookup_vni(bgp, vni);
-	if (!vpn) {
+	evi =  bgp_evpn_lookup_vni(bgp, vni);
+	if (!evi) {
 		flog_err(
 				EC_BGP_ES_CREATE,
 				"%u: Failed to associate VNI %d with ESI %s; VNI not present",
@@ -3998,14 +3998,14 @@ int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni)
 		zlog_debug("add local es %s evi %u",
 				es->esi_str, vni);
 
-	es_evi = bgp_evpn_es_evi_find(es, vpn);
+	es_evi = bgp_evpn_es_evi_find(es, evi);
 
 	if (es_evi) {
 		if (CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 			/* dup */
 			return 0;
 	} else {
-		es_evi = bgp_evpn_es_evi_new(es, vpn);
+		es_evi = bgp_evpn_es_evi_new(es, evi);
 		if (!es_evi) {
 			flog_err(EC_BGP_ES_CREATE, "%u: Failed to create ES-EVI for ES %s VNI %u",
 				 bgp->vrf_id, es->esi_str, vni);
@@ -4019,7 +4019,7 @@ int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni)
 	if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
 		build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG, &es->esi,
 					es->originator_ip);
-		bgp_evpn_ead_evi_route_update(bgp, es, vpn, &p);
+		bgp_evpn_ead_evi_route_update(bgp, es, evi, &p);
 	}
 
 	bgp_evpn_local_es_evi_uninstall_local_routes_in_vrfs(es, es_evi);
@@ -4034,7 +4034,7 @@ int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni)
  * ES-EVI is implicitly created on first VTEP's reference.
  */
 enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
-						    struct bgp_evpn_evi *vpn,
+						    struct bgp_evpn_evi *evi,
 						    const struct prefix_evpn *p,
 							struct bgp_path_info *pi)
 {
@@ -4046,7 +4046,7 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
 	enum zclient_send_status ret = ZCLIENT_SEND_SUCCESS;
 	struct ipaddr vtep_ip = {};
 
-	if (!vpn)
+	if (!evi)
 		/* local EAD-ES need not be sent back to zebra */
 		return ret;
 
@@ -4055,16 +4055,16 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("add remote %s es %s evi %u ead-ip %pIA vtep %pIA",
 			   p->prefix.ead_addr.eth_tag ? "ead-es" : "ead-evi",
-			   esi_to_str(esi, buf, sizeof(buf)), vpn->vni, &p->prefix.ead_addr.ip,
+			   esi_to_str(esi, buf, sizeof(buf)), evi->vni, &p->prefix.ead_addr.ip,
 			   &vtep_ip);
 
 	es = bgp_evpn_es_find(esi);
 	if (!es)
 		es = bgp_evpn_es_new(bgp, esi);
 
-	es_evi = bgp_evpn_es_evi_find(es, vpn);
+	es_evi = bgp_evpn_es_evi_find(es, evi);
 	if (!es_evi)
-		es_evi = bgp_evpn_es_evi_new(es, vpn);
+		es_evi = bgp_evpn_es_evi_new(es, evi);
 
 	ead_es = !!p->prefix.ead_addr.eth_tag;
 	ret = bgp_evpn_es_evi_vtep_add(bgp, es_evi, vtep_ip, ead_es);
@@ -4077,7 +4077,7 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
  * parent es-evi freed up implicitly in last VTEP's deref.
  */
 enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
-						    struct bgp_evpn_evi *vpn,
+						    struct bgp_evpn_evi *evi,
 						    const struct prefix_evpn *p,
 						    struct bgp_path_info *pi)
 {
@@ -4088,7 +4088,7 @@ enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
 	enum zclient_send_status ret = ZCLIENT_SEND_SUCCESS;
 	struct ipaddr vtep_ip = {};
 
-	if (!vpn)
+	if (!evi)
 		/* local EAD-ES need not be sent back to zebra */
 		return ret;
 
@@ -4099,7 +4099,7 @@ enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("del remote %s es %s evi %u ead_ip %pIA vtep %pIA",
 			   p->prefix.ead_addr.eth_tag ? "ead-es" : "ead-evi",
-			   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), vpn->vni,
+			   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), evi->vni,
 			   &p->prefix.ead_addr.ip, &vtep_ip);
 
 	es = bgp_evpn_es_find(&p->prefix.ead_addr.esi);
@@ -4107,16 +4107,16 @@ enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("del remote %s es %s evi %u vtep %pIA, NO es",
 				   p->prefix.ead_addr.eth_tag ? "ead-es" : "ead-evi",
-				   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), vpn->vni,
+				   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), evi->vni,
 				   &vtep_ip);
 		return ret;
 	}
-	es_evi = bgp_evpn_es_evi_find(es, vpn);
+	es_evi = bgp_evpn_es_evi_find(es, evi);
 	if (!es_evi) {
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("del remote %s es %s evi %u vtep %pIA, NO es-evi",
 				   p->prefix.ead_addr.eth_tag ? "ead-es" : "ead-evi",
-				   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), vpn->vni,
+				   esi_to_str(&p->prefix.ead_addr.esi, buf, sizeof(buf)), evi->vni,
 				   &vtep_ip);
 		return ret;
 	}
@@ -4153,30 +4153,30 @@ static void bgp_evpn_remote_es_evi_flush(struct bgp_evpn_es_evi *es_evi)
 }
 
 /* Initialize the ES tables maintained per-L2_VNI */
-void bgp_evpn_vni_es_init(struct bgp_evpn_evi *vpn)
+void bgp_evpn_vni_es_init(struct bgp_evpn_evi *evi)
 {
 	/* Initialize the ES-EVI RB tree */
-	RB_INIT(bgp_es_evi_rb_head, &vpn->es_evi_rb_tree);
+	RB_INIT(bgp_es_evi_rb_head, &evi->es_evi_rb_tree);
 
 	/* Initialize the local list maintained for quick walks by type */
-	vpn->local_es_evi_list = list_new();
-	listset_app_node_mem(vpn->local_es_evi_list);
+	evi->local_es_evi_list = list_new();
+	listset_app_node_mem(evi->local_es_evi_list);
 }
 
 /* Cleanup the ES info maintained per-L2_VNI */
-void bgp_evpn_vni_es_cleanup(struct bgp_evpn_evi *vpn)
+void bgp_evpn_vni_es_cleanup(struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 	struct bgp_evpn_es_evi *es_evi_next;
 
 	RB_FOREACH_SAFE(es_evi, bgp_es_evi_rb_head,
-			&vpn->es_evi_rb_tree, es_evi_next) {
+			&evi->es_evi_rb_tree, es_evi_next) {
 		es_evi = bgp_evpn_local_es_evi_do_del(es_evi);
 		if (es_evi)
 			bgp_evpn_remote_es_evi_flush(es_evi);
 	}
 
-	list_delete(&vpn->local_es_evi_list);
+	list_delete(&evi->local_es_evi_list);
 }
 
 static char *bgp_evpn_es_evi_vteps_str(char *vtep_str,
@@ -4248,8 +4248,8 @@ static void bgp_evpn_es_evi_show_entry(struct vty *vty,
 		json_object *json_types;
 
 		json_object_string_add(json, "esi", es_evi->es->esi_str);
-		if (es_evi->vpn)
-			json_object_int_add(json, "vni", es_evi->vpn->vni);
+		if (es_evi->evi)
+			json_object_int_add(json, "vni", es_evi->evi->vni);
 
 		if (CHECK_FLAG(es_evi->flags, (BGP_EVPNES_EVI_LOCAL |
 					       BGP_EVPNES_EVI_REMOTE))) {
@@ -4285,7 +4285,7 @@ static void bgp_evpn_es_evi_show_entry(struct vty *vty,
 		bgp_evpn_es_evi_vteps_str(vtep_str, es_evi, sizeof(vtep_str));
 
 		vty_out(vty, "%-8d %-30s %-5s %s\n",
-				es_evi->vpn->vni, es_evi->es->esi_str,
+				es_evi->evi->vni, es_evi->es->esi_str,
 				type_str, vtep_str);
 	}
 }
@@ -4295,7 +4295,7 @@ static void bgp_evpn_es_evi_show_entry_detail(struct vty *vty,
 {
 	enum asnotation_mode mode;
 
-	mode = bgp_get_asnotation(es_evi->vpn->bgp_vrf);
+	mode = bgp_get_asnotation(es_evi->evi->bgp_vrf);
 
 	if (json) {
 		json_object *json_flags;
@@ -4326,7 +4326,7 @@ static void bgp_evpn_es_evi_show_entry_detail(struct vty *vty,
 			strlcpy(vtep_str, "-", sizeof(type_str));
 
 		vty_out(vty, "VNI: %d ESI: %s\n",
-				es_evi->vpn->vni, es_evi->es->esi_str);
+				es_evi->evi->vni, es_evi->es->esi_str);
 		vty_out(vty, " Type: %s\n", type_str);
 		if (es_evi->es_frag) {
 			vty_out(vty, " ES fragment RD: ");
@@ -4344,13 +4344,13 @@ static void bgp_evpn_es_evi_show_entry_detail(struct vty *vty,
 	}
 }
 
-static void bgp_evpn_es_evi_show_one_vni(struct bgp_evpn_evi *vpn, struct vty *vty,
+static void bgp_evpn_es_evi_show_one_vni(struct bgp_evpn_evi *evi, struct vty *vty,
 		json_object *json_array, bool detail)
 {
 	struct bgp_evpn_es_evi *es_evi;
 	json_object *json = NULL;
 
-	RB_FOREACH(es_evi, bgp_es_evi_rb_head, &vpn->es_evi_rb_tree) {
+	RB_FOREACH(es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree) {
 		if (json_array)
 			/* create a separate json object for each ES */
 			json = json_object_new_object();
@@ -4373,10 +4373,10 @@ struct es_evi_show_ctx {
 static void bgp_evpn_es_evi_show_one_vni_hash_cb(struct hash_bucket *bucket,
 		void *ctxt)
 {
-	struct bgp_evpn_evi *vpn = (struct bgp_evpn_evi *)bucket->data;
+	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
 	struct es_evi_show_ctx *wctx = (struct es_evi_show_ctx *)ctxt;
 
-	bgp_evpn_es_evi_show_one_vni(vpn, wctx->vty, wctx->json, wctx->detail);
+	bgp_evpn_es_evi_show_one_vni(evi, wctx->vty, wctx->json, wctx->detail);
 }
 
 /* Display all ES EVIs */
@@ -4417,7 +4417,7 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 void bgp_evpn_es_evi_show_vni(struct vty *vty, vni_t vni,
 		bool uj, bool detail)
 {
-	struct bgp_evpn_evi *vpn = NULL;
+	struct bgp_evpn_evi *evi = NULL;
 	json_object *json_array = NULL;
 	struct bgp *bgp;
 
@@ -4428,9 +4428,9 @@ void bgp_evpn_es_evi_show_vni(struct vty *vty, vni_t vni,
 
 	bgp = bgp_get_evpn_master_instance();
 	if (bgp)
-		vpn = bgp_evpn_lookup_vni(bgp, vni);
+		evi =  bgp_evpn_lookup_vni(bgp, vni);
 
-	if (vpn) {
+	if (evi) {
 		if (!json_array && !detail) {
 			vty_out(vty, "Flags: L local, R remote, I inconsistent\n");
 			vty_out(vty, "VTEP-Flags: E EAD-per-ES, V EAD-per-EVI\n");
@@ -4438,7 +4438,7 @@ void bgp_evpn_es_evi_show_vni(struct vty *vty, vni_t vni,
 					"VNI", "ESI", "Flags", "VTEPs");
 		}
 
-		bgp_evpn_es_evi_show_one_vni(vpn, vty, json_array, detail);
+		bgp_evpn_es_evi_show_one_vni(evi, vty, json_array, detail);
 	} else {
 		if (!uj)
 			vty_out(vty, "VNI not found\n");
@@ -4579,7 +4579,7 @@ static void bgp_evpn_es_evi_set_inconsistent(struct bgp_evpn_es_evi *es_evi)
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("inconsistency detected - es %s evi %u vtep list mismatch",
 					es_evi->es->esi_str,
-					es_evi->vpn->vni);
+					es_evi->evi->vni);
 		SET_FLAG(es_evi->flags, BGP_EVPNES_EVI_INCONS_VTEP_LIST);
 
 		/* update parent ES with the inconsistency setting */
@@ -5346,7 +5346,7 @@ void bgp_evpn_local_es_evi_uninstall_local_routes_in_vrfs(struct bgp_evpn_es *es
 		/* VRF not available yet, mark for deferred cleanup once the VRF is updated */
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
 			zlog_debug("es %s vni %u: VRF not available, marking for deferred route cleanup",
-				   es->esi_str, es_evi->vpn->vni);
+				   es->esi_str, es_evi->evi->vni);
 		SET_FLAG(es_evi->flags, BGP_EVPNES_EVI_SWEEP_LOCAL_ROUTES);
 		return;
 	}
