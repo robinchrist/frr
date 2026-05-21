@@ -718,7 +718,7 @@ static int bgp_debug_parse_evpn_prefix(struct vty *vty, struct cmd_token **argv,
 			(void)str2prefix(argv[ip_idx + 1]->arg, &ip_prefix);
 			apply_mask(&ip_prefix);
 		}
-		build_type5_prefix_from_ip_prefix(
+		bgp_evpn_build_type5_prefix_evpn_from_ip_prefix(
 					(struct prefix_evpn *)argv_p,
 					&ip_prefix);
 	}

@@ -5011,10 +5011,10 @@ static void bgp_route_map_process_update(struct bgp *bgp, const char *rmap_name,
 				"Processing route_map %s(%s:%s) update on advertise type5 route command",
 				rmap_name, afi2str(afi), safi2str(safi));
 
-		if (route_update && (advertise_type5_routes_bestpath(bgp, afi) ||
-				     advertise_type5_routes_multipath(bgp, afi))) {
-			bgp_evpn_withdraw_type5_routes(bgp, afi, safi);
-			bgp_evpn_advertise_type5_routes(bgp, afi, safi);
+		if (route_update && (bgp_evpn_should_originate_type5_routes_bestpath(bgp, afi) ||
+				     bgp_evpn_should_originate_type5_routes_multipath(bgp, afi))) {
+			bgp_evpn_vrf_eject_afi_safi_prefixes_and_withdraw_their_type5_routes(bgp, afi, safi);
+			bgp_evpn_vrf_inject_safi_afi_prefixes_and_originate_as_type5_routes(bgp, afi, safi);
 		}
 	}
 }

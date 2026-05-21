@@ -20,13 +20,16 @@
 
 PREDECL_LIST(zebra_announce);
 PREDECL_LIST(zebra_l2_vni);
-PREDECL_SORTLIST_NONUNIQ(evpn_route_target_list);
 
 /* it's bit cursed that this is located here, but the include
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
 PREDECL_HASH(evi_irt_nodes);
-PREDECL_HASH(vrf_irt_nodes);
+PREDECL_HASH(vrf_fq_irt_nodes);
+PREDECL_HASH(vrf_wildcard_irt_nodes);
+
+PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_fq_rt_slu);
+PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_wildcard_rt_slu);
 
 enum bgp_bp_install_type {
 	BGP_BP_INSTALL_ROUTE,
@@ -943,7 +946,21 @@ struct bgp {
 	struct rfapi *rfapi;
 #endif
 
-	/* EVPN related information */
+	/*
+	 * Start of EVPN related information
+	 */
+
+	/* Attempt to group and separate some EVPN info that is only present in the
+	 * EVPN master instance / VRF
+	 */
+	struct evpn_master_instance_info {
+		/* Hash table of Import RTs to EVIs */
+		struct evi_irt_nodes_head evi_irt_nodes;
+
+		/* Hash table of VRF import RTs to VRFs */
+		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
+		struct vrf_fq_irt_nodes_head vrf_fq_irt_nodes;
+	} evpn_master_instance_info;
 
 	/* EVI hash table */
 	struct hash *vnihash;
@@ -967,21 +984,37 @@ struct bgp {
 	 */
 	bool reject_as_sets;
 
+	/*
+	 * Why do we have a bgp_evpn_info struct when the EVPN state / data
+	 * is still spread across the entire bgp struct????
+	 */
 	struct bgp_evpn_info *evpn_info;
 
-	/* EVPN - use RFC 8365 to auto-derive RT */
-	int advertise_autort_rfc8365;
+	/* Make Auto RTs RFC8365 **Compatible** (NOT compliant)
+	 * Sets the "Automatic" bit in the local admin for auto-derived RTs
+	 * The generated route targets are NOT RFC8365 compliant!
+	 */
+	int evpn_autort_rfc8365_compatible;
 
 	/*
 	 * Flooding mechanism for BUM packets for VxLAN-EVPN.
 	 */
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
-	/* Hash table of Import RTs to EVIs */
-	struct evi_irt_nodes_head evi_irt_nodes;
+	/* pointer and not directly embedded due to the messy header inclusion order... */
+	/* Wrapper struct to group VRF route target config (intended state)*/
+	struct bgp_evpn_vrf_rt_config* vrf_route_target_config;
 
-	/* Hash table of VRF import RTs to VRFs */
-	struct vrf_irt_nodes_head vrf_irt_nodes;
+	/* EVPN route target config derived state, we have separated intended and derived state */
+	/* Those are the route targets that should actually be used for import and export*/
+
+	/* Effective Wildcard Import Route Targets */
+	struct bgp_evpn_effective_wildcard_rt_slu_head effective_wildcard_import_rts;
+	/* Effective Fully-Qualified Import Route Targets */
+	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_import_rts;
+
+	/* Effective Fully-Qualified Export Route Targets (Export RT cannot be wildcard!) */
+	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
 
 	/* L3-VNI corresponding to this vrf */
 	vni_t l3vni;
@@ -1005,7 +1038,7 @@ struct bgp {
 	 * Flag resolve_overlay_index is used for recursive resolution
 	 * procedures for EVPN type-5 route's gateway IP overlay index.
 	 * When this flag is set, we build remote-ip-hash for
-	 * all L2VNIs and resolve overlay index nexthops using this hash.
+	 * alstruct bgpevpne overlay index nexthops using this hash.
 	 * Overlay index nexthops remain unresolved if this flag is not set.
 	 */
 	bool resolve_overlay_index;
@@ -1013,10 +1046,14 @@ struct bgp {
 	/* vrf flags */
 	uint32_t vrf_flags;
 #define BGP_VRF_AUTO                        (1 << 0)
-#define BGP_VRF_IMPORT_RT_CFGD              (1 << 1)
-#define BGP_VRF_EXPORT_RT_CFGD              (1 << 2)
-#define BGP_VRF_IMPORT_AUTO_RT_CFGD         (1 << 3) /* retain auto when cfgd */
-#define BGP_VRF_EXPORT_AUTO_RT_CFGD         (1 << 4) /* retain auto when cfgd */
+/* Any manual (fully qualified / NOT auto derived) EVPN import route target is configured */
+#define BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD              (1 << 1)
+/* Any manual (fully qualified / NOT auto derived) EVPN export route target is configured */
+#define BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD              (1 << 2)
+/* Automatic EVPN Import RT is explicitly configured */
+#define BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD         (1 << 3)
+/* Automatic EVPN Export RT is explicitly configured */
+#define BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD         (1 << 4)
 #define BGP_VRF_RD_CFGD                     (1 << 5)
 #define BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY    (1 << 6)
 /* per-VRF toVPN SID */
@@ -1034,17 +1071,15 @@ struct bgp {
 	struct prefix_rd vrf_prd;
 	char *vrf_prd_pretty;
 
-	/* import rt list for the vrf instance */
-	struct evpn_route_target_list_head vrf_import_rtl;
-
-	/* export rt list for the vrf instance */
-	struct evpn_route_target_list_head vrf_export_rtl;
-
 	/* list of corresponding l2vnis (struct bgp_evpn_evi) */
 	struct list *l2vnis;
 
 	/* route map for advertise ipv4/ipv6 unicast (type-5 routes) */
 	struct bgp_rmap adv_cmd_rmap[AFI_MAX][SAFI_MAX];
+
+	/*
+	 * End of EVPN related information
+	 */
 
 	struct vpn_policy vpn_policy[AFI_MAX];
 

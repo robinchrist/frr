@@ -72,15 +72,23 @@ enum bgp_path_selection_reason {
 	bgp_path_selection_default,
 };
 
+/* Formerly called bgp_node, some old references / docs might still exist */
 struct bgp_dest {
 	struct route_node *rn;
 
+	/* Polymorphic pointer for more or less arbitrary info
+	 * e.g. bgp_dest_set_bgp_aggregate_info sets info to a struct bgp_aggregate *
+	 */
 	void *info;
 
 	struct bgp_adj_out_rb adj_out;
 
 	struct bgp_adj_in *adj_in;
 
+	/* Parent destination node for VPN / EVPN
+	 * EVPN uses nested bgp_tables per Route Distinguisher value. The parent node is
+	 * a "meta-node" that only holds the route distinguisher (struct prefix_rd)
+	 */
 	struct bgp_dest *pdest;
 
 	STAILQ_ENTRY(bgp_dest) pq;

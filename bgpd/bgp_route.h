@@ -281,6 +281,7 @@ struct bgp_mplsvpn_nh_label_bind {
 	struct bgp_mplsvpn_nh_label_bind_cache *nh_label_bind_cache;
 };
 
+/* a BGP path (e.g. route received from a peer) */
 struct bgp_path_info {
 	/* For linked list. */
 	struct bgp_path_info *next;

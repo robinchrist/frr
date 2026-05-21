@@ -10,9 +10,26 @@
 #include "bgpd.h"
 
 #define EVPN_ROUTE_STRLEN 200 /* Must be >> MAC + IPv6 strings. */
-#define EVPN_AUTORT_VXLAN 0x10000000
+/*
+ *   RFC8365 "5.1.2.1.  Auto-Derivation of RT" defines:
+ *
+ *   0                   1                   2                   3
+ *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *  |     Global Administrator      |A| TYPE| D-ID  | Service ID    |
+ *  +-----------------------------------------------+---------------+
+ *  |       Service ID (Cont.)      |
+ *  +-------------------------------+
+ *
+ * This FLAG corresponds to the "A" bit (leftmost bit of a 32-bit value)
+ */
+#define BGP_EVPN_RT_RFC8365_A_BIT 0x80000000
 
 #define EVPN_ENABLED(bgp)  (bgp)->advertise_all_vni
+
+/* Global helper function to check whether EVPN as a protocol is generally enabled
+ * EVPN is generally enabled when `advertise-all-vni` is configured in one VRF
+*/
 static inline int is_evpn_enabled(void)
 {
 	struct bgp *bgp = NULL;
@@ -21,10 +38,17 @@ static inline int is_evpn_enabled(void)
 	return bgp ? EVPN_ENABLED(bgp) : 0;
 }
 
-static inline int advertise_type5_routes_bestpath(const struct bgp *bgp_vrf, afi_t afi)
+/* Indicates whether type-5 routes should be originated without overlay index,
+ * and only the best path for each prefix is exported to EVPN
+ *
+ * True when VRF has a non-zero L3VNI (otherwise we don't have a label for our route!)
+ * AND "advertise <afi> <safi>" is WITHOUT gateway-ip!
+ */
+static inline int bgp_evpn_should_originate_type5_routes_bestpath(const struct bgp *bgp_vrf, afi_t afi)
 {
 	uint16_t flags = bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN];
 
+	/* TODO: Use is_l3vni_cfgd -> Move is_l3vni_cfgd to this header? */
 	if (!bgp_vrf->l3vni)
 		return 0;
 
@@ -36,10 +60,19 @@ static inline int advertise_type5_routes_bestpath(const struct bgp *bgp_vrf, afi
 	return 0;
 }
 
-static inline int advertise_type5_routes_multipath(const struct bgp *bgp_vrf, afi_t afi)
+
+
+ /* Indicates whether type-5 routes should be originated with overlay index (gateway IP)
+ * and the routes use all paths are exported to EVPN using AddPath, and each
+ * path's nexthop becomes the gateway IP of the corresponding type-5 paths.
+ * True when VRF has a non-zero L3VNI (otherwise we don't have a label for our route!)
+ * AND "advertise <afi> <safi>" is WITH "gateway-ip" option!
+ */
+static inline int bgp_evpn_should_originate_type5_routes_multipath(const struct bgp *bgp_vrf, afi_t afi)
 {
 	uint16_t flags = bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN];
 
+	/* TODO: Use is_l3vni_cfgd -> Move is_l3vni_cfgd to this header? */
 	if (!bgp_vrf->l3vni)
 		return 0;
 
@@ -115,16 +148,16 @@ static inline bool evpn_resolve_overlay_index(void)
 	return bgp ? bgp->resolve_overlay_index : false;
 }
 
-extern void bgp_evpn_advertise_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,
+extern void bgp_evpn_vrf_upsert_prefix_as_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,
 					   const struct prefix *p, struct attr *src_attr,
 					   afi_t afi, safi_t safi, uint32_t addpath_id);
-extern void bgp_evpn_withdraw_type5_route(struct bgp *bgp_vrf,
+extern void bgp_evpn_vrf_delete_prefix_as_type5_route(struct bgp *bgp_vrf,
 					  const struct bgp_path_info *originator,
 					  const struct prefix *p, afi_t afi, safi_t safi,
 					  uint32_t addpath_id);
-extern void bgp_evpn_withdraw_type5_routes(struct bgp *bgp_vrf, afi_t afi,
+extern void bgp_evpn_vrf_eject_afi_safi_prefixes_and_withdraw_their_type5_routes(struct bgp *bgp_vrf, afi_t afi,
 					   safi_t safi);
-extern void bgp_evpn_advertise_type5_routes(struct bgp *bgp_vrf, afi_t afi,
+extern void bgp_evpn_vrf_inject_safi_afi_prefixes_and_originate_as_type5_routes(struct bgp *bgp_vrf, afi_t afi,
 					    safi_t safi);
 extern void bgp_evpn_vrf_delete(struct bgp *bgp_vrf);
 extern void bgp_evpn_handle_router_id_update(struct bgp *bgp, int withdraw);
@@ -136,15 +169,15 @@ extern void bgp_evpn_encode_prefix(struct stream *s, const struct prefix *p,
 				   mpls_label_t *label, uint8_t num_labels,
 				   struct attr *attr, bool addpath_capable,
 				   uint32_t addpath_tx_id);
-extern int bgp_nlri_parse_evpn(struct peer *peer, struct attr *attr,
+extern int bgp_evpn_parse_and_process_evpn_nlri(struct peer *peer, struct attr *attr,
 			       struct bgp_nlri *packet, bool withdraw);
-extern int bgp_evpn_import_route(struct bgp *bgp, afi_t afi, safi_t safi,
+extern int bgp_evpn_import_global_received_route(struct bgp *bgp, afi_t afi, safi_t safi,
 				 const struct prefix *p,
 				 struct bgp_path_info *ri);
 extern int bgp_evpn_unimport_route(struct bgp *bgp, afi_t afi, safi_t safi,
 				   const struct prefix *p,
 				   struct bgp_path_info *ri);
-extern void bgp_evpn_export_type5_route(struct bgp *bgp, struct bgp_dest *dest,
+extern void bgp_evpn_vrf_inject_prefix_and_originate_as_type5_route(struct bgp *bgp, struct bgp_dest *dest,
 					struct bgp_path_info *pi, afi_t afi, safi_t safi);
 extern void bgp_evpn_unexport_type5_route(struct bgp *bgp, const struct bgp_dest *dest,
 					  const struct bgp_path_info *pi, afi_t afi, safi_t safi);
@@ -164,15 +197,15 @@ extern int bgp_evpn_local_macip_del(struct bgp *bgp, vni_t vni,
 extern int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni,
 				    struct ethaddr *mac, struct ipaddr *ip,
 				    uint8_t flags, uint32_t seq, esi_t *esi);
-extern int bgp_evpn_local_l3vni_add(vni_t vni, vrf_id_t vrf_id,
+extern int bgp_evpn_add_local_l3vni(vni_t vni, vrf_id_t vrf_id,
 				    struct ethaddr *rmac,
 				    struct ethaddr *vrr_rmac,
 				    struct ipaddr *originator_ip, int filter,
 				    ifindex_t svi_ifindex, bool is_anycast_mac);
-extern int bgp_evpn_local_l3vni_del(vni_t vni, vrf_id_t vrf_id);
+extern int bgp_evpn_del_local_l3vni(vni_t vni, vrf_id_t vrf_id);
 extern void bgp_evpn_instance_down(struct bgp *bgp);
-extern int bgp_evpn_local_vni_del(struct bgp *bgp, vni_t vni);
-extern int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
+extern int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni);
+extern int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 				  struct ipaddr *originator_ip,
 				  vrf_id_t tenant_vrf_id,
 				  struct in_addr mcast_grp,
@@ -183,7 +216,7 @@ extern void bgp_evpn_cleanup(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);
 extern int bgp_evpn_get_type5_prefixlen(const struct prefix *pfx);
 extern bool bgp_evpn_is_prefix_nht_supported(const struct prefix *pfx);
-extern void update_advertise_vrf_routes(struct bgp *bgp_vrf);
+extern void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf);
 extern void bgp_evpn_show_remote_ip_hash(struct hash_bucket *bucket,
 					 void *args);
 extern void bgp_evpn_show_vni_svi_hash(struct hash_bucket *bucket, void *args);
@@ -214,10 +247,10 @@ evpn_zebra_uninstall(struct bgp *bgp, struct bgp_evpn_evi *evi,
 		     bool is_sync);
 bool bgp_evpn_skip_vrf_import_of_local_es(struct bgp *bgp_vrf, const struct prefix_evpn *evp,
 					  struct bgp_path_info *pi, int install);
-int uninstall_evpn_route_entry_in_vrf(struct bgp *bgp_vrf, const struct prefix_evpn *evp,
+int _bgp_evpn_vrf_uninstall_route_entry(struct bgp *bgp_vrf, const struct prefix_evpn *evp,
 				      struct bgp_path_info *parent_pi);
 extern void bgp_zebra_evpn_pop_items_from_announce_fifo(struct bgp_evpn_evi *evi);
-extern int install_uninstall_routes_for_vni(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install);
+extern int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install);
 extern void bgp_evpn_fill_rmac_nh_to_attr(struct bgp *bgp_vrf, struct attr *attr,
 					  struct prefix_evpn *evp, struct ipaddr *vtep_ip);
 #endif /* _QUAGGA_BGP_EVPN_H */

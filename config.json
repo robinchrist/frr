@@ -1,0 +1,40 @@
+{
+  "agent": {
+    "orchestrator": {
+      "model": "litellm/deepseek-ai/DeepSeek-V4-Pro",
+      "options": {},
+      "permission": {}
+    },
+    "explorer": {
+      "model": "litellm/deepseek-ai/DeepSeek-V4-Pro",
+      "options": {},
+      "permission": {}
+    },
+    "oracle": {
+      "model": "litellm/claude-opus-4-7",
+      "options": {},
+      "permission": {}
+    },
+    "council": {
+      "model": "litellm/claude-opus-4-7",
+      "options": {},
+      "permission": {}
+    },
+    "librarian": {
+      "model": "litellm/deepseek-ai/DeepSeek-V4-Pro",
+      "options": {},
+      "permission": {}
+    },
+    "designer": {
+      "model": "litellm/claude-sonnet-4-6",
+      "options": {},
+      "permission": {}
+    },
+    "fixer": {
+      "model": "litellm/claude-sonnet-4-6",
+      "options": {},
+      "permission": {}
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}

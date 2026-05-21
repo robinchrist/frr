@@ -3324,7 +3324,7 @@ void bgp_zebra_process_remote_routes_for_l2vni(struct event *e)
 	 * If we have learnt and retained remote routes (VTEPs, MACs)
 	 * for this VNI, install them.
 	 */
-	install_uninstall_routes_for_vni(NULL, NULL, true);
+	bgp_evpn_evi_install_uninstall_routes(NULL, NULL, true);
 
 	/*
 	 * If there are VNIs still pending to be processed, schedule them
@@ -3470,7 +3470,7 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 		frrtrace(8, frr_bgp, evpn_local_l3vni_add_zrecv, l3vni, vrf_id, &svi_rmac,
 			 &vrr_rmac, filter, &originator_ip, svi_ifindex, is_anycast_mac);
 
-		bgp_evpn_local_l3vni_add(l3vni, vrf_id, &svi_rmac, &vrr_rmac,
+		bgp_evpn_add_local_l3vni(l3vni, vrf_id, &svi_rmac, &vrr_rmac,
 					 &originator_ip, filter, svi_ifindex,
 					 is_anycast_mac);
 	} else {
@@ -3480,7 +3480,7 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 
 		frrtrace(2, frr_bgp, evpn_local_l3vni_del_zrecv, l3vni, vrf_id);
 
-		bgp_evpn_local_l3vni_del(l3vni, vrf_id);
+		bgp_evpn_del_local_l3vni(l3vni, vrf_id);
 	}
 
 	return 0;
@@ -3529,14 +3529,14 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 		frrtrace(4, frr_bgp, evpn_local_vni_add_zrecv, vni, &vtep_ip, tenant_vrf_id,
 			 mcast_grp);
 
-		return bgp_evpn_local_vni_add(
+		return bgp_evpn_add_local_l2vni(
 			bgp, vni,
 			&vtep_ip,
 			tenant_vrf_id, mcast_grp, svi_ifindex);
 	} else {
 		frrtrace(1, frr_bgp, evpn_local_vni_del_zrecv, vni);
 
-		return bgp_evpn_local_vni_del(bgp, vni);
+		return bgp_evpn_del_local_l2vni(bgp, vni);
 	}
 }
 
@@ -3630,17 +3630,17 @@ static int bgp_zebra_process_local_ip_prefix(ZAPI_CALLBACK_ARGS)
 	if (cmd == ZEBRA_IP_PREFIX_ROUTE_ADD) {
 
 		if (p.family == AF_INET)
-			bgp_evpn_advertise_type5_route(bgp_vrf, NULL, &p, NULL, AFI_IP,
+			bgp_evpn_vrf_upsert_prefix_as_type5_route(bgp_vrf, NULL, &p, NULL, AFI_IP,
 						       SAFI_UNICAST, 0);
 		else
-			bgp_evpn_advertise_type5_route(bgp_vrf, NULL, &p, NULL, AFI_IP6,
+			bgp_evpn_vrf_upsert_prefix_as_type5_route(bgp_vrf, NULL, &p, NULL, AFI_IP6,
 						       SAFI_UNICAST, 0);
 
 	} else {
 		if (p.family == AF_INET)
-			bgp_evpn_withdraw_type5_route(bgp_vrf, NULL, &p, AFI_IP, SAFI_UNICAST, 0);
+			bgp_evpn_vrf_delete_prefix_as_type5_route(bgp_vrf, NULL, &p, AFI_IP, SAFI_UNICAST, 0);
 		else
-			bgp_evpn_withdraw_type5_route(bgp_vrf, NULL, &p, AFI_IP6, SAFI_UNICAST, 0);
+			bgp_evpn_vrf_delete_prefix_as_type5_route(bgp_vrf, NULL, &p, AFI_IP6, SAFI_UNICAST, 0);
 	}
 	return 0;
 }
