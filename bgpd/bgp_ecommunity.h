@@ -162,11 +162,19 @@ struct ecommunity_ip6 {
 struct ecommunity_val {
 	uint8_t val[ECOMMUNITY_SIZE];
 };
+/* Many places in the code assume that sizeof(ecommunity_val) == sizeof(ecommunity_val.val) 
+ * so let's make sure this does not break by accident
+ */
+static_assert(sizeof(struct ecommunity_val) == ECOMMUNITY_SIZE, "struct ecommunity_val size mismatch");
 
-/* IPv6 Extended community value is eight octet.  */
+/* IPv6 Extended community value is twenty octet.  */
 struct ecommunity_val_ipv6 {
 	uint8_t val[IPV6_ECOMMUNITY_SIZE];
 };
+/* Many places in the code assume that sizeof(ecommunity_val_ipv6) == sizeof(ecommunity_val_ipv6.val) 
+ * so let's make sure this does not break by accident
+ */
+static_assert(sizeof(struct ecommunity_val_ipv6) == IPV6_ECOMMUNITY_SIZE, "struct ecommunity_val_ipv6 size mismatch");
 
 #define ecom_length_size(X, Y)    ((X)->size * (Y))
 
