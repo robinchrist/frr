@@ -55,6 +55,10 @@ DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_CFGD_RT, "BGP EVPN Configured Route Target");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EFFECTIVE_WILDCARD_RT, "BGP EVPN Effective Wildcard Route Target");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EFFECTIVE_FQ_RT, "BGP EVPN Effective Fully Qualified Route Target");
 
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_WILDCARD_IRT_NODE, "BGP EVPN VRF Wildcard Import RT hash table node");
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_FQ_IRT_NODE, "BGP EVPN VRF fully qualified Import RT hash table node");
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, "BGP EVPN BGP instance to VRF Import RT Node Mapping");
+
 /*
  * Static function declarations
  */
@@ -735,7 +739,7 @@ static struct vrf_fq_irt_node *lookup_vrf_fq_irt_node_by_ecom_val(struct ecommun
  */
 uint32_t vrf_wildcard_irt_node_hash_key(const struct vrf_wildcard_irt_node *irt)
 {
-	return jhash_1word(irt->local_admin, 0x57435254);
+	return jhash_1word(irt->local_admin_nbo, 0x57435254);
 }
 
 /*
@@ -744,7 +748,7 @@ uint32_t vrf_wildcard_irt_node_hash_key(const struct vrf_wildcard_irt_node *irt)
  */
 int vrf_wildcard_irt_node_hash_cmp(const struct vrf_wildcard_irt_node *a, const struct vrf_wildcard_irt_node *b)
 {
-	return memcmp(&a->local_admin, &b->local_admin, sizeof(a->local_admin));
+	return memcmp(&a->local_admin_nbo, &b->local_admin_nbo, sizeof(a->local_admin_nbo));
 }
 
 /*
@@ -776,9 +780,69 @@ static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(st
 	uint32_t local_admin_val = bgp_evpn_rt_eval_get_local_admin_nbo(eval);
 
 	memset(&tmp, 0, sizeof(tmp));
-	memcpy(&tmp.local_admin, &local_admin_val, sizeof(tmp.local_admin));
+	memcpy(&tmp.local_admin_nbo, &local_admin_val, sizeof(tmp.local_admin_nbo));
 
 	return vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes, &tmp);
+}
+
+static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp)
+{
+	struct vrf_mapped_bgp_instance *item;
+
+	item = XCALLOC(MTYPE_BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, sizeof(*item));
+	item->bgp = bgp;
+	return item;
+}
+
+static void vrf_mapped_bgp_instance_free(struct vrf_mapped_bgp_instance *item)
+{
+	XFREE(MTYPE_BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, item);
+}
+
+static struct vrf_fq_irt_node *vrf_fq_irt_node_new(struct ecommunity_val rt)
+{
+	struct vrf_fq_irt_node *node;
+
+	node = XCALLOC(MTYPE_BGP_EVPN_VRF_FQ_IRT_NODE, sizeof(*node));
+	memcpy(&node->rt, &rt, sizeof(node->rt));
+
+	vrf_mapped_bgp_instance_slu_init(&node->vrfs);
+
+	return node;
+}
+
+static void vrf_fq_irt_node_free(struct vrf_fq_irt_node *node)
+{
+	struct vrf_mapped_bgp_instance *item;
+
+	while ((item = vrf_mapped_bgp_instance_slu_pop(&node->vrfs)))
+		vrf_mapped_bgp_instance_free(item);
+	vrf_mapped_bgp_instance_slu_fini(&node->vrfs);
+
+	XFREE(MTYPE_BGP_EVPN_VRF_FQ_IRT_NODE, node);
+}
+
+static struct vrf_wildcard_irt_node *vrf_wildcard_irt_node_new(uint32_t local_admin_nbo)
+{
+	struct vrf_wildcard_irt_node *node;
+
+	node = XCALLOC(MTYPE_BGP_EVPN_VRF_WILDCARD_IRT_NODE, sizeof(*node));
+	node->local_admin_nbo = local_admin_nbo;
+
+	vrf_mapped_bgp_instance_slu_init(&node->vrfs);
+
+	return node;
+}
+
+static void vrf_wildcard_irt_node_free(struct vrf_wildcard_irt_node *node)
+{
+	struct vrf_mapped_bgp_instance *item;
+
+	while ((item = vrf_mapped_bgp_instance_slu_pop(&node->vrfs)))
+		vrf_mapped_bgp_instance_free(item);
+	vrf_mapped_bgp_instance_slu_fini(&node->vrfs);
+
+	XFREE(MTYPE_BGP_EVPN_VRF_WILDCARD_IRT_NODE, node);
 }
 
 // /*
@@ -1252,29 +1316,149 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp, bool evp
 
 
 
-// /*
-//  * Map the RTs (configured or automatically derived) of a VRF to the VRF.
-//  * The mapping will be used during route processing.
-//  * bgp_vrf: specific bgp vrf instance on which RT is configured
-//  */
-// void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
-// {
-// 	struct evpn_route_target *l3rt;
+/*
+ * Map the effective import RTs of a VRF to the vrf_irt_nodes lookup tables.
+ * The mapping is used during route import (bgp_evpn_vrf_check_route_matches_import_rts).
+ */
+void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
+{
+	struct bgp *bgp_evpn_mi;
+	struct bgp_evpn_effective_wildcard_rt *eff_w;
+	struct bgp_evpn_effective_fq_rt *eff_fq;
 
-// 	frr_each (evpn_route_target_list, &bgp_vrf->vrf_import_rtl, l3rt)
-// 		bgp_evpn_vrf_map_to_vrf_irt_node_by_rt(bgp_vrf, l3rt);
-// }
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(EC_BGP_NO_DFLT,
+			 "vrf map to irt nodes - evpn instance not created yet");
+		return;
+	}
 
-// /*
-//  * Unmap the RTs (configured or automatically derived) of a VRF from the VRF.
-//  */
-// void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
-// {
-// 	struct evpn_route_target *l3rt;
+	frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp_vrf->effective_wildcard_import_rts, eff_w) {
 
-// 	frr_each (evpn_route_target_list, &bgp_vrf->vrf_import_rtl, l3rt)
-// 		bgp_evpn_vrf_unmap_from_vrf_irt_node_by_rt(bgp_vrf, l3rt);
-// }
+		struct vrf_wildcard_irt_node tmp_lookup_node;
+		struct vrf_wildcard_irt_node *irt;
+		struct vrf_mapped_bgp_instance *vrf_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
+
+		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,&tmp_lookup_node);
+		/* Create the node if it doesn't exist */
+		if (!irt) {
+			irt = vrf_wildcard_irt_node_new(eff_w->local_admin_nbo);
+			vrf_wildcard_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,irt);
+		}
+
+
+		vrf_item = vrf_mapped_bgp_instance_new(bgp_vrf);
+		/* Skip the extra "is already present" check - try to insert right away
+		 * and if it fails, it means it's already present and we can just free the newly allocated item
+		 */
+		if(vrf_mapped_bgp_instance_slu_add(&irt->vrfs, vrf_item) != NULL)
+			/* Already mapped, free the newly allocated item */
+			vrf_mapped_bgp_instance_free(vrf_item);
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,&bgp_vrf->effective_fq_import_rts, eff_fq) {
+		struct vrf_fq_irt_node tmp_lookup_node;
+		struct vrf_fq_irt_node *irt;
+		struct vrf_mapped_bgp_instance *vrf_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
+
+		irt = vrf_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,&tmp_lookup_node);
+		/* Create the node if it doesn't exist */
+		if (!irt) {
+			irt = vrf_fq_irt_node_new(eff_fq->ecom_val);
+			vrf_fq_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,irt);
+		}
+
+		vrf_item = vrf_mapped_bgp_instance_new(bgp_vrf);
+
+		/* Skip the extra "is already present" check - try to insert right away
+		 * and if it fails, it means it's already present and we can just free the newly allocated item
+		 */
+		if(vrf_mapped_bgp_instance_slu_add(&irt->vrfs, vrf_item) != NULL)
+			/* Already mapped, free the newly allocated item */
+			vrf_mapped_bgp_instance_free(vrf_item);
+		
+	}
+}
+
+/*
+ * Unmap the VRF from all vrf_irt_nodes corresponding to its effective import RTs.
+ * Deletes IRT nodes that become empty.
+ */
+void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
+{
+	struct bgp *bgp_evpn_mi;
+	struct bgp_evpn_effective_wildcard_rt *eff_w;
+	struct bgp_evpn_effective_fq_rt *eff_fq;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(EC_BGP_NO_DFLT,
+			 "vrf unmap from irt nodes - evpn instance not created yet");
+		return;
+	}
+
+	frr_each (bgp_evpn_effective_wildcard_rt_slu,&bgp_vrf->effective_wildcard_import_rts, eff_w) {
+		struct vrf_wildcard_irt_node tmp_lookup_node;
+		struct vrf_wildcard_irt_node *irt;
+		struct vrf_mapped_bgp_instance tmp_vrf;
+		struct vrf_mapped_bgp_instance *vrf_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
+
+		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,&tmp_lookup_node);
+		if (!irt)
+			continue; /* Node does not exist, nothing to do */
+
+		tmp_vrf.bgp = bgp_vrf;
+		vrf_item = vrf_mapped_bgp_instance_slu_find(&irt->vrfs, &tmp_vrf);
+		if (!vrf_item)
+			continue; /* VRF not mapped to this IRT node*/
+
+		vrf_mapped_bgp_instance_slu_del(&irt->vrfs, vrf_item);
+		vrf_mapped_bgp_instance_free(vrf_item);
+
+		/* if the node doesn't hold any other mapped VRFs, delete it */
+		if (vrf_mapped_bgp_instance_slu_count(&irt->vrfs) == 0) {
+			vrf_wildcard_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,irt);
+			vrf_wildcard_irt_node_free(irt);
+		}
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,&bgp_vrf->effective_fq_import_rts, eff_fq) {
+		struct vrf_fq_irt_node tmp_lookup_node;
+		struct vrf_fq_irt_node *irt;
+		struct vrf_mapped_bgp_instance tmp_vrf;
+		struct vrf_mapped_bgp_instance *vrf_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
+
+		irt = vrf_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,&tmp_lookup_node);
+		if (!irt)
+			continue; /* Node does not exist, nothing to do */
+
+		tmp_vrf.bgp = bgp_vrf;
+		vrf_item = vrf_mapped_bgp_instance_slu_find(&irt->vrfs, &tmp_vrf);
+		if (!vrf_item)
+			continue; /* VRF not mapped to this IRT node*/
+
+		vrf_mapped_bgp_instance_slu_del(&irt->vrfs, vrf_item);
+		vrf_mapped_bgp_instance_free(vrf_item);
+
+		/* if the node doesn't hold any other mapped VRFs, delete it */
+		if (vrf_mapped_bgp_instance_slu_count(&irt->vrfs) == 0) {
+			vrf_fq_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,irt);
+			vrf_fq_irt_node_free(irt);
+		}
+	}
+}
 
 /*
  * Map the RTs (configured or automatically derived) of a VNI to the VNI.

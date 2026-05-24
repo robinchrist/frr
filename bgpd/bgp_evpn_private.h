@@ -350,7 +350,7 @@ struct vrf_wildcard_irt_node {
 
 	/* Key */
 	/* Actual RT value */
-	uint32_t local_admin;
+	uint32_t local_admin_nbo;
 
 	/* Value */
 	/* List of VRFs importing routes matching this RT. */
