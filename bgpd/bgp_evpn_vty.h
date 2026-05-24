@@ -20,7 +20,7 @@ extern void bgp_ethernetvpn_init(void);
 #define VTEP_IP_HELP_STR "Remote VTEP IPv4 address\n"
 #define VTEP_IPV6_HELP_STR "Remote VTEP IPv6 address\n"
 
-extern int argv_find_and_parse_oly_idx(struct cmd_token **argv, int argc,
+extern int argv_find_and_parse_overlay_option(struct cmd_token **argv, int argc,
 				       int *oly_idx,
 				       enum overlay_index_type *oly);
 

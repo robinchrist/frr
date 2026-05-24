@@ -912,7 +912,7 @@ def parse_frr_bgp_evpn_mh_local_ead_es_evi_route_del(event):
     parse_event(event, field_parsers)
 
 
-def parse_frr_bgp_evpn_local_vni_add_zrecv(event):
+def parse_frr_bgp_evpn_local_l2vni_add_zrecv(event):
     """
     bgp evpn local-vni parser; raw format -
     ctf_integer_network_hex(unsigned int, vtep, vtep.s_addr)
@@ -1769,7 +1769,7 @@ def main():
         "frr_bgp:evpn_mh_es_evi_vtep_del": parse_frr_bgp_evpn_mh_es_evi_vtep_del,
         "frr_bgp:evpn_mh_local_ead_es_evi_route_upd": parse_frr_bgp_evpn_mh_local_ead_es_evi_route_upd,
         "frr_bgp:evpn_mh_local_ead_es_evi_route_del": parse_frr_bgp_evpn_mh_local_ead_es_evi_route_del,
-        "frr_bgp:evpn_local_vni_add_zrecv": parse_frr_bgp_evpn_local_vni_add_zrecv,
+        "frr_bgp:evpn_local_vni_add_zrecv": parse_frr_bgp_evpn_local_l2vni_add_zrecv,
         "frr_bgp:evpn_local_l3vni_add_zrecv": parse_frr_bgp_evpn_local_l3vni_add_zrecv,
         "frr_bgp:evpn_local_macip_add_zrecv": parse_frr_bgp_evpn_local_macip_add_zrecv,
         "frr_bgp:evpn_local_macip_del_zrecv": parse_frr_bgp_evpn_local_macip_del_zrecv,

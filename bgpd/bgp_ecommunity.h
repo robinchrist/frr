@@ -192,7 +192,7 @@ static inline void encode_route_target_as(as_t as, uint32_t val,
 /*
  * Encode BGP Route Target IP:nn.
  */
-static inline void encode_route_target_ip(struct in_addr *ip, uint16_t val,
+static inline void encode_route_target_ip(const struct in_addr *ip, uint16_t val,
 					  struct ecommunity_val *eval,
 					  bool trans)
 {
@@ -393,6 +393,7 @@ extern uint32_t ecommunity_select_color(const struct ecommunity *ecom);
 extern bool ecommunity_add_val(struct ecommunity *ecom,
 			       struct ecommunity_val *eval,
 			       bool unique, bool overwrite);
+extern void ecommunity_append_val_unchecked(struct ecommunity *ecom, struct ecommunity_val *eval);
 extern bool ecommunity_add_val_ipv6(struct ecommunity *ecom,
 				    struct ecommunity_val_ipv6 *eval,
 				    bool unique, bool overwrite);

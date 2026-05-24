@@ -205,10 +205,10 @@ struct bgp_evpn_es_vrf {
 };
 
 /* ES per-EVI info
- * - ES-EVIs are maintained per-L2-VNI (vpn->es_evi_rb_tree)
- * - ES-EVIs are also linked to the parent ES (es->es_evi_list)
+ * - ESs are additionally maintained per EVI -> "ES-EVI" / "ES per-EVI info" (bgp_evpn_evi->es_evi_rb_tree)
+ * - ES-EVIs are linked to the parent ES (bgp_evpn_es->es_evi_list)
  * - Local ES-EVIs are created by zebra (via config). They are linked to a
- *   per-VNI list (vpn->local_es_evi_list) for quick access
+ *   per-VNI list (bgp_evpn_evi->local_es_evi_list) for quick access
  * - Remote ES-EVIs are created implicitly when a bgp_evpn_es_evi_vtep
  *   references it.
  */
@@ -408,10 +408,10 @@ extern int bgp_evpn_mh_route_update(struct bgp *bgp, struct bgp_evpn_es *es,
 				    struct bgp_dest *dest, struct attr *attr,
 				    struct bgp_path_info **ri,
 				    int *route_changed);
-int bgp_evpn_type1_route_process(struct peer *peer, afi_t afi, safi_t safi,
+int bgp_evpn_parse_and_process_route_type_1(struct peer *peer, afi_t afi, safi_t safi,
 		struct attr *attr, uint8_t *pfx, int psize,
 		uint32_t addpath_id);
-int bgp_evpn_type4_route_process(struct peer *peer, afi_t afi, safi_t safi,
+int bgp_evpn_parse_and_process_route_type_4(struct peer *peer, afi_t afi, safi_t safi,
 		struct attr *attr, uint8_t *pfx, int psize,
 		uint32_t addpath_id);
 extern int bgp_evpn_local_es_add(struct bgp *bgp, esi_t *esi, struct ipaddr originator_ip,
@@ -440,8 +440,8 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail);
 struct bgp_evpn_es *bgp_evpn_es_find(const esi_t *esi);
 extern void bgp_evpn_vrf_es_init(struct bgp *bgp_vrf);
 extern bool bgp_evpn_is_esi_local_and_non_bypass(esi_t *esi);
-extern void bgp_evpn_es_vrf_deref(struct bgp_evpn_es_evi *es_evi);
-extern void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi,
+extern void bgp_evpn_es_unlink_es_per_evi_from_vrf(struct bgp_evpn_es_evi *es_evi);
+extern void bgp_evpn_es_link_es_per_evi_to_vrf(struct bgp_evpn_es_evi *es_evi,
 				struct bgp *bgp_vrf);
 extern void bgp_evpn_path_mh_info_free(struct bgp_path_mh_info *mh_info);
 extern void bgp_evpn_path_es_link(struct bgp_path_info *pi, vni_t vni,

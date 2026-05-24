@@ -1559,7 +1559,7 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 							safi);
 				if (safi == SAFI_EVPN &&
 				    bgp_evpn_is_prefix_nht_supported(bgp_dest_get_prefix(dest)))
-					bgp_evpn_import_route(bgp_path,
+					bgp_evpn_import_global_received_route(bgp_path,
 						afi, safi, bgp_dest_get_prefix(dest), path);
 				if (safi == SAFI_UNICAST &&
 				    (bgp_path->inst_type !=

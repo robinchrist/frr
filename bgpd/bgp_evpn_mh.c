@@ -639,7 +639,7 @@ static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
 	if (global_dest) {
 
 		/* Delete route entry in the global EVPN table. */
-		pi = delete_evpn_route_entry(bgp, afi, safi, global_dest, NULL, 0);
+		pi = bgp_evpn_delete_route_entry(bgp, afi, safi, global_dest, NULL, 0);
 
 		/* Schedule for processing - withdraws to peers happen from
 		 * this table.
@@ -653,7 +653,7 @@ static int bgp_evpn_mh_route_delete(struct bgp *bgp, struct bgp_evpn_es *es,
 	 * Delete route entry in the ESI or VNI routing table.
 	 * This can just be removed.
 	 */
-	pi = delete_evpn_route_entry(bgp, afi, safi, dest, NULL, 0);
+	pi = bgp_evpn_delete_route_entry(bgp, afi, safi, dest, NULL, 0);
 	if (pi)
 		dest = bgp_path_info_reap(dest, pi);
 
@@ -694,7 +694,7 @@ int delete_global_ead_evi_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 			if (evp->prefix.route_type != BGP_EVPN_AD_ROUTE)
 				continue;
 
-			pi = delete_evpn_route_entry(bgp, afi, safi, bd, NULL, 0);
+			pi = bgp_evpn_delete_route_entry(bgp, afi, safi, bd, NULL, 0);
 			if (pi)
 				bgp_process(bgp, bd, pi, afi, safi);
 		}
@@ -839,8 +839,11 @@ static int bgp_evpn_type4_route_delete(struct bgp *bgp,
 					es->es_base_frag, p);
 }
 
-/* Process remote/received EVPN type-4 route (advertise or withdraw)  */
-int bgp_evpn_type4_route_process(struct peer *peer, afi_t afi, safi_t safi,
+/*
+ * Parse and process received EVPN route type 4 route (Ethernet Segment Route)
+ * (BGP UPDATE, advertise or withdraw).
+ */
+int bgp_evpn_parse_and_process_route_type_4(struct peer *peer, afi_t afi, safi_t safi,
 		struct attr *attr, uint8_t *pfx, int psize,
 		uint32_t addpath_id)
 {
@@ -1324,9 +1327,10 @@ static void bgp_evpn_local_type1_evi_route_del(struct bgp *bgp,
 }
 
 /*
- * Process received EVPN type-1 route (advertise or withdraw).
+ * Parse and process received EVPN route type 1 route (Ethernet Auto-discovery Route)
+ * (BGP UPDATE, advertise or withdraw).
  */
-int bgp_evpn_type1_route_process(struct peer *peer, afi_t afi, safi_t safi,
+int bgp_evpn_parse_and_process_route_type_1(struct peer *peer, afi_t afi, safi_t safi,
 		struct attr *attr, uint8_t *pfx, int psize,
 		uint32_t addpath_id)
 {
@@ -1864,7 +1868,7 @@ bgp_evpn_es_path_update_on_es_vrf_chg(struct bgp_evpn_es_vrf *es_vrf,
 			zlog_debug(
 				"update path %pFX linked to es %s on vrf chg",
 				&pi->net->rn->p, es->esi_str);
-		bgp_evpn_route_entry_install_if_vrf_match(es_vrf->bgp_vrf, pi,
+		bgp_evpn_vrf_install_uninstall_route_entry_if_match(es_vrf->bgp_vrf, pi,
 							  1);
 	}
 }
@@ -2280,7 +2284,7 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 				"update path %d %pFX linked to es %s on oper chg",
 				es_info->vni, &pi->net->rn->p, es->esi_str);
 
-		bgp_evpn_update_type2_route_entry(bgp, evi, pi->net, pi,
+		bgp_evpn_evi_update_type2_route_entry(bgp, evi, pi->net, pi,
 						  __func__);
 	}
 }
@@ -3241,8 +3245,10 @@ static void bgp_evpn_es_vrf_delete(struct bgp_evpn_es_vrf *es_vrf)
 	XFREE(MTYPE_BGP_EVPN_ES_VRF, es_vrf);
 }
 
-/* deref and delete if there are no references */
-void bgp_evpn_es_vrf_deref(struct bgp_evpn_es_evi *es_evi)
+/* Unlink an ES-EVI (Ethernet Segment per EVI info) from its assigned bgp_evpn_es_vrf support struct
+ * perform cleanup (deletes the bgp_evpn_es_vrf if needed)
+ */
+void bgp_evpn_es_unlink_es_per_evi_from_vrf(struct bgp_evpn_es_evi *es_evi)
 {
 	struct bgp_evpn_es_vrf *es_vrf = es_evi->es_vrf;
 
@@ -3262,8 +3268,12 @@ void bgp_evpn_es_vrf_deref(struct bgp_evpn_es_evi *es_evi)
 		bgp_evpn_es_vrf_delete(es_vrf);
 }
 
-/* find or create and reference */
-void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
+/* Link (or update the mapping if exists) an ES-EVI (Ethernet Segment per EVI info) to a BGP VRF using
+ * the bgp_evpn_es_vrf support struct needed for managing L3 NHGs
+ * Unlinks from the existing bgp_evpn_es_vrf if linked and performs bgp_evpn_es_vrf cleanup if needed
+ * Creates a new bgp_evpn_es_vrf if needed and links to it
+ */
+void bgp_evpn_es_link_es_per_evi_to_vrf(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
 {
 	struct bgp_evpn_es *es = es_evi->es;
 	struct bgp_evpn_es_vrf *es_vrf = es_evi->es_vrf;
@@ -3276,7 +3286,7 @@ void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
 		return;
 
 	/* deref the old ES-VRF */
-	bgp_evpn_es_vrf_deref(es_evi);
+	bgp_evpn_es_unlink_es_per_evi_from_vrf(es_evi);
 
 	if (!bgp_vrf)
 		return;
@@ -3298,10 +3308,8 @@ void bgp_evpn_es_vrf_ref(struct bgp_evpn_es_evi *es_evi, struct bgp *bgp_vrf)
 			   es_vrf->bgp_vrf->vrf_id, es_vrf->ref_cnt);
 }
 
-/* When the L2-VNI is associated with a L3-VNI/VRF update all the
- * associated ES-EVI entries
- */
-void bgp_evpn_es_evi_vrf_deref(struct bgp_evpn_evi *evi)
+/* Handle Ethernet Segment stuff when an EVI gets unlinked from a VRF */
+void bgp_evpn_es_handle_evi_unlinked_from_vrf(struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 
@@ -3309,9 +3317,13 @@ void bgp_evpn_es_evi_vrf_deref(struct bgp_evpn_evi *evi)
 		zlog_debug("es-vrf de-ref for vni %u", evi->vni);
 
 	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree)
-		bgp_evpn_es_vrf_deref(es_evi);
+		bgp_evpn_es_unlink_es_per_evi_from_vrf(es_evi);
 }
-void bgp_evpn_es_evi_vrf_ref(struct bgp_evpn_evi *evi)
+/* Handle Ethernet Segment stuff when an EVI gets linked to a VRF
+ * would probably work if called without bgp_evpn_es_handle_evi_linked_to_vrf first,
+ * but this is currently not being done
+*/
+void bgp_evpn_es_handle_evi_linked_to_vrf(struct bgp_evpn_evi *evi)
 {
 	struct bgp_evpn_es_evi *es_evi;
 
@@ -3319,7 +3331,8 @@ void bgp_evpn_es_evi_vrf_ref(struct bgp_evpn_evi *evi)
 		zlog_debug("es-vrf ref for vni %u", evi->vni);
 
 	RB_FOREACH (es_evi, bgp_es_evi_rb_head, &evi->es_evi_rb_tree) {
-		bgp_evpn_es_vrf_ref(es_evi, evi->bgp_vrf);
+		/* Link to the VRF, or update the mapping if it already exists */
+		bgp_evpn_es_link_es_per_evi_to_vrf(es_evi, evi->bgp_vrf);
 
 		/* Now that the VRF is updated for the ES-EVI, check if any local
 		 * route cleanup is required which was deferred earlier when the
@@ -3777,7 +3790,7 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_new(struct bgp_evpn_es *es,
 	listnode_init(&es_evi->es_listnode, es_evi);
 	listnode_add(es->es_evi_list, &es_evi->es_listnode);
 
-	bgp_evpn_es_vrf_ref(es_evi, evi->bgp_vrf);
+	bgp_evpn_es_link_es_per_evi_to_vrf(es_evi, evi->bgp_vrf);
 
 	if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 		zlog_debug("Created ES-EVI for ES %s VNI %u", es->esi_str, evi->vni);
@@ -3804,7 +3817,7 @@ static struct bgp_evpn_es_evi *bgp_evpn_es_evi_free_internal(struct bgp_evpn_es_
 	if (!force && CHECK_FLAG(es_evi->flags, (BGP_EVPNES_EVI_LOCAL | BGP_EVPNES_EVI_REMOTE)))
 		return es_evi;
 	bgp_evpn_es_frag_evi_del(es_evi, false);
-	bgp_evpn_es_vrf_deref(es_evi);
+	bgp_evpn_es_unlink_es_per_evi_from_vrf(es_evi);
 
 	/* remove from the ES's VNI list */
 	list_delete_node(es->es_evi_list, &es_evi->es_listnode);
@@ -5367,9 +5380,10 @@ void bgp_evpn_local_es_evi_uninstall_local_routes_in_vrfs(struct bgp_evpn_es *es
 			zlog_debug("route %pFX is matched on local esi %s, uninstall from %s route table",
 				   evp, es->esi_str, es_vrf->bgp_vrf->name_pretty);
 
+		/* ONLY process local routes! */
 		if (!bgp_evpn_skip_vrf_import_of_local_es(es_vrf->bgp_vrf, evp, pi, 0))
 			continue;
 
-		uninstall_evpn_route_entry_in_vrf(es_vrf->bgp_vrf, evp, pi);
+		_bgp_evpn_vrf_uninstall_route_entry(es_vrf->bgp_vrf, evp, pi);
 	}
 }

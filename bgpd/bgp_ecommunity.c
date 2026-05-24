@@ -74,7 +74,7 @@ static void ecommunity_hash_free(struct ecommunity *ecom)
    The additional parameters 'unique' and 'overwrite' ensure a particular
    extended community (based on type and sub-type) is present only
    once and whether the new value should replace what is existing or
-   not.
+   not. 'overwrite' only works when 'unique' is also true.
 */
 static bool ecommunity_add_val_internal(struct ecommunity *ecom,
 					const void *eval,
@@ -164,6 +164,15 @@ bool ecommunity_add_val(struct ecommunity *ecom, struct ecommunity_val *eval,
 {
 	return ecommunity_add_val_internal(ecom, (const void *)eval, unique,
 					   overwrite, ECOMMUNITY_SIZE);
+}
+
+extern void ecommunity_append_val_unchecked(struct ecommunity *ecom, struct ecommunity_val *eval) {
+	ecom->size++;
+	/* REALLOC is safe even for NULL pointers */
+	ecom->val = XREALLOC(MTYPE_ECOMMUNITY_VAL, ecom->val,
+			      ecom_length_size(ecom, ECOMMUNITY_SIZE));
+	memcpy(ecom->val + ((ecom->size - 1) * ECOMMUNITY_SIZE),
+	       eval, ECOMMUNITY_SIZE);
 }
 
 bool ecommunity_add_val_ipv6(struct ecommunity *ecom,
