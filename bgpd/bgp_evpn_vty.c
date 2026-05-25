@@ -95,7 +95,7 @@ static void display_vrf_irt_node_common(struct vty *vty, const char *rt_buf,
 	}
 }
 
-static void display_import_rt(struct vty *vty, struct evi_irt_node *irt,
+static void display_evi_irt_node(struct vty *vty, struct evi_irt_node *irt,
 			      json_object *json)
 {
 	struct listnode *node, *nnode;
@@ -2377,7 +2377,7 @@ static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp,
 	struct evi_irt_node *irt;
 
 	frr_each (evi_irt_nodes, &bgp->evi_irt_nodes, irt)
-		display_import_rt(vty, irt, json);
+		display_evi_irt_node(vty, irt, json);
 }
 
 /*
