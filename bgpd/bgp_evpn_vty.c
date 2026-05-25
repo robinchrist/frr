@@ -60,23 +60,17 @@ int argv_find_and_parse_overlay_option(struct cmd_token **argv, int argc, int *o
 	return 1;
 }
 
-static void display_vrf_import_rt(struct vty *vty, struct vrf_irt_node *irt,
+static void display_vrf_irt_node_common(struct vty *vty, const char *rt_buf,
+				  struct vrf_mapped_bgp_instance_slu_head *vrfs,
 				  json_object *json)
 {
-	struct listnode *node, *nnode;
-	struct bgp *tmp_bgp_vrf = NULL;
+	struct vrf_mapped_bgp_instance *vrf_item;
 	json_object *json_rt = NULL;
 	json_object *json_vrfs = NULL;
-	char rt_buf[RT_ADDRSTRLEN];
 
 	if (json) {
 		json_rt = json_object_new_object();
 		json_vrfs = json_object_new_array();
-	}
-
-	bgp_evpn_format_rt_ecom_val(rt_buf, sizeof(rt_buf), irt->rt, irt->is_wildcard);
-
-	if(json) {
 		json_object_string_add(json_rt, "rt", rt_buf);
 	} else {
 		vty_out(vty, "Route-target: %s\n", rt_buf);
@@ -84,15 +78,15 @@ static void display_vrf_import_rt(struct vty *vty, struct vrf_irt_node *irt,
 			"List of VRFs importing routes with this route-target:\n");
 	}
 
-	for (ALL_LIST_ELEMENTS(irt->vrfs, node, nnode, tmp_bgp_vrf)) {
+	frr_each (vrf_mapped_bgp_instance_slu, vrfs, vrf_item) {
 		if (json)
 			json_object_array_add(
 				json_vrfs,
 				json_object_new_string(
-					vrf_id_to_name(tmp_bgp_vrf->vrf_id)));
+					vrf_id_to_name(vrf_item->bgp->vrf_id)));
 		else
 			vty_out(vty, "  %s\n",
-				vrf_id_to_name(tmp_bgp_vrf->vrf_id));
+				vrf_id_to_name(vrf_item->bgp->vrf_id));
 	}
 
 	if (json) {
@@ -2355,10 +2349,23 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgp_evpn_evi *evi)
 static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 				     json_object *json)
 {
-	struct vrf_irt_node *irt;
+	struct vrf_fq_irt_node *fq_irt;
+	struct vrf_wildcard_irt_node *wildcard_irt;
+	char rt_buf[RT_ADDRSTRLEN];
 
-	frr_each (vrf_irt_nodes, &bgp_evpn->vrf_irt_nodes, irt)
-		display_vrf_import_rt(vty, irt, json);
+	frr_each (vrf_fq_irt_nodes,
+		  &bgp_evpn->evpn_master_instance_info.vrf_fq_irt_nodes, fq_irt) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq_irt->rt);
+		display_vrf_irt_node_common(vty, rt_buf, &fq_irt->vrfs, json);
+	}
+
+	frr_each (vrf_wildcard_irt_nodes,
+		  &bgp_evpn->evpn_master_instance_info.vrf_wildcard_irt_nodes,
+		  wildcard_irt) {
+		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf),
+							wildcard_irt->local_admin_nbo);
+		display_vrf_irt_node_common(vty, rt_buf, &wildcard_irt->vrfs, json);
+	}
 }
 
 /*
