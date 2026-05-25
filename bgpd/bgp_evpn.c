@@ -957,6 +957,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
 	evi_irt_nodes_del(&bgp->evpn_master_instance_info.evi_irt_nodes, irt);
+	/* No need to free the EVIs themselves, they are held in vnihash */
 	list_delete(&irt->evis);
 	XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, irt);
 }
@@ -8810,6 +8811,43 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp)
 		     bgp);
 }
 
+static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
+{
+	evi_irt_nodes_init(&bgp->evpn_master_instance_info.evi_irt_nodes);
+	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
+	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);	
+}
+
+static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
+{
+	struct evi_irt_node *evi_irt;
+	uint32_t idx = 0;
+
+	while ((evi_irt = evi_irt_nodes_pop_all(&bgp->evpn_master_instance_info.evi_irt_nodes,
+						&idx))) {
+
+		evi_irt_nodes_del(&bgp->evpn_master_instance_info.evi_irt_nodes, evi_irt);
+		/* No need to free the EVIs themselves, they are held in vnihash */
+		list_delete(&evi_irt->evis);
+		XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, evi_irt);
+	}
+	evi_irt_nodes_fini(&bgp->evpn_master_instance_info.evi_irt_nodes);
+
+	struct vrf_wildcard_irt_node *vrf_wildcard_irt;
+	idx = 0;
+	while ((vrf_wildcard_irt = vrf_wildcard_irt_nodes_pop_all(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes, &idx))) {
+		vrf_wildcard_irt_node_free(vrf_wildcard_irt);
+	}
+	vrf_wildcard_irt_nodes_fini(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
+
+	struct vrf_fq_irt_node *vrf_fq_irt;
+	idx = 0;
+	while ((vrf_fq_irt = vrf_fq_irt_nodes_pop_all(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes, &idx))) {
+		vrf_fq_irt_node_free(vrf_fq_irt);
+	}
+	vrf_fq_irt_nodes_fini(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
+}
+
 /*
  * Cleanup EVPN information - invoked at the time of bgpd exit or when the
  * BGP instance (default) is being freed.
@@ -8820,6 +8858,8 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 	if (!bgp->vnihash)
 		return;
 
+	bgp_evpn_master_instance_info_cleanup(bgp);
+
 	hash_iterate(bgp->vnihash,
 		     (void (*)(struct hash_bucket *, void *))free_vni_entry,
 		     bgp);
@@ -8829,48 +8869,27 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 	hash_clean_and_free(&bgp->vni_svi_hash,
 			    (void (*)(void *))hash_evpn_free);
 
-	bgp_evpn_vrf_rt_config_free(bgp->vrf_route_target_config);
-
-	{
-		struct evi_irt_node *irt;
-		uint32_t idx = 0;
-
-		while ((irt = evi_irt_nodes_pop_all(&bgp->evi_irt_nodes,
-						    &idx))) {
-			list_delete(&irt->evis);
-			XFREE(MTYPE_BGP_EVPN_EVI_IRT_NODE, irt);
-		}
-		evi_irt_nodes_fini(&bgp->evi_irt_nodes);
-	}
-
-	{
-		struct vrf_irt_node *irt;
-		uint32_t idx = 0;
-
-		while ((irt = vrf_irt_nodes_pop_all(&bgp->vrf_irt_nodes,
-						    &idx))) {
-			list_delete(&irt->vrfs);
-			XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
-		}
-		vrf_irt_nodes_fini(&bgp->vrf_irt_nodes);
-	}
 
 	/* No need to free the items themselves, they are held in vnihash */
 	list_delete(&bgp->l2vnis);
 
-	{
-		struct evpn_route_target *l3rt;
-		while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_import_rtl)))
-			bgp_evpn_route_target_del(l3rt);
-		evpn_route_target_list_fini(&bgp->vrf_import_rtl);
-		while ((l3rt = evpn_route_target_list_pop(&bgp->vrf_export_rtl)))
-			bgp_evpn_route_target_del(l3rt);
-		evpn_route_target_list_fini(&bgp->vrf_export_rtl);
-	}
-
 	if (bgp->evpn_info) {
 		ecommunity_free(&bgp->evpn_info->soo);
 		XFREE(MTYPE_BGP_EVPN_INFO, bgp->evpn_info);
+	}
+
+	bgp_evpn_vrf_rt_config_free(bgp->vrf_route_target_config);
+
+	struct bgp_evpn_effective_wildcard_rt* eff_wildcard_rt;
+	while((eff_wildcard_rt = bgp_evpn_effective_wildcard_rt_slu_pop(&bgp->effective_wildcard_import_rts))) {
+		bgp_evpn_effective_wildcard_rt_free(eff_wildcard_rt);
+	}
+	struct bgp_evpn_effective_fq_rt* eff_fq_rt;
+	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&bgp->effective_fq_import_rts))) {
+		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
+	}
+	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&bgp->effective_fq_export_rts))) {
+		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
 	}
 
 	if (bgp->vrf_prd_pretty)
@@ -8885,21 +8904,17 @@ void bgp_evpn_cleanup(struct bgp *bgp)
  */
 void bgp_evpn_init(struct bgp *bgp)
 {
+	bgp_evpn_master_instance_info_init(bgp);
+
 	bgp->vnihash =
 		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
 	bgp->vni_svi_hash =
 		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
 			    "BGP VNI hash based on SVI ifindex");
-	bgp->vrf_route_target_config = bgp_evpn_vrf_rt_config_new();
 
-	evi_irt_nodes_init(&bgp->evi_irt_nodes);
-	vrf_irt_nodes_init(&bgp->vrf_irt_nodes);
-	evpn_route_target_list_init(&bgp->vrf_import_rtl);
-	evpn_route_target_list_init(&bgp->vrf_export_rtl);
 	bgp->l2vnis = list_new();
 	bgp->l2vnis->cmp = vni_list_cmp;
-	bgp->evpn_info =
-		XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
+	bgp->evpn_info = XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
 	/* By default Duplicate Address Detection is enabled.
 	 * Max-moves (N) 5, detection time (M) 180
 	 * default action is warning-only
@@ -8929,6 +8944,12 @@ void bgp_evpn_init(struct bgp *bgp)
 
 	/* Default BUM handling is to do head-end replication. */
 	bgp->vxlan_flood_ctrl = VXLAN_FLOOD_HEAD_END_REPL;
+
+	bgp->vrf_route_target_config = bgp_evpn_vrf_rt_config_new();
+
+	bgp_evpn_effective_wildcard_rt_slu_init(&bgp->effective_wildcard_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&bgp->effective_fq_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&bgp->effective_fq_export_rts);
 
 	bgp_evpn_nh_init(bgp);
 }
