@@ -1887,6 +1887,8 @@ int bgp_evpn_vrf_configure_auto_rt(struct bgp *bgp_vrf,
 		bgp_evpn_vrf_handle_import_rt_change(bgp_vrf);
 	if(export_auto_rt_active_before != export_rt_active_after)
 		bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
+
+	return 0;
 }
 
 int bgp_evpn_vrf_configure_both_rt_manual(struct bgp *bgp_vrf, struct bgp_evpn_cfgd_rt* cfgd_rt)
