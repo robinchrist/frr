@@ -202,6 +202,9 @@ struct attr {
 	/* EVPN flags */
 	uint8_t evpn_flags;
 #define ATTR_EVPN_FLAG_STICKY	  (1 << 0)
+/* Indicates whether the route has the Default Gateway Extended Community
+ * (or should be advertise with it)
+ */
 #define ATTR_EVPN_FLAG_DEFAULT_GW (1 << 1)
 /* NA router flag (R-bit) support in EVPN */
 #define ATTR_EVPN_FLAG_ROUTER (1 << 2)

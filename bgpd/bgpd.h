@@ -973,11 +973,23 @@ struct bgp {
 	 */
 	struct hash *vni_svi_hash;
 
-	/* EVPN enable - advertise gateway macip routes */
-	int advertise_gw_macip;
+	/* This flag was completely undocumented, the following was derived from a code analysis:
+	 * so take it with a grain of salt
+	 *
+	 * Per-VRF EVPN flag - If this flag is set, we announce a MAC/IP route for each anycast gateway
+	 * (MACVLAN on top of SVI) and SVI of all EVIs in this VRF
+	 * **with the Default Gateway Extended Community set**
+	 * 
+	 * Difference to advertise_svi_macip:
+	 * - MAC/IP for anycast gateway is advertised
+	 * - MAC/IP for anycast gateway and SVI are advertised with the Default Gateway Extended Community set
+	 * 
+	 * Basically enables advertise_gw_macip for each EVI in the VRF (see struct bgp_evpn_evi)
+	 */
+	bool advertise_gw_macip;
 
 	/* EVPN enable - advertise local VNIs and their MACs etc. */
-	int advertise_all_vni;
+	bool advertise_all_vni;
 
 	/* draft-ietf-idr-deprecate-as-set-confed-set
 	 * Reject aspaths with AS_SET and/or AS_CONFED_SET.

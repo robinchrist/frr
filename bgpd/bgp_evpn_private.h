@@ -214,17 +214,25 @@ struct bgp_evpn_evi {
 
 	struct bgp *bgp_vrf; /* back pointer to the vrf instance */
 
-					   /* Flag to indicate if we are
-					    * advertising the g/w mac ip for
-					    * this VNI*/
-	uint8_t advertise_gw_macip;
+	/* Per-EVI flag - if this flag is set, we announce a MAC/IP route for the SVI of this EVI */
+	bool advertise_svi_macip;
 
-	/* Flag to indicate if we are
-	 * advertising subnet for this VNI */
-	uint8_t advertise_subnet;
+	/* This flag was completely undocumented, the following was derived from a code analysis:
+	 * so take it with a grain of salt
+	 *
+	 * Per-EVI EVPN flag - If this flag is set, we announce a MAC/IP route for each anycast gateway
+	 * (MACVLAN on top of SVI) and SVI in this EVI **with the Default Gateway Extended Community set**
+	 * 
+	 * Difference to advertise_svi_macip:
+	 * - MAC/IP for anycast gateway is advertised
+	 * - MAC/IP for anycast gateway and SVI are advertised with the Default Gateway Extended Community set
+	 */
+	bool advertise_gw_macip;
 
-	/* Flag to indicate if we are advertising the svi mac ip for this VNI*/
-	uint8_t advertise_svi_macip;
+	/* Hidden / Debug! Per EVI flag - if this flag is set
+	 * we advertise a Type 5 Route for the SVI's subnet
+	 */
+	bool advertise_subnet;
 
 	/* Id for deriving the RD
 	 * automatically for this VNI */
@@ -381,8 +389,12 @@ struct bgp_evpn_info {
 	/* Recovery time */
 	uint32_t dad_freeze_time;
 
-	/* EVPN enable - advertise svi macip routes */
-	int advertise_svi_macip;
+	/* Per-VRF flag - if this flag is set, we announce a MAC/IP route for the SVIs of all EVIs
+	 * assigned to this VRF
+	 * 
+	 * Basically enables advertise_svi_macip for each EVI in the VRF (see struct bgp_evpn_evi)
+	 */
+	bool advertise_svi_macip;
 
 	/* MAC-VRF Site-of-Origin
 	 * - added to all routes exported from L2VNI
@@ -583,6 +595,9 @@ static inline void encode_rmac_extcomm(struct ecommunity_val *eval,
 	memcpy(&eval->val[2], rmac, ETH_ALEN);
 }
 
+/* Encode Default Gateway Extended Community 
+ * It is a Transitive Opaque Extended Community, type = 0x03, sub-type = 0x0d
+ */
 static inline void encode_default_gw_extcomm(struct ecommunity_val *eval)
 {
 	memset(eval, 0, sizeof(*eval));

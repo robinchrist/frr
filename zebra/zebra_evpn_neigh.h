@@ -67,6 +67,9 @@ struct zebra_neigh {
 #define ZEBRA_NEIGH_LOCAL 0x01
 #define ZEBRA_NEIGH_REMOTE 0x02
 #define ZEBRA_NEIGH_REMOTE_NH 0x04 /* neigh entry for remote vtep */
+/* Indicates that the neighbor is an EVPN Default Gateway 
+ * (Default Gateway Extended Community)
+ */
 #define ZEBRA_NEIGH_DEF_GW 0x08
 #define ZEBRA_NEIGH_ROUTER_FLAG 0x10
 #define ZEBRA_NEIGH_DUPLICATE 0x20

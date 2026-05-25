@@ -2524,7 +2524,7 @@ static void bgp_evpn_build_route_type_2_3_extcomm(struct bgp_evpn_evi *evi, stru
 		ecommunity_append_val_unchecked(ecom_merge, &eval_rmac);
 	}
 
-	/* Add default gateway, if needed. */
+	/* Add Default Gateway Extended Community, if needed. */
 	if (CHECK_FLAG(attr->evpn_flags, ATTR_EVPN_FLAG_DEFAULT_GW)) {
 		encode_default_gw_extcomm(&eval_default_gw);
 		ecommunity_append_val_unchecked(ecom_merge, &eval_default_gw);

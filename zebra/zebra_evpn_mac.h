@@ -57,8 +57,13 @@ struct zebra_mac {
 #define ZEBRA_MAC_AUTO 0x04	/* Auto created for neighbor. */
 #define ZEBRA_MAC_STICKY 0x08      /* Static MAC */
 #define ZEBRA_MAC_REMOTE_RMAC 0x10 /* remote router mac */
+/* Indicates that the (local?) MAC is an EVPN Default Gateway MAC
+ * (Default Gateway Extended Community)
+ */
 #define ZEBRA_MAC_DEF_GW 0x20
-/* remote VTEP advertised MAC as default GW */
+/* Indicates that the (remote?) MAC was advertised as an EVPN Default Gateway MAC
+ * (Default Gateway Extended Community)
+ */
 #define ZEBRA_MAC_REMOTE_DEF_GW 0x40
 #define ZEBRA_MAC_DUPLICATE 0x80
 #define ZEBRA_MAC_FPM_SENT 0x100 /* whether or not this entry was sent. */

@@ -858,6 +858,9 @@ static inline const char *zapi_srv6_sid_notify2str(enum zapi_srv6_sid_notify not
 
 /* Zebra MAC types */
 #define ZEBRA_MACIP_TYPE_STICKY                0x01 /* Sticky MAC*/
+/* Indicates that this MAC IP entry is for an EVPN Default Gateway
+ * (Default Gateway Extended Community)
+ */
 #define ZEBRA_MACIP_TYPE_GW                    0x02 /* gateway (SVI) mac*/
 #define ZEBRA_MACIP_TYPE_ROUTER_FLAG           0x04 /* Router Flag - proxy NA */
 #define ZEBRA_MACIP_TYPE_OVERRIDE_FLAG         0x08 /* Override Flag */

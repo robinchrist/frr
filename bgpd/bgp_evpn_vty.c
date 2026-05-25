@@ -3506,7 +3506,7 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp,
  * evpn - enable advertisement of svi MAC-IP
  */
 static void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgp_evpn_evi *evi,
-					 uint32_t set)
+					 bool set)
 {
 	if (!evi) {
 		if (set && bgp->evpn_info->advertise_svi_macip)
@@ -3516,7 +3516,7 @@ static void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgp_evpn_evi *e
 
 		bgp->evpn_info->advertise_svi_macip = set;
 		bgp_zebra_advertise_svi_macip(bgp,
-					bgp->evpn_info->advertise_svi_macip, 0);
+					bgp->evpn_info->advertise_svi_macip ? 1 : 0, 0);
 	} else {
 		if (set && evi->advertise_svi_macip)
 			return;
@@ -3524,7 +3524,7 @@ static void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgp_evpn_evi *e
 			return;
 
 		evi->advertise_svi_macip = set;
-		bgp_zebra_advertise_svi_macip(bgp, evi->advertise_svi_macip,
+		bgp_zebra_advertise_svi_macip(bgp, evi->advertise_svi_macip ? 1 : 0,
 					      evi->vni);
 	}
 }
@@ -3538,14 +3538,14 @@ static void evpn_set_advertise_default_gw(struct bgp *bgp, struct bgp_evpn_evi *
 		if (bgp->advertise_gw_macip)
 			return;
 
-		bgp->advertise_gw_macip = 1;
-		bgp_zebra_advertise_gw_macip(bgp, bgp->advertise_gw_macip, 0);
+		bgp->advertise_gw_macip = true;
+		bgp_zebra_advertise_gw_macip(bgp, bgp->advertise_gw_macip ? 1 : 0, 0);
 	} else {
 		if (evi->advertise_gw_macip)
 			return;
 
-		evi->advertise_gw_macip = 1;
-		bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip,
+		evi->advertise_gw_macip = true;
+		bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip ? 1 : 0,
 					     evi->vni);
 	}
 	return;
@@ -3561,14 +3561,14 @@ static void evpn_unset_advertise_default_gw(struct bgp *bgp,
 		if (!bgp->advertise_gw_macip)
 			return;
 
-		bgp->advertise_gw_macip = 0;
-		bgp_zebra_advertise_gw_macip(bgp, bgp->advertise_gw_macip, 0);
+		bgp->advertise_gw_macip = false;
+		bgp_zebra_advertise_gw_macip(bgp, bgp->advertise_gw_macip ? 1 : 0, 0);
 	} else {
 		if (!evi->advertise_gw_macip)
 			return;
 
-		evi->advertise_gw_macip = 0;
-		bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip,
+		evi->advertise_gw_macip = false;
+		bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip ? 1 : 0,
 					     evi->vni);
 	}
 	return;
@@ -3618,8 +3618,8 @@ static void evpn_set_advertise_subnet(struct bgp *bgp,
 	if (evi->advertise_subnet)
 		return;
 
-	evi->advertise_subnet = 1;
-	bgp_zebra_advertise_subnet(bgp, evi->advertise_subnet, evi->vni);
+	evi->advertise_subnet = true;
+	bgp_zebra_advertise_subnet(bgp, evi->advertise_subnet ? 1 : 0, evi->vni);
 }
 
 /*
@@ -3630,8 +3630,8 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgp_evpn_evi *ev
 	if (!evi->advertise_subnet)
 		return;
 
-	evi->advertise_subnet = 0;
-	bgp_zebra_advertise_subnet(bgp, evi->advertise_subnet, evi->vni);
+	evi->advertise_subnet = false;
+	bgp_zebra_advertise_subnet(bgp, evi->advertise_subnet ? 1 : 0, evi->vni);
 }
 
 /*
@@ -3639,7 +3639,7 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgp_evpn_evi *ev
  */
 static void evpn_set_advertise_all_vni(struct bgp *bgp)
 {
-	bgp->advertise_all_vni = 1;
+	bgp->advertise_all_vni = true;
 	bgp_set_evpn(bgp);
 	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
 }
@@ -3650,7 +3650,7 @@ static void evpn_set_advertise_all_vni(struct bgp *bgp)
  */
 static void evpn_unset_advertise_all_vni(struct bgp *bgp)
 {
-	bgp->advertise_all_vni = 0;
+	bgp->advertise_all_vni = false;
 	bgp_set_evpn(bgp_get_default());
 	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
 	bgp_evpn_cleanup_on_disable(bgp);
