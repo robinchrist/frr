@@ -631,65 +631,54 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 }
 
 
-// void bgp_evpn_format_rt_ecom_val(char* buf, size_t buflen, struct ecommunity_val eval,
-// 						 bool is_wildcard) {
+void bgp_evpn_format_wildcard_rt_local_admin(char *buf, size_t buflen,
+					     uint32_t local_admin_nbo)
+{
+	snprintf(buf, buflen, "*:%u", ntohl(local_admin_nbo));
+}
 
+void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
+				    struct ecommunity_val eval)
+{
+	uint8_t type = eval.val[0];
+	uint8_t subtype = eval.val[1];
 
-// 	uint8_t type = eval.val[0];
-// 	/* should be 0x02 ECOMMUNITY_ROUTE_TARGET */
-// 	uint8_t subtype = eval.val[1];
+	if (subtype != ECOMMUNITY_ROUTE_TARGET) {
+		snprintf(buf, buflen, "(Invalid RT, wrong subtype)");
+		return;
+	}
 
-// 	if (is_wildcard) {
-// 		/* For wildcard RTs, we ignore type, sub-type and global-admin
-// 		 * The value is always in the last 4 bytes - even if the value
-// 		 * was 2-bytes (byte 6 / 7) before some masking operation,
-// 		 * byte 4 / 5 will be zeroed out, so we can always just format the
-// 		 * last 4 bytes.
-// 		 */
-// 		uint32_t local_admin_val;
-// 		ptr_get_be32(eval.val + 4, &local_admin_val);
-// 		snprintf(buf, buflen, "*:%u", local_admin_val);
-// 		return;
-// 	}
-
-// 	if(subtype != ECOMMUNITY_ROUTE_TARGET) {
-// 		snprintf(buf, buflen, "(Invalid RT, wrong subtype)");
-// 		return;
-// 	}
-
-// 	switch (type) {
-// 	case ECOMMUNITY_ENCODE_AS: {
-// 		uint16_t as2;
-// 		ptr_get_be16(eval.val + 2, &as2);
-// 		uint32_t local_admin_val;
-// 		ptr_get_be32(eval.val + 4, &local_admin_val);
-// 		snprintf(buf, buflen, "%u:%u", as2, local_admin_val);
-// 		break;
-// 	}
-
-// 	case ECOMMUNITY_ENCODE_AS4: {
-// 		uint32_t as4;
-// 		ptr_get_be32(eval.val + 2, &as4);
-// 		uint16_t local_admin_val;
-// 		ptr_get_be16(eval.val + 6, &local_admin_val);
-// 		snprintf(buf, buflen, "%u:%u", as4, local_admin_val);
-// 		break;
-// 	}
-
-// 	case ECOMMUNITY_ENCODE_IP: {
-// 		struct in_addr ip;
-// 		memcpy(&ip, eval.val + 2, 4);
-// 		uint16_t local_admin_val;
-// 		ptr_get_be16(eval.val + 6, &local_admin_val);
-// 		snprintfrr(buf, buflen, "%pI4:%u", &ip, local_admin_val);
-// 		break;
-// 	}
-
-// 	default:
-// 		snprintf(buf, buflen, "(Invalid RT, wrong type)");
-// 		break;
-// 	}
-// }
+	/* The ptr_get_beXX convert network byte order / big endian to host byte order */
+	switch (type) {
+	case ECOMMUNITY_ENCODE_AS: {
+		uint16_t as2;
+		uint32_t local_admin_val;
+		ptr_get_be16(eval.val + 2, &as2);
+		ptr_get_be32(eval.val + 4, &local_admin_val);
+		snprintf(buf, buflen, "%u:%u", as2, local_admin_val);
+		break;
+	}
+	case ECOMMUNITY_ENCODE_AS4: {
+		uint32_t as4;
+		uint16_t local_admin_val;
+		ptr_get_be32(eval.val + 2, &as4);
+		ptr_get_be16(eval.val + 6, &local_admin_val);
+		snprintf(buf, buflen, "%u:%u", as4, local_admin_val);
+		break;
+	}
+	case ECOMMUNITY_ENCODE_IP: {
+		struct in_addr ip;
+		uint16_t local_admin_val;
+		memcpy(&ip, eval.val + 2, 4);
+		ptr_get_be16(eval.val + 6, &local_admin_val);
+		snprintfrr(buf, buflen, "%pI4:%u", &ip, local_admin_val);
+		break;
+	}
+	default:
+		snprintf(buf, buflen, "(Invalid RT, wrong type)");
+		break;
+	}
+}
 
 /*
  * Hash key function for fully qualified VRF import route target hashmap node.

@@ -956,8 +956,10 @@ static inline bool bgp_evpn_is_path_local(struct bgp *bgp,
 extern int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1, struct ecommunity *ecom2);
 extern void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, safi_t safi,
 						     struct bgp_path_info *originator, bool add);
-extern void bgp_evpn_format_rt_ecom_val(char* buf, size_t buflen, struct ecommunity_val eval,
-						 bool is_wildcard);
+extern void bgp_evpn_format_wildcard_rt_local_admin(char *buf, size_t buflen,
+						    uint32_t local_admin_nbo);
+extern void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
+					   struct ecommunity_val eval);
 
 extern void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp, bool evpn_autort_rfc8365_compatible);
 
