@@ -952,6 +952,8 @@ static inline bool bgp_evpn_is_path_local(struct bgp *bgp,
 			&& pi->sub_type == BGP_ROUTE_STATIC);
 }
 
+/* Legacy function to compare route target extended communities, DO NOT USE*/
+extern int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1, struct ecommunity *ecom2);
 extern void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, safi_t safi,
 						     struct bgp_path_info *originator, bool add);
 extern void bgp_evpn_format_rt_ecom_val(char* buf, size_t buflen, struct ecommunity_val eval,
