@@ -109,14 +109,15 @@ static void display_evi_irt_node(struct vty *vty, struct evi_irt_node *irt,
 		json_vnis = json_object_new_array();
 	}
 
-	bgp_evpn_format_rt_ecom_val(rt_buf, sizeof(rt_buf), irt->rt, irt->is_wildcard);
+	/* FIXME: Use proper EVPN route target formatting function once evi_irt_node is also refactored */
+	bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), irt->rt);
 
 	if(json) {
 		json_object_string_add(json_rt, "rt", rt_buf);
 	} else {
 		vty_out(vty, "Route-target: %s\n", rt_buf);
 		vty_out(vty,
-			"List of VNIs importing routes with this route-target:\n");
+			"List of EVIs importing routes with this route-target:\n");
 	}
 
 	for (ALL_LIST_ELEMENTS(irt->evis, node, nnode, tmp_evi)) {
