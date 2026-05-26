@@ -1063,6 +1063,13 @@ struct bgp {
 	uint32_t vrf_flags;
 #define BGP_VRF_AUTO                        (1 << 0)
 #define BGP_EVPN_VRF_RD_CFGD                     (1 << 1)
+
+/* Indicates that the L3VNI and generally the VRF should only be used for Type 5 (IP Prefix) routes
+ * when advertising routes
+ * Setting this flag causes:
+ * - L3VNI is not included as "MPLS Label 2" in Type 2 routes
+ * - VRF Export Route Targets are not appended e.g. to advertised Type 2 routes!
+ */
 #define BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY    (1 << 2)
 /* per-VRF toVPN SID */
 #define BGP_VRF_TOVPN_SID_AUTO              (1 << 3)

@@ -8155,14 +8155,16 @@ static void bgp_evpn_evi_link_to_vrf_hash(struct hash_bucket *bucket,
  * Note that this may be called for VRFs that exist in the dataplane (Zebra)
  * but are not user-configured. In this case, we create a VRF and mark it as auto
  * created
- * filter is configured by the user via "vrf <X> vni <Y> prefix-routes-only"
+ * prefix_routes_only is configured by the user via "vrf <X> vni <Y> prefix-routes-only"
  */
 int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 			     struct ethaddr *svi_rmac,
 			     struct ethaddr *vrr_rmac,
 			     struct ipaddr *originator_ip,
-				 /* Technically an int / list of flags, but only one flag exists..*/
-				 int prefix_routes_only,
+				 /* Indicates that the L3VNI and generally the VRF should only be used for
+				  * Type 5 (IP Prefix) routes when advertising routes
+				  */
+				 bool prefix_routes_only,
 			     ifindex_t svi_ifindex,
 			     bool is_anycast_mac)
 {

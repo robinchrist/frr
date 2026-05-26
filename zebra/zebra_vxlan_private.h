@@ -33,7 +33,8 @@ struct zebra_l3vni {
 	/* vrf_id */
 	vrf_id_t vrf_id;
 
-	uint32_t filter;
+	/* Filter flags - currently only ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY */
+	uint32_t filter_flags;
 
 	/* Corresponding Bridge information */
 	vlanid_t vid;

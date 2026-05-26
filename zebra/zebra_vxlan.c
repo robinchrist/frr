@@ -779,7 +779,7 @@ static void zl3vni_print(struct zebra_l3vni *zl3vni, void **ctx)
 		vty_out(vty, "  SVI-If: %s\n", zl3vni_svi_if_name(zl3vni));
 		vty_out(vty, "  State: %s\n", zl3vni_state2str(zl3vni));
 		vty_out(vty, "  VNI Filter: %s\n",
-			CHECK_FLAG(zl3vni->filter, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
+			CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
 				? "prefix-routes-only"
 				: "none");
 		vty_out(vty, "  System MAC: %s\n",
@@ -819,7 +819,7 @@ static void zl3vni_print(struct zebra_l3vni *zl3vni, void **ctx)
 			zl3vni_rmac2str(zl3vni, buf, sizeof(buf)));
 		json_object_string_add(
 			json, "vniFilter",
-			CHECK_FLAG(zl3vni->filter, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
+			CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
 				? "prefix-routes-only"
 				: "none");
 		for (ALL_LIST_ELEMENTS(zl3vni->l2vnis, node, nnode, zevpn)) {
@@ -2399,7 +2399,7 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_putl(s, zl3vni->vni);
 	stream_put(s, &svi_rmac, sizeof(struct ethaddr));
 	stream_put_ipaddr(s, &zl3vni->local_vtep_ip);
-	stream_put(s, &zl3vni->filter, sizeof(int));
+	stream_put(s, &zl3vni->filter_flags, sizeof(int));
 	stream_putl(s, zl3vni->svi_if->ifindex);
 	stream_put(s, &vrr_rmac, sizeof(struct ethaddr));
 	stream_putl(s, is_anycast_mac);
@@ -2411,7 +2411,7 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 		zlog_debug("Send L3VNI ADD %u VRF %s RMAC %pEA VRR %pEA local-ip %pIA filter %s to %s",
 			   zl3vni->vni, vrf_id_to_name(zl3vni_vrf_id(zl3vni)), &svi_rmac, &vrr_rmac,
 			   &zl3vni->local_vtep_ip,
-			   CHECK_FLAG(zl3vni->filter, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY) ? "prefix-routes-only"
+			   CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY) ? "prefix-routes-only"
 									  : "none",
 			   zebra_route_string(client->proto));
 
@@ -2736,7 +2736,7 @@ int is_l3vni_for_prefix_routes_only(vni_t vni)
 	if (!zl3vni)
 		return 0;
 
-	return CHECK_FLAG(zl3vni->filter, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY) ? 1 : 0;
+	return CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY) ? 1 : 0;
 }
 
 /* handle evpn route in vrf table */
@@ -5464,7 +5464,7 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 		 * for prefix routes
 		 */
 		if (filter)
-			SET_FLAG(zl3vni->filter, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY);
+			SET_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY);
 
 		/* associate with vxlan-intf;
 		 * we need to associate with the vxlan-intf first

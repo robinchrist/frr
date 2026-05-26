@@ -3437,7 +3437,8 @@ static int bgp_zebra_process_local_es_evi(ZAPI_CALLBACK_ARGS)
 
 static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 {
-	int filter = 0;
+	/* Filter flags - currently only PREFIX_ROUTES_ONLY */
+	int filter_flags = 0;
 	vni_t l3vni = 0;
 	struct ethaddr svi_rmac, vrr_rmac = {.octet = {0} };
 	struct ipaddr originator_ip;
@@ -3455,7 +3456,9 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 			zlog_err("Unable to read originator ip address from stream");
 			return 0;
 		}
-		stream_get(&filter, s, sizeof(int));
+		stream_get(&filter_flags, s, sizeof(int));
+		bool l3vni_prefix_routes_only = CHECK_FLAG(filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY);
+
 		svi_ifindex = stream_getl(s);
 		stream_get(&vrr_rmac, s, sizeof(struct ethaddr));
 		is_anycast_mac = stream_getl(s);
@@ -3464,14 +3467,14 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 			zlog_debug("Rx L3VNI ADD VRF %s VNI %u Originator-IP %pIA RMAC svi-mac %pEA vrr-mac %pEA filter %s svi-if %u",
 				   vrf_id_to_name(vrf_id), l3vni,
 				   &originator_ip, &svi_rmac, &vrr_rmac,
-				   filter ? "prefix-routes-only" : "none",
+				   l3vni_prefix_routes_only ? "prefix-routes-only" : "none",
 				   svi_ifindex);
 
 		frrtrace(8, frr_bgp, evpn_local_l3vni_add_zrecv, l3vni, vrf_id, &svi_rmac,
-			 &vrr_rmac, filter, &originator_ip, svi_ifindex, is_anycast_mac);
+			 &vrr_rmac, filter_flags, &originator_ip, svi_ifindex, is_anycast_mac);
 
 		bgp_evpn_add_local_l3vni(l3vni, vrf_id, &svi_rmac, &vrr_rmac,
-					 &originator_ip, filter, svi_ifindex,
+					 &originator_ip, l3vni_prefix_routes_only, svi_ifindex,
 					 is_anycast_mac);
 	} else {
 		if (BGP_DEBUG(zebra, ZEBRA))

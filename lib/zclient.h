@@ -857,7 +857,14 @@ static inline const char *zapi_srv6_sid_notify2str(enum zapi_srv6_sid_notify not
 }
 
 /* Zebra EVPN L3VNI flags */
-#define ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY	(1 << 0) /* l3-vni used for prefix routes only */
+
+/* Indicates that the L3VNI and generally the VRF should only be used for Type 5 (IP Prefix) routes
+ * when advertising routes
+ * Setting this flag causes:
+ * - L3VNI is not included as "MPLS Label 2" in Type 2 routes
+ * - VRF Export Route Targets are not appended e.g. to advertised Type 2 routes!
+ */
+#define ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY	(1 << 0)
 
 
 /* Zebra MAC types */

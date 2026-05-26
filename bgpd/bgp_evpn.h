@@ -200,7 +200,7 @@ extern int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni,
 extern int bgp_evpn_add_local_l3vni(vni_t vni, vrf_id_t vrf_id,
 				    struct ethaddr *rmac,
 				    struct ethaddr *vrr_rmac,
-				    struct ipaddr *originator_ip, int filter,
+				    struct ipaddr *originator_ip, bool prefix_routes_only,
 				    ifindex_t svi_ifindex, bool is_anycast_mac);
 extern int bgp_evpn_del_local_l3vni(vni_t vni, vrf_id_t vrf_id);
 extern void bgp_evpn_instance_down(struct bgp *bgp);
