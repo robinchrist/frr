@@ -427,7 +427,7 @@ struct evpn_remote_ip {
 
 static inline int is_vrf_rd_configured(struct bgp *bgp_vrf)
 {
-	return (CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_RD_CFGD));
+	return (CHECK_FLAG(bgp_vrf->vrf_flags, BGP_EVPN_VRF_RD_CFGD));
 }
 
 static inline int bgp_evpn_vrf_rd_matches_existing(struct bgp *bgp_vrf,

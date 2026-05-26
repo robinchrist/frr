@@ -1062,7 +1062,7 @@ struct bgp {
 	/* vrf flags */
 	uint32_t vrf_flags;
 #define BGP_VRF_AUTO                        (1 << 0)
-#define BGP_VRF_RD_CFGD                     (1 << 1)
+#define BGP_EVPN_VRF_RD_CFGD                     (1 << 1)
 #define BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY    (1 << 2)
 /* per-VRF toVPN SID */
 #define BGP_VRF_TOVPN_SID_AUTO              (1 << 3)

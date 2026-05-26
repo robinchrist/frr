@@ -12413,7 +12413,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 {
 	/* import and export route-target info */
 	if (json) {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_RD_CFGD))
+		if (CHECK_FLAG(bgp->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
 			json_object_string_add(json, "rd", bgp->vrf_prd_pretty);
 
 		json_object_boolean_add(json, "defaultOriginateV4",
@@ -12506,7 +12506,7 @@ static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
 			json_object_object_add(json, "routeTargetExport", json_export_rt_list);
 		}
 	} else {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_RD_CFGD))
+		if (CHECK_FLAG(bgp->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
 			vty_out(vty, "RD %s\n", bgp->vrf_prd_pretty);
 
 		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
