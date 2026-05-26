@@ -988,7 +988,11 @@ struct bgp {
 	 */
 	bool advertise_gw_macip;
 
-	/* EVPN enable - advertise local VNIs and their MACs etc. */
+	/* Master EVPN enable flag
+	 * If this flag is set, EVPN is enabled and this BGP Instance is designated as **Master EVPN instance**!
+	 * Typically, the Master EVPN Instance is also used as the underlay VRF for the VXLAN Local Tunnel IPs
+	 * Can only be set on ONE BGP instance!
+	 */
 	bool advertise_all_vni;
 
 	/* draft-ietf-idr-deprecate-as-set-confed-set
