@@ -856,6 +856,10 @@ static inline const char *zapi_srv6_sid_notify2str(enum zapi_srv6_sid_notify not
 	return "UNKNOWN";
 }
 
+/* Zebra EVPN L3VNI flags */
+#define ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY	(1 << 0) /* l3-vni used for prefix routes only */
+
+
 /* Zebra MAC types */
 #define ZEBRA_MACIP_TYPE_STICKY                0x01 /* Sticky MAC*/
 /* Indicates that this MAC IP entry is for an EVPN Default Gateway
