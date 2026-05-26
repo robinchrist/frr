@@ -2361,12 +2361,11 @@ static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 /*
  * Display import RT mapping to VNIs (vty handler)
  */
-static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp,
-				 json_object *json)
+static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp, json_object *json)
 {
 	struct evi_irt_node *irt;
 
-	frr_each (evi_irt_nodes, &bgp->evi_irt_nodes, irt)
+	frr_each (evi_irt_nodes, &bgp->evpn_master_instance_info.evi_irt_nodes, irt)
 		display_evi_irt_node(vty, irt, json);
 }
 
