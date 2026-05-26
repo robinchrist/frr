@@ -1062,20 +1062,12 @@ struct bgp {
 	/* vrf flags */
 	uint32_t vrf_flags;
 #define BGP_VRF_AUTO                        (1 << 0)
-/* Any manual (fully qualified / NOT auto derived) EVPN import route target is configured */
-#define BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD              (1 << 1)
-/* Any manual (fully qualified / NOT auto derived) EVPN export route target is configured */
-#define BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD              (1 << 2)
-/* Automatic EVPN Import RT is explicitly configured */
-#define BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD         (1 << 3)
-/* Automatic EVPN Export RT is explicitly configured */
-#define BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD         (1 << 4)
-#define BGP_VRF_RD_CFGD                     (1 << 5)
-#define BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY    (1 << 6)
+#define BGP_VRF_RD_CFGD                     (1 << 1)
+#define BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY    (1 << 2)
 /* per-VRF toVPN SID */
-#define BGP_VRF_TOVPN_SID_AUTO              (1 << 7)
-#define BGP_VRF_TOVPN_SID_EXPLICIT	    (1 << 8)
-#define BGP_VRF_TOVPN_SID_FUNC_WIDE	    (1 << 9)
+#define BGP_VRF_TOVPN_SID_AUTO              (1 << 3)
+#define BGP_VRF_TOVPN_SID_EXPLICIT	    (1 << 4)
+#define BGP_VRF_TOVPN_SID_FUNC_WIDE	    (1 << 5)
 
 	/* unique ID for auto derivation of RD for this vrf */
 	uint16_t vrf_rd_id;
