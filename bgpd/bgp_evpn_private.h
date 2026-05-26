@@ -12,7 +12,11 @@
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_ecommunity.h"
 
-#define RT_ADDRSTRLEN 28
+/* Maximum length of a formatted EVPN Route Target
+ * Worst case route target: IPv4 + 2-byte local admin, e.g. 255.255.255.255:65535 
+ * -> 15 (IPv4) + 1 (colon) + 5 (max uint16) + null terminator = 22
+ */
+#define BGP_EVPN_RT_STR_LEN 22
 
 /* EVPN prefix lengths. This represents the sizeof struct evpn_addr
  * in bits  */

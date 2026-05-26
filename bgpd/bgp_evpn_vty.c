@@ -102,7 +102,7 @@ static void display_evi_irt_node(struct vty *vty, struct evi_irt_node *irt,
 	struct bgp_evpn_evi *tmp_evi;
 	json_object *json_rt = NULL;
 	json_object *json_vnis = NULL;
-	char rt_buf[RT_ADDRSTRLEN];
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
 	if (json) {
 		json_rt = json_object_new_object();
@@ -2352,7 +2352,7 @@ static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 {
 	struct vrf_fq_irt_node *fq_irt;
 	struct vrf_wildcard_irt_node *wildcard_irt;
-	char rt_buf[RT_ADDRSTRLEN];
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
 	frr_each (vrf_fq_irt_nodes,
 		  &bgp_evpn->evpn_master_instance_info.vrf_fq_irt_nodes, fq_irt) {
