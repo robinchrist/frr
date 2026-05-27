@@ -694,18 +694,41 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	}
 }
 
+static void bgp_evpn_format_wildcard_rt(char *buf, size_t buflen,
+					uint32_t local_admin)
+{
+	snprintf(buf, buflen, "*:%u", local_admin);
+}
+
+static void bgp_evpn_format_as2_rt(char *buf, size_t buflen,
+				   uint16_t as, uint32_t local_admin)
+{
+	snprintf(buf, buflen, "%u:%u", as, local_admin);
+}
+
+static void bgp_evpn_format_ip4_rt(char *buf, size_t buflen,
+				   struct in_addr ip, uint16_t local_admin)
+{
+	snprintfrr(buf, buflen, "%pI4:%u", &ip, local_admin);
+}
+
+static void bgp_evpn_format_as4_rt(char *buf, size_t buflen,
+				   uint32_t as, uint16_t local_admin)
+{
+	snprintf(buf, buflen, "%u:%u", as, local_admin);
+}
+
 /* For displaying irt nodes */
 void bgp_evpn_format_wildcard_rt_local_admin(char *buf, size_t buflen,
 					     uint32_t local_admin_nbo)
 {
-	snprintf(buf, buflen, "*:%u", ntohl(local_admin_nbo));
+	bgp_evpn_format_wildcard_rt(buf, buflen, ntohl(local_admin_nbo));
 }
 
 /* For displaying irt nodes */
 void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 				    struct ecommunity_val eval)
 {
-	uint8_t type = eval.val[0];
 	uint8_t subtype = eval.val[1];
 
 	if (subtype != ECOMMUNITY_ROUTE_TARGET) {
@@ -714,13 +737,13 @@ void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 	}
 
 	/* The ptr_get_beXX convert network byte order / big endian to host byte order */
-	switch (type) {
+	switch (eval.val[0]) {
 	case ECOMMUNITY_ENCODE_AS: {
 		uint16_t as2;
 		uint32_t local_admin_val;
 		ptr_get_be16(eval.val + 2, &as2);
 		ptr_get_be32(eval.val + 4, &local_admin_val);
-		snprintf(buf, buflen, "%u:%u", as2, local_admin_val);
+		bgp_evpn_format_as2_rt(buf, buflen, as2, local_admin_val);
 		break;
 	}
 	case ECOMMUNITY_ENCODE_AS4: {
@@ -728,7 +751,7 @@ void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 		uint16_t local_admin_val;
 		ptr_get_be32(eval.val + 2, &as4);
 		ptr_get_be16(eval.val + 6, &local_admin_val);
-		snprintf(buf, buflen, "%u:%u", as4, local_admin_val);
+		bgp_evpn_format_as4_rt(buf, buflen, as4, local_admin_val);
 		break;
 	}
 	case ECOMMUNITY_ENCODE_IP: {
@@ -736,11 +759,40 @@ void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 		uint16_t local_admin_val;
 		memcpy(&ip, eval.val + 2, 4);
 		ptr_get_be16(eval.val + 6, &local_admin_val);
-		snprintfrr(buf, buflen, "%pI4:%u", &ip, local_admin_val);
+		bgp_evpn_format_ip4_rt(buf, buflen, ip, local_admin_val);
 		break;
 	}
 	default:
 		snprintf(buf, buflen, "(Invalid RT, wrong type)");
+		break;
+	}
+}
+
+void bgp_evpn_format_cfgd_rt(char *buf, size_t buflen,
+			      const struct bgp_evpn_cfgd_rt *cfgd_rt)
+{
+	switch (cfgd_rt->type) {
+	case BGP_EVPN_CFGD_RT_TYPE_WILDCARD:
+		bgp_evpn_format_wildcard_rt(buf, buflen,
+					    cfgd_rt->payload.wildcard_rt.local_admin);
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_AS2:
+		bgp_evpn_format_as2_rt(buf, buflen,
+				       cfgd_rt->payload.as2_rt.as,
+				       cfgd_rt->payload.as2_rt.local_admin);
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_IP4:
+		bgp_evpn_format_ip4_rt(buf, buflen,
+				       cfgd_rt->payload.ip4_rt.ip,
+				       cfgd_rt->payload.ip4_rt.local_admin);
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_AS4:
+		bgp_evpn_format_as4_rt(buf, buflen,
+				       cfgd_rt->payload.as4_rt.as,
+				       cfgd_rt->payload.as4_rt.local_admin);
+		break;
+	default:
+		snprintf(buf, buflen, "(Invalid RT, unknown type)");
 		break;
 	}
 }

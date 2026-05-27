@@ -965,6 +965,8 @@ extern void bgp_evpn_format_wildcard_rt_local_admin(char *buf, size_t buflen,
 						    uint32_t local_admin_nbo);
 extern void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 					   struct ecommunity_val eval);
+extern void bgp_evpn_format_cfgd_rt(char *buf, size_t buflen,
+				    const struct bgp_evpn_cfgd_rt *cfgd_rt);
 
 extern void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp, bool evpn_autort_rfc8365_compatible);
 
