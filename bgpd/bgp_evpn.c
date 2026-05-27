@@ -164,6 +164,70 @@ static void bgp_evpn_cfgd_rt_free(struct bgp_evpn_cfgd_rt *cfgd_rt)
 }
 
 /*
+ * Convert a single-entry ecommunity to a newly allocated bgp_evpn_cfgd_rt.
+ * is_wildcard must be set when the original RT string used '*' as the global
+ * admin (the caller replaces '*' with '0' before parsing, so the ecommunity
+ * itself carries AS=0 and is indistinguishable from a real AS=0 RT).
+ * Returns NULL on any validation failure.
+ */
+struct bgp_evpn_cfgd_rt *bgp_evpn_cfgd_rt_from_ecom(const struct ecommunity *ecom,
+						     bool is_wildcard)
+{
+	/* The ecommunity comes from the VTY, which gets each RT as a separate argument*/
+	if (!ecom || ecom->size != 1 || ecom->unit_size != ECOMMUNITY_SIZE)
+		return NULL;
+
+	uint8_t* ecom_val = ecom->val;
+	const uint8_t type = ecom_val[0];
+	const uint8_t subtype = ecom_val[1];
+
+	if (subtype != ECOMMUNITY_ROUTE_TARGET)
+		return NULL;
+
+	if (is_wildcard) {
+		/* Wildcard parsing uses AS0 -> should always be AS2 type RT */
+		if(type != ECOMMUNITY_ENCODE_AS)
+			return NULL;
+
+		struct bgp_evpn_cfgd_rt *cfgd_rt = bgp_evpn_cfgd_rt_new();
+
+		cfgd_rt->type = BGP_EVPN_CFGD_RT_TYPE_WILDCARD;
+
+		ptr_get_be32(ecom_val + 4, &cfgd_rt->payload.wildcard_rt.local_admin);
+
+		return cfgd_rt;
+	} else {
+		struct bgp_evpn_cfgd_rt *cfgd_rt;
+
+		switch (type) {
+		case ECOMMUNITY_ENCODE_AS: /* 0x00 */
+			cfgd_rt = bgp_evpn_cfgd_rt_new();
+			cfgd_rt->type = BGP_EVPN_CFGD_RT_TYPE_AS2;
+			ptr_get_be16(ecom_val + 2, &cfgd_rt->payload.as2_rt.as);
+			ptr_get_be32(ecom_val + 4, &cfgd_rt->payload.as2_rt.local_admin);
+
+			return cfgd_rt;
+		case ECOMMUNITY_ENCODE_IP: /* 0x01 */
+			cfgd_rt = bgp_evpn_cfgd_rt_new();
+			cfgd_rt->type = BGP_EVPN_CFGD_RT_TYPE_IP4;
+			memcpy(&cfgd_rt->payload.ip4_rt.ip, ecom_val + 2, sizeof(struct in_addr));
+			ptr_get_be16(ecom_val + 6, &cfgd_rt->payload.ip4_rt.local_admin);
+			
+			return cfgd_rt;
+		case ECOMMUNITY_ENCODE_AS4: /* 0x02 */
+			cfgd_rt = bgp_evpn_cfgd_rt_new();
+			cfgd_rt->type = BGP_EVPN_CFGD_RT_TYPE_AS4;
+			ptr_get_be32(ecom_val + 2, &cfgd_rt->payload.as4_rt.as);
+			ptr_get_be16(ecom_val + 6, &cfgd_rt->payload.as4_rt.local_admin);
+
+			return cfgd_rt;
+		default:
+			return NULL;
+		}
+	}
+}
+
+/*
  * Comparison function for user configured route targets bgp_evpn_cfgd_rt_cmp
  * Uses standard convention: returns 0 if equal, < 0 if rt1 < rt2, > 0 if rt1 > rt2
  * Sort order is defined as follows:
@@ -630,13 +694,14 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	}
 }
 
-
+/* For displaying irt nodes */
 void bgp_evpn_format_wildcard_rt_local_admin(char *buf, size_t buflen,
 					     uint32_t local_admin_nbo)
 {
 	snprintf(buf, buflen, "*:%u", ntohl(local_admin_nbo));
 }
 
+/* For displaying irt nodes */
 void bgp_evpn_format_fq_rt_ecom_val(char *buf, size_t buflen,
 				    struct ecommunity_val eval)
 {

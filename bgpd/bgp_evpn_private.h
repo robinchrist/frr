@@ -100,6 +100,7 @@ struct bgp_evpn_cfgd_rt {
 };
 
 extern int bgp_evpn_cfgd_rt_cmp(const struct bgp_evpn_cfgd_rt *rt1, const struct bgp_evpn_cfgd_rt *rt2);
+extern struct bgp_evpn_cfgd_rt *bgp_evpn_cfgd_rt_from_ecom(const struct ecommunity *ecom, bool is_wildcard);
 
 
 DECLARE_SORTLIST_UNIQ(bgp_evpn_vrf_cfgd_rt_slu, struct bgp_evpn_cfgd_rt, slu_item, bgp_evpn_cfgd_rt_cmp);

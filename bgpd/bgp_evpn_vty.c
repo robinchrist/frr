@@ -6644,22 +6644,6 @@ static bool bgp_evpn_rt_matches_existing(struct list *rtl,
 	return false;
 }
 
-/*
- * L3 RT version of above.
- */
-static bool bgp_evpn_vrf_rt_matches_existing(struct evpn_route_target_list_head *rtl,
-					     struct ecommunity *ecomtarget)
-{
-	struct evpn_route_target *l3rt;
-
-	frr_each (evpn_route_target_list, rtl, l3rt) {
-		if (ecommunity_match(l3rt->ecom, ecomtarget))
-			return true;
-	}
-
-	return false;
-}
-
 /* display L3VNI related info for a VRF instance */
 DEFUN (show_bgp_vrf_l3vni_info,
        show_bgp_vrf_l3vni_info_cmd,
@@ -6702,50 +6686,9 @@ DEFUN (show_bgp_vrf_l3vni_info,
 	return CMD_SUCCESS;
 }
 
-static int vrf_add_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import,
-		  bool is_wildcard)
-{
-	/* Do nothing if we already have this route-target */
-	if (is_import) {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD) &&
-		    bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_import_rtl, ecom))
-			return -1;
-
-		bgp_evpn_vrf_configure_import_rt_manual(bgp, ecom, is_wildcard);
-	} else {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD) &&
-		    bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_export_rtl, ecom))
-			return -1;
-
-		bgp_evpn_vrf_configure_export_rt_manual(bgp, ecom);
-	}
-
-	return 0;
-}
-
-static int vrf_del_rt(struct bgp *bgp, struct ecommunity *ecom, bool is_import)
-{
-	/* Verify we already have this route-target */
-	if (is_import) {
-		if (!bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_import_rtl,
-						      ecom))
-			return -1;
-
-		bgp_evpn_vrf_unconfigure_import_rt_manual(bgp, ecom);
-	} else {
-		if (!bgp_evpn_vrf_rt_matches_existing(&bgp->vrf_export_rtl,
-						      ecom))
-			return -1;
-
-		bgp_evpn_vrf_unconfigure_export_rt_manual(bgp, ecom);
-	}
-
-	return 0;
-}
-
-static int vrf_process_rtlist(struct bgp *bgp, struct vty *vty, int argc,
+static int vrf_process_rtlist(struct bgp *bgp_vrf, struct vty *vty, int argc,
 			struct cmd_token **argv, int rt_idx, bool is_add,
-			bool is_import)
+			enum bgp_evpn_rt_direction direction)
 {
 	int ret = CMD_SUCCESS;
 	bool is_wildcard = false;
@@ -6759,6 +6702,8 @@ static int vrf_process_rtlist(struct bgp *bgp, struct vty *vty, int argc,
 		 *
 		 * Let's just convert it to 0 here so we dont have to modify
 		 * the ecommunity parser.
+		 *
+		 * This is so cursed...
 		 */
 		if ((argv[i]->arg)[0] == '*') {
 			(argv[i]->arg)[0] = '0';
@@ -6772,39 +6717,30 @@ static int vrf_process_rtlist(struct bgp *bgp, struct vty *vty, int argc,
 		if (is_wildcard)
 			(argv[i]->arg)[0] = '*';
 
-		if (!ecom) {
-			vty_out(vty, "%% Malformed Route Target list\n");
+		struct bgp_evpn_cfgd_rt* cfgd_rt = bgp_evpn_cfgd_rt_from_ecom(ecom, is_wildcard);
+		if(!cfgd_rt) {
+			vty_out(vty, "%% Malformed Route Target list item '%s'\n", argv[i]->arg);
 			ret = CMD_WARNING;
 			continue;
 		}
 
-		ecommunity_str(ecom);
-
-		if (is_add) {
-			if (vrf_add_rt(bgp, ecom, is_import, is_wildcard) != 0) {
-				vty_out(vty,
-					"%% RT specified already configured for this VRF: %s\n",
-					argv[i]->arg);
-				ecommunity_free(&ecom);
+		if(is_add) {
+			if(bgp_evpn_vrf_configure_rt_manual(bgp_vrf, direction, cfgd_rt) != 0) {
+				vty_out(vty, "%% Route Target '%s' already configured for this VRF\n", argv[i]->arg);
 				ret = CMD_WARNING;
 			}
-
 		} else {
-			if (vrf_del_rt(bgp, ecom, is_import) != 0) {
-				vty_out(vty,
-					"%% RT specified does not match configuration for this VRF: %s\n",
-					argv[i]->arg);
+			if(bgp_evpn_vrf_unconfigure_rt_manual(bgp_vrf, direction, cfgd_rt) != 0) {
+				vty_out(vty, "%% Route Target '%s' does not match configuration for this VRF\n", argv[i]->arg);
 				ret = CMD_WARNING;
 			}
-
-			ecommunity_free(&ecom);
 		}
 	}
 
 	return ret;
 }
 
-/* import/export rt for l3vni-vrf */
+/* Configure EVPN route targets for a VRF instance */
 DEFUN (bgp_evpn_vrf_rt,
        bgp_evpn_vrf_rt_cmd,
        "route-target <both|import|export> RTLIST...",
@@ -6814,22 +6750,20 @@ DEFUN (bgp_evpn_vrf_rt,
        "export\n"
        "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
 {
-	int ret = CMD_SUCCESS;
-	int tmp_ret = CMD_SUCCESS;
-	int rt_type;
+	enum bgp_evpn_rt_direction direction;
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
 	if (!strcmp(argv[1]->arg, "import"))
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
+		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
 	else if (!strcmp(argv[1]->arg, "export"))
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
+		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
 	else if (!strcmp(argv[1]->arg, "both"))
-		rt_type = BGP_EVPN_RT_DIRECTION_BOTH;
+		direction = BGP_EVPN_RT_DIRECTION_BOTH;
 	else {
-		vty_out(vty, "%% Invalid Route Target type\n");
+		vty_out(vty, "%% Invalid Route Target direction\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
@@ -6838,30 +6772,16 @@ DEFUN (bgp_evpn_vrf_rt,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (rt_type != BGP_EVPN_RT_DIRECTION_IMPORT) {
+	if (direction != BGP_EVPN_RT_DIRECTION_IMPORT) {
 		for (int i = 2; i < argc; i++) {
 			if ((argv[i]->arg)[0] == '*') {
-				vty_out(vty,
-					"%% Wildcard '*' only applicable for import\n");
+				vty_out(vty, "%% Wildcard Route Targets '*:...' are only applicable for import\n");
 				return CMD_WARNING_CONFIG_FAILED;
 			}
 		}
 	}
 
-	/* Add/update the import route-target */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 2, true, true);
-
-	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
-		ret = tmp_ret;
-
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_EXPORT)
-		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 2, true, false);
-
-	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
-		ret = tmp_ret;
-
-	return ret;
+	return vrf_process_rtlist(bgp, vty, argc, argv, 2, true, direction);
 }
 
 DEFPY (bgp_evpn_vrf_rt_auto,
