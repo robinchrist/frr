@@ -295,6 +295,101 @@ int bgp_evpn_cfgd_rt_cmp(const struct bgp_evpn_cfgd_rt *rt1, const struct bgp_ev
 	}
 }
 
+int bgp_evpn_effective_wildcard_rt_cmp(const struct bgp_evpn_effective_wildcard_rt *rt1, const struct bgp_evpn_effective_wildcard_rt *rt2) {
+	if(rt1->local_admin_nbo != rt2->local_admin_nbo)
+		/* Sort ascending by local admin */
+		return rt1->local_admin_nbo < rt2->local_admin_nbo ? -1 : 1;
+
+	return 0; /* wildcard RTs are identical if local admin is identical, as there is no global admin field */
+}
+
+int bgp_evpn_effective_fq_rt_cmp(const struct bgp_evpn_effective_fq_rt *rt1, const struct bgp_evpn_effective_fq_rt *rt2) {
+	uint8_t rt1_type = rt1->ecom_val.val[0];
+	uint8_t rt2_type = rt2->ecom_val.val[0];
+
+	/* subtype should always be 0x02...*/
+	uint8_t rt1_subtype = rt1->ecom_val.val[1];
+	uint8_t rt2_subtype = rt2->ecom_val.val[1];
+
+	/* Sort by subtype first, just in case...*/
+	if(rt1_subtype != rt2_subtype)
+		/* Sort by subtype - should not really happen as only 0x02 is valid for EVPN RTs, but just in case */
+		return rt1_subtype < rt2_subtype ? -1 : 1;
+
+	if(rt1_type != rt2_type)
+		/* Sort AS before IP4 before AS4 ecom type */
+		return rt1_type < rt2_type ? -1 : 1;
+
+	switch(rt1_type) {
+		case ECOMMUNITY_ENCODE_AS: { /* 0x00 */
+			uint16_t rt1_as;
+			uint16_t rt2_as;
+			ptr_get_be16(rt1->ecom_val.val + 2, &rt1_as);
+			ptr_get_be16(rt2->ecom_val.val + 2, &rt2_as);
+
+			if(rt1_as != rt2_as)
+				/* Sort ascending by AS number */
+				return rt1_as < rt2_as ? -1 : 1;
+
+			uint32_t rt1_local_admin;
+			uint32_t rt2_local_admin;
+			ptr_get_be32(rt1->ecom_val.val + 4, &rt1_local_admin);
+			ptr_get_be32(rt2->ecom_val.val + 4, &rt2_local_admin);
+
+			if(rt1_local_admin != rt2_local_admin)
+				/* Then sort ascending by local admin */
+				return rt1_local_admin < rt2_local_admin ? -1 : 1;
+
+			/* identical */
+			return 0;
+		}
+		case ECOMMUNITY_ENCODE_IP: {/* 0x01 */
+
+			/* IP4 RTs are sorted by IP address first (ascending), then by local admin (ascending) */
+			int ip_cmp = memcmp(rt1->ecom_val.val + 2, rt2->ecom_val.val + 2, sizeof(struct in_addr));
+			if(ip_cmp != 0) {
+				return ip_cmp;
+			}
+
+			uint16_t rt1_local_admin;
+			uint16_t rt2_local_admin;
+			ptr_get_be16(rt1->ecom_val.val + 6, &rt1_local_admin);
+			ptr_get_be16(rt2->ecom_val.val + 6, &rt2_local_admin);
+			if(rt1_local_admin != rt2_local_admin)
+				/* Then sort ascending by local admin */
+				return rt1_local_admin < rt2_local_admin ? -1 : 1;
+			
+
+			return 0;
+		}
+		case ECOMMUNITY_ENCODE_AS4: { /* 0x02 */
+			uint32_t rt1_as;
+			uint32_t rt2_as;
+			ptr_get_be32(rt1->ecom_val.val + 2, &rt1_as);
+			ptr_get_be32(rt2->ecom_val.val + 2, &rt2_as);
+
+			if(rt1_as != rt2_as)
+				/* Sort ascending by AS number */
+				return rt1_as < rt2_as ? -1 : 1;
+
+			uint16_t rt1_local_admin;
+			uint16_t rt2_local_admin;
+			ptr_get_be16(rt1->ecom_val.val + 4, &rt1_local_admin);
+			ptr_get_be16(rt2->ecom_val.val + 4, &rt2_local_admin);
+
+			if(rt1_local_admin != rt2_local_admin)
+				/* Then sort ascending by local admin */
+				return rt1_local_admin < rt2_local_admin ? -1 : 1;
+
+			/* identical */
+			return 0;
+		}
+		default:
+			/* Unknown - should not happen! Still try to get away with a somehow sensible fallback */
+			return memcmp(&rt1->ecom_val.val, &rt2->ecom_val.val, sizeof(rt1->ecom_val.val));
+	}
+}
+
 /* init wrapper struct */
 static struct bgp_evpn_vrf_rt_config* bgp_evpn_vrf_rt_config_new(void) {
 
