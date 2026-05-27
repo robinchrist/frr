@@ -3686,7 +3686,7 @@ static void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set)
 	}
 }
 
-static void write_vni_config(struct vty *vty, struct bgp_evpn_evi *evi)
+static void bgp_evpn_write_evi_config(struct vty *vty, struct bgp_evpn_evi *evi)
 {
 	char *ecom_str;
 	struct listnode *node, *nnode;
@@ -7247,7 +7247,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 		list_sort(vnilist, vni_cmp);
 		for (ALL_LIST_ELEMENTS_RO(vnilist, ln, data))
-			write_vni_config(vty, data);
+			bgp_evpn_write_evi_config(vty, data);
 
 		list_delete(&vnilist);
 	}
