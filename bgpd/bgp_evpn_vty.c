@@ -6791,7 +6791,8 @@ DEFPY (bgp_evpn_vrf_rt_auto,
        "import and export\n"
        "import\n"
        "export\n"
-       "Automatically derive route target\n")
+       "Automatically derive route target\n"
+	   "Explicitly disable automatic route target derivation\n")
 {
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 	enum bgp_evpn_rt_direction direction;
