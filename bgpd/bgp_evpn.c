@@ -1201,6 +1201,9 @@ static void bgp_evpn_evi_form_auto_rt(struct bgp *bgp, vni_t vni, struct list *r
  */
 void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
 {
+	if(bgp_get_evpn_master_instance() == NULL)
+		return; /* EVPN not even activated? Why are we even being called? */
+
 	/* Before we can update / regenerate the effective RTs, we need to perform the teardown
 	 * which uses the effective RTs to determine which routes must be deleted
 	 */
