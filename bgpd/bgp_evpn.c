@@ -177,7 +177,7 @@ struct bgp_evpn_cfgd_rt *bgp_evpn_cfgd_rt_from_ecom(const struct ecommunity *eco
 	if (!ecom || ecom->size != 1 || ecom->unit_size != ECOMMUNITY_SIZE)
 		return NULL;
 
-	uint8_t* ecom_val = ecom->val;
+	const uint8_t* ecom_val = ecom->val;
 	const uint8_t type = ecom_val[0];
 	const uint8_t subtype = ecom_val[1];
 
