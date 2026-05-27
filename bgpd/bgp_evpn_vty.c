@@ -6767,7 +6767,7 @@ DEFUN (bgp_evpn_vrf_rt,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (strmatch(argv[2]->arg, "auto")) {
+	if (!strcmp(argv[2]->arg, "auto")) {
 		vty_out(vty, "%% `auto` cannot be configured via list\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
@@ -6799,11 +6799,11 @@ DEFPY (bgp_evpn_vrf_rt_auto,
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (strmatch(type, "import"))
+	if (!strcmp(type, "import"))
 		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (strmatch(type, "export"))
+	else if (!strcmp(type, "export"))
 		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (strmatch(type, "both"))
+	else if (!strcmp(type, "both"))
 		direction = BGP_EVPN_RT_DIRECTION_BOTH;
 	else {
 		vty_out(vty, "%% Invalid Route Target direction\n");
@@ -6851,7 +6851,7 @@ DEFUN (no_bgp_evpn_vrf_rt,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (strmatch(argv[3]->arg, "auto")) {
+	if (!strcmp(argv[3]->arg, "auto")) {
 		vty_out(vty, "%% `auto` cannot be unconfigured via list\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
@@ -6868,6 +6868,7 @@ DEFUN (no_bgp_evpn_vrf_rt,
 	return vrf_process_rtlist(bgp, vty, argc, argv, 2, false, direction);
 }
 
+/* No extra disable token for now? */
 DEFPY (no_bgp_evpn_vrf_rt_auto,
        no_bgp_evpn_vrf_rt_auto_cmd,
        "no route-target <both|import|export>$type auto",
@@ -6878,49 +6879,27 @@ DEFPY (no_bgp_evpn_vrf_rt_auto,
        "export\n"
        "Automatically derive route target\n")
 {
+	enum bgp_evpn_rt_direction direction;
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	int rt_type;
 
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (strmatch(type, "import"))
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (strmatch(type, "export"))
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (strmatch(type, "both"))
-		rt_type = BGP_EVPN_RT_DIRECTION_BOTH;
+	if (!strcmp(argv[1]->arg, "import"))
+		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
+	else if (!strcmp(argv[1]->arg, "export"))
+		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
+	else if (!strcmp(argv[1]->arg, "both"))
+		direction = BGP_EVPN_RT_DIRECTION_BOTH;
 	else {
-		vty_out(vty, "%% Invalid Route Target type\n");
+		vty_out(vty, "%% Invalid Route Target direction\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD)) {
-			vty_out(vty,
-				"%% Import AUTO RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD)) {
-			vty_out(vty,
-				"%% Export AUTO RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD) &&
-		    !CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD)) {
-			vty_out(vty,
-				"%% Import/Export AUTO RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
+	if(bgp_evpn_vrf_configure_auto_rt(bgp, direction, BGP_EVPN_AUTORT_NOT_CFGD) != 0) {
+		vty_out(vty, "%% Auto Route Target effective state did not change!");
+		return CMD_WARNING;
 	}
-
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		bgp_evpn_vrf_unconfigure_import_auto_rt_explicit(bgp);
-
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_EXPORT)
-		bgp_evpn_vrf_unconfigure_export_auto_rt_explicit(bgp);
 
 	return CMD_SUCCESS;
 }
