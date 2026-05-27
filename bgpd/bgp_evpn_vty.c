@@ -7234,14 +7234,17 @@ static int vni_cmp(const void **a, const void **b)
 /*
  * Output EVPN configuration information.
  */
-void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
-				safi_t safi)
+void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, safi_t safi)
 {
-	if (bgp->advertise_all_vni)
+	assert(bgp_vrf != NULL);
+	assert(bgp_vrf->evpn_info != NULL);
+	assert(bgp_vrf->vrf_route_target_config != NULL);
+
+	if (bgp_vrf->advertise_all_vni)
 		vty_out(vty, "  advertise-all-vni\n");
 
-	if (hashcount(bgp->vnihash)) {
-		struct list *vnilist = hash_to_list(bgp->vnihash);
+	if (hashcount(bgp_vrf->vnihash)) {
+		struct list *vnilist = hash_to_list(bgp_vrf->vnihash);
 		struct listnode *ln;
 		struct bgp_evpn_evi *data;
 
@@ -7252,25 +7255,25 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
 		list_delete(&vnilist);
 	}
 
-	if (bgp->evpn_autort_rfc8365_compatible)
+	if (bgp_vrf->evpn_autort_rfc8365_compatible)
 		vty_out(vty, "  autort rfc8365-compatible\n");
 
-	if (bgp->advertise_gw_macip)
+	if (bgp_vrf->advertise_gw_macip)
 		vty_out(vty, "  advertise-default-gw\n");
 
-	if (bgp->evpn_info->advertise_svi_macip)
+	if (bgp_vrf->evpn_info->advertise_svi_macip)
 		vty_out(vty, "  advertise-svi-ip\n");
 
-	if (bgp->evpn_info->soo) {
+	if (bgp_vrf->evpn_info->soo) {
 		char *ecom_str;
 
-		ecom_str = ecommunity_ecom2str(bgp->evpn_info->soo,
+		ecom_str = ecommunity_ecom2str(bgp_vrf->evpn_info->soo,
 					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 		vty_out(vty, "  mac-vrf soo %s\n", ecom_str);
 		ecommunity_strfree(&ecom_str);
 	}
 
-	if (bgp->resolve_overlay_index)
+	if (bgp_vrf->resolve_overlay_index)
 		vty_out(vty, "  enable-resolve-overlay-index\n");
 
 	if (bgp_mh_info->evi_per_es_frag != BGP_EVPN_MAX_EVI_PER_ES_FRAG)
@@ -7299,43 +7302,43 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
 			vty_out(vty, "  disable-ead-evi-tx\n");
 	}
 
-	if (!bgp->evpn_info->dup_addr_detect)
+	if (!bgp_vrf->evpn_info->dup_addr_detect)
 		vty_out(vty, "  no dup-addr-detection\n");
 
-	if (bgp->evpn_info->dad_max_moves !=
+	if (bgp_vrf->evpn_info->dad_max_moves !=
 		EVPN_DAD_DEFAULT_MAX_MOVES ||
-		bgp->evpn_info->dad_time != EVPN_DAD_DEFAULT_TIME)
+		bgp_vrf->evpn_info->dad_time != EVPN_DAD_DEFAULT_TIME)
 		vty_out(vty, "  dup-addr-detection max-moves %u time %u\n",
-			bgp->evpn_info->dad_max_moves,
-			bgp->evpn_info->dad_time);
+			bgp_vrf->evpn_info->dad_max_moves,
+			bgp_vrf->evpn_info->dad_time);
 
-	if (bgp->evpn_info->dad_freeze) {
-		if (bgp->evpn_info->dad_freeze_time)
+	if (bgp_vrf->evpn_info->dad_freeze) {
+		if (bgp_vrf->evpn_info->dad_freeze_time)
 			vty_out(vty,
 				"  dup-addr-detection freeze %u\n",
-				bgp->evpn_info->dad_freeze_time);
+				bgp_vrf->evpn_info->dad_freeze_time);
 		else
 			vty_out(vty,
 				"  dup-addr-detection freeze permanent\n");
 	}
 
-	if (bgp->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
+	if (bgp_vrf->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
 		vty_out(vty, "  flooding disable\n");
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 		       BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
-		if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
+		if (bgp_vrf->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv4 unicast route-map %s\n",
-				bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
+				bgp_vrf->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
 		else
 			vty_out(vty,
 				"  advertise ipv4 unicast\n");
-	} else if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	} else if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 		   BGP_L2VPN_EVPN_ADV_IPV4_UNICAST_GW_IP)) {
-		if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
+		if (bgp_vrf->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
 			vty_out(vty,
 				"  advertise ipv4 unicast gateway-ip route-map %s\n",
-				bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
+				bgp_vrf->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
 		else
 			vty_out(vty, "  advertise ipv4 unicast gateway-ip\n");
 	}
@@ -7357,47 +7360,47 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
 		}
 	}
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 		       BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
-		if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
+		if (bgp_vrf->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
 			vty_out(vty,
 				"  advertise ipv6 unicast route-map %s\n",
-				bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
+				bgp_vrf->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
 		else
 			vty_out(vty,
 				"  advertise ipv6 unicast\n");
-	} else if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	} else if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 			      BGP_L2VPN_EVPN_ADV_IPV6_UNICAST_GW_IP)) {
-		if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
+		if (bgp_vrf->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
 			vty_out(vty,
 				"  advertise ipv6 unicast gateway-ip route-map %s\n",
-				bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
+				bgp_vrf->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
 		else
 			vty_out(vty, "  advertise ipv6 unicast gateway-ip\n");
 	}
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 		       BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4))
 		vty_out(vty, "  default-originate ipv4\n");
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	if (CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN],
 		       BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6))
 		vty_out(vty, "  default-originate ipv6\n");
 
-	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
-		if (!bgp->evpn_info->advertise_pip)
+	if (bgp_vrf->inst_type == BGP_INSTANCE_TYPE_VRF) {
+		if (!bgp_vrf->evpn_info->advertise_pip)
 			vty_out(vty, "  no advertise-pip\n");
-		if (bgp->evpn_info->advertise_pip) {
-			if (bgp->evpn_info->pip_ip_static.ipaddr_v4.s_addr != INADDR_ANY) {
+		if (bgp_vrf->evpn_info->advertise_pip) {
+			if (bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr != INADDR_ANY) {
 				vty_out(vty, "  advertise-pip ip %pIA",
-					&bgp->evpn_info->pip_ip_static);
+					&bgp_vrf->evpn_info->pip_ip_static);
 				if (!is_zero_mac(&(
-					    bgp->evpn_info->pip_rmac_static))) {
+					    bgp_vrf->evpn_info->pip_rmac_static))) {
 					char buf[ETHER_ADDR_STRLEN];
 
 					vty_out(vty, " mac %s",
 						prefix_mac2str(
-							&bgp->evpn_info
+							&bgp_vrf->evpn_info
 								 ->pip_rmac,
 							buf, sizeof(buf)));
 				}
@@ -7405,69 +7408,45 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
 			}
 		}
 	}
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
-		vty_out(vty, "  rd %s\n", bgp->vrf_prd_pretty);
+	if (CHECK_FLAG(bgp_vrf->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
+		vty_out(vty, "  rd %s\n", bgp_vrf->vrf_prd_pretty);
 
-	/* import route-target */
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD)) {
-		char *ecom_str;
-		struct evpn_route_target *l3rt;
+	/* route-target config: order is both, import, export; auto before manual */
+	struct bgp_evpn_vrf_rt_config *rtcfg = bgp_vrf->vrf_route_target_config;
 
-		frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
 
-			if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-				continue;
+	if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_AUTO_CFGD)
+		vty_out(vty, "  route-target both auto\n");
+	else if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "  route-target both auto disable\n");
 
-			ecom_str = ecommunity_ecom2str(
-				l3rt->ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-
-			if (l3rt->is_wildcard) {
-				char *vni_str = NULL;
-
-				vni_str = strchr(ecom_str, ':');
-				if (!vni_str) {
-					XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-					continue;
-				}
-
-				/* Move pointer to vni */
-				vni_str += 1;
-
-				vty_out(vty, "  route-target import *:%s\n",
-					vni_str);
-
-			} else
-				vty_out(vty, "  route-target import %s\n",
-					ecom_str);
-
-			XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-		}
-	}
-
-	/* import route-target auto */
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD))
+	if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_AUTO_CFGD)
 		vty_out(vty, "  route-target import auto\n");
+	else if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "  route-target import auto disable\n");
 
-	/* export route-target */
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD)) {
-		char *ecom_str;
-		struct evpn_route_target *l3rt;
+	if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_AUTO_CFGD)
+		vty_out(vty, "  route-target export auto\n");
+	else if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "  route-target export auto disable\n");
 
-		frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
 
-			if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-				continue;
-
-			ecom_str = ecommunity_ecom2str(
-				l3rt->ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-			vty_out(vty, "  route-target export %s\n", ecom_str);
-			XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-		}
+	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_both, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "  route-target both %s\n", rt_buf);
 	}
 
-	/* export route-target auto */
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD))
-		vty_out(vty, "  route-target export auto\n");
+	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_import, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "  route-target import %s\n", rt_buf);
+	}
+
+	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_export, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "  route-target export %s\n", rt_buf);
+	}
 }
 
 void bgp_ethernetvpn_init(void)
