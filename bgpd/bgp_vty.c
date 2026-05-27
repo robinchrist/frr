@@ -21793,7 +21793,7 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	bgp_config_write_table_map(vty, bgp, afi, safi);
 
 	if (safi == SAFI_EVPN)
-		bgp_config_write_evpn_info(vty, bgp, afi, safi);
+		bgp_evpn_config_write_vrf(vty, bgp, afi, safi);
 
 	if (safi == SAFI_FLOWSPEC)
 		bgp_fs_config_write_pbr(vty, bgp, afi, safi);

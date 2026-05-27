@@ -7234,7 +7234,7 @@ static int vni_cmp(const void **a, const void **b)
 /*
  * Output EVPN configuration information.
  */
-void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi,
+void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp, afi_t afi,
 				safi_t safi)
 {
 	if (bgp->advertise_all_vni)
