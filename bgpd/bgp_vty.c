@@ -60,6 +60,7 @@
 #include "bgpd/bgp_bfd.h"
 #include "bgpd/bgp_io.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_private.h"
 #include "bgpd/bgp_evpn_vty.h"
 #include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_addpath.h"
@@ -12408,183 +12409,122 @@ static void print_bgp_vrfs_timers(struct vty *vty, struct bgp *bgp, json_object 
 	}
 }
 
-static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp,
-					 json_object *json)
+/* Why is this even here? This should probably be in bgp_evpn_vty...c*/
+static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp, json_object *json)
 {
+	struct bgp_evpn_vrf_rt_config *rtcfg = bgp->vrf_route_target_config;
+	assert(rtcfg != NULL);
+
 	/* import and export route-target info */
 	if (json) {
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
 			json_object_string_add(json, "rd", bgp->vrf_prd_pretty);
 
 		json_object_boolean_add(json, "defaultOriginateV4",
-					CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-						   BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4));
+					CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4));
 
 		json_object_boolean_add(json, "defaultOriginateV6",
-					CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-						   BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6));
+					CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6));
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
 			if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
-				json_object_string_add(json, "advertiseV4UnicastRoutemap",
-						       bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
+				json_object_string_add(json, "advertiseV4UnicastRoutemap", bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
 		}
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
 			if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
-				json_object_string_add(json, "advertiseV6UnicastRoutemap",
-						       bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
+				json_object_string_add(json, "advertiseV6UnicastRoutemap", bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
 		}
 
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD)) {
-			char *ecom_str;
-			struct evpn_route_target *l3rt;
-			json_object *json_import_rt_list = NULL;
-
-			json_import_rt_list = json_object_new_array();
-			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
-				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-					continue;
-
-				ecom_str = ecommunity_ecom2str(l3rt->ecom,
-							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-
-				if (l3rt->is_wildcard) {
-					char *vni_str = NULL;
-					char rt_str[32];
-
-					vni_str = strchr(ecom_str, ':');
-					if (!vni_str) {
-						XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-						continue;
-					}
-
-					/* Move pointer to vni */
-					vni_str += 1;
-
-					snprintf(rt_str, sizeof(rt_str), "*:%s", vni_str);
-					json_object_array_add(json_import_rt_list,
-							      json_object_new_string(rt_str));
-				} else
-					json_object_array_add(json_import_rt_list,
-							      json_object_new_string(ecom_str));
-
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-			/* import route-target auto */
-			if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD)) {
-				json_object_array_add(json_import_rt_list,
-						      json_object_new_string("auto"));
-			}
-			json_object_object_add(json, "routeTargetImport", json_import_rt_list);
-		}
-
-		/* export route-target */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD)) {
-			char *ecom_str;
-			struct evpn_route_target *l3rt;
-			json_object *json_export_rt_list = NULL;
-
-			json_export_rt_list = json_object_new_array();
-			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
-				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-					continue;
-
-				ecom_str = ecommunity_ecom2str(l3rt->ecom,
-							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-				json_object_array_add(json_export_rt_list,
-						      json_object_new_string(ecom_str));
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-			/* export route-target auto */
-			if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD)) {
-				json_object_array_add(json_export_rt_list,
-						      json_object_new_string("auto"));
-			}
-			json_object_object_add(json, "routeTargetExport", json_export_rt_list);
-		}
 	} else {
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_EVPN_VRF_RD_CFGD))
 			vty_out(vty, "RD %s\n", bgp->vrf_prd_pretty);
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4))
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4))
 			vty_out(vty, "  default-originate ipv4\n");
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6))
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6))
 			vty_out(vty, "  default-originate ipv6\n");
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
 			if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
-				vty_out(vty, "  advertise ipv4 unicast route-map %s\n",
-					bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
+				vty_out(vty, "  advertise ipv4 unicast route-map %s\n", bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
 		}
 
-		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
-			       BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
 			if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
-				vty_out(vty, "  advertise ipv6 unicast route-map %s\n",
-					bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
+				vty_out(vty, "  advertise ipv6 unicast route-map %s\n", bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
 		}
 
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD)) {
-			char *ecom_str;
-			struct evpn_route_target *l3rt;
+		if(bgp->vrf_route_target_config->autort_cfgd_both == BGP_EVPN_AUTORT_AUTO_CFGD)
+			vty_out(vty, "  route-target both auto\n");
+		if(bgp->vrf_route_target_config->autort_cfgd_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
+			vty_out(vty, "  route-target both auto disable\n");
 
-			vty_out(vty, "Route Target Import\n");
-			frr_each (evpn_route_target_list, &bgp->vrf_import_rtl, l3rt) {
-				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-					continue;
+		if(bgp->vrf_route_target_config->autort_cfgd_import == BGP_EVPN_AUTORT_AUTO_CFGD)
+			vty_out(vty, "  route-target import auto\n");
+		if(bgp->vrf_route_target_config->autort_cfgd_import == BGP_EVPN_AUTORT_DISABLE_CFGD)
+			vty_out(vty, "  route-target import auto disable\n");
 
-				ecom_str = ecommunity_ecom2str(l3rt->ecom,
-							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+		if(bgp->vrf_route_target_config->autort_cfgd_export == BGP_EVPN_AUTORT_AUTO_CFGD)
+			vty_out(vty, "  route-target export auto\n");
+		if(bgp->vrf_route_target_config->autort_cfgd_export == BGP_EVPN_AUTORT_DISABLE_CFGD)
+			vty_out(vty, "  route-target export auto disable\n");
+	}
 
-				if (l3rt->is_wildcard) {
-					char *vni_str = NULL;
 
-					vni_str = strchr(ecom_str, ':');
-					if (!vni_str) {
-						XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-						continue;
-					}
 
-					/* Move pointer to vni */
-					vni_str += 1;
+ 	struct bgp_evpn_effective_wildcard_rt *wcard;
+	struct bgp_evpn_effective_fq_rt *fq;
 
-					vty_out(vty, "   *:%s\n", vni_str);
-				} else
-					vty_out(vty, "   %s\n", ecom_str);
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	json_object *json_import_rt_list = NULL;
+	json_object *json_export_rt_list = NULL;
 
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-		}
-		/* import route-target auto */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_AUTO_EXPLICIT_CFGD))
-			vty_out(vty, "   auto\n");
+	if(json) {
+		json_import_rt_list = json_object_new_array();
+		json_export_rt_list = json_object_new_array();
+	}
 
-		/* export route-target info */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD)) {
-			char *ecom_str;
-			struct evpn_route_target *l3rt;
+	if(!json)
+		vty_out(vty, "Effective Import Route Targets:\n");
 
-			vty_out(vty, "Route Target Export\n");
-			frr_each (evpn_route_target_list, &bgp->vrf_export_rtl, l3rt) {
-				if (l3rt->origin != BGP_EVPN_RT_ORIGIN_MANUAL)
-					continue;
+	frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp->effective_wildcard_import_rts, wcard) {
+		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wcard->local_admin_nbo);
 
-				ecom_str = ecommunity_ecom2str(l3rt->ecom,
-							       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-				vty_out(vty, "   %s\n", ecom_str);
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-		}
-		/* export route-target auto */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_AUTO_EXPLICIT_CFGD))
-			vty_out(vty, "   auto\n");
+		if(json)
+			json_object_array_add(json_import_rt_list, json_object_new_string(rt_buf));
+		else
+			vty_out(vty, "   %s\n", rt_buf);
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu, &bgp->effective_fq_import_rts, fq) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+
+		if(json)
+			json_object_array_add(json_import_rt_list, json_object_new_string(rt_buf));
+		else
+			vty_out(vty, "   %s\n", rt_buf);
+	}
+
+	if(json)
+		json_object_object_add(json, "routeTargetImport", json_import_rt_list);
+	
+	if (!json)
+		vty_out(vty, "  Effective Export Route Targets:\n");
+
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,&bgp->effective_fq_export_rts, fq) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+
+		if(json)
+			json_object_array_add(json_export_rt_list, json_object_new_string(rt_buf));
+		else
+			vty_out(vty, "   %s\n", rt_buf);
+	}
+
+	if (json) {
+		json_object_object_add(json, "routeTargetExport", json_export_rt_list);
 	}
 }
 
