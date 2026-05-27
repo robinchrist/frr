@@ -6832,76 +6832,40 @@ DEFUN (no_bgp_evpn_vrf_rt,
        "import and export\n"
        "import\n"
        "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
 {
+	enum bgp_evpn_rt_direction direction;
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	int ret = CMD_SUCCESS;
-	int tmp_ret = CMD_SUCCESS;
-	int rt_type;
 
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (!strcmp(argv[2]->arg, "import"))
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[2]->arg, "export"))
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[2]->arg, "both"))
-		rt_type = BGP_EVPN_RT_DIRECTION_BOTH;
+	if (!strcmp(argv[1]->arg, "import"))
+		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
+	else if (!strcmp(argv[1]->arg, "export"))
+		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
+	else if (!strcmp(argv[1]->arg, "both"))
+		direction = BGP_EVPN_RT_DIRECTION_BOTH;
 	else {
-		vty_out(vty, "%% Invalid Route Target type\n");
+		vty_out(vty, "%% Invalid Route Target direction\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (!strcmp(argv[3]->arg, "auto")) {
+	if (strmatch(argv[3]->arg, "auto")) {
 		vty_out(vty, "%% `auto` cannot be unconfigured via list\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD)) {
-			vty_out(vty,
-				"%% Import RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD)) {
-			vty_out(vty,
-				"%% Export RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
-		if (!CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_IMPORT_RT_MANUAL_CFGD)
-		    && !CHECK_FLAG(bgp->vrf_flags, BGP_VRF_EVPN_EXPORT_RT_MANUAL_CFGD)) {
-			vty_out(vty,
-				"%% Import/Export RT is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	if (rt_type != BGP_EVPN_RT_DIRECTION_IMPORT) {
-		for (int i = 3; i < argc; i++) {
+	if (direction != BGP_EVPN_RT_DIRECTION_IMPORT) {
+		for (int i = 2; i < argc; i++) {
 			if ((argv[i]->arg)[0] == '*') {
-				vty_out(vty,
-					"%% Wildcard '*' only applicable for import\n");
+				vty_out(vty, "%% Wildcard Route Targets '*:...' are only applicable for import\n");
 				return CMD_WARNING_CONFIG_FAILED;
 			}
 		}
 	}
 
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 3, false, true);
-
-	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
-		ret = tmp_ret;
-
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_EXPORT)
-		tmp_ret = vrf_process_rtlist(bgp, vty, argc, argv, 3, false, false);
-
-	if (ret == CMD_SUCCESS && tmp_ret != CMD_SUCCESS)
-		ret = tmp_ret;
-
-	return ret;
+	return vrf_process_rtlist(bgp, vty, argc, argv, 2, false, direction);
 }
 
 DEFPY (no_bgp_evpn_vrf_rt_auto,
