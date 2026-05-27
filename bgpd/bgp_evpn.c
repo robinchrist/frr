@@ -1621,6 +1621,8 @@ void bgp_evpn_vrf_teardown_import(struct bgp *bgp_vrf)
  *
  * Note that this function does NOT optimize the path when an implicit RT is active and the
  * user configures this RT manually - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
  */
 int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 				     enum bgp_evpn_rt_direction direction,
@@ -1635,13 +1637,18 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 	 * With insert hint we could perhaps try to find (check whether exists) and reuse that?
 	 */
 
+	/* Wildcard import route targets are not allowed for export -> deny export and both -> only allow import! */
+	if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD && direction != BGP_EVPN_RT_DIRECTION_IMPORT)  {
+		bgp_evpn_cfgd_rt_free(cfgd_rt);
+		return -1;
+	}
 
 	/* "both" overrides any existing "import" or "export" statements - we don't want those to coexist
 	 * because that just doesn't make sense and can make the config difficult to understand
 	 */
 	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
 		/* Safe the extra "does exist" step, insert right away - if it fails, it was already present */
-		if (bgp_evpn_vrf_cfgd_rt_slu_add(&bgp_vrf->vrf_route_target_config->cfgd_both,cfgd_rt)) {
+		if (bgp_evpn_vrf_cfgd_rt_slu_add(&bgp_vrf->vrf_route_target_config->cfgd_both,cfgd_rt) != NULL) {
 			bgp_evpn_cfgd_rt_free(cfgd_rt);
 			return -1; /* Already present as "both" -> abort */
 		}
@@ -1686,7 +1693,7 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 		/* Skip the extra "does exist" / ..._find step and insert into the relevant list right away
 		 * if a duplicate exists, the _add function will fail and return non-null
 		 */
-		if (bgp_evpn_vrf_cfgd_rt_slu_add(relevant_list, cfgd_rt)) {
+		if (bgp_evpn_vrf_cfgd_rt_slu_add(relevant_list, cfgd_rt) != NULL) {
 			bgp_evpn_cfgd_rt_free(cfgd_rt);
 			return -1; /* RT already exists in relevant list, abort */
 		}
@@ -1714,6 +1721,8 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
  *
  * Note that this function does NOT optimize the path when an explicit RT is active, the user
  * deconfigures it and the implicit RT with the same value kicks in - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
  */
 int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 				       enum bgp_evpn_rt_direction direction,
@@ -1722,6 +1731,10 @@ int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 	bool import_changed = false;
 	bool export_changed = false;
 
+	/* No need to check for "Wildcard only for direction import" here
+	 * The user shouldn't be able to configure wildcard RTs for any other direction than import in the first place
+	 * so it's only in our interest to let them remove anything that shouldn't have been configured anyway
+	 */
 
 	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
 		/* Check if the route target exists in the "both" configuration */
