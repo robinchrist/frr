@@ -8001,7 +8001,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 {
 	struct bgp_evpn_evi *evi;
 
-	evi = XCALLOC(MTYPE_BGP_EVPN, sizeof(struct bgp_evpn_evi));
+	evi = XCALLOC(MTYPE_BGP_EVPN_EVI, sizeof(struct bgp_evpn_evi));
 
 	/* Set values - RD and RT set to defaults. */
 	evi->vni = vni;
@@ -8064,12 +8064,12 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
 	QOBJ_UNREG(evi);
-	XFREE(MTYPE_BGP_EVPN, evi);
+	XFREE(MTYPE_BGP_EVPN_EVI, evi);
 }
 
 static void hash_evpn_free(struct bgp_evpn_evi *evi)
 {
-	XFREE(MTYPE_BGP_EVPN, evi);
+	XFREE(MTYPE_BGP_EVPN_EVI, evi);
 }
 
 /*
