@@ -5612,7 +5612,7 @@ static int bgp_evpn_vrf_check_route_matches_import_rts(struct bgp *bgp_vrf,
 	if (!ecom || !ecom->size)
 		return 0;
 
-	/* For each Route Target attached to the route, see if it matches this VNI.
+	/* For each Route Target attached to the route, see if it matches this VRF.
 	 * If any RT matches, we're done. Route Targets are BGP extended communities.
 	 */
 	for (i = 0; i < ecom->size; i++) {
@@ -5667,45 +5667,35 @@ static int bgp_evpn_evi_check_route_matches_import_rts(struct bgp *bgp, struct b
 	if (!ecom || !ecom->size)
 		return 0;
 
-	/* For each extended community RT, see if it matches this VNI. If any RT
-	 * matches, we're done.
+	/* For each Route Target attached to the route, see if it matches this EVI.
+	 * If any RT matches, we're done. Route Targets are BGP extended communities.
 	 */
 	for (i = 0; i < ecom->size; i++) {
 		uint8_t *pnt;
-		uint8_t type, sub_type;
+		uint8_t sub_type;
 		struct ecommunity_val *eval;
-		struct ecommunity_val eval_tmp;
-		struct evi_irt_node *irt;
 
-		/* Only deal with RTs */
+		/* Only deal with extended communities that are Route Targets */
 		pnt = (ecom->val + (i * ecom->unit_size));
-		eval = (struct ecommunity_val *)(ecom->val
-						 + (i * ecom->unit_size));
-		type = *pnt++;
+		eval = (struct ecommunity_val *)(ecom->val + (i * ecom->unit_size));
+		/*type = **/pnt++;
 		sub_type = *pnt++;
 		if (sub_type != ECOMMUNITY_ROUTE_TARGET)
 			continue;
 
-		/* See if this RT matches specified VNIs import RTs */
-		irt = lookup_evi_irt_node(bgp, eval);
-		if (irt && is_evi_present_in_evi_irt_node(irt, evi))
+		struct evi_mapped_evi tmp_lookup;
+		tmp_lookup.evi = evi;
+
+		/* First check the wildcard route-target because auto import RTs are wildcards
+		 * so we have a better chance succeeeding here!
+		 */
+		struct evi_wildcard_irt_node* wildcard_irt = lookup_evi_wildcard_irt_node_by_ecom_val(*eval);
+		if(wildcard_irt != NULL && evi_mapped_evi_slu_find(&wildcard_irt->evis, &tmp_lookup) != NULL)
 			return 1;
 
-		/* Also check for non-exact match. In this, we mask out the AS
-		 * and
-		 * only check on the local-admin sub-field. This is to
-		 * facilitate using
-		 * VNI as the RT for EBGP peering too.
-		 */
-		irt = NULL;
-		if (type == ECOMMUNITY_ENCODE_AS
-		    || type == ECOMMUNITY_ENCODE_AS4
-		    || type == ECOMMUNITY_ENCODE_IP) {
-			memcpy(&eval_tmp, eval, ecom->unit_size);
-			mask_ecom_global_admin(&eval_tmp, eval);
-			irt = lookup_evi_irt_node(bgp, &eval_tmp);
-		}
-		if (irt && is_evi_present_in_evi_irt_node(irt, evi))
+		/* Now check for regular route targets */
+		struct evi_fq_irt_node* fq_irt = lookup_evi_fq_irt_node_by_ecom_val(*eval);
+		if (fq_irt != NULL && evi_mapped_evi_slu_find(&fq_irt->evis, &tmp_lookup) != NULL)
 			return 1;
 	}
 
