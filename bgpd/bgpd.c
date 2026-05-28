@@ -3758,10 +3758,10 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 				   name, bgp->as_pretty);
 	}
 
-	/* Default the EVPN VRF to the default one */
-	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT && !bgp_master.bgp_evpn) {
+	/* Default the EVPN Master Instance / VRF to the default instance / VRF */
+	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT && !bgp_master.bgp_evpn_mi) {
 		bgp_lock(bgp);
-		bm->bgp_evpn = bgp;
+		bm->bgp_evpn_mi = bgp;
 	}
 
 	bgp_lock(bgp);
@@ -4013,20 +4013,20 @@ struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id)
 }
 
 /* Sets the BGP instance where EVPN is enabled */
-void bgp_set_evpn(struct bgp *bgp)
+void bgp_set_evpn_master_instance(struct bgp *bgp)
 {
-	if (bm->bgp_evpn == bgp)
+	if (bm->bgp_evpn_mi == bgp)
 		return;
 
 	/* First, release the reference count we hold on the instance */
-	if (bm->bgp_evpn)
-		bgp_unlock(bm->bgp_evpn);
+	if (bm->bgp_evpn_mi)
+		bgp_unlock(bm->bgp_evpn_mi);
 
-	bm->bgp_evpn = bgp;
+	bm->bgp_evpn_mi = bgp;
 
 	/* Increase the reference count on this new VRF */
-	if (bm->bgp_evpn)
-		bgp_lock(bm->bgp_evpn);
+	if (bm->bgp_evpn_mi)
+		bgp_lock(bm->bgp_evpn_mi);
 }
 
 /* Returns the BGP EVPN master instance if exists
@@ -4036,7 +4036,7 @@ void bgp_set_evpn(struct bgp *bgp)
  */
 struct bgp *bgp_get_evpn_master_instance(void)
 {
-	return bm->bgp_evpn;
+	return bm->bgp_evpn_mi;
 }
 
 /* handle socket creation or deletion, if necessary
@@ -4609,13 +4609,12 @@ int bgp_delete(struct bgp *bgp)
 
 	bgp_cleanup_routes(bgp);
 
-	if (bm->terminating && bm->bgp_evpn == bgp) {
-		/*
-		 * Clean ES route tables while bgp is still alive,
-		 * then release EVPN VNI bgp_lock references so the
-		 * subsequent bgp_unlock() can drive refcount to
-		 * zero and trigger bgp_free().
-		 */
+	/*
+	 * If the current instance is the EVPN Master Instance / VRF, clean ES route tables
+	 * while bgp is still alive, then release EVPN VNI bgp_lock references so the
+	 * subsequent bgp_unlock() can drive refcount to zero and trigger bgp_free().
+	 */
+	if (bm->terminating && bm->bgp_evpn_mi == bgp) {
 		bgp_evpn_es_cleanup_routes(bgp);
 		bgp_evpn_cleanup(bgp);
 	}
@@ -4664,12 +4663,12 @@ int bgp_delete(struct bgp *bgp)
 	if (vrf && (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating))
 		bgp_vrf_unlink(bgp, vrf);
 
-	/* Update EVPN VRF pointer */
-	if (bm->bgp_evpn == bgp) {
+	/* Update EVPN Master Instance / VRF pointer */
+	if (bm->bgp_evpn_mi == bgp) {
 		if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT)
-			bgp_set_evpn(NULL);
+			bgp_set_evpn_master_instance(NULL);
 		else
-			bgp_set_evpn(bgp_get_default());
+			bgp_set_evpn_master_instance(bgp_get_default());
 	}
 
 	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating) {

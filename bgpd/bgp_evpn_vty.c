@@ -3648,7 +3648,7 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgp_evpn_evi *ev
 static void evpn_set_advertise_all_vni(struct bgp *bgp)
 {
 	bgp->advertise_all_vni = true;
-	bgp_set_evpn(bgp);
+	bgp_set_evpn_master_instance(bgp);
 	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
 }
 
@@ -3659,7 +3659,7 @@ static void evpn_set_advertise_all_vni(struct bgp *bgp)
 static void evpn_unset_advertise_all_vni(struct bgp *bgp)
 {
 	bgp->advertise_all_vni = false;
-	bgp_set_evpn(bgp_get_default());
+	bgp_set_evpn_master_instance(bgp_get_default());
 	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
 	bgp_evpn_cleanup_on_disable(bgp);
 }

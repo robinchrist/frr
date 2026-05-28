@@ -185,8 +185,8 @@ struct bgp_master {
 	/* dynamic mpls label allocation pool */
 	struct labelpool labelpool;
 
-	/* BGP-EVPN VRF ID. Defaults to default VRF (if any) */
-	struct bgp* bgp_evpn;
+	/* BGP-EVPN Master Instance / VRF. Defaults to default VRF (if any) */
+	struct bgp* bgp_evpn_mi;
 
 	/* How big should we set the socket buffer size */
 	uint32_t socket_buffer;
@@ -2713,7 +2713,7 @@ extern struct bgp *bgp_lookup_by_name(const char *name);
 extern struct bgp *bgp_lookup_by_name_filter(const char *name, bool filter_auto);
 extern struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id);
 extern struct bgp *bgp_get_evpn_master_instance(void);
-extern void bgp_set_evpn(struct bgp *bgp);
+extern void bgp_set_evpn_master_instance(struct bgp *bgp);
 extern struct peer *peer_lookup(struct bgp *bgp, union sockunion *su);
 extern struct peer *peer_lookup_by_conf_if(struct bgp *bgp, const char *ifname);
 extern struct peer *peer_lookup_by_hostname(struct bgp *bgp, const char *hostname);
