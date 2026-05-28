@@ -6327,27 +6327,28 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 		    evp->prefix.route_type == BGP_EVPN_IMET_ROUTE ||
 		    evp->prefix.route_type == BGP_EVPN_IP_PREFIX_ROUTE) {
 
-			struct vrf_mapped_bgp_instance_slu_head* target_vrfs = NULL;
-			struct evi_mapped_evi_slu_head* target_evis = NULL;
 
-			/* Determine list of VRFs to import to for
+			/* Determine VRFs to import to for
 			 * Route Type 2 (MAC-IP) and Route Type 5 (IP Prefix)
 			 */
 			if(evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE /* Route Type 2 */
 				|| evp->prefix.route_type == BGP_EVPN_IP_PREFIX_ROUTE /* Route Type 5 */) {
 
-				/* First check the wildcard route-target because auto import RTs are wildcards
-				 * so we have a better chance succeeeding here!
-				 */
+				/* A route can match both a wildcard RT and a regular RT at the same time! */
+				/* Check Wildcard RT first */
 				struct vrf_wildcard_irt_node* vrf_wildcard_irt = lookup_vrf_wildcard_irt_node_by_ecom_val(*eval);
-				if(vrf_wildcard_irt != NULL) {
-					target_vrfs = &vrf_wildcard_irt->vrfs;
-				} else {
-					/* Now check for regular route targets */
-					struct vrf_fq_irt_node* vrf_fq_irt = lookup_vrf_fq_irt_node_by_ecom_val(*eval);
-					if (vrf_fq_irt != NULL)
-						target_vrfs = &vrf_fq_irt->vrfs;
-				}
+				if(vrf_wildcard_irt != NULL)
+					bgp_evpn_install_uninstall_route_in_vrf_list(
+					bgp, afi, safi, evp, pi, &vrf_wildcard_irt->vrfs,
+					import);
+				
+				/* Now check for regular route targets */
+				struct vrf_fq_irt_node* vrf_fq_irt = lookup_vrf_fq_irt_node_by_ecom_val(*eval);
+				if (vrf_fq_irt != NULL)
+					bgp_evpn_install_uninstall_route_in_vrf_list(
+					bgp, afi, safi, evp, pi, &vrf_fq_irt->vrfs,
+					import);
+				
 			}
 
 			/* Determine list of EVIs to import to for
@@ -6357,30 +6358,21 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 				|| evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE /* Route Type 2 */
 				|| evp->prefix.route_type == BGP_EVPN_IMET_ROUTE /* Route Type 3 */) {
 
-				/* First check the wildcard route-target because auto import RTs are wildcards
-				 * so we have a better chance succeeeding here!
-				 */
+				/* A route can match both a wildcard RT and a regular RT at the same time! */
+				/* Check Wildcard RT first */
 				struct evi_wildcard_irt_node* evi_wildcard_irt = lookup_evi_wildcard_irt_node_by_ecom_val(*eval);
-				if(evi_wildcard_irt != NULL) {
-					target_evis = &evi_wildcard_irt->evis;
-				} else {
-					/* Now check for regular route targets */
-					struct evi_fq_irt_node* evi_fq_irt = lookup_evi_fq_irt_node_by_ecom_val(*eval);
-					if (evi_fq_irt != NULL)
-						target_evis = &evi_fq_irt->evis;
-				}
-			}
-
-			if(target_vrfs != NULL) {
-				bgp_evpn_install_uninstall_route_in_vrf_list(
-					bgp, afi, safi, evp, pi, target_vrfs,
+				if(evi_wildcard_irt != NULL)
+					bgp_evpn_install_uninstall_route_in_evi_list(
+					bgp, afi, safi, evp, pi, &evi_wildcard_irt->evis,
 					import);
-			}
-
-			if(target_evis != NULL) {
-				bgp_evpn_install_uninstall_route_in_evi_list(
-					bgp, afi, safi, evp, pi, target_evis,
+				
+				/* Now check for regular route targets */
+				struct evi_fq_irt_node* evi_fq_irt = lookup_evi_fq_irt_node_by_ecom_val(*eval);
+				if (evi_fq_irt != NULL)
+					bgp_evpn_install_uninstall_route_in_evi_list(
+					bgp, afi, safi, evp, pi, &evi_fq_irt->evis,
 					import);
+				
 			}
 		} else if (evp->prefix.route_type == BGP_EVPN_ES_ROUTE) {
 			/* ES routes are imported into the ES table
