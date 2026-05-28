@@ -6195,30 +6195,43 @@ static int bgp_evpn_install_uninstall_route_in_vrf_list(struct bgp *bgp_def, afi
 static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t afi,
 					   safi_t safi, struct prefix_evpn *evp,
 					   struct bgp_path_info *pi,
-					   struct list *evis, int install)
+					   struct evi_mapped_evi_slu_head* evis, int install)
 {
-	struct bgp_evpn_evi *evi;
-	struct listnode *node, *nnode;
+	struct evi_mapped_evi *evi_item;
 
-	for (ALL_LIST_ELEMENTS(evis, node, nnode, evi)) {
+	/* EVIs only import Route Type 1 (AD), Route Type 2 (MAC-IP) or Route Type 3 (IMET), so skip others */
+	if (!(evp->prefix.route_type == BGP_EVPN_AD_ROUTE ||
+			evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE ||
+			evp->prefix.route_type == BGP_EVPN_IMET_ROUTE))
+		/* TODO: Tracing? Would be nice to show the user WHY a route is denied */
+		return 0;
+
+	frr_each(evi_mapped_evi_slu, evis, evi_item) {
 		int ret;
 
-		if (!is_evi_live(evi))
-			continue;
-
 		if (install)
-			ret = bgp_evpn_evi_install_route_entry(bgp, evi, evp, pi);
+			ret = bgp_evpn_evi_install_route_entry(bgp, evi_item->evi, evp, pi);
 		else
-			ret = bgp_evpn_evi_uninstall_route_entry(bgp, evi, evp, pi);
+			ret = bgp_evpn_evi_uninstall_route_entry(bgp, evi_item->evi, evp, pi);
 
 		if (ret) {
+			const char *route_type_str = "Unknown";
+			switch (evp->prefix.route_type) {
+			case BGP_EVPN_AD_ROUTE:
+				route_type_str = "AD";
+				break;
+			case BGP_EVPN_MAC_IP_ROUTE:
+				route_type_str = "MACIP";
+				break;
+			case BGP_EVPN_IMET_ROUTE:
+				route_type_str = "IMET";
+				break;
+			}
 			flog_err(EC_BGP_EVPN_FAIL,
 				 "%u: Failed to %s EVPN %s route in EVI with VNI %u",
 				 bgp->vrf_id, install ? "install" : "uninstall",
-				 evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE
-					 ? "MACIP"
-					 : "IMET",
-				 evi->vni);
+				 route_type_str,
+				 evi_item->evi->vni);
 			return ret;
 		}
 	}
@@ -6315,9 +6328,9 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 		    evp->prefix.route_type == BGP_EVPN_IP_PREFIX_ROUTE) {
 
 			struct vrf_mapped_bgp_instance_slu_head* target_vrfs = NULL;
-			struct list* target_evis = NULL;
+			struct evi_mapped_evi_slu_head* target_evis = NULL;
 
-			/* Determine (list of) VRFs to import to for
+			/* Determine list of VRFs to import to for
 			 * Route Type 2 (MAC-IP) and Route Type 5 (IP Prefix)
 			 */
 			if(evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE /* Route Type 2 */
@@ -6337,7 +6350,7 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 				}
 			}
 
-			/* Determine (list of) EVIs to import to for
+			/* Determine list of EVIs to import to for
 			 * Route Type 1 (AD), 2 (MACIP), 3 (IMET)
 			 */
 			if (evp->prefix.route_type == BGP_EVPN_AD_ROUTE /* Route Type 1 */
@@ -6347,19 +6360,14 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 				/* First check the wildcard route-target because auto import RTs are wildcards
 				 * so we have a better chance succeeeding here!
 				 */
-				struct ecommunity_val eval_tmp;
-				memcpy(&eval_tmp, eval, ecom->unit_size);
-				/* EVI still uses the legacy logic without separate wildcard irt type */
-				mask_ecom_global_admin(&eval_tmp, eval);
-
-				struct evi_irt_node* evi_irt = lookup_evi_irt_node(bgp, &eval_tmp);
-				if (evi_irt != NULL) {
-					target_evis = evi_irt->evis;
+				struct evi_wildcard_irt_node* evi_wildcard_irt = lookup_evi_wildcard_irt_node_by_ecom_val(*eval);
+				if(evi_wildcard_irt != NULL) {
+					target_evis = &evi_wildcard_irt->evis;
 				} else {
 					/* Now check for regular route targets */
-					evi_irt = lookup_evi_irt_node(bgp, eval);
-					if (evi_irt != NULL)
-						target_evis = evi_irt->evis;
+					struct evi_fq_irt_node* evi_fq_irt = lookup_evi_fq_irt_node_by_ecom_val(*eval);
+					if (evi_fq_irt != NULL)
+						target_evis = &evi_fq_irt->evis;
 				}
 			}
 
