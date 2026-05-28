@@ -5648,10 +5648,10 @@ static int bgp_evpn_vrf_check_route_matches_import_rts(struct bgp *bgp_vrf,
 }
 
 /*
- * Given a route entry and a VNI, see if this route entry should be
- * imported into the VNI i.e., RTs match.
+ * Given a route entry and an EVI, check if this route matches
+ * the import route targets for the EVI
  */
-static int is_route_matching_for_vni(struct bgp *bgp, struct bgp_evpn_evi *evi,
+static int bgp_evpn_evi_check_route_matches_import_rts(struct bgp *bgp, struct bgp_evpn_evi *evi,
 				     struct bgp_path_info *pi)
 {
 	struct attr *attr = pi->attr;
@@ -5995,7 +5995,7 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
 		 * Skip install/uninstall if the route entry is not needed to
 		 * be imported into the VNI i.e. RTs dont match
 		 */
-		if (!is_route_matching_for_vni(bgp, t_evi, pi))
+		if (!bgp_evpn_evi_check_route_matches_import_rts(bgp, t_evi, pi))
 			continue;
 
 		ret = bgp_evpn_evi_install_route_entry(bgp, t_evi, evp, pi);
@@ -6101,7 +6101,7 @@ int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *
 					 * entry is not needed to be imported
 					 * into the VNI i.e. RTs dont match
 					 */
-					if (!is_route_matching_for_vni(bgp, evi, pi))
+					if (!bgp_evpn_evi_check_route_matches_import_rts(bgp, evi, pi))
 						continue;
 
 					if (install)
