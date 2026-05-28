@@ -259,7 +259,20 @@ struct bgp_evpn_evi {
 	/* PIM-SM MDT group for BUM flooding */
 	struct in_addr mcast_grp;
 
-	/* Import and Export RTs. */
+	/* Wrapper struct to group EVI route target config (intended state) */
+	struct bgp_evpn_rt_config *evi_rt_config;
+
+	/* Effective import RTs derived from rt_config (wildcard = auto,
+	 * fq = manually configured or auto-generated fully-qualified).
+	 * Effective export RTs are always fully-qualified.
+	 */
+	struct bgp_evpn_effective_wildcard_rt_slu_head effective_wildcard_import_rts;
+	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_import_rts;
+	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
+
+	/* Legacy import/export RT lists — kept during migration, removed once
+	 * all callers use effective_*_rts above.
+	 */
 	struct list *evi_import_rtl;
 	struct list *evi_export_rtl;
 

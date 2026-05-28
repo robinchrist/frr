@@ -1380,54 +1380,6 @@ void bgp_evpn_xxport_delete_ecomm(void *val)
 }
 
 
-// /*
-//  * Ensure that specified VRF is present in the vrf_irt_node corresponding to the
-//  * specified RT, creating the node if it does not exist already.
-//  * bgp_vrf = BGP vrf instance
-//  */
-// static void bgp_evpn_vrf_map_to_vrf_irt_node_by_rt(struct bgp *bgp_vrf, const struct evpn_route_target *l3rt)
-// {
-// 	struct vrf_irt_node *irt;
-
-// 	/* Convert configured route target to ecommunity value */
-// 	irt = lookup_vrf_irt_node(l3rt->rt_val, l3rt->is_wildcard);
-
-// 	if (irt && is_vrf_present_in_vrf_irt_node(irt, bgp_vrf))
-// 		return; /* Already mapped. */
-
-// 	if (!irt)
-// 		irt = vrf_irt_node_new(l3rt->rt_val, l3rt->is_wildcard);
-
-// 	if(!irt)
-// 		/* this should never happen, NULL is only returned if EVPN is not yet active */
-// 		return;
-
-// 	/* Add VRF to the list for this RT. */
-// 	listnode_add(irt->vrfs, bgp_vrf);
-// }
-
-
-// /*
-//  * Unmap specified VRF from specified RT. If there are no other
-//  * VRFs for this RT, then the RT hash is deleted.
-//  * bgp_vrf: BGP VRF specific instance
-//  */
-// static void bgp_evpn_vrf_unmap_from_vrf_irt_node_by_rt(struct bgp *bgp_vrf,
-// 			      const struct evpn_route_target *l3rt)
-// {
-// 	struct vrf_irt_node *irt;
-
-// 	irt = lookup_vrf_irt_node(l3rt->rt_val, l3rt->is_wildcard);
-
-// 	if (!irt)
-// 		return; /* Not mapped */
-
-// 	/* Delete VRF from list for this RT. */
-// 	listnode_delete(irt->vrfs, bgp_vrf);
-
-// 	if (!listnode_head(irt->vrfs))
-// 		vrf_irt_node_free(irt);
-// }
 
 /*
  * Map one RT to specified VNI.
@@ -8011,7 +7963,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 	evi->svi_ifindex = svi_ifindex;
 	evi->vxlan_flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
-	/* Initialize route-target import and export lists */
+	/* Initialize legacy route-target import and export lists */
 	evi->evi_import_rtl = list_new();
 	evi->evi_import_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
@@ -8020,6 +7972,14 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 	evi->evi_export_rtl->cmp =
 		(int (*)(void *, void *))bgp_evpn_route_target_ecom_cmp;
 	evi->evi_export_rtl->del = bgp_evpn_xxport_delete_ecomm;
+
+
+	evi->evi_rt_config = bgp_evpn_rt_config_new();
+	bgp_evpn_effective_wildcard_rt_slu_init(&evi->effective_wildcard_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&evi->effective_fq_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&evi->effective_fq_export_rts);
+
+
 	bf_assign_index(bm->rd_idspace, evi->rd_id);
 	bgp_evpn_evi_derive_rd_rt(bgp, evi);
 
@@ -8056,8 +8016,25 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	bgp_table_unlock(evi->ip_table);
 	bgp_table_unlock(evi->mac_table);
 	bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
+	/* Free legacy RT lists */
 	list_delete(&evi->evi_import_rtl);
 	list_delete(&evi->evi_export_rtl);
+
+	bgp_evpn_rt_config_free(evi->evi_rt_config);
+
+	struct bgp_evpn_effective_wildcard_rt* eff_wildcard_rt;
+	while((eff_wildcard_rt = bgp_evpn_effective_wildcard_rt_slu_pop(&evi->effective_wildcard_import_rts))) {
+		bgp_evpn_effective_wildcard_rt_free(eff_wildcard_rt);
+	}
+	struct bgp_evpn_effective_fq_rt* eff_fq_rt;
+	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_import_rts))) {
+		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
+	}
+	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_export_rts))) {
+		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
+	}
+
+
 	bf_release_index(bm->rd_idspace, evi->rd_id);
 	hash_release(bgp->vni_svi_hash, evi);
 	hash_release(bgp->vnihash, evi);
@@ -9252,30 +9229,31 @@ void bgp_evpn_init(struct bgp *bgp)
 	bgp->l2vnis = list_new();
 	bgp->l2vnis->cmp = vni_list_cmp;
 	bgp->evpn_info = XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
+	assert(bgp->evpn_info);
+
+
 	/* By default Duplicate Address Detection is enabled.
 	 * Max-moves (N) 5, detection time (M) 180
 	 * default action is warning-only
 	 * freeze action permanently freezes address,
 	 * and freeze time (auto-recovery) is disabled.
 	 */
-	if (bgp->evpn_info) {
-		bgp->evpn_info->dup_addr_detect = true;
-		bgp->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
-		bgp->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
-		bgp->evpn_info->dad_freeze = false;
-		bgp->evpn_info->dad_freeze_time = 0;
-		/* Initialize zebra vxlan */
-		bgp_zebra_dup_addr_detection(bgp);
-		/* Enable PIP feature by default for bgp vrf instance */
-		if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
-			struct bgp *bgp_default;
+	bgp->evpn_info->dup_addr_detect = true;
+	bgp->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
+	bgp->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
+	bgp->evpn_info->dad_freeze = false;
+	bgp->evpn_info->dad_freeze_time = 0;
+	/* Initialize zebra vxlan */
+	bgp_zebra_dup_addr_detection(bgp);
+	/* Enable PIP feature by default for bgp vrf instance */
+	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
+		struct bgp *bgp_default;
 
-			bgp->evpn_info->advertise_pip = true;
-			bgp_default = bgp_get_default();
-			if (bgp_default) {
-				SET_IPADDR_V4(&bgp->evpn_info->pip_ip);
-				bgp->evpn_info->pip_ip.ipaddr_v4 = bgp_default->router_id;
-			}
+		bgp->evpn_info->advertise_pip = true;
+		bgp_default = bgp_get_default();
+		if (bgp_default) {
+			SET_IPADDR_V4(&bgp->evpn_info->pip_ip);
+			bgp->evpn_info->pip_ip.ipaddr_v4 = bgp_default->router_id;
 		}
 	}
 

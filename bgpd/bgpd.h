@@ -1025,7 +1025,7 @@ struct bgp {
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
 	/* pointer and not directly embedded due to the messy header inclusion order... */
-	/* Wrapper struct to group VRF route target config (intended state)*/
+	/* Wrapper struct to group VRF route target config (intended state) */
 	struct bgp_evpn_rt_config* vrf_route_target_config;
 
 	/* EVPN route target config derived state, we have separated intended and derived state */
