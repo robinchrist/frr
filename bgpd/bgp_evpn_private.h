@@ -610,12 +610,12 @@ static inline void bgp_evpn_evi_link_to_vrf(struct bgp_evpn_evi *evi)
 	bgp_evpn_es_handle_evi_linked_to_vrf(evi);
 }
 
-static inline int is_vni_configured(struct bgp_evpn_evi *evi)
+static inline int is_vni_configured(const struct bgp_evpn_evi *evi)
 {
 	return (CHECK_FLAG(evi->flags, EVI_FLAG_CFGD));
 }
 
-static inline int is_evi_live(struct bgp_evpn_evi *evi)
+static inline int is_evi_live(const struct bgp_evpn_evi *evi)
 {
 	return (CHECK_FLAG(evi->flags, EVI_FLAG_LIVE));
 }
@@ -630,7 +630,7 @@ static inline int is_l3vni_live(const struct bgp *bgp_vrf)
 	return (bgp_vrf->l3vni && bgp_vrf->l3vni_svi_ifindex);
 }
 
-static inline int is_rd_configured(struct bgp_evpn_evi *evi)
+static inline int is_rd_configured(const struct bgp_evpn_evi *evi)
 {
 	return (CHECK_FLAG(evi->flags, EVI_FLAG_RD_CFGD));
 }
