@@ -32,10 +32,10 @@
 */
 static inline int is_evpn_enabled(void)
 {
-	struct bgp *bgp = NULL;
+	struct bgp *bgp_evpn_mi = NULL;
 
-	bgp = bgp_get_evpn_master_instance();
-	return bgp ? EVPN_ENABLED(bgp) : 0;
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	return bgp_evpn_mi ? EVPN_ENABLED(bgp_evpn_mi) : 0;
 }
 
 /* Indicates whether type-5 routes should be originated without overlay index,
@@ -142,10 +142,10 @@ static inline bool is_pi_family_evpn(struct bgp_path_info *pi)
 
 static inline bool evpn_resolve_overlay_index(void)
 {
-	struct bgp *bgp = NULL;
+	struct bgp *bgp_evpn_mi = NULL;
 
-	bgp = bgp_get_evpn_master_instance();
-	return bgp ? bgp->resolve_overlay_index : false;
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	return bgp_evpn_mi ? bgp_evpn_mi->resolve_overlay_index : false;
 }
 
 extern void bgp_evpn_vrf_upsert_prefix_as_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,

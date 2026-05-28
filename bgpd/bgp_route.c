@@ -580,7 +580,7 @@ int bgp_dest_set_defer_flag(struct bgp_dest *dest, bool delete)
 	if (!set_flag)
 		return -1;
 
-	struct bgp *bgp_evpn = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
 
 	/* Set the flag BGP_NODE_SELECT_DEFER on prefix/dest if route selection
 	 * deferral timer is active. RFC4724 says that restarting BGP node must
@@ -594,8 +594,8 @@ int bgp_dest_set_defer_flag(struct bgp_dest *dest, bool delete)
 	 * mark the route as deferred.
 	 */
 	if (BGP_GR_SELECT_DEFERRAL_TIMER_IS_RUNNING(bgp, afi, safi) ||
-	    (pi_is_imported_from_evpn && bgp_evpn != NULL &&
-	     BGP_GR_SELECT_DEFERRAL_TIMER_IS_RUNNING(bgp_evpn, AFI_L2VPN, SAFI_EVPN))) {
+	    (pi_is_imported_from_evpn && bgp_evpn_mi != NULL &&
+	     BGP_GR_SELECT_DEFERRAL_TIMER_IS_RUNNING(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN))) {
 		if (!CHECK_FLAG(dest->flags, BGP_NODE_SELECT_DEFER))
 			bgp->gr_info[afi][safi].gr_deferred++;
 		SET_FLAG(dest->flags, BGP_NODE_SELECT_DEFER);
@@ -4697,7 +4697,7 @@ void bgp_do_deferred_path_selection(struct bgp *bgp, afi_t afi, safi_t safi)
 		 */
 		bgp_evpn_handle_deferred_bestpath_for_vrfs();
 	} else if (safi == SAFI_UNICAST && (afi == AFI_IP || afi == AFI_IP6)) {
-		struct bgp *bgp_evpn = bgp_get_evpn_master_instance();
+		struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
 
 		if (bgp->vrf_id == VRF_DEFAULT) {
 			/*
@@ -4706,8 +4706,8 @@ void bgp_do_deferred_path_selection(struct bgp *bgp, afi_t afi, safi_t safi)
 			 */
 			bgp_deferred_path_selection(bgp, afi, safi, bgp->rib[afi][safi], cnt, NULL,
 						    false);
-		} else if (!bgp_evpn || !bgp_evpn->gr_info[AFI_L2VPN][SAFI_EVPN].af_enabled ||
-			   bgp_evpn->gr_info[AFI_L2VPN][SAFI_EVPN].route_sync_tier2) {
+		} else if (!bgp_evpn_mi || !bgp_evpn_mi->gr_info[AFI_L2VPN][SAFI_EVPN].af_enabled ||
+			   bgp_evpn_mi->gr_info[AFI_L2VPN][SAFI_EVPN].route_sync_tier2) {
 			/*
 			 * Process the route list for IPv4/IPv6 unicast table
 			 * in non-default VRF.
@@ -4726,14 +4726,14 @@ void bgp_do_deferred_path_selection(struct bgp *bgp, afi_t afi, safi_t safi)
 			bgp_deferred_path_selection(bgp, afi, safi, bgp->rib[afi][safi], cnt, NULL,
 						    false);
 		} else {
-			if (bgp_evpn && BGP_DEBUG(graceful_restart, GRACEFUL_RESTART)) {
+			if (bgp_evpn_mi && BGP_DEBUG(graceful_restart, GRACEFUL_RESTART)) {
 				zlog_debug("%s: Skipped BGP deferred path selection for %s. GR %s started for %s L2VPN EVPN. UPDATE_COMPLETE %s",
 					   bgp->name_pretty, get_afi_safi_str(afi, safi, false),
-					   bgp_evpn->gr_info[AFI_L2VPN][SAFI_EVPN].af_enabled
+					   bgp_evpn_mi->gr_info[AFI_L2VPN][SAFI_EVPN].af_enabled
 						   ? ""
 						   : "NOT",
-					   bgp_evpn->name_pretty,
-					   bgp_evpn->gr_info[AFI_L2VPN][SAFI_EVPN].route_sync_tier2
+					   bgp_evpn_mi->name_pretty,
+					   bgp_evpn_mi->gr_info[AFI_L2VPN][SAFI_EVPN].route_sync_tier2
 						   ? "done"
 						   : "NOT done");
 			}

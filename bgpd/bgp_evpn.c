@@ -6078,6 +6078,7 @@ int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *
 	afi = AFI_L2VPN;
 	safi = SAFI_EVPN;
 
+	/* Why is this not documented anywhere? Why can this be null?? */
 	if (!bgp) {
 		walk_fifo = true;
 		bgp = bgp_get_evpn_master_instance();

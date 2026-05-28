@@ -166,7 +166,7 @@ void sigusr1(void)
 */
 static FRR_NORETURN void bgp_exit(int status)
 {
-	struct bgp *bgp, *bgp_default, *bgp_evpn;
+	struct bgp *bgp, *bgp_default, *bgp_evpn_mi;
 	struct listnode *node, *nnode;
 
 	/* it only makes sense for this to be called on a clean exit */
@@ -177,16 +177,16 @@ static FRR_NORETURN void bgp_exit(int status)
 	bgp_close();
 
 	bgp_default = bgp_get_default();
-	bgp_evpn = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
 
 	/* reverse bgp_master_init */
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (bgp_default == bgp || bgp_evpn == bgp)
+		if (bgp_default == bgp || bgp_evpn_mi == bgp)
 			continue;
 		bgp_delete(bgp);
 	}
-	if (bgp_evpn && bgp_evpn != bgp_default)
-		bgp_delete(bgp_evpn);
+	if (bgp_evpn_mi && bgp_evpn_mi != bgp_default)
+		bgp_delete(bgp_evpn_mi);
 	if (bgp_default)
 		bgp_delete(bgp_default);
 
