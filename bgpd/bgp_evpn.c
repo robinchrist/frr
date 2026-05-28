@@ -395,9 +395,9 @@ static struct bgp_evpn_vrf_rt_config* bgp_evpn_vrf_rt_config_new(void) {
 
 	struct bgp_evpn_vrf_rt_config* config = XCALLOC(MTYPE_BGP_EVPN_VRF_RT_CONFIG, sizeof(struct bgp_evpn_vrf_rt_config));
 
-	bgp_evpn_vrf_cfgd_rt_slu_init(&config->cfgd_both);
-	bgp_evpn_vrf_cfgd_rt_slu_init(&config->cfgd_import);
-	bgp_evpn_vrf_cfgd_rt_slu_init(&config->cfgd_export);
+	bgp_evpn_cfgd_rt_slu_init(&config->cfgd_both);
+	bgp_evpn_cfgd_rt_slu_init(&config->cfgd_import);
+	bgp_evpn_cfgd_rt_slu_init(&config->cfgd_export);
 
 	return config;
 }
@@ -409,22 +409,22 @@ static void bgp_evpn_vrf_rt_config_free(struct bgp_evpn_vrf_rt_config* config) {
 	if (!config)
 		return;
 
-	while ((item = bgp_evpn_vrf_cfgd_rt_slu_pop(&config->cfgd_both)))
+	while ((item = bgp_evpn_cfgd_rt_slu_pop(&config->cfgd_both)))
     	bgp_evpn_cfgd_rt_free(item);
 
-	bgp_evpn_vrf_cfgd_rt_slu_fini(&config->cfgd_both);
+	bgp_evpn_cfgd_rt_slu_fini(&config->cfgd_both);
 
 
-	while ((item = bgp_evpn_vrf_cfgd_rt_slu_pop(&config->cfgd_import)))
+	while ((item = bgp_evpn_cfgd_rt_slu_pop(&config->cfgd_import)))
     	bgp_evpn_cfgd_rt_free(item);
 
-	bgp_evpn_vrf_cfgd_rt_slu_fini(&config->cfgd_import);
+	bgp_evpn_cfgd_rt_slu_fini(&config->cfgd_import);
 
 
-	while ((item = bgp_evpn_vrf_cfgd_rt_slu_pop(&config->cfgd_export)))
+	while ((item = bgp_evpn_cfgd_rt_slu_pop(&config->cfgd_export)))
     	bgp_evpn_cfgd_rt_free(item);
 
-	bgp_evpn_vrf_cfgd_rt_slu_fini(&config->cfgd_export);
+	bgp_evpn_cfgd_rt_slu_fini(&config->cfgd_export);
 
 	XFREE(MTYPE_BGP_EVPN_VRF_RT_CONFIG, config);
 }
@@ -532,7 +532,7 @@ static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool
 
 	/* The relevant autort cfg, either import or export */
 	enum bgp_evpn_autort_cfgd relevant_autort_cfg;
-	struct bgp_evpn_vrf_cfgd_rt_slu_head *relevant_cfgd_rt_list;
+	struct bgp_evpn_cfgd_rt_slu_head *relevant_cfgd_rt_list;
 
 	if(!bgp_vrf)
 		return false; /* shouldn't happen, but be defensive */
@@ -580,7 +580,7 @@ static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool
 
 	/* Now determine whether implicit auto RT generation should kick in */
 	/* Only generate the implicit auto RT if user has not configured ANY import/export (+both because that also affects import/export) RT */
-	if(bgp_evpn_vrf_cfgd_rt_slu_count(&rt_config->cfgd_both) == 0 && bgp_evpn_vrf_cfgd_rt_slu_count(relevant_cfgd_rt_list) == 0)
+	if(bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_both) == 0 && bgp_evpn_cfgd_rt_slu_count(relevant_cfgd_rt_list) == 0)
 		return true;
 
 	return false;
@@ -721,7 +721,7 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf) {
 	/* Now add the user configured RTs */
 
 	/* Begin with the both RTs */
-	frr_each(bgp_evpn_vrf_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
+	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
 		bgp_evpn_vrf_push_effective_rt(
 			cfgd_item,
@@ -731,7 +731,7 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf) {
 	}
 
 	/* Now the import specific RTs */
-	frr_each(bgp_evpn_vrf_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
+	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
 		bgp_evpn_vrf_push_effective_rt(
 			cfgd_item,
@@ -769,7 +769,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	/* Now add the user configured RTs */
 
 	/* Begin with the both RTs */
-	frr_each(bgp_evpn_vrf_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
+	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
 		bgp_evpn_vrf_push_effective_rt(
 			cfgd_item,
@@ -779,7 +779,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	}
 
 	/* Now the import specific RTs */
-	frr_each(bgp_evpn_vrf_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
+	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
 		bgp_evpn_vrf_push_effective_rt(
 			cfgd_item,
@@ -1863,7 +1863,7 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 	 */
 	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
 		/* Safe the extra "does exist" step, insert right away - if it fails, it was already present */
-		if (bgp_evpn_vrf_cfgd_rt_slu_add(&bgp_vrf->vrf_route_target_config->cfgd_both,cfgd_rt) != NULL) {
+		if (bgp_evpn_cfgd_rt_slu_add(&bgp_vrf->vrf_route_target_config->cfgd_both,cfgd_rt) != NULL) {
 			bgp_evpn_cfgd_rt_free(cfgd_rt);
 			return -1; /* Already present as "both" -> abort */
 		}
@@ -1874,22 +1874,22 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 		/* "both" cannot coexist with import or export - delete those if exists */
 		struct bgp_evpn_cfgd_rt * found_rt;
 
-		found_rt = bgp_evpn_vrf_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_rt);
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_rt);
 		if (found_rt) {
 			import_changed = false; /* RT was already in import -> no change -> no need to trigger update */
-			bgp_evpn_vrf_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_import,found_rt);
+			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_import,found_rt);
 			bgp_evpn_cfgd_rt_free(found_rt);
 		}
 
-		found_rt = bgp_evpn_vrf_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_export,cfgd_rt);
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_export,cfgd_rt);
 		if (found_rt) {
 			export_changed = false; /* RT was already in export -> no change -> no need to trigger update */
-			bgp_evpn_vrf_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_export,found_rt);
+			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_export,found_rt);
 			bgp_evpn_cfgd_rt_free(found_rt);
 		}
 	} else {
 		/* Branch for import or export - the logic is pretty much identical, just on different lists */
-		struct bgp_evpn_vrf_cfgd_rt_slu_head* relevant_list;
+		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
 		bool* relevant_changed_flag;
 		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
 			relevant_list = &bgp_vrf->vrf_route_target_config->cfgd_import;
@@ -1900,7 +1900,7 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 		}
 
 		/* Check whether the route target already exists in the "both" list, if yes, abort */
-		if(bgp_evpn_vrf_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_rt)) {
+		if(bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_rt)) {
 			bgp_evpn_cfgd_rt_free(cfgd_rt);
 			return -1; /* RT already exists as "both", abort */
 		}
@@ -1908,7 +1908,7 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 		/* Skip the extra "does exist" / ..._find step and insert into the relevant list right away
 		 * if a duplicate exists, the _add function will fail and return non-null
 		 */
-		if (bgp_evpn_vrf_cfgd_rt_slu_add(relevant_list, cfgd_rt) != NULL) {
+		if (bgp_evpn_cfgd_rt_slu_add(relevant_list, cfgd_rt) != NULL) {
 			bgp_evpn_cfgd_rt_free(cfgd_rt);
 			return -1; /* RT already exists in relevant list, abort */
 		}
@@ -1954,7 +1954,7 @@ int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
 		/* Check if the route target exists in the "both" configuration */
 		struct bgp_evpn_cfgd_rt* found_rt;
-		found_rt = bgp_evpn_vrf_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
 		bgp_evpn_cfgd_rt_free(to_delete);
 
 		if(!found_rt) {
@@ -1962,15 +1962,15 @@ int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 		}
 
 		/* Remove from "both" list */
-		bgp_evpn_vrf_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
+		bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
 		bgp_evpn_cfgd_rt_free(found_rt);
 
 		import_changed = true;
 		export_changed = true;
 	} else {
 		/* Branch for import or export - the logic is pretty much identical, just on different lists */
-		struct bgp_evpn_vrf_cfgd_rt_slu_head* relevant_list;
-		struct bgp_evpn_vrf_cfgd_rt_slu_head* other_list;
+		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
+		struct bgp_evpn_cfgd_rt_slu_head* other_list;
 		bool* relevant_changed_flag;
 
 		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
@@ -1990,25 +1990,25 @@ int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 		 * if yes: split up the "both" statement
 		 */
 		struct bgp_evpn_cfgd_rt* found_rt;
-		found_rt = bgp_evpn_vrf_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
 		if(found_rt) {
 			/* Route-Target to deconfigure is configured as "both" -> Split it up */
 			*relevant_changed_flag = true;
 
 			/* Extract / Remove from "both" list */
-			bgp_evpn_vrf_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
+			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
 			/* And move the node into the other list */
-			bgp_evpn_vrf_cfgd_rt_slu_add(other_list, found_rt);
+			bgp_evpn_cfgd_rt_slu_add(other_list, found_rt);
 		}
 
 		/* Check if RT exists in the relevant list ("both" shouldn't be configured in that case!) */
-		found_rt = bgp_evpn_vrf_cfgd_rt_slu_find(relevant_list, to_delete);
+		found_rt = bgp_evpn_cfgd_rt_slu_find(relevant_list, to_delete);
 		if(found_rt) {
 			/* Route-Target to deconfigure is configured in relevant list */
 			*relevant_changed_flag = true;
 
 			/* Simply delete it */
-			bgp_evpn_vrf_cfgd_rt_slu_del(relevant_list, found_rt);
+			bgp_evpn_cfgd_rt_slu_del(relevant_list, found_rt);
 			bgp_evpn_cfgd_rt_free(found_rt);
 		}
 		bgp_evpn_cfgd_rt_free(to_delete);

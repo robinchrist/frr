@@ -7434,17 +7434,17 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 		vty_out(vty, "  route-target export auto disable\n");
 
 
-	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_both, cfgd_rt) {
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_both, cfgd_rt) {
 		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
 		vty_out(vty, "  route-target both %s\n", rt_buf);
 	}
 
-	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_import, cfgd_rt) {
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_import, cfgd_rt) {
 		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
 		vty_out(vty, "  route-target import %s\n", rt_buf);
 	}
 
-	frr_each (bgp_evpn_vrf_cfgd_rt_slu, &rtcfg->cfgd_export, cfgd_rt) {
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_export, cfgd_rt) {
 		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
 		vty_out(vty, "  route-target export %s\n", rt_buf);
 	}

@@ -83,10 +83,13 @@ struct bgp_evpn_cfgd_as4_rt {
 	uint16_t local_admin;
 };
 
-PREDECL_SORTLIST_UNIQ(bgp_evpn_vrf_cfgd_rt_slu);
+PREDECL_SORTLIST_UNIQ(bgp_evpn_cfgd_rt_slu);
 
 
-/* User configured Route Target */
+/* User configured Route Target, used for both VRF and EVI
+ * If you make changes to this type which are not 100% compatible with
+ * VRF or EVI, consider splitting this into two separate types!
+ */
 struct bgp_evpn_cfgd_rt {
 	enum bgp_evpn_cfgd_rt_type type;
 	union {
@@ -96,14 +99,14 @@ struct bgp_evpn_cfgd_rt {
 		struct bgp_evpn_cfgd_as4_rt as4_rt;
 	} payload;
 
-	struct bgp_evpn_vrf_cfgd_rt_slu_item slu_item;
+	struct bgp_evpn_cfgd_rt_slu_item slu_item;
 };
 
 extern int bgp_evpn_cfgd_rt_cmp(const struct bgp_evpn_cfgd_rt *rt1, const struct bgp_evpn_cfgd_rt *rt2);
 extern struct bgp_evpn_cfgd_rt *bgp_evpn_cfgd_rt_from_ecom(const struct ecommunity *ecom, bool is_wildcard);
 
 
-DECLARE_SORTLIST_UNIQ(bgp_evpn_vrf_cfgd_rt_slu, struct bgp_evpn_cfgd_rt, slu_item, bgp_evpn_cfgd_rt_cmp);
+DECLARE_SORTLIST_UNIQ(bgp_evpn_cfgd_rt_slu, struct bgp_evpn_cfgd_rt, slu_item, bgp_evpn_cfgd_rt_cmp);
 
 
 
@@ -144,16 +147,16 @@ struct bgp_evpn_vrf_rt_config {
 	 * Route Targets configured as route-target both ...
 	 * No wildcard RTs allowed (as export cannot have wildcard RTs)
 	 */
-	struct bgp_evpn_vrf_cfgd_rt_slu_head cfgd_both;
+	struct bgp_evpn_cfgd_rt_slu_head cfgd_both;
 	/*
 	 * Route Targets configured as route-target import ...
 	 */
-	struct bgp_evpn_vrf_cfgd_rt_slu_head cfgd_import;
+	struct bgp_evpn_cfgd_rt_slu_head cfgd_import;
 	/*
 	 * Route Targets configured as route-target export ...
 	 * No wildcard RTs allowed!
 	 */
-	struct bgp_evpn_vrf_cfgd_rt_slu_head cfgd_export;
+	struct bgp_evpn_cfgd_rt_slu_head cfgd_export;
 };
 
 
