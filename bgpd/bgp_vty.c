@@ -12412,7 +12412,7 @@ static void print_bgp_vrfs_timers(struct vty *vty, struct bgp *bgp, json_object 
 /* Why is this even here? This should probably be in bgp_evpn_vty...c*/
 static void print_bgp_vrfs_route_targets(struct vty *vty, struct bgp *bgp, json_object *json)
 {
-	struct bgp_evpn_vrf_rt_config *rtcfg = bgp->vrf_route_target_config;
+	struct bgp_evpn_rt_config *rtcfg = bgp->vrf_route_target_config;
 	assert(rtcfg != NULL);
 
 	/* import and export route-target info */

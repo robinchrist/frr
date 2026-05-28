@@ -1019,7 +1019,7 @@ struct bgp {
 
 	/* pointer and not directly embedded due to the messy header inclusion order... */
 	/* Wrapper struct to group VRF route target config (intended state)*/
-	struct bgp_evpn_vrf_rt_config* vrf_route_target_config;
+	struct bgp_evpn_rt_config* vrf_route_target_config;
 
 	/* EVPN route target config derived state, we have separated intended and derived state */
 	/* Those are the route targets that should actually be used for import and export*/

@@ -131,8 +131,11 @@ enum bgp_evpn_autort_cfgd {
  * local admin value would not compare equal but likely be rendered identically)
  * Configuration routines are expected to handle this and only ever pass us sensible route targets.
  * There can also be overlap (local-admin) between a fully qualified route-target and a wildcard!
+ *
+ * Used for both VRFs and EVIs! If you make changes to this type which are not 100% compatible with
+ * VRF or EVI, consider splitting this into two separate types!
  */
-struct bgp_evpn_vrf_rt_config {
+struct bgp_evpn_rt_config {
 
 	/*
 	 * Auto RT config - consistency is difficult to represent in a data structure, invariants

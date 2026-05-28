@@ -7413,7 +7413,7 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 		vty_out(vty, "  rd %s\n", bgp_vrf->vrf_prd_pretty);
 
 	/* route-target config: order is both, import, export; auto before manual */
-	struct bgp_evpn_vrf_rt_config *rtcfg = bgp_vrf->vrf_route_target_config;
+	struct bgp_evpn_rt_config *rtcfg = bgp_vrf->vrf_route_target_config;
 
 	char rt_buf[BGP_EVPN_RT_STR_LEN];
 	struct bgp_evpn_cfgd_rt *cfgd_rt;

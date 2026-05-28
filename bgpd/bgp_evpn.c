@@ -49,7 +49,7 @@
 DEFINE_QOBJ_TYPE(bgp_evpn_evi);
 DEFINE_QOBJ_TYPE(bgp_evpn_es);
 
-DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_RT_CONFIG, "BGP EVPN VRF Route Target Config");
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_RT_CONFIG, "BGP EVPN Route Target Config");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_INFO, "BGP EVPN instance information");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_CFGD_RT, "BGP EVPN Configured Route Target");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EFFECTIVE_WILDCARD_RT, "BGP EVPN Effective Wildcard Route Target");
@@ -391,9 +391,9 @@ int bgp_evpn_effective_fq_rt_cmp(const struct bgp_evpn_effective_fq_rt *rt1, con
 }
 
 /* init wrapper struct */
-static struct bgp_evpn_vrf_rt_config* bgp_evpn_vrf_rt_config_new(void) {
+static struct bgp_evpn_rt_config* bgp_evpn_rt_config_new(void) {
 
-	struct bgp_evpn_vrf_rt_config* config = XCALLOC(MTYPE_BGP_EVPN_VRF_RT_CONFIG, sizeof(struct bgp_evpn_vrf_rt_config));
+	struct bgp_evpn_rt_config* config = XCALLOC(MTYPE_BGP_EVPN_RT_CONFIG, sizeof(struct bgp_evpn_rt_config));
 
 	bgp_evpn_cfgd_rt_slu_init(&config->cfgd_both);
 	bgp_evpn_cfgd_rt_slu_init(&config->cfgd_import);
@@ -403,7 +403,7 @@ static struct bgp_evpn_vrf_rt_config* bgp_evpn_vrf_rt_config_new(void) {
 }
 
 /* free wrapper struct */
-static void bgp_evpn_vrf_rt_config_free(struct bgp_evpn_vrf_rt_config* config) {
+static void bgp_evpn_rt_config_free(struct bgp_evpn_rt_config* config) {
 	struct bgp_evpn_cfgd_rt* item;
 
 	if (!config)
@@ -426,7 +426,7 @@ static void bgp_evpn_vrf_rt_config_free(struct bgp_evpn_vrf_rt_config* config) {
 
 	bgp_evpn_cfgd_rt_slu_fini(&config->cfgd_export);
 
-	XFREE(MTYPE_BGP_EVPN_VRF_RT_CONFIG, config);
+	XFREE(MTYPE_BGP_EVPN_RT_CONFIG, config);
 }
 
 static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_effective_wildcard_rt_new(uint32_t local_admin_nbo) {
@@ -528,7 +528,7 @@ static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt
 
 static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool is_import) {
 
-	struct bgp_evpn_vrf_rt_config* rt_config;
+	struct bgp_evpn_rt_config* rt_config;
 
 	/* The relevant autort cfg, either import or export */
 	enum bgp_evpn_autort_cfgd relevant_autort_cfg;
@@ -9099,7 +9099,7 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 		XFREE(MTYPE_BGP_EVPN_INFO, bgp->evpn_info);
 	}
 
-	bgp_evpn_vrf_rt_config_free(bgp->vrf_route_target_config);
+	bgp_evpn_rt_config_free(bgp->vrf_route_target_config);
 
 	struct bgp_evpn_effective_wildcard_rt* eff_wildcard_rt;
 	while((eff_wildcard_rt = bgp_evpn_effective_wildcard_rt_slu_pop(&bgp->effective_wildcard_import_rts))) {
@@ -9166,7 +9166,7 @@ void bgp_evpn_init(struct bgp *bgp)
 	/* Default BUM handling is to do head-end replication. */
 	bgp->vxlan_flood_ctrl = VXLAN_FLOOD_HEAD_END_REPL;
 
-	bgp->vrf_route_target_config = bgp_evpn_vrf_rt_config_new();
+	bgp->vrf_route_target_config = bgp_evpn_rt_config_new();
 
 	bgp_evpn_effective_wildcard_rt_slu_init(&bgp->effective_wildcard_import_rts);
 	bgp_evpn_effective_fq_rt_slu_init(&bgp->effective_fq_import_rts);
