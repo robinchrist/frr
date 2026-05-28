@@ -27,6 +27,8 @@ PREDECL_LIST(zebra_l2_vni);
 PREDECL_HASH(evi_irt_nodes);
 PREDECL_HASH(vrf_fq_irt_nodes);
 PREDECL_HASH(vrf_wildcard_irt_nodes);
+PREDECL_HASH(evi_fq_irt_nodes);
+PREDECL_HASH(evi_wildcard_irt_nodes);
 
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_fq_rt_slu);
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_wildcard_rt_slu);
@@ -954,12 +956,17 @@ struct bgp {
 	 * EVPN master instance / VRF
 	 */
 	struct evpn_master_instance_info {
-		/* Hash table of Import RTs to EVIs */
-		struct evi_irt_nodes_head evi_irt_nodes;
-
-		/* Hash table of VRF import RTs to VRFs */
+		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
+		/* Hash table of Fully Qualified VRF import RTs to VRFs */
 		struct vrf_fq_irt_nodes_head vrf_fq_irt_nodes;
+
+		/* Legacy Hash table of Import RTs to EVIs */
+		struct evi_irt_nodes_head evi_irt_nodes;
+		/* Hash table of Wildcard EVI import RTs to EVIs */
+		struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
+		/* Hash table of Fully Qualified EVI import RTs to EVIs */
+		struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
 	} evpn_master_instance_info;
 
 	/* EVI hash table */

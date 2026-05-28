@@ -320,8 +320,13 @@ extern uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt);
 DECLARE_HASH(evi_irt_nodes, struct evi_irt_node, hash_item,
 	     evi_irt_node_hash_cmp, evi_irt_node_hash_key);
 
+
+
 PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
 
+/* Wrapper struct to maintain a sorted unique list of VRFs mapped to something
+ * (something is currently vrf_..._irt_node)
+ */
 struct vrf_mapped_bgp_instance {
 	struct bgp *bgp;
 
@@ -340,7 +345,7 @@ static inline int vrf_mapped_bgp_instance_cmp(const struct vrf_mapped_bgp_instan
 DECLARE_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu, struct vrf_mapped_bgp_instance, slu_item, vrf_mapped_bgp_instance_cmp);
 
 /* Mapping of Import RT to VRFs.
- * The Import RTs of all VRFss are maintained in a hash table with each
+ * The Import RTs of all VRFs are maintained in a hash table with each
  * RT linking to all VRFs that will import routes matching this RT.
  */
 struct vrf_fq_irt_node {
@@ -381,6 +386,72 @@ extern int vrf_wildcard_irt_node_hash_cmp(const struct vrf_wildcard_irt_node *a,
 extern uint32_t vrf_wildcard_irt_node_hash_key(const struct vrf_wildcard_irt_node *irt);
 
 DECLARE_HASH(vrf_wildcard_irt_nodes, struct vrf_wildcard_irt_node, hash_item, vrf_wildcard_irt_node_hash_cmp, vrf_wildcard_irt_node_hash_key);
+
+
+PREDECL_SORTLIST_UNIQ(evi_mapped_evi_slu);
+
+/* Wrapper struct to maintain a sorted unique list of EVIs mapped to something
+ * (something is currently evi_..._irt_node)
+ */
+struct evi_mapped_evi {
+	struct bgp_evpn_evi *evi;
+
+	struct evi_mapped_evi_slu_item slu_item;
+};
+
+static inline int evi_mapped_evi_cmp(const struct evi_mapped_evi *a, const struct evi_mapped_evi *b)
+{
+	/* simply compare pointer values */
+	void* evi_a = (void*)a->evi;
+	void* evi_b = (void*)b->evi;
+	return evi_a > evi_b ? 1 : (evi_a < evi_b ? -1 : 0);
+}
+
+DECLARE_SORTLIST_UNIQ(evi_mapped_evi_slu, struct evi_mapped_evi, slu_item, evi_mapped_evi_cmp);
+
+/* Mapping of Import RT to EVIs.
+ * The Import RTs of all EVIs are maintained in a hash table with each
+ * RT linking to all EVIs that will import routes matching this RT.
+ */
+struct evi_fq_irt_node {
+	/* typesafe hash item */
+	struct evi_fq_irt_nodes_item hash_item;
+
+	/* Key */
+	/* Actual RT value */
+	struct ecommunity_val rt;
+
+	/* Value */
+	/* List of EVIs importing routes matching this RT. */
+	// struct list *evis;
+	struct evi_mapped_evi_slu_head evis;
+};
+
+extern int evi_fq_irt_node_hash_cmp(const struct evi_fq_irt_node *a, const struct evi_fq_irt_node *b);
+extern uint32_t evi_fq_irt_node_hash_key(const struct evi_fq_irt_node *irt);
+
+DECLARE_HASH(evi_fq_irt_nodes, struct evi_fq_irt_node, hash_item, evi_fq_irt_node_hash_cmp, evi_fq_irt_node_hash_key);
+
+
+struct evi_wildcard_irt_node {
+	/* typesafe hash item */
+	struct evi_wildcard_irt_nodes_item hash_item;
+
+	/* Key */
+	/* Actual RT value */
+	uint32_t local_admin_nbo;
+
+	/* Value */
+	/* List of EVIs importing routes matching this RT. */
+	// struct list *evis;
+	struct evi_mapped_evi_slu_head evis;
+};
+
+extern int evi_wildcard_irt_node_hash_cmp(const struct evi_wildcard_irt_node *a, const struct evi_wildcard_irt_node *b);
+extern uint32_t evi_wildcard_irt_node_hash_key(const struct evi_wildcard_irt_node *irt);
+
+DECLARE_HASH(evi_wildcard_irt_nodes, struct evi_wildcard_irt_node, hash_item, evi_wildcard_irt_node_hash_cmp, evi_wildcard_irt_node_hash_key);
+
 
 
 #define EVPN_DAD_DEFAULT_TIME 180 /* secs */

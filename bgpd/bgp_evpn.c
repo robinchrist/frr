@@ -59,6 +59,10 @@ DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_WILDCARD_IRT_NODE, "BGP EVPN VRF Wildcard
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_FQ_IRT_NODE, "BGP EVPN VRF fully qualified Import RT hash table node");
 DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, "BGP EVPN BGP instance to VRF Import RT Node Mapping");
 
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EVI_WILDCARD_IRT_NODE, "BGP EVPN EVI Wildcard Import RT hash table node");
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EVI_FQ_IRT_NODE, "BGP EVPN EVI fully qualified Import RT hash table node");
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_EVI_MAPPED_EVI, "BGP EVPN EVI to EVI Import RT Node Mapping");
+
 /*
  * Static function declarations
  */
@@ -1046,68 +1050,164 @@ static void vrf_wildcard_irt_node_free(struct vrf_wildcard_irt_node *node)
 	XFREE(MTYPE_BGP_EVPN_VRF_WILDCARD_IRT_NODE, node);
 }
 
-// /*
-//  * Create a new vrf import_rt in evpn instance
-//  * May return NULL if EVPN is not yet active - called should not have called
-//  * in this case anyway!
-//  */
-// static struct vrf_irt_node *vrf_irt_node_new(struct ecommunity_val rt, bool is_wildcard)
-// {
-// 	struct bgp *bgp_evpn = NULL;
-// 	struct vrf_irt_node *irt;
 
-// 	bgp_evpn = bgp_get_evpn_master_instance();
-// 	if (!bgp_evpn) {
-// 		flog_err(EC_BGP_NO_DFLT,
-// 			 "vrf import rt new - evpn instance not created yet");
-// 		return NULL;
-// 	}
 
-// 	irt = XCALLOC(MTYPE_BGP_EVPN_VRF_IRT_NODE, sizeof(struct vrf_irt_node));
+/*
+ * Hash key function for fully qualified EVI import route target hashmap node.
+ * Does not hash values, only key (ecommunity value!)
+ */
+uint32_t evi_fq_irt_node_hash_key(const struct evi_fq_irt_node *irt)
+{
+	return jhash(irt->rt.val, ECOMMUNITY_SIZE, 0x46515254);
+}
 
-// 	irt->is_wildcard = is_wildcard;
-// 	irt->rt = rt;
-// 	irt->vrfs = list_new();
+/*
+ * Key Comparison function for fully qualified EVI import route target hashmap node
+ * Does NOT compare values, only key (ecommunity value!)
+ */
+int evi_fq_irt_node_hash_cmp(const struct evi_fq_irt_node *a, const struct evi_fq_irt_node *b)
+{
+	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
+}
 
-// 	/* Add to typesafe hash */
-// 	vrf_irt_nodes_add(&bgp_evpn->vrf_irt_nodes, irt);
+/*
+ * Function to lookup a fully qualified Import RT node - used to map a RT to set of
+ * EVIs importing routes with that RT.
+ */
+static struct evi_fq_irt_node *lookup_evi_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val)
+{
+	struct bgp *bgp_evpn_mi = NULL;
+	struct evi_fq_irt_node tmp;
 
-// 	return irt;
-// }
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(
+			EC_BGP_NO_DFLT,
+			"evi fq import rt lookup - evpn instance not created yet");
+		return NULL;
+	}
 
-// /*
-//  * Free the vrf import rt node
-//  */
-// static void vrf_irt_node_free(struct vrf_irt_node *irt)
-// {
-// 	struct bgp *bgp_evpn = NULL;
+	memset(&tmp, 0, sizeof(tmp));
+	memcpy(&tmp.rt, &rt_val, sizeof(tmp.rt));
 
-// 	bgp_evpn = bgp_get_evpn();
-// 	if (!bgp_evpn) {
-// 		flog_err(EC_BGP_NO_DFLT,
-// 			 "vrf import rt free - evpn instance not created yet");
-// 		return;
-// 	}
+	return evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes, &tmp);
+}
 
-// 	vrf_irt_nodes_del(&bgp_evpn->vrf_irt_nodes, irt);
-// 	list_delete(&irt->vrfs);
-// 	XFREE(MTYPE_BGP_EVPN_VRF_IRT_NODE, irt);
-// }
 
-// /*
-//  * Is specified VRF present on the RT's list of "importing" VRFs?
-//  */
-// static int is_vrf_present_in_vrf_irt_node(struct vrf_irt_node *irt_node, struct bgp *bgp_vrf)
-// {
-// 	struct listnode *node = NULL, *nnode = NULL;
-// 	struct bgp *tmp_bgp_vrf = NULL;
+/*
+ * Hash key function for wildcard EVI import route target hashmap node.
+ * Does not hash values, only key (local_admin value!)
+ */
+uint32_t evi_wildcard_irt_node_hash_key(const struct evi_wildcard_irt_node *irt)
+{
+	return jhash_1word(irt->local_admin_nbo, 0x57435254);
+}
 
-// 	for (ALL_LIST_ELEMENTS(irt_node->vrfs, node, nnode, tmp_bgp_vrf)) {
-// 		if (tmp_bgp_vrf == bgp_vrf)
-// 			return 1;
-// 	}
-// 	return 0;
-// }
+/*
+ * Key Comparison function for wildcard EVI import route target hashmap node
+ * Does NOT compare values, only key (local_admin value!)
+ */
+int evi_wildcard_irt_node_hash_cmp(const struct evi_wildcard_irt_node *a, const struct evi_wildcard_irt_node *b)
+{
+	return memcmp(&a->local_admin_nbo, &b->local_admin_nbo, sizeof(a->local_admin_nbo));
+}
+
+/*
+ * Function to lookup a wildcard qualified Import RT node by route target ecommunity value
+ * will return NULL if route target is not of type AS, AS4 or IP
+ */
+static struct evi_wildcard_irt_node *lookup_evi_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval)
+{
+	struct bgp *bgp_evpn_mi = NULL;
+	struct evi_wildcard_irt_node tmp;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(
+			EC_BGP_NO_DFLT,
+			"evi wildcard import rt lookup - evpn instance not created yet");
+		return NULL;
+	}
+
+	/* Wildcard RTs were only built with AS, AS4 and IP4 support in mind - filter other types! */
+	uint8_t type = eval.val[0];
+	if(!(type == ECOMMUNITY_ENCODE_AS ||
+			type == ECOMMUNITY_ENCODE_AS4 ||
+			type == ECOMMUNITY_ENCODE_IP)) {
+		return NULL;
+	}
+
+	/* Extract local admin value, then perform actual lookup */
+	uint32_t local_admin_val = bgp_evpn_rt_eval_get_local_admin_nbo(eval);
+
+	memset(&tmp, 0, sizeof(tmp));
+	memcpy(&tmp.local_admin_nbo, &local_admin_val, sizeof(tmp.local_admin_nbo));
+
+	return evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes, &tmp);
+}
+
+static struct evi_mapped_evi *evi_mapped_evi_new(struct bgp_evpn_evi *evi)
+{
+	struct evi_mapped_evi *item;
+
+	item = XCALLOC(MTYPE_BGP_EVPN_EVI_MAPPED_EVI, sizeof(*item));
+	item->evi = evi;
+	return item;
+}
+
+static void evi_mapped_evi_free(struct evi_mapped_evi *item)
+{
+	XFREE(MTYPE_BGP_EVPN_EVI_MAPPED_EVI, item);
+}
+
+static struct evi_fq_irt_node *evi_fq_irt_node_new(struct ecommunity_val rt)
+{
+	struct evi_fq_irt_node *node;
+
+	node = XCALLOC(MTYPE_BGP_EVPN_EVI_FQ_IRT_NODE, sizeof(*node));
+	memcpy(&node->rt, &rt, sizeof(node->rt));
+
+	evi_mapped_evi_slu_init(&node->evis);
+
+	return node;
+}
+
+static void evi_fq_irt_node_free(struct evi_fq_irt_node *node)
+{
+	struct evi_mapped_evi *item;
+
+	while ((item = evi_mapped_evi_slu_pop(&node->evis)))
+		evi_mapped_evi_free(item);
+	evi_mapped_evi_slu_fini(&node->evis);
+
+	XFREE(MTYPE_BGP_EVPN_EVI_FQ_IRT_NODE, node);
+}
+
+static struct evi_wildcard_irt_node *evi_wildcard_irt_node_new(uint32_t local_admin_nbo)
+{
+	struct evi_wildcard_irt_node *node;
+
+	node = XCALLOC(MTYPE_BGP_EVPN_EVI_WILDCARD_IRT_NODE, sizeof(*node));
+	node->local_admin_nbo = local_admin_nbo;
+
+	evi_mapped_evi_slu_init(&node->evis);
+
+	return node;
+}
+
+static void evi_wildcard_irt_node_free(struct evi_wildcard_irt_node *node)
+{
+	struct evi_mapped_evi *item;
+
+	while ((item = evi_mapped_evi_slu_pop(&node->evis)))
+		evi_mapped_evi_free(item);
+	evi_mapped_evi_slu_fini(&node->evis);
+
+	XFREE(MTYPE_BGP_EVPN_EVI_WILDCARD_IRT_NODE, node);
+}
+
+
+
 
 /*
  * Hash key function for import route target.
@@ -9036,7 +9136,9 @@ static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 {
 	evi_irt_nodes_init(&bgp->evpn_master_instance_info.evi_irt_nodes);
 	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
-	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);	
+	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
+	evi_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes);
+	evi_fq_irt_nodes_init(&bgp->evpn_master_instance_info.evi_fq_irt_nodes);
 }
 
 static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
@@ -9067,6 +9169,20 @@ static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
 		vrf_fq_irt_node_free(vrf_fq_irt);
 	}
 	vrf_fq_irt_nodes_fini(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
+
+	struct evi_wildcard_irt_node *evi_wildcard_irt;
+	idx = 0;
+	while ((evi_wildcard_irt = evi_wildcard_irt_nodes_pop_all(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes, &idx))) {
+		evi_wildcard_irt_node_free(evi_wildcard_irt);
+	}
+	evi_wildcard_irt_nodes_fini(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes);
+
+	struct evi_fq_irt_node *evi_fq_irt;
+	idx = 0;
+	while ((evi_fq_irt = evi_fq_irt_nodes_pop_all(&bgp->evpn_master_instance_info.evi_fq_irt_nodes, &idx))) {
+		evi_fq_irt_node_free(evi_fq_irt);
+	}
+	evi_fq_irt_nodes_fini(&bgp->evpn_master_instance_info.evi_fq_irt_nodes);
 }
 
 /*
