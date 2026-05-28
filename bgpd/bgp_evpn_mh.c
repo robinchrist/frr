@@ -4418,7 +4418,7 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 	}
 
 	if (bgp_evpn_mi)
-		hash_iterate(bgp_evpn_mi->vnihash,
+		hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash,
 				(void (*)(struct hash_bucket *,
 				  void *))bgp_evpn_es_evi_show_one_vni_hash_cb,
 				&wctx);

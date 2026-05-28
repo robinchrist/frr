@@ -956,6 +956,9 @@ struct bgp {
 	 * EVPN master instance / VRF
 	 */
 	struct evpn_master_instance_info {
+		/* EVI hash table */
+		struct hash *vnihash;
+
 		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
 		/* Hash table of Fully Qualified VRF import RTs to VRFs */
@@ -968,9 +971,6 @@ struct bgp {
 		/* Hash table of Fully Qualified EVI import RTs to EVIs */
 		struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
 	} evpn_master_instance_info;
-
-	/* EVI hash table */
-	struct hash *vnihash;
 
 	/*
 	 * VNI hash table based on SVI ifindex as its key.

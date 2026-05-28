@@ -1611,6 +1611,9 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
  */
 void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool evpn_autort_rfc8365_compatible)
 {
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	assert(bgp_evpn_mi); /* This function should only be called after EVPN instance is created */
+
 	if(bgp_vrf->evpn_autort_rfc8365_compatible == evpn_autort_rfc8365_compatible)
 		return; /* No change */
 
@@ -1624,7 +1627,7 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool
 	if(bgp_evpn_vrf_should_generate_export_autort(bgp_vrf))
 		bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 
-	hash_iterate(bgp_vrf->vnihash,
+	hash_iterate(bgp_vrf->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
 			       void*))bgp_evpn_evi_update_autorts,
 		     bgp_vrf);
@@ -7341,60 +7344,64 @@ void bgp_evpn_install_uninstall_default_route(struct bgp *bgp_vrf, afi_t afi, sa
  * local routes for all VNIs/VRF being deleted and withdrawn and the next
  * will result in the routes being re-advertised.
  */
-void bgp_evpn_handle_router_id_update(struct bgp *bgp, int withdraw)
+void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 {
 	struct listnode *node;
-	struct bgp *bgp_vrf;
+	struct bgp *bgp_vrf_temp;
+
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	assert(bgp_evpn_mi);
+
 
 	if (withdraw) {
 
 		/* delete and withdraw all the type-5 routes
 		   stored in the global table for this vrf
 		 */
-		withdraw_router_id_vrf(bgp);
+		withdraw_router_id_vrf(bgp_vrf);
 
 		/* delete all the VNI routes (type-2/type-3) routes for all the
 		 * L2-VNIs
 		 */
-		hash_iterate(bgp->vnihash,
+		hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash,
 			     (void (*)(struct hash_bucket *,
 				       void *))withdraw_router_id_vni,
-			     bgp);
+			     bgp_vrf);
 
-		if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
-			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+		if (bgp_vrf == bgp_evpn_mi) {
+			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf_temp)) {
 				/* advertise pip is enabled,
 				 * bgp instance L3VNI VTEP-IP is IPv4
 				 * advertise pip IP is not user configured.
 				 */
-				if (bgp_vrf->evpn_info->advertise_pip &&
-				    IS_IPADDR_V4(&bgp_vrf->originator_ip) &&
-				    (bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
+				if (bgp_vrf_temp->evpn_info->advertise_pip &&
+				    IS_IPADDR_V4(&bgp_vrf_temp->originator_ip) &&
+				    (bgp_vrf_temp->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
 				     INADDR_ANY)) {
-					bgp_vrf->evpn_info->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
+					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
 				}
 			}
 		}
 	} else {
 
 		/* Assign new default instance router-id */
-		if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
-			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+		if (bgp_vrf == bgp_evpn_mi) {
+			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf_temp)) {
 				/* advertise pip is enabled,
 				 * bgp instance L3VNI VTEP-IP is IPv4
 				 * advertise pip IP is not user configured.
 				 * assign the bgp default router-id as pip IP.
 				 */
-				if (bgp_vrf->evpn_info->advertise_pip &&
-				    IS_IPADDR_V4(&bgp_vrf->originator_ip) &&
-				    (bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
+				if (bgp_vrf_temp->evpn_info->advertise_pip &&
+				    IS_IPADDR_V4(&bgp_vrf_temp->originator_ip) &&
+				    (bgp_vrf_temp->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
 				     INADDR_ANY)) {
-					SET_IPADDR_V4(&bgp_vrf->evpn_info->pip_ip);
-					bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = bgp->router_id;
+					SET_IPADDR_V4(&bgp_vrf_temp->evpn_info->pip_ip);
+					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4 = bgp_vrf->router_id;
 					/* advertise type-5 routes with
 					 * new nexthop
 					 */
-					bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
+					bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf_temp);
 				}
 			}
 		}
@@ -7402,15 +7409,15 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp, int withdraw)
 		/* advertise all routes in the vrf as type-5 routes with the new
 		 * RD
 		 */
-		update_router_id_vrf(bgp);
+		update_router_id_vrf(bgp_vrf);
 
 		/* advertise all the VNI routes (type-2/type-3) routes with the
 		 * new RD
 		 */
-		hash_iterate(bgp->vnihash,
+		hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash,
 			     (void (*)(struct hash_bucket *,
 				       void *))update_router_id_vni,
-			     bgp);
+			     bgp_vrf);
 	}
 }
 
@@ -7503,7 +7510,7 @@ void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt)
 	ctx.bgp = bgp;
 	ctx.cnt = cnt;
 
-	hash_iterate(bgp->vnihash,
+	hash_iterate(bgp->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
 			       void *))bgp_evpn_handle_deferred_bestpath_per_vni,
 		     &ctx);
@@ -7571,7 +7578,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 		bgp, BGP_MARTIAN_SOO, (void *)old_soo, (void *)new_soo);
 
 	/* Update locally originated routes for all L2VNIs */
-	hash_iterate(bgp->vnihash,
+	hash_iterate(bgp->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
 			       void *))bgp_evpn_evi_update_routes_hash,
 		     bgp);
@@ -7985,7 +7992,7 @@ struct bgp_evpn_evi *bgp_evpn_lookup_vni(struct bgp *bgp, vni_t vni)
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.vni = vni;
-	evi = hash_lookup(bgp->vnihash, &tmp);
+	evi = hash_lookup(bgp->evpn_master_instance_info.vnihash, &tmp);
 	return evi;
 }
 
@@ -8035,7 +8042,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 	evi->mac_table = bgp_table_init(bgp, AFI_L2VPN, SAFI_EVPN);
 
 	/* Add to hash */
-	(void)hash_get(bgp->vnihash, evi, hash_alloc_intern);
+	(void)hash_get(bgp->evpn_master_instance_info.vnihash, evi, hash_alloc_intern);
 
 	bgp_evpn_remote_ip_hash_init(evi);
 	bgp_evpn_link_to_vni_svi_hash(bgp, evi);
@@ -8084,7 +8091,7 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 
 	bf_release_index(bm->rd_idspace, evi->rd_id);
 	hash_release(bgp->vni_svi_hash, evi);
-	hash_release(bgp->vnihash, evi);
+	hash_release(bgp->evpn_master_instance_info.vnihash, evi);
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
 	QOBJ_UNREG(evi);
@@ -8732,7 +8739,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 	 * v
 	 * install_evpn_route_entry_in_vrf
 	 */
-	hash_iterate(bgp_evpn_mi->vnihash,
+	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
 			       void *))bgp_evpn_evi_link_to_vrf_hash,
 		     bgp_vrf);
@@ -9133,7 +9140,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
  */
 void bgp_evpn_flood_control_change(struct bgp *bgp)
 {
-	hash_iterate(bgp->vnihash, advertise_withdraw_type3, bgp);
+	hash_iterate(bgp->evpn_master_instance_info.vnihash, advertise_withdraw_type3, bgp);
 }
 
 /*
@@ -9152,7 +9159,7 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp)
 		vni_count--;
 	}
 
-	hash_iterate(bgp->vnihash, (void (*)(struct hash_bucket *, void *))cleanup_vni_on_disable,
+	hash_iterate(bgp->evpn_master_instance_info.vnihash, (void (*)(struct hash_bucket *, void *))cleanup_vni_on_disable,
 		     bgp);
 }
 
@@ -9216,16 +9223,16 @@ static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
 void bgp_evpn_cleanup(struct bgp *bgp)
 {
 	/* Guard against double-call during termination */
-	if (!bgp->vnihash)
+	if (!bgp->evpn_master_instance_info.vnihash)
 		return;
 
 	bgp_evpn_master_instance_info_cleanup(bgp);
 
-	hash_iterate(bgp->vnihash,
+	hash_iterate(bgp->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *, void *))free_vni_entry,
 		     bgp);
 
-	hash_clean_and_free(&bgp->vnihash, NULL);
+	hash_clean_and_free(&bgp->evpn_master_instance_info.vnihash, NULL);
 
 	hash_clean_and_free(&bgp->vni_svi_hash,
 			    (void (*)(void *))hash_evpn_free);
@@ -9267,7 +9274,7 @@ void bgp_evpn_init(struct bgp *bgp)
 {
 	bgp_evpn_master_instance_info_init(bgp);
 
-	bgp->vnihash =
+	bgp->evpn_master_instance_info.vnihash =
 		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
 	bgp->vni_svi_hash =
 		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
