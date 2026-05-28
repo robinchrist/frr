@@ -462,7 +462,10 @@ static void bgp_evpn_effective_fq_rt_free(struct bgp_evpn_effective_fq_rt* eff_r
 }
 
 /*
- * FRR automatic route target generation:
+ * FRR automatic route target generation for VRFs and EVIs:
+ * For VRFs, <VNI> is the L3VNI assigned to the VRF
+ * For EVIs, <VNI> is the L2VNI assigned to the EVI
+ * 
  * Export RT: <lower 2 byte of AS>:<VNI>
  * Import RT: *:<VNI> - this is a wildcard RT!
  *
@@ -475,11 +478,12 @@ static void bgp_evpn_effective_fq_rt_free(struct bgp_evpn_effective_fq_rt* eff_r
  * Apparently, some users require the "automatic" bit set in the RT / VNI, so this is what we do
  */
 
-/* Import Auto RTs are always wildcard at the moment - should we generate other kinds of import RTs
+/* Common function to generate import auto RT for VRF and EVIs, see above for details
+ * Import Auto RTs are always wildcard at the moment - should we generate other kinds of import RTs
  * we'll have to adjust fhe function signature and return a union or split the function and have the caller
  * call all of them
  */
-static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_vrf_derive_import_auto_rt(vni_t vni, bool rfc8365_compatible) {
+static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_derive_import_auto_rt(vni_t vni, bool rfc8365_compatible) {
 
 	if(rfc8365_compatible) {
 		/* Set the "automatic" bit in the local admin field of the RT, see docs above why */
@@ -491,8 +495,8 @@ static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_vrf_derive_import_auto_r
 
 	return bgp_evpn_effective_wildcard_rt_new(local_admin_nbo);
 }
-
-static struct bgp_evpn_effective_fq_rt* _bgp_evpn_vrf_derive_export_auto_rt(as_t as, vni_t vni, bool rfc8365_compatible) {
+/* Common function to generate export auto RT for VRF and EVIs, see above for details */
+static struct bgp_evpn_effective_fq_rt* _bgp_evpn_derive_export_auto_rt(as_t as, vni_t vni, bool rfc8365_compatible) {
 
 	struct ecommunity_val eval;
 
@@ -518,17 +522,35 @@ static struct bgp_evpn_effective_fq_rt* _bgp_evpn_vrf_derive_export_auto_rt(as_t
  * Function does not check whether auto RT generation should actually be done
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
-static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const struct bgp *bgp) {
-	return _bgp_evpn_vrf_derive_export_auto_rt(bgp->as, bgp->l3vni, bgp->evpn_autort_rfc8365_compatible);
+static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const struct bgp *bgp_vrf) {
+	return _bgp_evpn_derive_export_auto_rt(bgp_vrf->as, bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
 }
 
 /*
  * Function does not check whether auto RT generation should actually be done
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
-static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt(const struct bgp *bgp) {
-	return _bgp_evpn_vrf_derive_import_auto_rt(bgp->l3vni, bgp->evpn_autort_rfc8365_compatible);
+static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt(const struct bgp *bgp_vrf) {
+	return _bgp_evpn_derive_import_auto_rt(bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
 }
+
+
+/*
+ * Function does not check whether auto RT generation should actually be done
+ * caller needs to check this and only call if auto RTs should actually be generated!
+ */
+static struct bgp_evpn_effective_fq_rt* bgp_evpn_evi_derive_export_auto_rt(const struct bgp *parent_vrf, const struct bgp_evpn_evi *evi) {
+	return _bgp_evpn_derive_export_auto_rt(parent_vrf->as, evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
+}
+
+/*
+ * Function does not check whether auto RT generation should actually be done
+ * caller needs to check this and only call if auto RTs should actually be generated!
+ */
+static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_evi_derive_import_auto_rt(const struct bgp *parent_vrf, const struct bgp_evpn_evi *evi) {
+	return _bgp_evpn_derive_import_auto_rt(evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
+}
+
 
 /* Common function used for both VRFs and EVIs, returns whether Auto RT should be generated
  * - If user Auto RT config exists, that takes precedence (explicit request / explicit disable)
@@ -1056,12 +1078,12 @@ static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(st
 	return vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes, &tmp);
 }
 
-static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp)
+static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp_vrf)
 {
 	struct vrf_mapped_bgp_instance *item;
 
 	item = XCALLOC(MTYPE_BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, sizeof(*item));
-	item->bgp = bgp;
+	item->bgp = bgp_vrf;
 	return item;
 }
 
@@ -1299,6 +1321,7 @@ int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
 }
 
 /*
+ * Legacy!
  * Create a new import_rt
  */
 static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
@@ -1319,6 +1342,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
 }
 
 /*
+ * Legacy!
  * Free the import rt node
  */
 static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
@@ -1330,6 +1354,7 @@ static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 }
 
 /*
+ * Legacy!
  * Function to lookup Import RT node - used to map a RT to set of
  * VNIs importing routes with that RT.
  */
@@ -1344,6 +1369,7 @@ static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
 }
 
 /*
+ * Legacy!
  * Is specified VNI present on the RT's list of "importing" VNIs?
  */
 static int is_evi_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgp_evpn_evi *evi)
@@ -1378,39 +1404,6 @@ static inline void mask_ecom_global_admin(struct ecommunity_val *dst,
 		dst->val[4] = dst->val[5] = 0;
 	}
 }
-
-// static inline void bgp_evpn_vrf_rt_ecom_val_convert_to_wildcard(struct ecommunity_val* dst)
-// {
-// 	uint8_t type;
-// 	uint8_t subtype;
-
-// 	/* Save old Type (Encode AS / AS4 / IP), will be masked off too */
-// 	type = dst->val[0];
-// 	subtype = dst->val[1];
-// 	if((type != ECOMMUNITY_ENCODE_AS && type != ECOMMUNITY_ENCODE_AS4 &&
-// 	   type != ECOMMUNITY_ENCODE_IP) || subtype != ECOMMUNITY_ROUTE_TARGET) {
-
-// 		/* Unexpected encoding type, do not attempt to mask */
-// 		return;
-// 	}
-
-// 	/*
-// 	 * Zeroize type and subtype, as wildcard RTs are not valid RTs themselves,
-// 	 * and we want to prevent any accidental leaking of those
-// 	 * or at least make it very obvious by making the entire community invalid
-// 	 */
-// 	dst->val[0] = 0;
-// 	dst->val[1] = 0;
-
-// 	/* Now zeroize the global administrator field */
-// 	if (type == ECOMMUNITY_ENCODE_AS) {
-// 		dst->val[2] = dst->val[3] = 0;
-// 	} else if (type == ECOMMUNITY_ENCODE_AS4 || type == ECOMMUNITY_ENCODE_IP) {
-// 		dst->val[2] = dst->val[3] = 0;
-// 		dst->val[4] = dst->val[5] = 0;
-// 	}
-
-// }
 
 /*
  * Compare Route Targets.
@@ -1447,7 +1440,7 @@ void bgp_evpn_xxport_delete_ecomm(void *val)
 
 
 
-/*
+/* Legacy!
  * Map one RT to specified VNI.
  */
 static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_evi *evi,
@@ -1477,7 +1470,7 @@ static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_e
 	listnode_add(irt->evis, evi);
 }
 
-/*
+/* Legacy!
  * Unmap specified VNI from specified RT. If there are no other
  * VNIs for this RT, then the RT hash is deleted.
  */
@@ -1491,7 +1484,7 @@ static void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp *bgp, struct bgp_ev
 	}
 }
 
-/*
+/* Legacy!
  * Create RT extended community automatically from passed information:
  * of the form AS:VNI.
  * NOTE: We use only the lower 16 bits of the AS. This is sufficient as
@@ -1589,7 +1582,7 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 		bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
 }
 
-/*
+/* Legacy!
  * Handle autort change for a given VNI.
  */
 static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *bgp)
@@ -1601,13 +1594,13 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
 			bgp_evpn_evi_uninstall_routes(bgp, evi);
 		bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 		list_delete_all_node(evi->evi_import_rtl);
-		bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
+		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
 		if (is_evi_live(evi))
 			bgp_evpn_evi_install_routes(bgp, evi);
 	}
 	if (!is_export_rt_configured(evi)) {
 		list_delete_all_node(evi->evi_export_rtl);
-		bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
+		legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
 		if (is_evi_live(evi))
 			bgp_evpn_evi_handle_export_rt_change(bgp, evi);
 	}
@@ -1616,25 +1609,25 @@ static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *
 /*
  * Change the auto RT "algorithm" / algorithm option, takes care of both VRFs and EVIs
  */
-void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp, bool evpn_autort_rfc8365_compatible)
+void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool evpn_autort_rfc8365_compatible)
 {
-	if(bgp->evpn_autort_rfc8365_compatible == evpn_autort_rfc8365_compatible)
+	if(bgp_vrf->evpn_autort_rfc8365_compatible == evpn_autort_rfc8365_compatible)
 		return; /* No change */
 
 	/* The VRF Route Target should be updated BEFORE updating the EVIs
 	 * because the EVIs use their own RTs AND possibly the VRF RTs!
 	*/
 	/* Only trigger the update logic if Auto RT is actually being used */
-	if(bgp_evpn_vrf_should_generate_import_autort(bgp))
-		bgp_evpn_vrf_handle_import_rt_change(bgp);
+	if(bgp_evpn_vrf_should_generate_import_autort(bgp_vrf))
+		bgp_evpn_vrf_handle_import_rt_change(bgp_vrf);
 
-	if(bgp_evpn_vrf_should_generate_export_autort(bgp))
-		bgp_evpn_vrf_handle_export_rt_change(bgp);
+	if(bgp_evpn_vrf_should_generate_export_autort(bgp_vrf))
+		bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 
-	hash_iterate(bgp->vnihash,
+	hash_iterate(bgp_vrf->vnihash,
 		     (void (*)(struct hash_bucket *,
 			       void*))bgp_evpn_evi_update_autorts,
-		     bgp);
+		     bgp_vrf);
 }
 
 
@@ -1842,7 +1835,7 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
  * Derive Import RT automatically for VNI and map VNI to RT.
  * The mapping will be used during route processing.
  */
-void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
@@ -1854,7 +1847,7 @@ void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *ev
 /*
  * Derive Export RT automatically for VNI.
  */
-void bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
@@ -2359,8 +2352,8 @@ static void bgp_evpn_get_rmac_nexthop(struct bgp_evpn_evi *evi,
 static void bgp_evpn_evi_derive_rd_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	bgp_evpn_evi_derive_auto_rd(bgp, evi);
-	bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
-	bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
+	legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
+	legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
 }
 
 /*

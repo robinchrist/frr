@@ -2105,7 +2105,7 @@ static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgp_evpn_evi 
 	/* Reset to auto RT - this also rebuilds the RT to VNI mapping */
 	if (list_isempty(evi->evi_import_rtl)) {
 		UNSET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
-		bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
+		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
 	}
 	/* Rebuild the RT to VNI mapping */
 	else
@@ -2172,7 +2172,7 @@ static void evpn_evi_unconfigure_export_rt(struct bgp *bgp, struct bgp_evpn_evi 
 	assert(evi->evi_export_rtl);
 	if (list_isempty(evi->evi_export_rtl)) {
 		UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
-		bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
+		legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
 	}
 
 	if (is_evi_live(evi))

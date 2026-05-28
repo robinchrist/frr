@@ -1107,9 +1107,9 @@ extern void bgp_evpn_vrf_teardown_import(struct bgp *bgp_vrf);
 extern void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *vpn);
 extern void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp,
 					    struct bgp_evpn_evi *evi);
-extern void bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp,
+extern void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp,
 					   struct bgp_evpn_evi *evi);
-extern void bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp,
+extern void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp,
 					   struct bgp_evpn_evi *evi);
 extern void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);
