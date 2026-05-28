@@ -2744,8 +2744,6 @@ static void bgp_evpn_build_route_type_2_3_extcomm(struct bgp_evpn_evi *evi, stru
 	bool proxy;
 
 	bgp_encap_types tnl_type;
-	struct listnode *node, *nnode;
-	struct ecommunity *ecom;
 	struct bgp_evpn_effective_fq_rt *effective_rt;
 	uint32_t seqnum;
 	struct bgp_evpn_effective_fq_rt_slu_head *vrf_export_rts = NULL;
@@ -2767,9 +2765,8 @@ static void bgp_evpn_build_route_type_2_3_extcomm(struct bgp_evpn_evi *evi, stru
 	attr->encap_tunneltype = tnl_type;
 
 	/* Add the EVI's export RTs */
-	for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode, ecom))
-		/* This might break sorting introduced by ecommunity_add_val... */
-		ecommunity_merge(ecom_merge, ecom);
+	frr_each (bgp_evpn_effective_fq_rt_slu, &evi->effective_fq_export_rts, effective_rt)
+		ecommunity_append_val_unchecked(ecom_merge, &effective_rt->ecom_val);
 
 	/* Add the export RTs for L3VNI if told to - caller determines when this should
 	 * be done. This is typically determined by bgp_evpn_route_add_l3_attrs_ok which
