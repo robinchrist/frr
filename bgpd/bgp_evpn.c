@@ -530,13 +530,59 @@ static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt
 	return _bgp_evpn_vrf_derive_import_auto_rt(bgp->l3vni, bgp->evpn_autort_rfc8365_compatible);
 }
 
+/* Common function used for both VRFs and EVIs, returns whether Auto RT should be generated
+ * - If user Auto RT config exists, that takes precedence (explicit request / explicit disable)
+ *   - "both" takes precedence over import/export specific config - however, if both is set, import/export
+ *      should not be set! So this precedence should never be relevant
+ * 
+ * - If no user auto rt config exists, implicit auto RT generation kicks in ONLY if NO user configured RTs exist
+ */
+static bool _bgp_evpn_should_generate_autort_common(
+	enum bgp_evpn_autort_cfgd autort_cfg_both, /* autort cfg for "both" */
+	enum bgp_evpn_autort_cfgd direction_autort_cfg, /* autort cfg for import or export */
+	struct bgp_evpn_cfgd_rt_slu_head *both_cfgd_rt_list, /* list of configured RTs for "both" */
+	struct bgp_evpn_cfgd_rt_slu_head *direction_cfgd_rt_list /* list of configured RTs for import or export */
+	) {
+
+	/* First process the "both" config */
+	/* "both" config takes precedence - conflicting "import"/"export" config should not even exist then */
+
+	/* If auto RT generation is disabled, then we should not generate auto RTs in any case */
+	if (autort_cfg_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		return false;
+
+	/* autort_cfgd_both config can now only be NOT_CFGD or AUTO_CFGD */
+	if(autort_cfg_both == BGP_EVPN_AUTORT_AUTO_CFGD)
+		return true; /* User has explicitly requested auto RT generation */
+
+	/* autort_cfgd_both == NOT_CFGD */
+
+
+	/* Now process the "import" or "export" config */
+
+	if(direction_autort_cfg == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		return false; /* User has explicitly requested to disable auto RT generation in import/export specific config */
+
+	if(direction_autort_cfg == BGP_EVPN_AUTORT_AUTO_CFGD)
+		return true; /* User has explicitly requested auto RT generation in import/export specific config */
+
+	/* autort_cfgd_[import/export] == NOT_CFGD */
+
+	/* Now determine whether implicit auto RT generation should kick in */
+	/* Only generate the implicit auto RT if user has not configured ANY import/export (+both because that also affects import/export) RT */
+	if(bgp_evpn_cfgd_rt_slu_count(both_cfgd_rt_list) == 0 && bgp_evpn_cfgd_rt_slu_count(direction_cfgd_rt_list) == 0)
+		return true;
+
+	return false;
+}
+
 static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool is_import) {
 
 	struct bgp_evpn_rt_config* rt_config;
 
 	/* The relevant autort cfg, either import or export */
-	enum bgp_evpn_autort_cfgd relevant_autort_cfg;
-	struct bgp_evpn_cfgd_rt_slu_head *relevant_cfgd_rt_list;
+	enum bgp_evpn_autort_cfgd direction_autort_cfg;
+	struct bgp_evpn_cfgd_rt_slu_head *direction_cfgd_rt_list;
 
 	if(!bgp_vrf)
 		return false; /* shouldn't happen, but be defensive */
@@ -547,47 +593,23 @@ static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool
 	rt_config = bgp_vrf->vrf_route_target_config;
 
 	if(is_import) {
-		relevant_autort_cfg = rt_config->autort_cfgd_import;
-		relevant_cfgd_rt_list = &rt_config->cfgd_import;
+		direction_autort_cfg = rt_config->autort_cfgd_import;
+		direction_cfgd_rt_list = &rt_config->cfgd_import;
 	} else {
-		relevant_autort_cfg = rt_config->autort_cfgd_export;
-		relevant_cfgd_rt_list = &rt_config->cfgd_export;
+		direction_autort_cfg = rt_config->autort_cfgd_export;
+		direction_cfgd_rt_list = &rt_config->cfgd_export;
 	}
 
 	/* Auto RT generation only supported when VNI is configured */
 	if (!is_l3vni_cfgd(bgp_vrf))
 		return false;
 
-	/* First process the "both" config */
-	/* "both" config takes precedence - conflicting "import"/"export" config should not even exist then */
-
-	/* If auto RT generation is disabled, then we should not generate auto RTs in any case */
-	if (rt_config->autort_cfgd_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
-		return false;
-
-	/* autort_cfgd_both config can now only be NOT_CFGD or AUTO_CFGD */
-	if(rt_config->autort_cfgd_both == BGP_EVPN_AUTORT_AUTO_CFGD)
-		return true; /* User has explicitly requested auto RT generation */
-
-	/* autort_cfgd_both == NOT_CFGD */
-
-
-	/* Now process the "import" or "export" config */
-
-	if(relevant_autort_cfg == BGP_EVPN_AUTORT_DISABLE_CFGD)
-		return false; /* User has explicitly requested to disable auto RT generation in import/export specific config */
-
-	if(relevant_autort_cfg == BGP_EVPN_AUTORT_AUTO_CFGD)
-		return true; /* User has explicitly requested auto RT generation in import/export specific config */
-
-	/* autort_cfgd_[import/export] == NOT_CFGD */
-
-	/* Now determine whether implicit auto RT generation should kick in */
-	/* Only generate the implicit auto RT if user has not configured ANY import/export (+both because that also affects import/export) RT */
-	if(bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_both) == 0 && bgp_evpn_cfgd_rt_slu_count(relevant_cfgd_rt_list) == 0)
-		return true;
-
-	return false;
+	return _bgp_evpn_should_generate_autort_common(
+		rt_config->autort_cfgd_both,
+		direction_autort_cfg,
+		&rt_config->cfgd_both,
+		direction_cfgd_rt_list
+	);
 }
 
 static bool bgp_evpn_vrf_should_generate_import_autort(const struct bgp *bgp_vrf) {
@@ -596,6 +618,50 @@ static bool bgp_evpn_vrf_should_generate_import_autort(const struct bgp *bgp_vrf
 static bool bgp_evpn_vrf_should_generate_export_autort(const struct bgp *bgp_vrf) {
 	return _bgp_evpn_vrf_should_generate_autort(bgp_vrf, true);
 }
+
+static bool _bgp_evpn_evi_should_generate_autort(const struct bgp_evpn_evi *evi, bool is_import) {
+
+	struct bgp_evpn_rt_config* rt_config;
+
+	/* The relevant autort cfg, either import or export */
+	enum bgp_evpn_autort_cfgd direction_autort_cfg;
+	struct bgp_evpn_cfgd_rt_slu_head *direction_cfgd_rt_list;
+
+	if(!evi)
+		return false; /* shouldn't happen, but be defensive */
+
+	if(!evi->evi_rt_config)
+		return false; /* also shouldn't happen, but be defensive */
+
+	rt_config = evi->evi_rt_config;
+
+	if(is_import) {
+		direction_autort_cfg = rt_config->autort_cfgd_import;
+		direction_cfgd_rt_list = &rt_config->cfgd_import;
+	} else {
+		direction_autort_cfg = rt_config->autort_cfgd_export;
+		direction_cfgd_rt_list = &rt_config->cfgd_export;
+	}
+
+	/* Auto RT generation only supported when VNI is configured */
+	if(!is_vni_configured(evi))
+		return false;
+
+	return _bgp_evpn_should_generate_autort_common(
+		rt_config->autort_cfgd_both,
+		direction_autort_cfg,
+		&rt_config->cfgd_both,
+		direction_cfgd_rt_list
+	);
+}
+
+static bool bgp_evpn_evi_should_generate_import_autort(const struct bgp_evpn_evi *evi) {
+	return _bgp_evpn_evi_should_generate_autort(evi, false);
+}
+static bool bgp_evpn_evi_should_generate_export_autort(const struct bgp_evpn_evi *evi) {
+	return _bgp_evpn_evi_should_generate_autort(evi, true);
+}
+
 
 /*
  * Returns the local admin in network byte order from a route target ecommunity value
