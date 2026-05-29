@@ -2291,6 +2291,108 @@ void bgp_evpn_evi_teardown_import(struct bgp_evpn_evi *evi)
 	bgp_evpn_evi_unmap_from_evi_irt_nodes(evi);
 }
 
+/* Common part for VRFs and EVIs
+ * 
+ * Unified function for configuring manual route targets, meant to be called by VTY
+ * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
+ *
+ * For direction "both", it will err if the route target already exists in "both"
+ * and if not, it will override / remove any import / export statements with the same route target if present
+ * !!!General rule: "both" cannot coexist with "import" or "export" statements for the same route target!!!
+ *
+ * For direction "import" or "export", it will err if the route target already exists as "both"
+ * or explicitly configured with the respective direction
+ * will NOT split up "both" statements into "import" an "export" - there is no real use case for that
+ * and if the user REALLY wants that, they have to do "no both" and then import + export..
+ *
+ * Note that there is NO auto merge of "import" + "export" to "both"!
+ * "both" is only placed in the config if function is called with direction "both"!
+ *
+ * Note that this function does NOT optimize the path when an implicit RT is active and the
+ * user configures this RT manually - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
+ */
+static int _bgp_evpn_configure_rt_manual_common(struct bgp_evpn_rt_config *rt_config,
+				     enum bgp_evpn_rt_direction direction,
+				     struct bgp_evpn_cfgd_rt *cfgd_rt, bool* import_changed, bool* export_changed)
+{
+	*import_changed = false;
+	*export_changed = false;
+
+	/* This logic could perhaps be simplified once insert hints for sorted lists exist?
+	 * because we always need to check whether the RT already exists in the "both" list, but
+	 * in the "both" case we also need to insert and I don't want "check if exists" + "insert"
+	 * With insert hint we could perhaps try to find (check whether exists) and reuse that?
+	 */
+
+	/* Wildcard import route targets are not allowed for export -> deny export and both -> only allow import! */
+	if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD && direction != BGP_EVPN_RT_DIRECTION_IMPORT)  {
+		bgp_evpn_cfgd_rt_free(cfgd_rt);
+		return -1;
+	}
+
+	/* "both" overrides any existing "import" or "export" statements - we don't want those to coexist
+	 * because that just doesn't make sense and can make the config difficult to understand
+	 */
+	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
+		/* Safe the extra "does exist" step, insert right away - if it fails, it was already present */
+		if (bgp_evpn_cfgd_rt_slu_add(&rt_config->cfgd_both,cfgd_rt) != NULL) {
+			bgp_evpn_cfgd_rt_free(cfgd_rt);
+			return -1; /* Already present as "both" -> abort */
+		}
+		/* Assume both changed, may be set to false in next step */
+		*import_changed = true;
+		*export_changed = true;
+
+		/* "both" cannot coexist with import or export - delete those if exists */
+		struct bgp_evpn_cfgd_rt * found_rt;
+
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt);
+		if (found_rt) {
+			*import_changed = false; /* RT was already in import -> no change -> no need to trigger update */
+			bgp_evpn_cfgd_rt_slu_del(&rt_config->cfgd_import,found_rt);
+			bgp_evpn_cfgd_rt_free(found_rt);
+		}
+
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export,cfgd_rt);
+		if (found_rt) {
+			*export_changed = false; /* RT was already in export -> no change -> no need to trigger update */
+			bgp_evpn_cfgd_rt_slu_del(&rt_config->cfgd_export,found_rt);
+			bgp_evpn_cfgd_rt_free(found_rt);
+		}
+	} else {
+		/* Branch for import or export - the logic is pretty much identical, just on different lists */
+		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
+		bool* relevant_changed_flag;
+		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
+			relevant_list = &rt_config->cfgd_import;
+			relevant_changed_flag = import_changed;
+		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
+			relevant_list = &rt_config->cfgd_export;
+			relevant_changed_flag = export_changed;
+		}
+
+		/* Check whether the route target already exists in the "both" list, if yes, abort */
+		if(bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_both, cfgd_rt)) {
+			bgp_evpn_cfgd_rt_free(cfgd_rt);
+			return -1; /* RT already exists as "both", abort */
+		}
+
+		/* Skip the extra "does exist" / ..._find step and insert into the relevant list right away
+		 * if a duplicate exists, the _add function will fail and return non-null
+		 */
+		if (bgp_evpn_cfgd_rt_slu_add(relevant_list, cfgd_rt) != NULL) {
+			bgp_evpn_cfgd_rt_free(cfgd_rt);
+			return -1; /* RT already exists in relevant list, abort */
+		}
+
+		*relevant_changed_flag = true; /* RT was newly added to relevant list -> change happened -> need to trigger update */
+	}
+
+	return 0;
+}
+
 
 /* Unified function for configuring manual route targets, meant to be called by VTY
  * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
@@ -2319,75 +2421,11 @@ int bgp_evpn_vrf_configure_rt_manual(struct bgp *bgp_vrf,
 	bool import_changed = false;
 	bool export_changed = false;
 
-	/* This logic could perhaps be simplified once insert hints for sorted lists exist?
-	 * because we always need to check whether the RT already exists in the "both" list, but
-	 * in the "both" case we also need to insert and I don't want "check if exists" + "insert"
-	 * With insert hint we could perhaps try to find (check whether exists) and reuse that?
-	 */
+	int ret = _bgp_evpn_configure_rt_manual_common(bgp_vrf->vrf_route_target_config, direction, cfgd_rt,
+		&import_changed, &export_changed);
 
-	/* Wildcard import route targets are not allowed for export -> deny export and both -> only allow import! */
-	if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD && direction != BGP_EVPN_RT_DIRECTION_IMPORT)  {
-		bgp_evpn_cfgd_rt_free(cfgd_rt);
-		return -1;
-	}
-
-	/* "both" overrides any existing "import" or "export" statements - we don't want those to coexist
-	 * because that just doesn't make sense and can make the config difficult to understand
-	 */
-	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
-		/* Safe the extra "does exist" step, insert right away - if it fails, it was already present */
-		if (bgp_evpn_cfgd_rt_slu_add(&bgp_vrf->vrf_route_target_config->cfgd_both,cfgd_rt) != NULL) {
-			bgp_evpn_cfgd_rt_free(cfgd_rt);
-			return -1; /* Already present as "both" -> abort */
-		}
-		/* Assume both changed, may be set to false in next step */
-		import_changed = true;
-		export_changed = true;
-
-		/* "both" cannot coexist with import or export - delete those if exists */
-		struct bgp_evpn_cfgd_rt * found_rt;
-
-		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_rt);
-		if (found_rt) {
-			import_changed = false; /* RT was already in import -> no change -> no need to trigger update */
-			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_import,found_rt);
-			bgp_evpn_cfgd_rt_free(found_rt);
-		}
-
-		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_export,cfgd_rt);
-		if (found_rt) {
-			export_changed = false; /* RT was already in export -> no change -> no need to trigger update */
-			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_export,found_rt);
-			bgp_evpn_cfgd_rt_free(found_rt);
-		}
-	} else {
-		/* Branch for import or export - the logic is pretty much identical, just on different lists */
-		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
-		bool* relevant_changed_flag;
-		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
-			relevant_list = &bgp_vrf->vrf_route_target_config->cfgd_import;
-			relevant_changed_flag = &import_changed;
-		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
-			relevant_list = &bgp_vrf->vrf_route_target_config->cfgd_export;
-			relevant_changed_flag = &export_changed;
-		}
-
-		/* Check whether the route target already exists in the "both" list, if yes, abort */
-		if(bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_rt)) {
-			bgp_evpn_cfgd_rt_free(cfgd_rt);
-			return -1; /* RT already exists as "both", abort */
-		}
-
-		/* Skip the extra "does exist" / ..._find step and insert into the relevant list right away
-		 * if a duplicate exists, the _add function will fail and return non-null
-		 */
-		if (bgp_evpn_cfgd_rt_slu_add(relevant_list, cfgd_rt) != NULL) {
-			bgp_evpn_cfgd_rt_free(cfgd_rt);
-			return -1; /* RT already exists in relevant list, abort */
-		}
-
-		*relevant_changed_flag = true; /* RT was newly added to relevant list -> change happened -> need to trigger update */
-	}
+	if(ret != 0)
+		return ret;
 
 	/* Trigger update logic if necessary */
 	if(import_changed)
@@ -2625,7 +2663,47 @@ int bgp_evpn_vrf_unconfigure_export_rt_manual(struct bgp *bgp_vrf, struct bgp_ev
 }
 
 
+/* Unified function for configuring manual route targets, meant to be called by VTY
+ * Will call the appropriate bgp_evpn_evi_handle_..._rt_change functions
+ *
+ * For direction "both", it will err if the route target already exists in "both"
+ * and if not, it will override / remove any import / export statements with the same route target if present
+ * !!!General rule: "both" cannot coexist with "import" or "export" statements for the same route target!!!
+ *
+ * For direction "import" or "export", it will err if the route target already exists as "both"
+ * or explicitly configured with the respective direction
+ * will NOT split up "both" statements into "import" an "export" - there is no real use case for that
+ * and if the user REALLY wants that, they have to do "no both" and then import + export..
+ *
+ * Note that there is NO auto merge of "import" + "export" to "both"!
+ * "both" is only placed in the config if function is called with direction "both"!
+ *
+ * Note that this function does NOT optimize the path when an implicit RT is active and the
+ * user configures this RT manually - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
+ */
+int bgp_evpn_evi_configure_rt_manual(struct bgp_evpn_evi *evi,
+				     enum bgp_evpn_rt_direction direction,
+				     struct bgp_evpn_cfgd_rt *cfgd_rt)
+{
+	bool import_changed = false;
+	bool export_changed = false;
 
+	int ret = _bgp_evpn_configure_rt_manual_common(evi->evi_rt_config, direction, cfgd_rt,
+		&import_changed, &export_changed);
+
+	if(ret != 0)
+		return ret;
+
+	/* Trigger update logic if necessary */
+	if(import_changed)
+		bgp_evpn_evi_handle_import_rt_change(evi);
+	if(export_changed)
+		bgp_evpn_evi_handle_export_rt_change(evi);
+
+	return 0;
+}
 
 
 
