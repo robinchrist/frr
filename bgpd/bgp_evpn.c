@@ -2635,12 +2635,17 @@ static void evpn_convert_nexthop_to_ipv6(struct attr *attr)
 /*
  * Wrapper for node get in global table.
  */
-struct bgp_dest *bgp_evpn_global_node_get(struct bgp_table *table, afi_t afi,
-					  safi_t safi,
+struct bgp_dest *bgp_evpn_global_node_get(
 					  const struct prefix_evpn *evp,
 					  struct prefix_rd *prd,
 					  const struct bgp_path_info *local_pi)
 {
+	afi_t afi = AFI_L2VPN;
+	safi_t safi = SAFI_EVPN;
+
+	struct bgp* bgp_evpn_mi = bgp_get_evpn_master_instance();
+	assert(bgp_evpn_mi);
+
 	struct prefix_evpn global_p = {};
 
 	if (evp->prefix.route_type == BGP_EVPN_AD_ROUTE) {
@@ -2670,7 +2675,7 @@ struct bgp_dest *bgp_evpn_global_node_get(struct bgp_table *table, afi_t afi,
 
 		evp = &global_p;
 	}
-	return bgp_afi_node_get(table, afi, safi, (struct prefix *)evp, prd);
+	return bgp_afi_node_get(bgp_evpn_mi->rib[afi][safi], afi, safi, (struct prefix *)evp, prd);
 }
 
 /*
@@ -3809,8 +3814,7 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	bgp_evpn_build_route_type_5_extcomm(bgp_vrf, &attr);
 
 	/* get the route node in global table */
-	dest = bgp_evpn_global_node_get(bgp_evpn_mi->rib[afi][safi], afi, safi,
-					evp, &bgp_vrf->vrf_prd, NULL);
+	dest = bgp_evpn_global_node_get(evp, &bgp_vrf->vrf_prd, NULL);
 	assert(dest);
 
 	/* create or update the route entry within the route node */
@@ -4596,8 +4600,7 @@ static int bgp_evpn_evi_update_route(struct bgp *bgp, struct bgp_evpn_evi *evi,
 	if (route_change) {
 		struct bgp_path_info *global_pi;
 
-		dest = bgp_evpn_global_node_get(bgp->rib[afi][safi], afi, safi,
-						p, &evi->prd, NULL);
+		dest = bgp_evpn_global_node_get(p, &evi->prd, NULL);
 		bgp_evpn_evi_update_route_entry(
 			bgp, evi, afi, safi, dest, attr_new, NULL /* mac */,
 			NULL /* ip */, 1, &global_pi, flags, seq,
@@ -4818,8 +4821,7 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp_evpn_mi, struct bgp_e
 
 	if (route_change) {
 		/* Update route in global routing table. */
-		global_dest = bgp_evpn_global_node_get(
-			bgp_evpn_mi->rib[afi][safi], afi, safi, &evp, &evi->prd, NULL);
+		global_dest = bgp_evpn_global_node_get(&evp, &evi->prd, NULL);
 		assert(global_dest);
 		bgp_evpn_evi_update_route_entry(
 			bgp_evpn_mi, evi, afi, safi, global_dest, attr_new,
@@ -6453,8 +6455,10 @@ int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *
  *  - no routes without IP address (otherwise we have nothing to import into the VRF!)
  *  - no routes that point to a local ethernet segment
  * This is supposed to be used with imported routes (i.e. routes received from peers)
+ *
+ * receiving_vrf is the vrf in which the route has been received (VRF in which the peer operates)
  */
-static int bgp_evpn_install_uninstall_route_in_vrf_list(struct bgp *bgp_def, afi_t afi,
+static int bgp_evpn_install_uninstall_route_in_vrf_list(struct bgp *receiving_vrf, afi_t afi,
 					   safi_t safi, struct prefix_evpn *evp,
 					   struct bgp_path_info *pi,
 					   struct vrf_mapped_bgp_instance_slu_head* vrfs, int install)
@@ -6492,7 +6496,7 @@ static int bgp_evpn_install_uninstall_route_in_vrf_list(struct bgp *bgp_def, afi
 		if (ret) {
 			flog_err(EC_BGP_EVPN_FAIL,
 				 "%u: Failed to %s prefix %pFX in VRF %s",
-				 bgp_def->vrf_id,
+				 receiving_vrf->vrf_id,
 				 install ? "install" : "uninstall", evp,
 				 vrf_id_to_name(vrf_item->bgp->vrf_id));
 			return ret;
@@ -6504,8 +6508,10 @@ static int bgp_evpn_install_uninstall_route_in_vrf_list(struct bgp *bgp_def, afi
 
 /*
  * Install or uninstall route in matching EVIs (list).
+ *
+ * receiving_vrf is the vrf in which the route has been received (VRF in which the peer operates)
  */
-static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t afi,
+static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *receiving_vrf, afi_t afi,
 					   safi_t safi, struct prefix_evpn *evp,
 					   struct bgp_path_info *pi,
 					   struct evi_mapped_evi_slu_head* evis, int install)
@@ -6523,9 +6529,9 @@ static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t a
 		int ret;
 
 		if (install)
-			ret = bgp_evpn_evi_install_route_entry(bgp, evi_item->evi, evp, pi);
+			ret = bgp_evpn_evi_install_route_entry(receiving_vrf, evi_item->evi, evp, pi);
 		else
-			ret = bgp_evpn_evi_uninstall_route_entry(bgp, evi_item->evi, evp, pi);
+			ret = bgp_evpn_evi_uninstall_route_entry(receiving_vrf, evi_item->evi, evp, pi);
 
 		if (ret) {
 			const char *route_type_str = "Unknown";
@@ -6542,7 +6548,7 @@ static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t a
 			}
 			flog_err(EC_BGP_EVPN_FAIL,
 				 "%u: Failed to %s EVPN %s route in EVI with VNI %u",
-				 bgp->vrf_id, install ? "install" : "uninstall",
+				 receiving_vrf->vrf_id, install ? "install" : "uninstall",
 				 route_type_str,
 				 evi_item->evi->vni);
 			return ret;
@@ -6555,6 +6561,8 @@ static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t a
 /*
  * Install or uninstall an EVPN route into appropriate VRFs / EVIs / ESs
  * This is supposed to be used with imported routes (i.e. routes received from peers)
+ *
+ * receiving_vrf is the vrf in which the route has been received (VRF in which the peer operates)
  *
  * EVPN routes *always* go into the global table. The global table is located in the EVPN
  * master instance!
@@ -6862,8 +6870,7 @@ static void bgp_evpn_evi_update_advertise_type_1_2_route(struct bgp *bgp, struct
 	 * attribute.
 	 */
 	attr = pi->attr;
-	global_dest = bgp_evpn_global_node_get(bgp->rib[afi][safi], afi, safi,
-					       &tmp_evp, &evi->prd, NULL);
+	global_dest = bgp_evpn_global_node_get(&tmp_evp, &evi->prd, NULL);
 	assert(global_dest);
 
 	if (evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE) {
@@ -6922,8 +6929,7 @@ static void bgp_evpn_evi_update_advertise_routes(struct bgp *bgp, struct bgp_evp
 
 		attr = pi->attr;
 
-		global_dest = bgp_evpn_global_node_get(
-			bgp->rib[afi][safi], afi, safi, &p, &evi->prd, NULL);
+		global_dest = bgp_evpn_global_node_get(&p, &evi->prd, NULL);
 		bgp_evpn_evi_update_route_entry(
 			bgp, evi, afi, safi, global_dest, attr, NULL /* mac */,
 			NULL /* ip */, 1, &pi, 0, mac_mobility_seqnum(attr),
