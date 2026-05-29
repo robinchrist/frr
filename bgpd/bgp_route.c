@@ -5761,6 +5761,10 @@ void bgp_update(struct peer *peer, const struct prefix *p, uint32_t addpath_id,
 		safi = SAFI_UNICAST;
 
 	bgp = peer->bgp;
+	/* Some SAFIs like MPLS EVPN, EVPN or encap (?) use two-level tables
+ 	 * where the top level node is keyed by the RD (Route Distinguisher) and then 
+ 	 * contains (?) another table
+	 */
 	dest = bgp_afi_node_get(bgp->rib[afi][safi], afi, safi, p, prd);
 	rib_table = bgp_dest_table(dest);
 
@@ -5797,6 +5801,21 @@ void bgp_update(struct peer *peer, const struct prefix *p, uint32_t addpath_id,
 					   .addpath_rx_id = addpath_id };
 
 	pi = bgp_pi_hash_find(&rib_table->pi_hash, &pi_lookup);
+
+	/* Safeguard for EVPN: 
+	 * The EVPN logic is extremely inconsistent and broken. For EVPN, all route *must* go into the
+	 * global table. The global table is located in the EVPN master VRF!
+	 * Currently, if you configure peers receiving EVPN routes in VRFs other than the EVPN master VRF
+	 * (which is also used as underlay VRF), bad things will happen.
+	 */
+	if(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bm->bgp_evpn_mi) { 
+		/* TODO: Should we check that advertise-all-vni is actually set in this VRF?
+		 * or still allow importing routes if it's not set?
+		 */
+		
+		reason = "EVPN route received EVPN NON-master VRF";
+		goto filtered;
+	}
 
 	/* AS path local-as loop check. */
 	if (peer->change_local_as) {
