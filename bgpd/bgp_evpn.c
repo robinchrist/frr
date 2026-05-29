@@ -6322,7 +6322,7 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
 }
 
 /*
- * Install or uninstall routes of specified type that are appropriate for this
+ * Install or uninstall all type 1, 2 and 3 routes that are appropriate for this
  * particular EVI.
  */
 int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install)
@@ -6373,15 +6373,10 @@ int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *
 					dest);
 
 			/* Proceed only for AD, MAC_IP and IMET routes */
-			switch (evp->prefix.route_type) {
-			case BGP_EVPN_AD_ROUTE:
-			case BGP_EVPN_MAC_IP_ROUTE:
-			case BGP_EVPN_IMET_ROUTE:
-				break;
-			case BGP_EVPN_ES_ROUTE:
-			case BGP_EVPN_IP_PREFIX_ROUTE:
+			if(!(evp->prefix.route_type == BGP_EVPN_AD_ROUTE ||
+			     evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE ||
+				 evp->prefix.route_type == BGP_EVPN_IMET_ROUTE))
 				continue;
-			}
 
 			for (pi = bgp_dest_get_bgp_path_info(dest); pi;
 			     pi = pi->next) {
@@ -7648,14 +7643,15 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 				/* advertise pip is enabled,
 				 * bgp instance L3VNI VTEP-IP is IPv4
 				 * advertise pip IP is not user configured.
-				 * assign the bgp default router-id as pip IP.
+				 * assign the EVPN master instance router-id as pip IP.
 				 */
 				if (bgp_vrf_temp->evpn_info->advertise_pip &&
 				    IS_IPADDR_V4(&bgp_vrf_temp->originator_ip) &&
 				    (bgp_vrf_temp->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
 				     INADDR_ANY)) {
+					
 					SET_IPADDR_V4(&bgp_vrf_temp->evpn_info->pip_ip);
-					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4 = bgp_vrf->router_id;
+					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn_mi->router_id;
 					/* advertise type-5 routes with
 					 * new nexthop
 					 */
