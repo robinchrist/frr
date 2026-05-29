@@ -6334,31 +6334,30 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
 /*
  * Install or uninstall all type 1, 2 and 3 routes that are appropriate for this
  * particular EVI.
+ *
+ * walk_fifo is special and magic, TODO: document this....
  */
-int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install)
+int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo)
 {
 	afi_t afi;
 	safi_t safi;
+	struct bgp* bgp_evpn_mi = NULL;
 	struct bgp_dest *rd_dest, *dest;
 	struct bgp_table *table;
 	struct bgp_path_info *pi;
 	int ret = 0;
 	uint8_t count = 0;
-	bool walk_fifo = false;
 
 	afi = AFI_L2VPN;
 	safi = SAFI_EVPN;
 
-	/* Why is this not documented anywhere? Why can this be null?? */
-	if (!bgp) {
-		walk_fifo = true;
-		bgp = bgp_get_evpn_master_instance();
-		if (!bgp) {
-			zlog_warn("%s: No BGP EVPN instance found...", __func__);
+	if(!walk_fifo)
+		assert(evi);
 
-			return -1;
-		}
-	}
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi)
+		return -1;
+
 
 	if (BGP_DEBUG(zebra, ZEBRA))
 		zlog_debug("%s: Total %u L2VNI VPNs pending to be processed for remote route installation",
@@ -6370,7 +6369,7 @@ int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evp
 	 * any RD.
 	 * Note: EVPN routes are a 2-level table.
 	 */
-	for (rd_dest = bgp_table_top(bgp->rib[afi][safi]); rd_dest;
+	for (rd_dest = bgp_table_top(bgp_evpn_mi->rib[afi][safi]); rd_dest;
 	     rd_dest = bgp_route_next(rd_dest)) {
 		table = bgp_dest_get_bgp_table_info(rd_dest);
 		if (!table)
@@ -6402,7 +6401,7 @@ int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evp
 					continue;
 
 				if (walk_fifo) {
-					ret = install_evpn_remote_route_per_l2vni(bgp, pi, evp);
+					ret = install_evpn_remote_route_per_l2vni(bgp_evpn_mi, pi, evp);
 					if (ret) {
 						bgp_dest_unlock_node(rd_dest);
 						bgp_dest_unlock_node(dest);
@@ -6414,18 +6413,18 @@ int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evp
 					 * entry is not needed to be imported
 					 * into the VNI i.e. RTs dont match
 					 */
-					if (!bgp_evpn_evi_check_route_matches_import_rts(bgp, evi, pi))
+					if (!bgp_evpn_evi_check_route_matches_import_rts(bgp_evpn_mi, evi, pi))
 						continue;
 
 					if (install)
-						ret = bgp_evpn_evi_install_route_entry(bgp, evi, evp, pi);
+						ret = bgp_evpn_evi_install_route_entry(bgp_evpn_mi, evi, evp, pi);
 					else
-						ret = bgp_evpn_evi_uninstall_route_entry(bgp, evi, evp, pi);
+						ret = bgp_evpn_evi_uninstall_route_entry(bgp_evpn_mi, evi, evp, pi);
 
 					if (ret) {
 						flog_err(EC_BGP_EVPN_FAIL,
 							 "%u: Failed to %s EVPN %s route in VNI %u",
-							 bgp->vrf_id,
+							 bgp_evpn_mi->vrf_id,
 							 install ? "install" : "uninstall",
 							 bgp_evpn_route_type_str[evp->prefix.route_type]
 								 .str,
@@ -7863,7 +7862,7 @@ int bgp_evpn_evi_install_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi
 	 * Install type-3 routes followed by type-2 routes - the ones applicable
 	 * for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_global_routes(bgp, evi, true);
+	return bgp_evpn_evi_install_uninstall_global_routes(evi, true, false);
 }
 
 /*
@@ -7876,7 +7875,7 @@ int bgp_evpn_evi_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *e
 	 * Uninstall type-2 routes followed by type-3 routes - the ones
 	 * applicable for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_global_routes(bgp, evi, false);
+	return bgp_evpn_evi_install_uninstall_global_routes(evi, false, false);
 }
 
 /*

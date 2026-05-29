@@ -3324,7 +3324,7 @@ void bgp_zebra_process_remote_routes_for_l2vni(struct event *e)
 	 * If we have learnt and retained remote routes (VTEPs, MACs)
 	 * for this VNI, install them.
 	 */
-	bgp_evpn_evi_install_uninstall_global_routes(NULL, NULL, true);
+	bgp_evpn_evi_install_uninstall_global_routes(NULL, true, true);
 
 	/*
 	 * If there are VNIs still pending to be processed, schedule them

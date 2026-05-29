@@ -254,7 +254,7 @@ bool bgp_evpn_skip_vrf_import_of_local_es(struct bgp *bgp_vrf, const struct pref
 int _bgp_evpn_vrf_uninstall_route_entry(struct bgp *bgp_vrf, const struct prefix_evpn *evp,
 				      struct bgp_path_info *parent_pi);
 extern void bgp_zebra_evpn_pop_items_from_announce_fifo(struct bgp_evpn_evi *evi);
-extern int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install);
+extern int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo);
 extern void bgp_evpn_fill_rmac_nh_to_attr(struct bgp *bgp_vrf, struct attr *attr,
 					  struct prefix_evpn *evp, struct ipaddr *vtep_ip);
 #endif /* _QUAGGA_BGP_EVPN_H */
