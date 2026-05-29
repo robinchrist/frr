@@ -6335,7 +6335,7 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
  * Install or uninstall all type 1, 2 and 3 routes that are appropriate for this
  * particular EVI.
  */
-int bgp_evpn_evi_install_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install)
+int bgp_evpn_evi_install_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi, bool install)
 {
 	afi_t afi;
 	safi_t safi;
@@ -7863,7 +7863,7 @@ int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	 * Install type-3 routes followed by type-2 routes - the ones applicable
 	 * for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_routes(bgp, evi, true);
+	return bgp_evpn_evi_install_uninstall_global_routes(bgp, evi, true);
 }
 
 /*
@@ -7876,7 +7876,7 @@ int bgp_evpn_evi_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	 * Uninstall type-2 routes followed by type-3 routes - the ones
 	 * applicable for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_routes(bgp, evi, false);
+	return bgp_evpn_evi_install_uninstall_global_routes(bgp, evi, false);
 }
 
 /*
