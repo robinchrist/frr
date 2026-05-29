@@ -1688,13 +1688,15 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	/*
 	 * for all EVIs attached to this VRF, update all type-2 routes
 	 * because they carry the export route-targets of the VRF they belong to and of the EVI itselfs
+	 * No need to update the type 1 or type 3 routes, as they only carry the EVIs own route targets, never the
+	 * EVI's tenant VRF route targets
 	 */
 	for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi))
 		bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
 }
 
-/* TODO: bgp_evpn_evi_handle_import_rt_change */
-/* TODO: bgp_evpn_evi_handle_export_rt_change */
+/* TODO: bgp_evpn_evi_handle_import_rt_change, Dep: bgp_evpn_evi_teardown_import, bgp_evpn_evi_setup_import */
+/* TODO: bgp_evpn_evi_handle_export_rt_change Dep: ??? */
 
 /* Legacy!
  * Handle autort change for a given VNI.
@@ -5039,37 +5041,33 @@ static int bgp_evpn_evi_get_flood_mode(struct bgp *bgp,
  * -  Type 3 (Inclusive Multicast Ethernet Tag Route)
  * This function is invoked upon the EVI export RT getting modified or
  * a change to tunnel IP. Note that these
- * situations need the route in the per-VNI table as well as the global
+ * situations need the route in the per-EVI table as well as the global
  * table to be updated (as attributes change).
  */
-int bgp_evpn_evi_update_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
+int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	int ret;
 	struct prefix_evpn p;
 
 	update_type1_routes_for_evi(bgp, evi);
 
 	/* Update and advertise the type-3 route (only one) followed by the
-	 * locally learnt type-2 routes (MACIP) - for this VNI.
+	 * locally learnt type-2 routes (MACIP) - for this EVI.
 	 *
 	 * RT-3 only if doing head-end replication
 	 */
-	if (bgp_evpn_evi_get_flood_mode(bgp, evi)
-				== VXLAN_FLOOD_HEAD_END_REPL) {
+	if (bgp_evpn_evi_get_flood_mode(bgp, evi) == VXLAN_FLOOD_HEAD_END_REPL) {
 		build_evpn_type3_prefix(&p, &evi->originator_ip);
-		ret = bgp_evpn_evi_update_route(bgp, evi, &p, 0, 0, NULL);
-		if (ret)
-			return ret;
+		bgp_evpn_evi_update_route(bgp, evi, &p, 0, 0, NULL);
 	}
 
 	bgp_evpn_evi_update_all_type2_routes(bgp, evi);
 	return 0;
 }
 
-/* Helper function / wrapper around bgp_evpn_evi_update_routes for hash_iterate()
+/* Helper function / wrapper around bgp_evpn_evi_update_type_1_2_3_routes for hash_iterate()
  * Update Type-1/2/3 Routes for an EVI
  */
-static void bgp_evpn_evi_update_routes_hash(struct hash_bucket *bucket,
+static void bgp_evpn_evi_update_type_1_2_3_routes_hash(struct hash_bucket *bucket,
 				       struct bgp *bgp)
 {
 	struct bgp_evpn_evi *evi;
@@ -5078,7 +5076,7 @@ static void bgp_evpn_evi_update_routes_hash(struct hash_bucket *bucket,
 		return;
 
 	evi = (struct bgp_evpn_evi *)bucket->data;
-	bgp_evpn_evi_update_routes(bgp, evi);
+	bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
 }
 
 /*
@@ -7780,7 +7778,7 @@ void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt)
  */
 int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	return bgp_evpn_evi_update_routes(bgp, evi);
+	return bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
 }
 
 void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw)
@@ -7840,7 +7838,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 	/* Update locally originated routes for all L2VNIs */
 	hash_iterate(bgp->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
-			       void *))bgp_evpn_evi_update_routes_hash,
+			       void *))bgp_evpn_evi_update_type_1_2_3_routes_hash,
 		     bgp);
 
 	/* clear old_soo */
@@ -9134,7 +9132,7 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 		/* Only need to update the exported routes if they made use of the VRF (VNI + Export RTs) */
 		if (CHECK_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS)) {
 			UNSET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
-			bgp_evpn_evi_update_routes(bgp_evpn_mi, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
 		}
 		bgp_evpn_evi_unlink_from_vrf(evi);
 	}
@@ -9338,7 +9336,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 		 * for VRFs
 		 */
 		if (is_evi_live(evi))
-			bgp_evpn_evi_update_routes(bgp, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
 	} else {
 		/* Create or update as appropriate. */
 		evi = bgp_evpn_evi_new(bgp, vni, originator_ip, tenant_vrf_id,

@@ -1123,7 +1123,7 @@ extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		ifindex_t svi_ifindex);
 extern void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni);
-extern int bgp_evpn_evi_update_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
+extern int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern struct bgp_path_info *bgp_evpn_delete_route_entry(struct bgp *bgp, afi_t afi, safi_t safi,
 						     struct bgp_dest *dest,
 						     const struct bgp_path_info *originator,

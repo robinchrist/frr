@@ -4628,7 +4628,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi)) {
 			if (!bgp_evpn_is_svi_macip_enabled(evi))
 				continue;
-			bgp_evpn_evi_update_routes(bgp_evpn_mi, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
 		}
 	}
 
