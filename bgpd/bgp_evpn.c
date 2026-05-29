@@ -1698,6 +1698,14 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 /* TODO: bgp_evpn_evi_handle_import_rt_change, Dep: bgp_evpn_evi_teardown_import, bgp_evpn_evi_setup_import */
 /* TODO: bgp_evpn_evi_handle_export_rt_change Dep: ??? */
 
+/*
+ * Handle change to export RT - update and advertise local routes.
+ */
+int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi)
+{
+	return bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
+}
+
 /* Legacy!
  * Handle autort change for a given VNI.
  */
@@ -7778,13 +7786,7 @@ void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt)
 			       void *))bgp_evpn_handle_deferred_bestpath_per_vni,
 		     &ctx);
 }
-/*
- * Handle change to export RT - update and advertise local routes.
- */
-int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi)
-{
-	return bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
-}
+
 
 void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw)
 {
