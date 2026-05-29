@@ -483,7 +483,7 @@ static void bgp_evpn_effective_fq_rt_free(struct bgp_evpn_effective_fq_rt* eff_r
  * we'll have to adjust fhe function signature and return a union or split the function and have the caller
  * call all of them
  */
-static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_derive_import_auto_rt(vni_t vni, bool rfc8365_compatible) {
+static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_derive_import_auto_rt_common(vni_t vni, bool rfc8365_compatible) {
 
 	if(rfc8365_compatible) {
 		/* Set the "automatic" bit in the local admin field of the RT, see docs above why */
@@ -496,7 +496,7 @@ static struct bgp_evpn_effective_wildcard_rt* _bgp_evpn_derive_import_auto_rt(vn
 	return bgp_evpn_effective_wildcard_rt_new(local_admin_nbo);
 }
 /* Common function to generate export auto RT for VRF and EVIs, see above for details */
-static struct bgp_evpn_effective_fq_rt* _bgp_evpn_derive_export_auto_rt(as_t as, vni_t vni, bool rfc8365_compatible) {
+static struct bgp_evpn_effective_fq_rt* _bgp_evpn_derive_export_auto_rt_common(as_t as, vni_t vni, bool rfc8365_compatible) {
 
 	struct ecommunity_val eval;
 
@@ -523,7 +523,7 @@ static struct bgp_evpn_effective_fq_rt* _bgp_evpn_derive_export_auto_rt(as_t as,
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const struct bgp *bgp_vrf) {
-	return _bgp_evpn_derive_export_auto_rt(bgp_vrf->as, bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_export_auto_rt_common(bgp_vrf->as, bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
 }
 
 /*
@@ -531,7 +531,7 @@ static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt(const struct bgp *bgp_vrf) {
-	return _bgp_evpn_derive_import_auto_rt(bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_import_auto_rt_common(bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
 }
 
 
@@ -540,7 +540,7 @@ static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_fq_rt* bgp_evpn_evi_derive_export_auto_rt(const struct bgp *parent_vrf, const struct bgp_evpn_evi *evi) {
-	return _bgp_evpn_derive_export_auto_rt(parent_vrf->as, evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_export_auto_rt_common(parent_vrf->as, evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
 }
 
 /*
@@ -548,7 +548,7 @@ static struct bgp_evpn_effective_fq_rt* bgp_evpn_evi_derive_export_auto_rt(const
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_evi_derive_import_auto_rt(const struct bgp *parent_vrf, const struct bgp_evpn_evi *evi) {
-	return _bgp_evpn_derive_import_auto_rt(evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_import_auto_rt_common(evi->vni, parent_vrf->evpn_autort_rfc8365_compatible);
 }
 
 
