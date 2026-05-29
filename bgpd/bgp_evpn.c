@@ -2116,7 +2116,7 @@ void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgp_evpn_
 	UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
 }
 
-static void bgp_evpn_rt_list_remove_by_ecom(struct list *rt_list, struct ecommunity *ecomdel)
+static void legacy_bgp_evpn_rt_list_remove_by_ecom(struct list *rt_list, struct ecommunity *ecomdel)
 {
 	struct listnode *node = NULL, *nnode = NULL, *node_to_del = NULL;
 	struct ecommunity *ecom = NULL;
@@ -2146,7 +2146,7 @@ void legacy_bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list 
 	ecom_auto = ecommunity_new();
 	ecommunity_add_val(ecom_auto, &eval, false, false);
 
-	bgp_evpn_rt_list_remove_by_ecom(rtl, ecom_auto);
+	legacy_bgp_evpn_rt_list_remove_by_ecom(rtl, ecom_auto);
 
 	ecommunity_free(&ecom_auto);
 }
