@@ -1494,7 +1494,7 @@ static int legacy_is_evi_present_in_evi_irt_node(struct evi_irt_node *irt_node, 
 	return 0;
 }
 
-/*
+/* Legacy?
  * Mask off global-admin field of specified extended community (RT),
  * just retain the local-admin field.
  */
@@ -1514,7 +1514,7 @@ static inline void mask_ecom_global_admin(struct ecommunity_val *dst,
 	}
 }
 
-/*
+/* Legacy?
  * Compare Route Targets.
  */
 int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
@@ -1541,6 +1541,7 @@ int bgp_evpn_route_target_ecom_cmp(struct ecommunity *ecom1,
 	return strcmp(ecom1->str, ecom2->str);
 }
 
+/* Legacy? */
 void bgp_evpn_xxport_delete_ecomm(void *val)
 {
 	struct ecommunity *ecomm = val;
@@ -1628,6 +1629,7 @@ static void legacy_bgp_evpn_evi_form_auto_rt(struct bgp *bgp, vni_t vni, struct 
 		ecommunity_free(&ecomadd);
 }
 
+
 /* Call this when you've done modifications that could potentially influence the effective Import Route Targets
  * e.g. VNI change (different Auto RT), new "import" RT added / removed, new "both" RT added / removed, etc..
  */
@@ -1691,6 +1693,9 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 		bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
 }
 
+/* TODO: bgp_evpn_evi_handle_import_rt_change */
+/* TODO: bgp_evpn_evi_handle_export_rt_change */
+
 /* Legacy!
  * Handle autort change for a given VNI.
  */
@@ -1745,7 +1750,7 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool
 
 
 /*
- * Map the effective import RTs of a VRF to the vrf_irt_nodes lookup tables.
+ * Map the effective import RTs of a VRF to the vrf_wildcard_irt_nodes and vrf_fq_irt_nodes lookup tables.
  * The mapping is used during route import (bgp_evpn_vrf_check_route_matches_import_rts).
  */
 void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
@@ -1815,7 +1820,7 @@ void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
 }
 
 /*
- * Unmap the VRF from all vrf_irt_nodes corresponding to its effective import RTs.
+ * Unmap the VRF from all vrf_wildcard_irt_nodes and vrf_fq_irt_nodes corresponding to its effective import RTs.
  * Deletes IRT nodes that become empty.
  */
 void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
@@ -1887,6 +1892,152 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 		}
 	}
 }
+
+/*
+ * Map the effective import RTs of a EVI to the evi_wildcard_irt_nodes and evi_fq_irt_nodes lookup tables.
+ * The mapping is used during route import (bgp_evpn_evi_check_route_matches_import_rts).
+ */
+void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi)
+{
+	struct bgp *bgp_evpn_mi;
+	struct bgp_evpn_effective_wildcard_rt *eff_w;
+	struct bgp_evpn_effective_fq_rt *eff_fq;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(EC_BGP_NO_DFLT,
+			 "evi map to irt nodes - evpn instance not created yet");
+		return;
+	}
+
+	frr_each (bgp_evpn_effective_wildcard_rt_slu, &evi->effective_wildcard_import_rts, eff_w) {
+
+		struct evi_wildcard_irt_node tmp_lookup_node;
+		struct evi_wildcard_irt_node *irt;
+		struct evi_mapped_evi *evi_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
+
+		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,&tmp_lookup_node);
+		/* Create the node if it doesn't exist */
+		if (!irt) {
+			irt = evi_wildcard_irt_node_new(eff_w->local_admin_nbo);
+			evi_wildcard_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,irt);
+		}
+
+
+		evi_item = evi_mapped_evi_new(evi);
+		/* Skip the extra "is already present" check - try to insert right away
+		 * and if it fails, it means it's already present and we can just free the newly allocated item
+		 */
+		if(evi_mapped_evi_slu_add(&irt->evis, evi_item) != NULL)
+			/* Already mapped, free the newly allocated item */
+			evi_mapped_evi_free(evi_item);
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,&evi->effective_fq_import_rts, eff_fq) {
+		struct evi_fq_irt_node tmp_lookup_node;
+		struct evi_fq_irt_node *irt;
+		struct evi_mapped_evi *evi_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
+
+		irt = evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,&tmp_lookup_node);
+		/* Create the node if it doesn't exist */
+		if (!irt) {
+			irt = evi_fq_irt_node_new(eff_fq->ecom_val);
+			evi_fq_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,irt);
+		}
+
+		evi_item = evi_mapped_evi_new(evi);
+
+		/* Skip the extra "is already present" check - try to insert right away
+		 * and if it fails, it means it's already present and we can just free the newly allocated item
+		 */
+		if(evi_mapped_evi_slu_add(&irt->evis, evi_item) != NULL)
+			/* Already mapped, free the newly allocated item */
+			evi_mapped_evi_free(evi_item);
+		
+	}
+}
+
+/*
+ * Unmap the EVI from all evi_wildcard_irt_nodes and evi_fq_irt_nodes corresponding to its effective import RTs.
+ * Deletes IRT nodes that become empty.
+ */
+void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
+{
+	struct bgp *bgp_evpn_mi;
+	struct bgp_evpn_effective_wildcard_rt *eff_w;
+	struct bgp_evpn_effective_fq_rt *eff_fq;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi) {
+		flog_err(EC_BGP_NO_DFLT,
+			 "evi unmap from irt nodes - evpn instance not created yet");
+		return;
+	}
+
+	frr_each (bgp_evpn_effective_wildcard_rt_slu,&evi->effective_wildcard_import_rts, eff_w) {
+		struct evi_wildcard_irt_node tmp_lookup_node;
+		struct evi_wildcard_irt_node *irt;
+		struct evi_mapped_evi tmp_evi;
+		struct evi_mapped_evi *evi_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
+
+		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,&tmp_lookup_node);
+		if (!irt)
+			continue; /* Node does not exist, nothing to do */
+
+		tmp_evi.evi = evi;
+		evi_item = evi_mapped_evi_slu_find(&irt->evis, &tmp_evi);
+		if (!evi_item)
+			continue; /* EVI not mapped to this IRT node*/
+
+		evi_mapped_evi_slu_del(&irt->evis, evi_item);
+		evi_mapped_evi_free(evi_item);
+
+		/* if the node doesn't hold any other mapped EVIs, delete it */
+		if (evi_mapped_evi_slu_count(&irt->evis) == 0) {
+			evi_wildcard_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,irt);
+			evi_wildcard_irt_node_free(irt);
+		}
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,&evi->effective_fq_import_rts, eff_fq) {
+		struct evi_fq_irt_node tmp_lookup_node;
+		struct evi_fq_irt_node *irt;
+		struct evi_mapped_evi tmp_evi;
+		struct evi_mapped_evi *evi_item;
+
+		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
+		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
+
+		irt = evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,&tmp_lookup_node);
+		if (!irt)
+			continue; /* Node does not exist, nothing to do */
+
+		tmp_evi.evi = evi;
+		evi_item = evi_mapped_evi_slu_find(&irt->evis, &tmp_evi);
+		if (!evi_item)
+			continue; /* EVI not mapped to this IRT node*/
+
+		evi_mapped_evi_slu_del(&irt->evis, evi_item);
+		evi_mapped_evi_free(evi_item);
+
+		/* if the node doesn't hold any other mapped EVIs, delete it */
+		if (evi_mapped_evi_slu_count(&irt->evis) == 0) {
+			evi_fq_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,irt);
+			evi_fq_irt_node_free(irt);
+		}
+	}
+}
+
+
 
 /*
  * Map the RTs (configured or automatically derived) of a VNI to the VNI.

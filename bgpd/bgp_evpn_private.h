@@ -1101,6 +1101,8 @@ extern int bgp_evpn_vrf_install_global_routes(struct bgp *bgp_vrf);
 extern int bgp_evpn_vrf_uninstall_global_routes(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf);
+extern void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi);
+extern void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi);
 extern void bgp_evpn_vrf_setup_import(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_teardown_import(struct bgp *bgp_vrf);
 
