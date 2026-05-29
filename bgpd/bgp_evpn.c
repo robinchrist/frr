@@ -1715,7 +1715,7 @@ static void legacy_bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struc
 
 	if (!is_import_rt_configured(evi)) {
 		if (is_evi_live(evi))
-			bgp_evpn_evi_uninstall_routes(bgp, evi);
+			bgp_evpn_evi_uninstall_global_routes(bgp, evi);
 		legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 		list_delete_all_node(evi->evi_import_rtl);
 		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
@@ -7870,7 +7870,7 @@ int bgp_evpn_evi_install_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi
  * Uninstall any existing remote routes for this EVI. One scenario in which
  * this is invoked is upon an import RT change.
  */
-int bgp_evpn_evi_uninstall_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
+int bgp_evpn_evi_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	/*
 	 * Uninstall type-2 routes followed by type-3 routes - the ones
