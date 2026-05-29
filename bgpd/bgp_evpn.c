@@ -871,7 +871,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	}
 
 	/* Now the import specific RTs */
-	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
+	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_export, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
 		bgp_evpn_vrf_push_effective_rt(
 			cfgd_item,
@@ -880,6 +880,8 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 		);
 	}
 }
+
+
 
 static void bgp_evpn_format_wildcard_rt(char *buf, size_t buflen,
 					uint32_t local_admin)
