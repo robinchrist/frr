@@ -6337,7 +6337,7 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
  *
  * walk_fifo is special and magic, TODO: document this....
  */
-int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo)
+static int _bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo)
 {
 	afi_t afi;
 	safi_t safi;
@@ -6451,6 +6451,25 @@ int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool 
 	}
 
 	return 0;
+}
+
+/*
+ * Install or uninstall all type 1, 2 and 3 routes that are appropriate for this
+ * particular EVI. Analog to bgp_evpn_vrf_install_uninstall_global_routes but for EVIs instead of VRFs.
+ */
+int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install) {
+	return _bgp_evpn_evi_install_uninstall_global_routes(evi, install, false);
+}
+
+/*
+ * Install or uninstall all type 1, 2 and 3 routes that are appropriate for this
+ * particular EVI. 
+ * 
+ * magic variant that does a FIFO walk (see commmit 07a80709c728d87abc2d15393a719d4232b1f33b
+ * for more details until we document this properly!)
+ */
+int bgp_evpn_evi_install_uninstall_global_routes_fifo(bool install) {
+	return _bgp_evpn_evi_install_uninstall_global_routes(NULL, install, false);
 }
 
 
@@ -7862,7 +7881,7 @@ int bgp_evpn_evi_install_global_routes(struct bgp_evpn_evi *evi)
 	 * Install type-3 routes followed by type-2 routes - the ones applicable
 	 * for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_global_routes(evi, true, false);
+	return bgp_evpn_evi_install_uninstall_global_routes(evi, true);
 }
 
 /*
@@ -7875,7 +7894,7 @@ int bgp_evpn_evi_uninstall_global_routes(struct bgp_evpn_evi *evi)
 	 * Uninstall type-2 routes followed by type-3 routes - the ones
 	 * applicable for this EVI.
 	 */
-	return bgp_evpn_evi_install_uninstall_global_routes(evi, false, false);
+	return bgp_evpn_evi_install_uninstall_global_routes(evi, false);
 }
 
 /*
