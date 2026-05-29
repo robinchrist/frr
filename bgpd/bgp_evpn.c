@@ -1720,7 +1720,7 @@ static void legacy_bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struc
 		list_delete_all_node(evi->evi_import_rtl);
 		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
 		if (is_evi_live(evi))
-			bgp_evpn_evi_install_routes(bgp, evi);
+			bgp_evpn_evi_install_global_routes(bgp, evi);
 	}
 	if (!is_export_rt_configured(evi)) {
 		list_delete_all_node(evi->evi_export_rtl);
@@ -7857,7 +7857,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
  * routing table. This is invoked when a VNI becomes "live" or its Import
  * RT is changed.
  */
-int bgp_evpn_evi_install_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
+int bgp_evpn_evi_install_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	/*
 	 * Install type-3 routes followed by type-2 routes - the ones applicable

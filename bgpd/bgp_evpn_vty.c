@@ -2056,7 +2056,7 @@ static void evpn_evi_configure_import_rt(struct bgp *bgp, struct bgp_evpn_evi *e
 
 	/* Install routes that match new import RT */
 	if (is_evi_live(evi))
-		bgp_evpn_evi_install_routes(bgp, evi);
+		bgp_evpn_evi_install_global_routes(bgp, evi);
 }
 
 /*
@@ -2113,7 +2113,7 @@ static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgp_evpn_evi 
 
 	/* Install routes that match new import RT */
 	if (is_evi_live(evi))
-		bgp_evpn_evi_install_routes(bgp, evi);
+		bgp_evpn_evi_install_global_routes(bgp, evi);
 }
 
 /*
