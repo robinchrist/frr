@@ -2100,21 +2100,21 @@ void legacy_bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi
  * Derive Import RT automatically for VNI and map VNI to RT.
  * The mapping will be used during route processing.
  */
-void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
-	legacy_bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
+	legacy_bgp_evpn_evi_form_auto_rt(bgp_evpn_mi, evi->vni, evi->evi_import_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
 
 	/* Map RT to VNI */
-	legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
+	legacy_bgp_evpn_map_vni_to_its_rts(bgp_evpn_mi, evi);
 }
 
 /*
  * Derive Export RT automatically for VNI.
  */
-void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
-	legacy_bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
+	legacy_bgp_evpn_evi_form_auto_rt(bgp_evpn_mi, evi->vni, evi->evi_export_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
 }
 
@@ -2614,11 +2614,11 @@ static void bgp_evpn_get_rmac_nexthop(struct bgp_evpn_evi *evi,
  * Derive RD and RT for a VNI automatically. Invoked at the time of
  * creation of a VNI.
  */
-static void bgp_evpn_evi_derive_rd_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
+static void bgp_evpn_evi_derive_rd_rt(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
-	bgp_evpn_evi_derive_auto_rd(bgp, evi);
-	legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
-	legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
+	bgp_evpn_evi_derive_auto_rd(bgp_evpn_mi, evi);
+	legacy_bgp_evpn_evi_derive_import_auto_rt(bgp_evpn_mi, evi);
+	legacy_bgp_evpn_evi_derive_export_auto_rt(bgp_evpn_mi, evi);
 }
 
 /*
@@ -4197,7 +4197,7 @@ static inline bool bgp_evpn_route_add_l3_attrs_ok(struct bgp_evpn_evi *evi, cons
  * Create or update an EVPN EVI route entry. This could be in the EVI route tables
  * or the global route table.
  */
-static int bgp_evpn_evi_update_route_entry(struct bgp *bgp, struct bgp_evpn_evi *evi,
+static int bgp_evpn_evi_update_route_entry(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi,
 				   afi_t afi, safi_t safi,
 				   struct bgp_dest *dest, struct attr *attr,
 				   const struct ethaddr *mac,
@@ -4217,7 +4217,7 @@ static int bgp_evpn_evi_update_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	evp = (const struct prefix_evpn *)bgp_dest_get_prefix(dest);
 
 	/* See if this is an update of an existing route, or a new add. */
-	local_pi = bgp_evpn_route_get_local_path(bgp, dest, 0);
+	local_pi = bgp_evpn_route_get_local_path(bgp_evpn_mi, dest, 0);
 
 	/* If route doesn't exist already, create a new one, if told to.
 	 * Otherwise act based on whether the attributes of the route have
@@ -4232,7 +4232,7 @@ static int bgp_evpn_evi_update_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	/* if a local path is being added with a non-zero esi look
 	 * for SYNC paths from ES peers and bubble up the sync-info
 	 */
-	update_evpn_route_entry_sync_info(bgp, dest, attr, seq, vpn_rt, mac);
+	update_evpn_route_entry_sync_info(bgp_evpn_mi, dest, attr, seq, vpn_rt, mac);
 
 	/* For non-GW MACs, update MAC mobility seq number, if needed. */
 	if (seq && !CHECK_FLAG(flags, ZEBRA_MACIP_TYPE_GW))
@@ -4249,7 +4249,7 @@ static int bgp_evpn_evi_update_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 
 		/* Create new route with its attribute. */
 		tmp_pi = info_make(ZEBRA_ROUTE_BGP, BGP_ROUTE_STATIC, 0,
-				   bgp->peer_self, attr_new, dest);
+				   bgp_evpn_mi->peer_self, attr_new, dest);
 		SET_FLAG(tmp_pi->flags, BGP_PATH_VALID);
 		bgp_path_info_extra_get(tmp_pi);
 
@@ -4668,7 +4668,7 @@ static int bgp_evpn_evi_delete_route(struct bgp *bgp, struct bgp_evpn_evi *evi,
 	return 0;
 }
 
-void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi *evi,
+void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi,
 				       struct bgp_dest *dest,
 				       struct bgp_path_info *local_pi,
 				       const char *caller)
@@ -4711,7 +4711,7 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	 * some other values could differ for different routes. The
 	 * attributes will be shared in the hash table.
 	 */
-	bgp_attr_default_set(&attr, bgp, BGP_ORIGIN_IGP);
+	bgp_attr_default_set(&attr, bgp_evpn_mi, BGP_ORIGIN_IGP);
 	bgp_evpn_vtep_ip_to_attr_nh(&evi->originator_ip, &attr);
 	attr.evpn_flags = local_pi->attr->evpn_flags;
 	attr.es_flags = local_pi->attr->es_flags;
@@ -4742,8 +4742,8 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 							      ? &attr.esi
 							      : NULL);
 
-	if (bgp->evpn_info)
-		macvrf_soo = bgp->evpn_info->soo;
+	if (bgp_evpn_mi->evpn_info)
+		macvrf_soo = bgp_evpn_mi->evpn_info->soo;
 
 	/* Set up extended community. */
 	bgp_evpn_build_route_type_2_3_extcomm(evi, &attr, add_l3_attrs, macvrf_soo);
@@ -4763,7 +4763,7 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 
 	/* Update the route entry. */
 	route_change = bgp_evpn_evi_update_route_entry(
-		bgp, evi, afi, safi, dest, &attr, NULL /* mac */, NULL /* ip */,
+		bgp_evpn_mi, evi, afi, safi, dest, &attr, NULL /* mac */, NULL /* ip */,
 		0, &pi, 0, seq, true /* setup_sync */, &old_is_sync);
 
 	assert(pi);
@@ -4780,14 +4780,14 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	 * advertised to peers; otherwise, ensure it is evicted and
 	 * (re)install the remote route into zebra.
 	 */
-	evpn_route_select_install(bgp, evi, dest, pi);
+	evpn_route_select_install(bgp_evpn_mi, evi, dest, pi);
 
 	if (CHECK_FLAG(pi->flags, BGP_PATH_REMOVED)) {
 		route_change = 0;
 	} else {
 		if (!CHECK_FLAG(pi->flags, BGP_PATH_SELECTED)) {
 			route_change = 0;
-			evpn_cleanup_local_non_best_route(bgp, evi, dest, pi);
+			evpn_cleanup_local_non_best_route(bgp_evpn_mi, evi, dest, pi);
 		} else {
 			bool new_is_sync;
 
@@ -4799,13 +4799,13 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 			 */
 			new_is_sync = bgp_evpn_attr_is_sync(pi->attr);
 			if (!new_is_sync && old_is_sync) {
-				if (CHECK_FLAG(bgp->flags,
+				if (CHECK_FLAG(bgp_evpn_mi->flags,
 					       BGP_FLAG_DELETE_IN_PROGRESS))
-					(void)evpn_zebra_uninstall(bgp, evi,
+					(void)evpn_zebra_uninstall(bgp_evpn_mi, evi,
 								   &evp, pi,
 								   true);
 				else
-					bgp_zebra_route_install(dest, pi, bgp,
+					bgp_zebra_route_install(dest, pi, bgp_evpn_mi,
 								false, evi,
 								true);
 			}
@@ -4819,16 +4819,16 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	if (route_change) {
 		/* Update route in global routing table. */
 		global_dest = bgp_evpn_global_node_get(
-			bgp->rib[afi][safi], afi, safi, &evp, &evi->prd, NULL);
+			bgp_evpn_mi->rib[afi][safi], afi, safi, &evp, &evi->prd, NULL);
 		assert(global_dest);
 		bgp_evpn_evi_update_route_entry(
-			bgp, evi, afi, safi, global_dest, attr_new,
+			bgp_evpn_mi, evi, afi, safi, global_dest, attr_new,
 			NULL /* mac */, NULL /* ip */, 0, &global_pi, 0,
 			mac_mobility_seqnum(attr_new), false /* setup_sync */,
 			NULL /* old_is_sync */);
 
 		/* Schedule for processing and unlock node. */
-		bgp_process(bgp, global_dest, global_pi, afi, safi);
+		bgp_process(bgp_evpn_mi, global_dest, global_pi, afi, safi);
 		bgp_dest_unlock_node(global_dest);
 	}
 
@@ -4836,7 +4836,7 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp, struct bgp_evpn_evi 
 	aspath_unintern(&attr.aspath);
 }
 
-static void bgp_evpn_evi_update_type2_route(struct bgp *bgp, struct bgp_evpn_evi *evi,
+static void bgp_evpn_evi_update_type2_route(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi,
 			       struct bgp_dest *dest)
 {
 	struct bgp_path_info *tmp_pi;
@@ -4848,18 +4848,18 @@ static void bgp_evpn_evi_update_type2_route(struct bgp *bgp, struct bgp_evpn_evi
 		return;
 
 	/* Identify local route. */
-	tmp_pi = bgp_evpn_route_get_local_path(bgp, dest, 0);
+	tmp_pi = bgp_evpn_route_get_local_path(bgp_evpn_mi, dest, 0);
 	if (!tmp_pi)
 		return;
 
-	bgp_evpn_evi_update_type2_route_entry(bgp, evi, dest, tmp_pi, __func__);
+	bgp_evpn_evi_update_type2_route_entry(bgp_evpn_mi, evi, dest, tmp_pi, __func__);
 }
 
 /*
  * Update all type-2 (MACIP) local routes for this EVI - these should also
  * be scheduled for advertise to peers.
  */
-void bgp_evpn_evi_update_all_type2_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void bgp_evpn_evi_update_all_type2_routes(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	struct bgp_dest *dest;
 
@@ -4869,11 +4869,11 @@ void bgp_evpn_evi_update_all_type2_routes(struct bgp *bgp, struct bgp_evpn_evi *
 	 */
 	for (dest = bgp_table_top(evi->mac_table); dest;
 	     dest = bgp_route_next(dest))
-		bgp_evpn_evi_update_type2_route(bgp, evi, dest);
+		bgp_evpn_evi_update_type2_route(bgp_evpn_mi, evi, dest);
 
 	for (dest = bgp_table_top(evi->ip_table); dest;
 	     dest = bgp_route_next(dest))
-		bgp_evpn_evi_update_type2_route(bgp, evi, dest);
+		bgp_evpn_evi_update_type2_route(bgp_evpn_mi, evi, dest);
 }
 
 /*
@@ -8210,13 +8210,13 @@ void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp)
  * Derive RD automatically for VNI using passed information - it
  * is of the form RouterId:unique-id-for-vni.
  */
-void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	char buf[BGP_EVPN_PREFIX_RD_LEN];
 
 	evi->prd.family = AF_UNSPEC;
 	evi->prd.prefixlen = 64;
-	snprintfrr(buf, sizeof(buf), "%pI4:%hu", &bgp->router_id, evi->rd_id);
+	snprintfrr(buf, sizeof(buf), "%pI4:%hu", &bgp_evpn_mi->router_id, evi->rd_id);
 	(void)str2prefix_rd(buf, &evi->prd);
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -8243,21 +8243,21 @@ bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni)
 /*
  * Lookup VNI.
  */
-struct bgp_evpn_evi *bgp_evpn_lookup_vni(struct bgp *bgp, vni_t vni)
+struct bgp_evpn_evi *bgp_evpn_lookup_vni(struct bgp *bgp_evpn_mi, vni_t vni)
 {
 	struct bgp_evpn_evi *evi;
 	struct bgp_evpn_evi tmp;
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.vni = vni;
-	evi = hash_lookup(bgp->evpn_master_instance_info.vnihash, &tmp);
+	evi = hash_lookup(bgp_evpn_mi->evpn_master_instance_info.vnihash, &tmp);
 	return evi;
 }
 
 /*
  * Create a new EVPN EVI - invoked upon configuration or zebra notification.
  */
-struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
+struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 		struct ipaddr *originator_ip,
 		vrf_id_t tenant_vrf_id,
 		struct in_addr mcast_grp,
@@ -8293,17 +8293,17 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 
 
 	bf_assign_index(bm->rd_idspace, evi->rd_id);
-	bgp_evpn_evi_derive_rd_rt(bgp, evi);
+	bgp_evpn_evi_derive_rd_rt(bgp_evpn_mi, evi);
 
 	/* Initialize EVPN route tables. */
-	evi->ip_table = bgp_table_init(bgp, AFI_L2VPN, SAFI_EVPN);
-	evi->mac_table = bgp_table_init(bgp, AFI_L2VPN, SAFI_EVPN);
+	evi->ip_table = bgp_table_init(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN);
+	evi->mac_table = bgp_table_init(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN);
 
 	/* Add to hash */
-	(void)hash_get(bgp->evpn_master_instance_info.vnihash, evi, hash_alloc_intern);
+	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.vnihash, evi, hash_alloc_intern);
 
 	bgp_evpn_remote_ip_hash_init(evi);
-	bgp_evpn_link_to_vni_svi_hash(bgp, evi);
+	bgp_evpn_link_to_vni_svi_hash(bgp_evpn_mi, evi);
 
 	/* add to l2vni list on corresponding vrf */
 	bgp_evpn_evi_link_to_vrf(evi);
@@ -9852,29 +9852,29 @@ static struct bgp_evpn_evi *bgp_evpn_vni_svi_hash_lookup(struct bgp *bgp,
 	return evi;
 }
 
-static void bgp_evpn_link_to_vni_svi_hash(struct bgp *bgp, struct bgp_evpn_evi *evi)
+static void bgp_evpn_link_to_vni_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	if (evi->svi_ifindex == 0)
 		return;
 
-	(void)hash_get(bgp->vni_svi_hash, evi, hash_alloc_intern);
+	(void)hash_get(bgp_evpn_mi->vni_svi_hash, evi, hash_alloc_intern);
 }
 
-static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp,
+static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp_evpn_mi,
 					      struct bgp_evpn_evi *evi)
 {
 	if (evi->svi_ifindex == 0)
 		return;
 
-	hash_release(bgp->vni_svi_hash, evi);
+	hash_release(bgp_evpn_mi->vni_svi_hash, evi);
 }
 
 void bgp_evpn_show_vni_svi_hash(struct hash_bucket *bucket, void *args)
 {
-	struct bgp_evpn_evi *evpn = (struct bgp_evpn_evi *)bucket->data;
+	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
 	struct vty *vty = (struct vty *)args;
 
-	vty_out(vty, "SVI: %u VNI: %u\n", evpn->svi_ifindex, evpn->vni);
+	vty_out(vty, "SVI: %u VNI: %u\n", evi->svi_ifindex, evi->vni);
 }
 
 /*
