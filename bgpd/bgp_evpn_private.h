@@ -1088,6 +1088,8 @@ extern int bgp_evpn_evi_configure_rt_manual(struct bgp_evpn_evi *evi, enum bgp_e
 				     struct bgp_evpn_cfgd_rt *cfgd_rt);
 extern int bgp_evpn_evi_unconfigure_rt_manual(struct bgp_evpn_evi *evi, enum bgp_evpn_rt_direction direction,
 				       struct bgp_evpn_cfgd_rt *to_delete);
+extern int bgp_evpn_evi_configure_auto_rt(struct bgp_evpn_evi *evi, enum bgp_evpn_rt_direction direction,
+				   enum bgp_evpn_autort_cfgd cfg);
 
 extern void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf);

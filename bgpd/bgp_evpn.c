@@ -2489,6 +2489,81 @@ static int _bgp_evpn_unconfigure_rt_manual_common(struct bgp_evpn_rt_config *rt_
 	return 0;
 }
 
+/* Common part for VRFs and EVIs
+ * 
+ * Unified configure / unconfigure auto-RT, meant to be called by VTY
+ * Note that for auto-RTs we don't have an "unconfigure" function, because auto-RT is an enum
+ * For VTY "no route-target <both/import/export> auto", call this function with "BGP_EVPN_AUTORT_NOT_CFGD"
+ *
+ * The behaviour is pretty much the same as for manual RTs:
+ *  - Call with dir both and cfg != BGP_EVPN_AUTORT_NOT_CFGD will override both "import" and "export" and cannot coexist with them.
+ *  - Call with dir both and cfg == BGP_EVPN_AUTORT_NOT_CFGD will only work if "both" != BGP_EVPN_AUTORT_NOT_CFGD!
+ *  - Call with dir import/export and cfg != BGP_EVPN_AUTORT_NOT_CFGD will override the respective direction and split up "both"
+ *  - Call with dir import/export and cfg == BGP_EVPN_AUTORT_NOT_CFGD will override the respective direction and split up "both"
+ *
+ * This function should implicitly optimize the case when implicit RT is active and the user explicitly requests auto RT generation
+ * or auto RT is not active and user requests explicitly auto rt disable
+ */
+static int _bgp_evpn_configure_auto_rt_common(struct bgp_evpn_rt_config *rt_config,
+				   enum bgp_evpn_rt_direction direction,
+				   enum bgp_evpn_autort_cfgd cfg)
+{
+
+	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
+		if(cfg == rt_config->autort_cfgd_both)
+			return -1; /* No config change, abort */
+
+		/* don't bother with "change detection" / "do we have to call bgp_evpn_..._handle_<import/export>_rt_change"
+		 * here, that logic would become a bit tricky and lengthy (particular with implicit auto RT...)
+		 * we rely on bgp_evpn_..._should_generate_<import/export>_autort
+		 * if that changed after we changed the config, we need to call the change handlers
+		 */
+
+		/* regardless of "both" new value, both import and export will be set to BGP_EVPN_AUTORT_NOT_CFGD
+		 * either both was != BGP_EVPN_AUTORT_NOT_CFGD -> import and export (should be) NOT_CFGD -> no change
+		 * or both was == BGP_EVPN_AUTORT_NOT_CFGD -> import and export should be removed because "both" cannot coexist with "import" or "export"
+		 */
+		rt_config->autort_cfgd_import = BGP_EVPN_AUTORT_NOT_CFGD;
+		rt_config->autort_cfgd_export = BGP_EVPN_AUTORT_NOT_CFGD;
+
+		rt_config->autort_cfgd_both = cfg;
+
+	} else {
+		/* simplify the logic by just looking at the current effective state - if the effective state changes,
+		 * we are good, otherwise err out because there is no actual change
+		 */
+		enum bgp_evpn_autort_cfgd* relevant_cfgd_var;
+		enum bgp_evpn_autort_cfgd* other_cfgd_var;
+		if(direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
+			relevant_cfgd_var = &rt_config->autort_cfgd_import;
+			other_cfgd_var = &rt_config->autort_cfgd_export;
+		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
+			relevant_cfgd_var = &rt_config->autort_cfgd_export;
+			other_cfgd_var = &rt_config->autort_cfgd_import;
+		}
+		enum bgp_evpn_autort_cfgd current_effective_state;
+		/* if "both" is configured, it takes precedence (in that case, import and export should both be NOT_CFGD!)*/
+		if(rt_config->autort_cfgd_both != BGP_EVPN_AUTORT_NOT_CFGD) {
+			current_effective_state = rt_config->autort_cfgd_both;
+		} else {
+			current_effective_state = *relevant_cfgd_var; /* both is not configured -> use the specific direction */
+		}
+
+		if(cfg == current_effective_state)
+			return -1; /* No config change, abort */
+
+		/* split up both if it's configured */
+		if(rt_config->autort_cfgd_both != BGP_EVPN_AUTORT_NOT_CFGD) {
+			*other_cfgd_var = rt_config->autort_cfgd_both;
+			rt_config->autort_cfgd_both = BGP_EVPN_AUTORT_NOT_CFGD;
+		}
+		/* both is always NOT_CFGD now */
+		*relevant_cfgd_var = cfg;
+	}
+	
+	return 0;
+}
+
 
 /* Unified function for configuring manual route targets, meant to be called by VTY
  * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
@@ -2587,57 +2662,10 @@ int bgp_evpn_vrf_configure_auto_rt(struct bgp *bgp_vrf,
 	bool import_auto_rt_active_before = bgp_evpn_vrf_should_generate_import_autort(bgp_vrf);
 	bool export_auto_rt_active_before = bgp_evpn_vrf_should_generate_export_autort(bgp_vrf);
 
-	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
-		if(cfg == bgp_vrf->vrf_route_target_config->autort_cfgd_both)
-			return -1; /* No config change, abort */
+	int ret = _bgp_evpn_configure_auto_rt_common(bgp_vrf->vrf_route_target_config, direction, cfg);
+	if(ret != 0)
+		return ret;
 
-		/* don't bother with "change detection" / "do we have to call bgp_evpn_vrf_handle_<import/export>_rt_change"
-		 * here, that logic would become a bit tricky and lengthy (particular with implicit auto RT...)
-		 * we rely on bgp_evpn_vrf_should_generate_<import/export>_autort
-		 * if that changed after we changed the config, we need to call the change handlers
-		 */
-
-		/* regardless of "both" new value, both import and export will be set to BGP_EVPN_AUTORT_NOT_CFGD
-		 * either both was != BGP_EVPN_AUTORT_NOT_CFGD -> import and export (should be) NOT_CFGD -> no change
-		 * or both was == BGP_EVPN_AUTORT_NOT_CFGD -> import and export should be removed because "both" cannot coexist with "import" or "export"
-		 */
-		bgp_vrf->vrf_route_target_config->autort_cfgd_import = BGP_EVPN_AUTORT_NOT_CFGD;
-		bgp_vrf->vrf_route_target_config->autort_cfgd_export = BGP_EVPN_AUTORT_NOT_CFGD;
-
-		bgp_vrf->vrf_route_target_config->autort_cfgd_both = cfg;
-
-	} else {
-		/* simplify the logic by just looking at the current effective state - if the effective state changes,
-		 * we are good, otherwise err out because there is no actual change
-		 */
-		enum bgp_evpn_autort_cfgd* relevant_cfgd_var;
-		enum bgp_evpn_autort_cfgd* other_cfgd_var;
-		if(direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
-			relevant_cfgd_var = &bgp_vrf->vrf_route_target_config->autort_cfgd_import;
-			other_cfgd_var = &bgp_vrf->vrf_route_target_config->autort_cfgd_export;
-		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
-			relevant_cfgd_var = &bgp_vrf->vrf_route_target_config->autort_cfgd_export;
-			other_cfgd_var = &bgp_vrf->vrf_route_target_config->autort_cfgd_import;
-		}
-		enum bgp_evpn_autort_cfgd current_effective_state;
-		/* if "both" is configured, it takes precedence (in that case, import and export should both be NOT_CFGD!)*/
-		if(bgp_vrf->vrf_route_target_config->autort_cfgd_both != BGP_EVPN_AUTORT_NOT_CFGD) {
-			current_effective_state = bgp_vrf->vrf_route_target_config->autort_cfgd_both;
-		} else {
-			current_effective_state = *relevant_cfgd_var; /* both is not configured -> use the specific direction */
-		}
-
-		if(cfg == current_effective_state)
-			return -1; /* No config change, abort */
-
-		/* split up both if it's configured */
-		if(bgp_vrf->vrf_route_target_config->autort_cfgd_both != BGP_EVPN_AUTORT_NOT_CFGD) {
-			*other_cfgd_var = bgp_vrf->vrf_route_target_config->autort_cfgd_both;
-			bgp_vrf->vrf_route_target_config->autort_cfgd_both = BGP_EVPN_AUTORT_NOT_CFGD;
-		}
-		/* both is always NOT_CFGD now */
-		*relevant_cfgd_var = cfg;
-	}
 	bool import_rt_active_after = bgp_evpn_vrf_should_generate_import_autort(bgp_vrf);
 	bool export_rt_active_after = bgp_evpn_vrf_should_generate_export_autort(bgp_vrf);
 
@@ -2765,6 +2793,41 @@ int bgp_evpn_evi_unconfigure_rt_manual(struct bgp_evpn_evi *evi,
 	if(import_changed)
 		bgp_evpn_evi_handle_import_rt_change(evi);
 	if(export_changed)
+		bgp_evpn_evi_handle_export_rt_change(evi);
+
+	return 0;
+}
+
+/* Unified configure / unconfigure auto-RT, meant to be called by VTY
+ * Note that for auto-RTs we don't have an "unconfigure" function, because auto-RT is an enum
+ * For VTY "no route-target <both/import/export> auto", call this function with "BGP_EVPN_AUTORT_NOT_CFGD"
+ *
+ * The behaviour is pretty much the same as for manual RTs:
+ *  - Call with dir both and cfg != BGP_EVPN_AUTORT_NOT_CFGD will override both "import" and "export" and cannot coexist with them.
+ *  - Call with dir both and cfg == BGP_EVPN_AUTORT_NOT_CFGD will only work if "both" != BGP_EVPN_AUTORT_NOT_CFGD!
+ *  - Call with dir import/export and cfg != BGP_EVPN_AUTORT_NOT_CFGD will override the respective direction and split up "both"
+ *  - Call with dir import/export and cfg == BGP_EVPN_AUTORT_NOT_CFGD will override the respective direction and split up "both"
+ *
+ * This function should implicitly optimize the case when implicit RT is active and the user explicitly requests auto RT generation
+ * or auto RT is not active and user requests explicitly auto rt disable
+ */
+int bgp_evpn_evi_configure_auto_rt(struct bgp_evpn_evi *evi,
+				   enum bgp_evpn_rt_direction direction,
+				   enum bgp_evpn_autort_cfgd cfg)
+{
+	bool import_auto_rt_active_before = bgp_evpn_evi_should_generate_import_autort(evi);
+	bool export_auto_rt_active_before = bgp_evpn_evi_should_generate_export_autort(evi);
+
+	int ret = _bgp_evpn_configure_auto_rt_common(evi->evi_rt_config, direction, cfg);
+	if(ret != 0)
+		return ret;
+
+	bool import_rt_active_after = bgp_evpn_evi_should_generate_import_autort(evi);
+	bool export_rt_active_after = bgp_evpn_evi_should_generate_export_autort(evi);
+
+	if(import_auto_rt_active_before != import_rt_active_after)
+		bgp_evpn_evi_handle_import_rt_change(evi);
+	if(export_auto_rt_active_before != export_rt_active_after)
 		bgp_evpn_evi_handle_export_rt_change(evi);
 
 	return 0;
