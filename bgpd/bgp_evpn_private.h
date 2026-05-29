@@ -1095,8 +1095,8 @@ extern void bgp_evpn_evi_handle_rd_change(struct bgp *bgp, struct bgp_evpn_evi *
 				      int withdraw);
 void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 					      struct ecommunity *new_soo);
-extern int bgp_evpn_evi_install_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
-extern int bgp_evpn_evi_uninstall_global_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
+extern int bgp_evpn_evi_install_global_routes(struct bgp_evpn_evi *evi);
+extern int bgp_evpn_evi_uninstall_global_routes(struct bgp_evpn_evi *evi);
 extern int bgp_evpn_vrf_install_global_routes(struct bgp *bgp_vrf);
 extern int bgp_evpn_vrf_uninstall_global_routes(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf);
