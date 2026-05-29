@@ -249,6 +249,11 @@ bool bgp_path_suppressed(struct bgp_path_info *pi)
 	return listcount(pi->extra->aggr_suppressors) > 0;
 }
 
+/* Returns the destination node for the given AFI and SAFI 
+ * Some SAFIs like MPLS EVPN, EVPN or encap (?) use two-level tables
+ * where the top level node is keyed by the RD (Route Distinguisher) and then 
+ * contains (?) another table
+ */
 struct bgp_dest *bgp_afi_node_get(struct bgp_table *table, afi_t afi,
 				  safi_t safi, const struct prefix *p,
 				  struct prefix_rd *prd)
@@ -258,6 +263,9 @@ struct bgp_dest *bgp_afi_node_get(struct bgp_table *table, afi_t afi,
 
 	assert(table);
 
+	/* Two level table for some SAFIs - top level node is keyed by Route Distinguisher
+	 * top level node contains another table!
+	 */
 	if ((safi == SAFI_MPLS_VPN) || (safi == SAFI_ENCAP)
 	    || (safi == SAFI_EVPN)) {
 		pdest = bgp_node_get(table, (struct prefix *)prd);
@@ -274,6 +282,9 @@ struct bgp_dest *bgp_afi_node_get(struct bgp_table *table, afi_t afi,
 
 	dest = bgp_node_get(table, p);
 
+	/* pdest probably means parent destination
+	 * For the two-level SAFIs, link the node to its parent
+	 */
 	if ((safi == SAFI_MPLS_VPN) || (safi == SAFI_ENCAP)
 	    || (safi == SAFI_EVPN))
 		dest->pdest = pdest;
