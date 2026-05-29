@@ -6555,10 +6555,13 @@ static int bgp_evpn_install_uninstall_route_in_evi_list(struct bgp *bgp, afi_t a
 /*
  * Install or uninstall an EVPN route into appropriate VRFs / EVIs / ESs
  * This is supposed to be used with imported routes (i.e. routes received from peers)
+ *
+ * EVPN routes *always* go into the global table. The global table is located in the EVPN
+ * master instance!
  */
-static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t safi,
+static int bgp_evpn_install_uninstall_route(struct bgp *receiving_vrf, afi_t afi, safi_t safi,
 					const struct prefix *p,
-					struct bgp_path_info *pi, int import)
+					struct bgp_path_info *pi, bool import)
 {
 	struct prefix_evpn *evp = (struct prefix_evpn *)p;
 	struct attr *attr = pi->attr;
@@ -6652,14 +6655,14 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 				struct vrf_wildcard_irt_node* vrf_wildcard_irt = lookup_vrf_wildcard_irt_node_by_ecom_val(*eval);
 				if(vrf_wildcard_irt != NULL)
 					bgp_evpn_install_uninstall_route_in_vrf_list(
-					bgp, afi, safi, evp, pi, &vrf_wildcard_irt->vrfs,
+					receiving_vrf, afi, safi, evp, pi, &vrf_wildcard_irt->vrfs,
 					import);
 				
 				/* Now check for regular route targets */
 				struct vrf_fq_irt_node* vrf_fq_irt = lookup_vrf_fq_irt_node_by_ecom_val(*eval);
 				if (vrf_fq_irt != NULL)
 					bgp_evpn_install_uninstall_route_in_vrf_list(
-					bgp, afi, safi, evp, pi, &vrf_fq_irt->vrfs,
+					receiving_vrf, afi, safi, evp, pi, &vrf_fq_irt->vrfs,
 					import);
 				
 			}
@@ -6676,14 +6679,14 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 				struct evi_wildcard_irt_node* evi_wildcard_irt = lookup_evi_wildcard_irt_node_by_ecom_val(*eval);
 				if(evi_wildcard_irt != NULL)
 					bgp_evpn_install_uninstall_route_in_evi_list(
-					bgp, afi, safi, evp, pi, &evi_wildcard_irt->evis,
+					receiving_vrf, afi, safi, evp, pi, &evi_wildcard_irt->evis,
 					import);
 				
 				/* Now check for regular route targets */
 				struct evi_fq_irt_node* evi_fq_irt = lookup_evi_fq_irt_node_by_ecom_val(*eval);
 				if (evi_fq_irt != NULL)
 					bgp_evpn_install_uninstall_route_in_evi_list(
-					bgp, afi, safi, evp, pi, &evi_fq_irt->evis,
+					receiving_vrf, afi, safi, evp, pi, &evi_fq_irt->evis,
 					import);
 				
 			}
@@ -6695,7 +6698,7 @@ static int bgp_evpn_install_uninstall_route(struct bgp *bgp, afi_t afi, safi_t s
 			es = bgp_evpn_es_find(&evp->prefix.es_addr.esi);
 			if (es && bgp_evpn_is_es_local(es))
 				bgp_evpn_es_route_install_uninstall(
-					bgp, es, afi, safi, evp, pi, import);
+					receiving_vrf, es, afi, safi, evp, pi, import);
 		} /* else -> should not happen */
 	}
 
@@ -8360,19 +8363,19 @@ static void hash_evpn_free(struct bgp_evpn_evi *evi)
 /*
  * Import EVPN route from global table to VRFs/EVIs/ESs.
  */
-int bgp_evpn_import_global_received_route(struct bgp *bgp, afi_t afi, safi_t safi,
+int bgp_evpn_import_global_received_route(struct bgp *receiving_vrf, afi_t afi, safi_t safi,
 			  const struct prefix *p, struct bgp_path_info *pi)
 {
-	return bgp_evpn_install_uninstall_route(bgp, afi, safi, p, pi, 1);
+	return bgp_evpn_install_uninstall_route(receiving_vrf, afi, safi, p, pi, true);
 }
 
 /*
  * Unimport evpn route from VRFs/EVIs/ESs.
  */
-int bgp_evpn_unimport_route(struct bgp *bgp, afi_t afi, safi_t safi,
+int bgp_evpn_unimport_route(struct bgp *receiving_vrf, afi_t afi, safi_t safi,
 			    const struct prefix *p, struct bgp_path_info *pi)
 {
-	return bgp_evpn_install_uninstall_route(bgp, afi, safi, p, pi, 0);
+	return bgp_evpn_install_uninstall_route(receiving_vrf, afi, safi, p, pi, false);
 }
 
 /*
@@ -9392,9 +9395,9 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
  * need to advertise local VNIs as EVPN RT-3 whereas, if BUM packets are
  * to be dropped, the RT-3s must be withdrawn.
  */
-void bgp_evpn_flood_control_change(struct bgp *bgp)
+void bgp_evpn_flood_control_change(struct bgp *bgp_evpn_mi)
 {
-	hash_iterate(bgp->evpn_master_instance_info.vnihash, advertise_withdraw_type3, bgp);
+	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash, advertise_withdraw_type3, bgp_evpn_mi);
 }
 
 /*

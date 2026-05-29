@@ -25,17 +25,21 @@
  */
 #define BGP_EVPN_RT_RFC8365_A_BIT 0x80000000
 
-#define EVPN_ENABLED(bgp)  (bgp)->advertise_all_vni
+static inline bool is_evpn_master_instance(const struct bgp *bgp)
+{
+	return bgp == bgp_get_evpn_master_instance();
+}
 
 /* Global helper function to check whether EVPN as a protocol is generally enabled
  * EVPN is generally enabled when `advertise-all-vni` is configured in one VRF
 */
-static inline int is_evpn_enabled(void)
+static inline bool is_evpn_enabled(void)
 {
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp * bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if(!bgp_evpn_mi) /* that shouldn't be null.. */
+		return false;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	return bgp_evpn_mi ? EVPN_ENABLED(bgp_evpn_mi) : 0;
+	return bgp_evpn_mi->advertise_all_vni;
 }
 
 /* Indicates whether type-5 routes should be originated without overlay index,

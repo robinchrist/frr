@@ -3777,13 +3777,19 @@ DEFUN (bgp_evpn_advertise_default_gw_vni,
        "advertise-default-gw",
        "Advertise default g/w mac-ip routes in EVPN for a VNI\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	evpn_set_advertise_default_gw(bgp, evi);
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty,
+			"This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	evpn_set_advertise_default_gw(bgp_evpn_mi, evi);
 
 	return CMD_SUCCESS;
 }
@@ -3794,13 +3800,19 @@ DEFUN (no_bgp_evpn_advertise_default_vni_gw,
        NO_STR
        "Withdraw default g/w mac-ip routes from EVPN for a VNI\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	evpn_unset_advertise_default_gw(bgp, evi);
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty,
+			"This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	evpn_unset_advertise_default_gw(bgp_evpn_mi, evi);
 
 	return CMD_SUCCESS;
 }
@@ -3811,18 +3823,18 @@ DEFUN (bgp_evpn_advertise_default_gw,
        "advertise-default-gw",
        "Advertise All default g/w mac-ip routes in EVPN\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
 		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
+			"This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	evpn_set_advertise_default_gw(bgp, NULL);
+	evpn_set_advertise_default_gw(bgp_evpn_mi, NULL);
 
 	return CMD_SUCCESS;
 }
@@ -3833,12 +3845,18 @@ DEFUN (no_bgp_evpn_advertise_default_gw,
        NO_STR
        "Withdraw All default g/w mac-ip routes from EVPN\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	evpn_unset_advertise_default_gw(bgp, NULL);
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty,
+			"This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	evpn_unset_advertise_default_gw(bgp_evpn_mi, NULL);
 
 	return CMD_SUCCESS;
 }
@@ -3854,9 +3872,10 @@ DEFUN (bgp_evpn_advertise_all_vni,
 	if (!bgp)
 		return CMD_WARNING;
 
+	/* How or WHY does this even work?? bgp_evpn_mi should never be null due to bgp_set_evpn_master_instance?  */
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
 	if (bgp_evpn_mi && bgp_evpn_mi != bgp) {
-		vty_out(vty, "%% Please unconfigure EVPN in %s\n",
+		vty_out(vty, "%% There can only be one EVPN master VRF! Please unconfigure in VRF %s first\n",
 			bgp_evpn_mi->name_pretty);
 		return CMD_WARNING_CONFIG_FAILED;
 	}
@@ -3875,6 +3894,12 @@ DEFUN (no_bgp_evpn_advertise_all_vni,
 
 	if (!bgp)
 		return CMD_WARNING;
+
+	if(!bgp->advertise_all_vni) {
+		vty_out(vty, "%% VRF is not the EVPN master VRF, advertise-all-vni is not configured\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	evpn_unset_advertise_all_vni(bgp);
 	return CMD_SUCCESS;
 }
@@ -3885,12 +3910,12 @@ DEFUN (bgp_evpn_evpn_autort_rfc8365_compatible,
        "Auto-derivation of RT\n"
        "Auto-derivation of RT using RFC8365\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp)
+	if (!bgp_vrf)
 		return CMD_WARNING;
 
-	bgp_evpn_configure_evpn_autort_rfc8365_compatible(bgp, true);
+	bgp_evpn_configure_evpn_autort_rfc8365_compatible(bgp_vrf, true);
 
 	return CMD_SUCCESS;
 }
@@ -3902,12 +3927,12 @@ DEFUN (no_bgp_evpn_evpn_autort_rfc8365_compatible,
        "Auto-derivation of RT\n"
        "Auto-derivation of RT using RFC8365\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp)
+	if (!bgp_vrf)
 		return CMD_WARNING;
 
-	bgp_evpn_configure_evpn_autort_rfc8365_compatible(bgp, false);
+	bgp_evpn_configure_evpn_autort_rfc8365_compatible(bgp_vrf, false);
 
 	return CMD_SUCCESS;
 }
@@ -3958,25 +3983,24 @@ DEFPY (dup_addr_detection,
        "Duplicate address detection time\n"
        "Time in seconds (2-1800) default 180\n")
 {
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp_vrf)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	bgp_vrf->evpn_info->dup_addr_detect = true;
+	bgp_evpn_mi->evpn_info->dup_addr_detect = true;
 
 	if (time_val)
-		bgp_vrf->evpn_info->dad_time = time_val;
+		bgp_evpn_mi->evpn_info->dad_time = time_val;
 	if (max_moves_val)
-		bgp_vrf->evpn_info->dad_max_moves = max_moves_val;
+		bgp_evpn_mi->evpn_info->dad_max_moves = max_moves_val;
 
-	bgp_zebra_dup_addr_detection(bgp_vrf);
+	bgp_zebra_dup_addr_detection(bgp_evpn_mi);
 
 	return CMD_SUCCESS;
 }
@@ -3989,23 +4013,22 @@ DEFPY (dup_addr_detection_auto_recovery,
        "Duplicate address detection permanent freeze\n"
        "Duplicate address detection freeze time (30-3600)\n")
 {
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	uint32_t freeze_time = freeze_time_val;
 
-	if (!bgp_vrf)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	bgp_vrf->evpn_info->dup_addr_detect = true;
-	bgp_vrf->evpn_info->dad_freeze = true;
-	bgp_vrf->evpn_info->dad_freeze_time = freeze_time;
+	bgp_evpn_mi->evpn_info->dup_addr_detect = true;
+	bgp_evpn_mi->evpn_info->dad_freeze = true;
+	bgp_evpn_mi->evpn_info->dad_freeze_time = freeze_time;
 
-	bgp_zebra_dup_addr_detection(bgp_vrf);
+	bgp_zebra_dup_addr_detection(bgp_evpn_mi);
 
 	return CMD_SUCCESS;
 }
@@ -4023,70 +4046,68 @@ DEFPY (no_dup_addr_detection,
        "Duplicate address detection permanent freeze\n"
        "Duplicate address detection freeze time (30-3600)\n")
 {
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	uint32_t max_moves = (uint32_t)max_moves_val;
 	uint32_t freeze_time = (uint32_t)freeze_time_val;
 
-	if (!bgp_vrf)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
 	if (argc == 2) {
-		if (!bgp_vrf->evpn_info->dup_addr_detect)
+		if (!bgp_evpn_mi->evpn_info->dup_addr_detect)
 			return CMD_SUCCESS;
 		/* Reset all parameters to default. */
-		bgp_vrf->evpn_info->dup_addr_detect = false;
-		bgp_vrf->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
-		bgp_vrf->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
-		bgp_vrf->evpn_info->dad_freeze = false;
-		bgp_vrf->evpn_info->dad_freeze_time = 0;
+		bgp_evpn_mi->evpn_info->dup_addr_detect = false;
+		bgp_evpn_mi->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
+		bgp_evpn_mi->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
+		bgp_evpn_mi->evpn_info->dad_freeze = false;
+		bgp_evpn_mi->evpn_info->dad_freeze_time = 0;
 	} else {
 		if (max_moves) {
-			if (bgp_vrf->evpn_info->dad_max_moves != max_moves) {
+			if (bgp_evpn_mi->evpn_info->dad_max_moves != max_moves) {
 				vty_out(vty,
 				"%% Value does not match with config\n");
 				return CMD_SUCCESS;
 			}
-			bgp_vrf->evpn_info->dad_max_moves =
-				EVPN_DAD_DEFAULT_MAX_MOVES;
+			bgp_evpn_mi->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
 		}
 
 		if (time_val) {
-			if (bgp_vrf->evpn_info->dad_time != time_val) {
+			if (bgp_evpn_mi->evpn_info->dad_time != time_val) {
 				vty_out(vty,
 				"%% Value does not match with config\n");
 				return CMD_SUCCESS;
 			}
-			bgp_vrf->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
+			bgp_evpn_mi->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
 		}
 
 		if (freeze_time) {
-			if (bgp_vrf->evpn_info->dad_freeze_time
+			if (bgp_evpn_mi->evpn_info->dad_freeze_time
 			    != freeze_time) {
 				vty_out(vty,
 				"%% Value does not match with config\n");
 				return CMD_SUCCESS;
 			}
-			bgp_vrf->evpn_info->dad_freeze_time = 0;
-			bgp_vrf->evpn_info->dad_freeze = false;
+			bgp_evpn_mi->evpn_info->dad_freeze_time = 0;
+			bgp_evpn_mi->evpn_info->dad_freeze = false;
 		}
 
 		if (permanent_val) {
-			if (bgp_vrf->evpn_info->dad_freeze_time) {
+			if (bgp_evpn_mi->evpn_info->dad_freeze_time) {
 				vty_out(vty,
 				"%% Value does not match with config\n");
 				return CMD_SUCCESS;
 			}
-			bgp_vrf->evpn_info->dad_freeze = false;
+			bgp_evpn_mi->evpn_info->dad_freeze = false;
 		}
 	}
 
-	bgp_zebra_dup_addr_detection(bgp_vrf);
+	bgp_zebra_dup_addr_detection(bgp_evpn_mi);
 
 	return CMD_SUCCESS;
 }
@@ -4097,20 +4118,20 @@ DEFPY(bgp_evpn_advertise_svi_ip,
       NO_STR
       "Advertise svi mac-ip routes in EVPN\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
 	if (no)
-		evpn_set_advertise_svi_macip(bgp, NULL, 0);
+		evpn_set_advertise_svi_macip(bgp_evpn_mi, NULL, 0);
 	else {
-		if (!EVPN_ENABLED(bgp)) {
+		if (!is_evpn_master_instance(bgp_evpn_mi)) {
 			vty_out(vty,
-				"This command is only supported under EVPN VRF\n");
+				"This command is only supported under the EVPN master VRF\n");
 			return CMD_WARNING;
 		}
-		evpn_set_advertise_svi_macip(bgp, NULL, 1);
+		evpn_set_advertise_svi_macip(bgp_evpn_mi, NULL, 1);
 	}
 
 	return CMD_SUCCESS;
@@ -4122,16 +4143,21 @@ DEFPY(bgp_evpn_advertise_svi_ip_vni,
       NO_STR
       "Advertise svi mac-ip routes in EVPN for a VNI\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
 	if (no)
-		evpn_set_advertise_svi_macip(bgp, evi, 0);
+		evpn_set_advertise_svi_macip(bgp_evpn_mi, evi, 0);
 	else
-		evpn_set_advertise_svi_macip(bgp, evi, 1);
+		evpn_set_advertise_svi_macip(bgp_evpn_mi, evi, 1);
 
 	return CMD_SUCCESS;
 }
@@ -4142,18 +4168,16 @@ DEFPY(macvrf_soo_global, macvrf_soo_global_cmd,
       "Site-of-Origin extended community\n"
       "VPN extended community\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+
 	struct ecommunity *ecomm_soo;
 
-	if (!bgp || !bgp_evpn_mi || !bgp_evpn_mi->evpn_info)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (bgp != bgp_evpn_mi) {
-		vty_out(vty,
-			"%% Please configure MAC-VRF SoO in the EVPN underlay: %s\n",
-			bgp_evpn_mi->name_pretty);
-		return CMD_WARNING_CONFIG_FAILED;
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
 	}
 
 	ecomm_soo = ecommunity_str2com(soo, ECOMMUNITY_SITE_ORIGIN, 0);
@@ -4175,14 +4199,17 @@ DEFPY(no_macvrf_soo_global, no_macvrf_soo_global_cmd,
       "Site-of-Origin extended community\n"
       "VPN extended community\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp || !bgp_evpn_mi || !bgp_evpn_mi->evpn_info)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (bgp_evpn_mi)
-		bgp_evpn_handle_global_macvrf_soo_change(bgp_evpn_mi,
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	bgp_evpn_handle_global_macvrf_soo_change(bgp_evpn_mi,
 							 NULL /* new_soo */);
 
 	return CMD_SUCCESS;
@@ -4191,20 +4218,25 @@ DEFPY(no_macvrf_soo_global, no_macvrf_soo_global_cmd,
 DEFUN_HIDDEN (bgp_evpn_advertise_vni_subnet,
 	      bgp_evpn_advertise_vni_subnet_cmd,
 	      "advertise-subnet",
-	      "Advertise the subnet corresponding to VNI\n")
+	      "Advertise prefix routes for EVI SVIs\n")
 {
 	struct bgp *bgp_vrf = NULL;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
+
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
 
 	bgp_vrf = bgp_lookup_by_vrf_id(evi->tenant_vrf_id);
 	if (!bgp_vrf)
 		return CMD_WARNING;
 
-	evpn_set_advertise_subnet(bgp, evi);
+	evpn_set_advertise_subnet(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
@@ -4212,15 +4244,20 @@ DEFUN_HIDDEN (no_bgp_evpn_advertise_vni_subnet,
 	      no_bgp_evpn_advertise_vni_subnet_cmd,
 	      "no advertise-subnet",
 	      NO_STR
-	      "Advertise All local VNIs\n")
+	      "Withdraw prefix routes for EVI SVIs\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	evpn_unset_advertise_subnet(bgp, evi);
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	evpn_unset_advertise_subnet(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
@@ -4492,7 +4529,7 @@ DEFPY (bgp_evpn_enable_resolve_overlay_index,
 		return CMD_WARNING;
 
 	if (bgp != bgp_get_evpn_master_instance()) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4512,9 +4549,11 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
 	struct bgp *bgp_evpn_mi = NULL;
 
-	if (!bgp_vrf || EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is supported under L3VNI BGP EVPN VRF\n");
+	if(!bgp_vrf)
+		return CMD_WARNING;
+
+	if (is_evpn_master_instance(bgp_vrf)) {
+		vty_out(vty, "This command is only supported under a EVPN NON-master VRF\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
@@ -6338,14 +6377,19 @@ DEFPY(bgp_evpn_flood_control_vni,
       "Flood BUM packets using head-end replication\n")
 {
 	struct bgp_evpn_evi *evpn = NULL;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	enum vxlan_flood_control flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
 	if (vty->node == BGP_EVPN_VNI_NODE)
 		evpn = VTY_GET_CONTEXT_SUB(bgp_evpn_evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
+
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
 
 	if (!evpn)
 		return CMD_WARNING;
@@ -6363,7 +6407,7 @@ DEFPY(bgp_evpn_flood_control_vni,
 		return CMD_SUCCESS;
 
 	evpn->vxlan_flood_ctrl = flood_ctrl;
-	bgp_evpn_flood_control_change(bgp);
+	bgp_evpn_flood_control_change(bgp_evpn_mi);
 
 	return CMD_SUCCESS;
 }
@@ -6375,16 +6419,21 @@ DEFUN_NOSH (bgp_evpn_vni,
             "VNI number\n")
 {
 	vni_t vni;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	struct bgp_evpn_evi *evi;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
+
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
 
 	vni = strtoul(argv[1]->arg, NULL, 10);
 
 	/* Create VNI, or mark as configured. */
-	evi = evpn_create_update_vni(bgp, vni);
+	evi = evpn_create_update_vni(bgp_evpn_mi, vni);
 	if (!evi) {
 		vty_out(vty, "%% Failed to create VNI \n");
 		return CMD_WARNING;
@@ -6527,16 +6576,15 @@ DEFUN (bgp_evpn_vni_rd,
        EVPN_ASN_IP_HELP_STR)
 {
 	struct prefix_rd prd;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6551,7 +6599,7 @@ DEFUN (bgp_evpn_vni_rd,
 		return CMD_SUCCESS;
 
 	/* Configure or update the RD. */
-	evpn_evi_configure_rd(bgp, evi, &prd, argv[1]->arg);
+	evpn_evi_configure_rd(bgp_evpn_mi, evi, &prd, argv[1]->arg);
 	return CMD_SUCCESS;
 }
 
@@ -6563,16 +6611,16 @@ DEFUN (no_bgp_evpn_vni_rd,
        EVPN_ASN_IP_HELP_STR)
 {
 	struct prefix_rd prd;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
 		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+			"This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6594,7 +6642,7 @@ DEFUN (no_bgp_evpn_vni_rd,
 		return CMD_WARNING;
 	}
 
-	evpn_evi_unconfigure_rd(bgp, evi);
+	evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
@@ -6604,15 +6652,14 @@ DEFUN (no_bgp_evpn_vni_rd_without_val,
        NO_STR
        EVPN_RT_DIST_HELP_STR)
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6622,7 +6669,7 @@ DEFUN (no_bgp_evpn_vni_rd_without_val,
 		return CMD_WARNING;
 	}
 
-	evpn_evi_unconfigure_rd(bgp, evi);
+	evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
@@ -6924,14 +6971,14 @@ DEFUN(bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cmd,
       "export\n"
       "Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	struct ecommunity *ecomadd = NULL;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6946,7 +6993,7 @@ DEFUN(bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cmd,
 	/* Do nothing if we already have this export route-target */
 	if (!bgp_evpn_rt_matches_existing(bgp_mh_info->ead_es_export_rtl,
 					  ecomadd))
-		bgp_evpn_mh_config_ead_export_rt(bgp, ecomadd, false);
+		bgp_evpn_mh_config_ead_export_rt(bgp_evpn_mi, ecomadd, false);
 	else
 		ecommunity_free(&ecomadd);
 
@@ -6959,14 +7006,14 @@ DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
       "EAD ES Route Target\n"
       "export\n" EVPN_ASN_IP_HELP_STR)
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	struct ecommunity *ecomdel = NULL;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6984,7 +7031,7 @@ DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
 			"%% RT specified does not match EAD-ES RT configuration\n");
 		return CMD_WARNING;
 	}
-	bgp_evpn_mh_config_ead_export_rt(bgp, ecomdel, true);
+	bgp_evpn_mh_config_ead_export_rt(bgp_evpn_mi, ecomdel, true);
 
 	ecommunity_free(&ecomdel);
 	return CMD_SUCCESS;
@@ -6999,17 +7046,17 @@ DEFUN (bgp_evpn_vni_rt,
        "export\n"
        "Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int rt_type;
 	struct ecommunity *ecomadd = NULL;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
 		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+			"This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -7040,7 +7087,7 @@ DEFUN (bgp_evpn_vni_rt,
 		    bgp_evpn_rt_matches_existing(evi->evi_import_rtl, ecomadd))
 			ecommunity_free(&ecomadd);
 		else
-			evpn_evi_configure_import_rt(bgp, evi, ecomadd);
+			evpn_evi_configure_import_rt(bgp_evpn_mi, evi, ecomadd);
 	}
 
 	/* Add/update the export route-target */
@@ -7059,7 +7106,7 @@ DEFUN (bgp_evpn_vni_rt,
 		    bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomadd))
 			ecommunity_free(&ecomadd);
 		else
-			evpn_evi_configure_export_rt(bgp, evi, ecomadd);
+			evpn_evi_configure_export_rt(bgp_evpn_mi, evi, ecomadd);
 	}
 
 	return CMD_SUCCESS;
@@ -7075,17 +7122,17 @@ DEFUN (no_bgp_evpn_vni_rt,
        "export\n"
        EVPN_ASN_IP_HELP_STR)
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int rt_type, found_ecomdel;
 	struct ecommunity *ecomdel = NULL;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
 		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+			"This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -7137,7 +7184,7 @@ DEFUN (no_bgp_evpn_vni_rt,
 				"%% RT specified does not match configuration for this VNI\n");
 			return CMD_WARNING;
 		}
-		evpn_evi_unconfigure_import_rt(bgp, evi, ecomdel);
+		evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, ecomdel);
 	} else if (rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
 		if (!bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomdel)) {
 			ecommunity_free(&ecomdel);
@@ -7145,17 +7192,17 @@ DEFUN (no_bgp_evpn_vni_rt,
 				"%% RT specified does not match configuration for this VNI\n");
 			return CMD_WARNING;
 		}
-		evpn_evi_unconfigure_export_rt(bgp, evi, ecomdel);
+		evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, ecomdel);
 	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
 		found_ecomdel = 0;
 
 		if (bgp_evpn_rt_matches_existing(evi->evi_import_rtl, ecomdel)) {
-			evpn_evi_unconfigure_import_rt(bgp, evi, ecomdel);
+			evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, ecomdel);
 			found_ecomdel = 1;
 		}
 
 		if (bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomdel)) {
-			evpn_evi_unconfigure_export_rt(bgp, evi, ecomdel);
+			evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, ecomdel);
 			found_ecomdel = 1;
 		}
 
@@ -7179,16 +7226,16 @@ DEFUN (no_bgp_evpn_vni_rt_without_val,
        "import\n"
        "export\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int rt_type;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!EVPN_ENABLED(bgp)) {
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
 		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
+			"This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -7218,9 +7265,9 @@ DEFUN (no_bgp_evpn_vni_rt_without_val,
 
 	/* Unconfigure the RT. */
 	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		evpn_evi_unconfigure_import_rt(bgp, evi, NULL);
+		evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, NULL);
 	else
-		evpn_evi_unconfigure_export_rt(bgp, evi, NULL);
+		evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, NULL);
 	return CMD_SUCCESS;
 }
 
