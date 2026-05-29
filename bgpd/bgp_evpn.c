@@ -740,7 +740,7 @@ static struct bgp_evpn_effective_fq_rt* bgp_evpn_effective_fq_rt_from_cfgd_rt_ne
 }
 
 /* may be called with the list pointers being NULL, will simply not insert then */
-static int bgp_evpn_vrf_push_effective_rt(
+static int bgp_evpn_push_effective_rt_common(
 	const struct bgp_evpn_cfgd_rt * cfgd_rt,
 	struct bgp_evpn_effective_wildcard_rt_slu_head* wildcard_list,
 	struct bgp_evpn_effective_fq_rt_slu_head* fq_list
@@ -815,7 +815,7 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf) {
 	/* Begin with the both RTs */
 	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
-		bgp_evpn_vrf_push_effective_rt(
+		bgp_evpn_push_effective_rt_common(
 			cfgd_item,
 			&bgp_vrf->effective_wildcard_import_rts,
 			&bgp_vrf->effective_fq_import_rts
@@ -825,7 +825,7 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf) {
 	/* Now the import specific RTs */
 	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_import, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
-		bgp_evpn_vrf_push_effective_rt(
+		bgp_evpn_push_effective_rt_common(
 			cfgd_item,
 			&bgp_vrf->effective_wildcard_import_rts,
 			&bgp_vrf->effective_fq_import_rts
@@ -863,7 +863,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	/* Begin with the both RTs */
 	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_both, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
-		bgp_evpn_vrf_push_effective_rt(
+		bgp_evpn_push_effective_rt_common(
 			cfgd_item,
 			NULL, /* export RTs cannot be wildcard, so no need to push to wildcard list */
 			&bgp_vrf->effective_fq_export_rts
@@ -873,7 +873,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	/* Now the import specific RTs */
 	frr_each(bgp_evpn_cfgd_rt_slu, &bgp_vrf->vrf_route_target_config->cfgd_export, cfgd_item) {
 		/* Return code ignored for now, maybe add some logging in the future? */
-		bgp_evpn_vrf_push_effective_rt(
+		bgp_evpn_push_effective_rt_common(
 			cfgd_item,
 			NULL, /* export RTs cannot be wildcard, so no need to push to wildcard list */
 			&bgp_vrf->effective_fq_export_rts
