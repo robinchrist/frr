@@ -2162,7 +2162,7 @@ void legacy_bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list 
 }
 
 /*
- * Map the VRF to the applicable vrf_irt_nodes and then import / install
+ * Map the VRF to the applicable vrf_..._irt_nodes and then import / install
  * all applicable routes
  * You should be able to call this function multiple times without issues
  * (just no guarantee that the results or the routing tables makes sense then :) )
@@ -2184,7 +2184,7 @@ void bgp_evpn_vrf_setup_import(struct bgp *bgp_vrf)
 
 /*
  * Uninstall all routes from the VRF and then
- * unmap the VRF from all vrf_irt_nodes corresponding to the VRF RTs
+ * unmap the VRF from all vrf_..._irt_nodes corresponding to the VRF RTs
  * !! Call BEFORE you modify the effective import route targets!!
  * Sorry, I couldn't find a nicer name for this function
  */
@@ -2202,6 +2202,49 @@ void bgp_evpn_vrf_teardown_import(struct bgp *bgp_vrf)
 	/* Cleanup the RT to VRF mapping in any case for robustness */
 	bgp_evpn_vrf_unmap_from_vrf_irt_nodes(bgp_vrf);
 }
+
+/*
+ * Map the EVI to the applicable evi_..._irt_nodes and then import / install
+ * all applicable routes
+ * You should be able to call this function multiple times without issues
+ * (just no guarantee that the results or the routing tables makes sense then :) )
+ * Sorry, I couldn't find a nicer name for this function
+ */
+void bgp_evpn_evi_setup_import(struct bgp_evpn_evi *evi)
+{
+
+	/*
+	 * First setup the mapping to evi_..._irt_nodes (which is the actual data
+	 * structure used in the import process, specifically by bgp_evpn_evi_check_route_matches_import_rts)
+	 * THEN import / install routes.
+	 */
+	/*if (is_l3vni_live(bgp_vrf)) {*/
+		bgp_evpn_evi_map_to_evi_irt_nodes(evi);
+		bgp_evpn_evi_install_global_routes(evi);
+	/*}*/
+}
+
+/*
+ * Uninstall all routes from the EVI and then
+ * unmap the EVI from all evi_..._irt_nodes corresponding to the EVI RTs
+ * !! Call BEFORE you modify the effective import route targets!!
+ * Sorry, I couldn't find a nicer name for this function
+ */
+void bgp_evpn_evi_teardown_import(struct bgp_evpn_evi *evi)
+{
+	/*
+	 * First uninstall the routes (this process uses evi_..._irt_nodes
+	 * specifically in bgp_evpn_evi_check_route_matches_import_rts)
+	 * THEN destroy the mapping to the evi_..._irt_nodes
+	 */
+	/* uninstall routes from evi */
+	/*if (is_l3vni_live(bgp_vrf))*/
+		bgp_evpn_evi_uninstall_global_routes(evi);
+
+	/* Cleanup the RT to VRF mapping in any case for robustness */
+	bgp_evpn_evi_unmap_from_evi_irt_nodes(evi);
+}
+
 
 /* Unified function for configuring manual route targets, meant to be called by VTY
  * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
