@@ -2833,6 +2833,50 @@ int bgp_evpn_evi_configure_auto_rt(struct bgp_evpn_evi *evi,
 	return 0;
 }
 
+int bgp_evpn_evi_configure_both_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* cfgd_rt)
+{
+	return bgp_evpn_evi_configure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_BOTH, cfgd_rt);
+}
+int bgp_evpn_evi_configure_both_auto_rt(struct bgp_evpn_evi *evi, enum bgp_evpn_autort_cfgd cfg)
+{
+	return bgp_evpn_evi_configure_auto_rt(evi, BGP_EVPN_RT_DIRECTION_BOTH, cfg);
+}
+
+int bgp_evpn_evi_configure_import_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* cfgd_rt)
+{
+	return bgp_evpn_evi_configure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_IMPORT, cfgd_rt);
+}
+int bgp_evpn_evi_configure_import_auto_rt(struct bgp_evpn_evi *evi, enum bgp_evpn_autort_cfgd cfg)
+{
+	return bgp_evpn_evi_configure_auto_rt(evi, BGP_EVPN_RT_DIRECTION_IMPORT, cfg);
+}
+
+int bgp_evpn_evi_configure_export_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* cfgd_rt)
+{
+	return bgp_evpn_evi_configure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_EXPORT, cfgd_rt);
+}
+
+int bgp_evpn_evi_configure_export_auto_rt(struct bgp_evpn_evi *evi, enum bgp_evpn_autort_cfgd cfg)
+{
+	return bgp_evpn_evi_configure_auto_rt(evi, BGP_EVPN_RT_DIRECTION_EXPORT, cfg);
+}
+
+int bgp_evpn_evi_unconfigure_both_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* to_delete)
+{
+	return bgp_evpn_evi_unconfigure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_BOTH, to_delete);
+}
+
+int bgp_evpn_evi_unconfigure_import_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* to_delete)
+{
+	return bgp_evpn_evi_unconfigure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_IMPORT, to_delete);
+}
+
+int bgp_evpn_evi_unconfigure_export_rt_manual(struct bgp_evpn_evi *evi, struct bgp_evpn_cfgd_rt* to_delete)
+{
+	return bgp_evpn_evi_unconfigure_rt_manual(evi, BGP_EVPN_RT_DIRECTION_EXPORT, to_delete);
+}
+
+
 /* Flag if the route is injectable into EVPN.
  * This would be following category:
  * Non-imported route,
