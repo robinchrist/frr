@@ -739,7 +739,10 @@ static struct bgp_evpn_effective_fq_rt* bgp_evpn_effective_fq_rt_from_cfgd_rt_ne
 	return bgp_evpn_effective_fq_rt_new(eval);
 }
 
-/* may be called with the list pointers being NULL, will simply not insert then */
+/* Helper function for updating effective route targets for both VRF and EVI
+ * Converts a configured RT into an effective RT and pushes it into the relevant list (fully qualified / wildcard)
+ * may be called with the list pointers being NULL, will simply not insert then 
+ */
 static int bgp_evpn_push_effective_rt_common(
 	const struct bgp_evpn_cfgd_rt * cfgd_rt,
 	struct bgp_evpn_effective_wildcard_rt_slu_head* wildcard_list,
@@ -877,6 +880,110 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 			cfgd_item,
 			NULL, /* export RTs cannot be wildcard, so no need to push to wildcard list */
 			&bgp_vrf->effective_fq_export_rts
+		);
+	}
+}
+
+static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp* parent_vrf, struct bgp_evpn_evi *evi) {
+
+	struct bgp_evpn_effective_wildcard_rt* eff_w_item;
+	struct bgp_evpn_effective_fq_rt* eff_fq_item;
+	struct bgp_evpn_cfgd_rt* cfgd_item;
+
+	if(!parent_vrf)
+		return; /* shouldn't happen */
+	if(!evi)
+		return; /* shouldn't happen! */
+	if(!evi->evi_rt_config)
+		return; /* also shouldn't happen, but be defensive */
+
+	/* Clear the existing lists */
+	while ((eff_w_item = bgp_evpn_effective_wildcard_rt_slu_pop(&evi->effective_wildcard_import_rts)))
+		bgp_evpn_effective_wildcard_rt_free(eff_w_item);
+
+	while ((eff_fq_item = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_import_rts)))
+		bgp_evpn_effective_fq_rt_free(eff_fq_item);
+
+	/* Start with the auto RT */
+	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_import_autort(evi);
+	if(should_generate_auto_rt) {
+
+		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(parent_vrf, evi);
+
+		if(eff_w_item) /* eff_w_item should never be NULL... */
+			/* Insert should always succeed, list is empty */
+			bgp_evpn_effective_wildcard_rt_slu_add(&evi->effective_wildcard_import_rts, eff_w_item);
+	}
+
+	/* Now add the user configured RTs */
+
+	/* Begin with the both RTs */
+	frr_each(bgp_evpn_cfgd_rt_slu, &evi->evi_rt_config->cfgd_both, cfgd_item) {
+		/* Return code ignored for now, maybe add some logging in the future? */
+		bgp_evpn_push_effective_rt_common(
+			cfgd_item,
+			&evi->effective_wildcard_import_rts,
+			&evi->effective_fq_import_rts
+		);
+	}
+
+	/* Now the import specific RTs */
+	frr_each(bgp_evpn_cfgd_rt_slu, &evi->evi_rt_config->cfgd_import, cfgd_item) {
+		/* Return code ignored for now, maybe add some logging in the future? */
+		bgp_evpn_push_effective_rt_common(
+			cfgd_item,
+			&evi->effective_wildcard_import_rts,
+			&evi->effective_fq_import_rts
+		);
+	}
+}
+
+static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp* parent_vrf, struct bgp_evpn_evi *evi) {
+
+	struct bgp_evpn_effective_fq_rt* eff_fq_item;
+	struct bgp_evpn_cfgd_rt* cfgd_item;
+
+	if(!parent_vrf)
+		return; /* shouldn't happen */
+	if(!evi)
+		return; /* shouldn't happen! */
+	if(!evi->evi_rt_config)
+		return; /* also shouldn't happen, but be defensive */
+
+	/* Clear the existing lists */
+	while ((eff_fq_item = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_export_rts)))
+		bgp_evpn_effective_fq_rt_free(eff_fq_item);
+
+	/* Start with the auto RT */
+	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_export_autort(evi);
+	if(should_generate_auto_rt) {
+
+		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(parent_vrf, evi);
+
+		if(eff_fq_item) /* eff_fq_item should never be NULL... */
+			/* Insert should always succeed, list is empty */
+			bgp_evpn_effective_fq_rt_slu_add(&evi->effective_fq_export_rts, eff_fq_item);
+	}
+
+	/* Now add the user configured RTs */
+
+	/* Begin with the both RTs */
+	frr_each(bgp_evpn_cfgd_rt_slu, &evi->evi_rt_config->cfgd_both, cfgd_item) {
+		/* Return code ignored for now, maybe add some logging in the future? */
+		bgp_evpn_push_effective_rt_common(
+			cfgd_item,
+			NULL, /* export RTs cannot be wildcard, so no need to push to wildcard list */
+			&evi->effective_fq_export_rts
+		);
+	}
+
+	/* Now the import specific RTs */
+	frr_each(bgp_evpn_cfgd_rt_slu, &evi->evi_rt_config->cfgd_export, cfgd_item) {
+		/* Return code ignored for now, maybe add some logging in the future? */
+		bgp_evpn_push_effective_rt_common(
+			cfgd_item,
+			NULL, /* export RTs cannot be wildcard, so no need to push to wildcard list */
+			&evi->effective_fq_export_rts
 		);
 	}
 }
