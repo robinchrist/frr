@@ -1218,7 +1218,7 @@ static void bgp_evpn_ead_evi_route_update(struct bgp *bgp,
 			 es->esi_str, evi->vni);
 }
 
-void update_type1_routes_for_evi(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void update_type1_routes_for_evi(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	struct prefix_evpn p;
 	struct bgp_evpn_es *es;
@@ -1233,13 +1233,13 @@ void update_type1_routes_for_evi(struct bgp *bgp, struct bgp_evpn_evi *evi)
 
 		/* Update EAD-ES */
 		if (bgp_evpn_local_es_is_active(es))
-			bgp_evpn_ead_es_route_update(bgp, es);
+			bgp_evpn_ead_es_route_update(bgp_evpn_mi, es);
 
 		/* Update EAD-EVI */
 		if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
 			build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
 						&es->esi, es->originator_ip);
-			bgp_evpn_ead_evi_route_update(bgp, es, evi, &p);
+			bgp_evpn_ead_evi_route_update(bgp_evpn_mi, es, evi, &p);
 		}
 	}
 }
