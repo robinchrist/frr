@@ -1085,10 +1085,10 @@ extern int bgp_evpn_vrf_unconfigure_export_rt_manual(struct bgp *bgp_vrf, struct
 
 extern void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf);
+extern void bgp_evpn_evi_handle_import_rt_change(struct bgp_evpn_evi *evi);
+extern void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi);
 
 extern void legacy_bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
-
-extern int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi);
 
 extern void bgp_evpn_vrf_handle_rd_change(struct bgp *bgp_vrf, int withdraw);
 extern void bgp_evpn_evi_handle_rd_change(struct bgp *bgp, struct bgp_evpn_evi *evi,

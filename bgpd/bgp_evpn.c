@@ -884,14 +884,16 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 	}
 }
 
-static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp* parent_vrf, struct bgp_evpn_evi *evi) {
+static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *evi) {
 
+	struct bgp* bgp_evpn_mi;
 	struct bgp_evpn_effective_wildcard_rt* eff_w_item;
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
-	if(!parent_vrf)
-		return; /* shouldn't happen */
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if(!bgp_evpn_mi)
+		return; /* shouldn't happen, but be defensive */
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -908,7 +910,7 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp* parent_vrf,
 	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_import_autort(evi);
 	if(should_generate_auto_rt) {
 
-		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(parent_vrf, evi);
+		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(bgp_evpn_mi, evi);
 
 		if(eff_w_item) /* eff_w_item should never be NULL... */
 			/* Insert should always succeed, list is empty */
@@ -938,13 +940,15 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp* parent_vrf,
 	}
 }
 
-static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp* parent_vrf, struct bgp_evpn_evi *evi) {
+static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *evi) {
 
+	struct bgp* bgp_evpn_mi;
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
-	if(!parent_vrf)
-		return; /* shouldn't happen */
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if(!bgp_evpn_mi)
+		return; /* shouldn't happen, but be defensive */
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -958,7 +962,7 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp* parent_vrf,
 	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_export_autort(evi);
 	if(should_generate_auto_rt) {
 
-		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(parent_vrf, evi);
+		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(bgp_evpn_mi, evi);
 
 		if(eff_fq_item) /* eff_fq_item should never be NULL... */
 			/* Insert should always succeed, list is empty */
@@ -1646,7 +1650,10 @@ void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
 	/* Now we can regenerate the effective RTs based on the new config */
 	bgp_evpn_vrf_regenerate_effective_import_rts(bgp_vrf);
 
-	/* Setup the Import again, now with the new effective RTs */
+	/* Setup the Import again, now with the new effective RTs 
+	 * Import even when the L3VNI is not yet active, because SENDING traffic (we import routes -> we send traffic)
+	 * is independent from the VRFs L3VNI (Downstream VNI - remote peer dictates the VNI!)
+	 */
 	bgp_evpn_vrf_setup_import(bgp_vrf);
 }
 
@@ -1695,15 +1702,54 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 		bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
 }
 
-/* TODO: bgp_evpn_evi_handle_import_rt_change, Dep: bgp_evpn_evi_teardown_import, bgp_evpn_evi_setup_import */
-/* TODO: bgp_evpn_evi_handle_export_rt_change Dep: ??? */
+
+void bgp_evpn_evi_handle_import_rt_change(struct bgp_evpn_evi *evi)
+{
+	struct bgp *bgp_evpn_mi = NULL;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi)
+		return; /* EVPN not even activated? Why are we even being called? */
+
+	/* Before we can update / regenerate the effective RTs, we need to perform the teardown
+	 * which uses the effective RTs to determine which routes must be deleted
+	 */
+	bgp_evpn_evi_teardown_import(evi);
+
+	/* Now we can regenerate the effective RTs based on the new config */
+	bgp_evpn_evi_regenerate_effective_import_rts(evi);
+
+	/* Setup the Import again, now with the new effective RTs
+	 * Import even when the L2VNI is not yet active, because SENDING traffic (we import routes -> we send traffic)
+	 * is independent from the EVIs L2VNI (Downstream VNI - remote peer dictates the VNI!)
+	 */
+	bgp_evpn_evi_setup_import(evi);
+}
 
 /*
  * Handle change to export RT - update and advertise local routes.
  */
-int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 {
-	return bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
+	struct bgp *bgp_evpn_mi = NULL;
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi)
+		return; /* EVPN not even activated? Why are we even being called? */
+
+	/* Update the Export RTs in any case - the regenerate function might decide to not generate any new RTs
+	 * depending on the L3VNIs state and only clear the existing ones.
+	 */
+	bgp_evpn_evi_regenerate_effective_export_rts(evi);
+
+	/* If the L2VNI / EVI is not yet active, do not advertise routes
+	 * because we could never process received traffic
+	 */
+	if(!is_evi_live(evi))
+		return;
+
+
+	bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
 }
 
 /* Legacy!
@@ -1726,7 +1772,7 @@ static void legacy_bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struc
 		list_delete_all_node(evi->evi_export_rtl);
 		legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
 		if (is_evi_live(evi))
-			bgp_evpn_evi_handle_export_rt_change(bgp, evi);
+			bgp_evpn_evi_handle_export_rt_change(evi);
 	}
 }
 

@@ -2132,7 +2132,7 @@ static void evpn_evi_configure_export_rt(struct bgp *bgp, struct bgp_evpn_evi *e
 	SET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
 
 	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_export_rt_change(bgp, evi);
+		bgp_evpn_evi_handle_export_rt_change(evi);
 }
 
 /*
@@ -2176,7 +2176,7 @@ static void evpn_evi_unconfigure_export_rt(struct bgp *bgp, struct bgp_evpn_evi 
 	}
 
 	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_export_rt_change(bgp, evi);
+		bgp_evpn_evi_handle_export_rt_change(evi);
 }
 
 /*
