@@ -2294,7 +2294,6 @@ void bgp_evpn_evi_teardown_import(struct bgp_evpn_evi *evi)
 /* Common part for VRFs and EVIs
  * 
  * Unified function for configuring manual route targets, meant to be called by VTY
- * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
  *
  * For direction "both", it will err if the route target already exists in "both"
  * and if not, it will override / remove any import / export statements with the same route target if present
@@ -2393,6 +2392,103 @@ static int _bgp_evpn_configure_rt_manual_common(struct bgp_evpn_rt_config *rt_co
 	return 0;
 }
 
+/* Common part for VRFs and EVIs
+ * 
+ * Unified function for de-configuring manual route targets, meant to be called by VTY
+ *
+ * For direction "both", it will err if the route target does not exist in "both"
+ *
+ * For direction "import" or "export", a "both" statement will be split up into "import" and "export"
+ * if the route target exists as "both" and the user tries to deconfigure it as "import" or "export"
+ * Function will err if it exists neither as "both" nor in the relevant direction list
+ *
+ * Note that this function does NOT optimize the path when an explicit RT is active, the user
+ * deconfigures it and the implicit RT with the same value kicks in - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
+ */
+static int _bgp_evpn_unconfigure_rt_manual_common(struct bgp_evpn_rt_config *rt_config,
+				       enum bgp_evpn_rt_direction direction,
+				       struct bgp_evpn_cfgd_rt *to_delete, bool* import_changed, bool* export_changed)
+{
+	*import_changed = false;
+	*export_changed = false;
+
+	/* No need to check for "Wildcard only for direction import" here
+	 * The user shouldn't be able to configure wildcard RTs for any other direction than import in the first place
+	 * so it's only in our interest to let them remove anything that shouldn't have been configured anyway
+	 */
+
+	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
+		/* Check if the route target exists in the "both" configuration */
+		struct bgp_evpn_cfgd_rt* found_rt;
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_both, to_delete);
+		bgp_evpn_cfgd_rt_free(to_delete);
+
+		if(!found_rt) {
+			return -1; /* RT doesn't exist as "both", nothing to unconfigure */
+		}
+
+		/* Remove from "both" list */
+		bgp_evpn_cfgd_rt_slu_del(&rt_config->cfgd_both, found_rt);
+		bgp_evpn_cfgd_rt_free(found_rt);
+
+		*import_changed = true;
+		*export_changed = true;
+	} else {
+		/* Branch for import or export - the logic is pretty much identical, just on different lists */
+		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
+		struct bgp_evpn_cfgd_rt_slu_head* other_list;
+		bool* relevant_changed_flag;
+
+		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
+			relevant_list = &rt_config->cfgd_import;
+			other_list = &rt_config->cfgd_export;
+			relevant_changed_flag = import_changed;
+		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
+			relevant_list = &rt_config->cfgd_export;
+			other_list = &rt_config->cfgd_import;
+			relevant_changed_flag = export_changed;
+		}
+
+		/* Note that if one branch is hit, the other one should NOT be hit - but we perform both checks for robustness */
+
+		/* Check if the route target exists in the "both" configuration
+		 * (shouldn't be configured as "import" or "export" in that case!)
+		 * if yes: split up the "both" statement
+		 */
+		struct bgp_evpn_cfgd_rt* found_rt;
+		found_rt = bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_both, to_delete);
+		if(found_rt) {
+			/* Route-Target to deconfigure is configured as "both" -> Split it up */
+			*relevant_changed_flag = true;
+
+			/* Extract / Remove from "both" list */
+			bgp_evpn_cfgd_rt_slu_del(&rt_config->cfgd_both, found_rt);
+			/* And move the node into the other list */
+			bgp_evpn_cfgd_rt_slu_add(other_list, found_rt);
+		}
+
+		/* Check if RT exists in the relevant list ("both" shouldn't be configured in that case!) */
+		found_rt = bgp_evpn_cfgd_rt_slu_find(relevant_list, to_delete);
+		if(found_rt) {
+			/* Route-Target to deconfigure is configured in relevant list */
+			*relevant_changed_flag = true;
+
+			/* Simply delete it */
+			bgp_evpn_cfgd_rt_slu_del(relevant_list, found_rt);
+			bgp_evpn_cfgd_rt_free(found_rt);
+		}
+		bgp_evpn_cfgd_rt_free(to_delete);
+
+		if(!*relevant_changed_flag) {
+			return -1; /* RT doesn't exist, nothing to unconfigure */
+		}
+	}
+
+	return 0;
+}
+
 
 /* Unified function for configuring manual route targets, meant to be called by VTY
  * Will call the appropriate bgp_evpn_vrf_handle_..._rt_change functions
@@ -2457,77 +2553,11 @@ int bgp_evpn_vrf_unconfigure_rt_manual(struct bgp *bgp_vrf,
 	bool import_changed = false;
 	bool export_changed = false;
 
-	/* No need to check for "Wildcard only for direction import" here
-	 * The user shouldn't be able to configure wildcard RTs for any other direction than import in the first place
-	 * so it's only in our interest to let them remove anything that shouldn't have been configured anyway
-	 */
+	int ret = _bgp_evpn_unconfigure_rt_manual_common(bgp_vrf->vrf_route_target_config, direction, to_delete,
+		&import_changed, &export_changed);
 
-	if (direction == BGP_EVPN_RT_DIRECTION_BOTH) {
-		/* Check if the route target exists in the "both" configuration */
-		struct bgp_evpn_cfgd_rt* found_rt;
-		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
-		bgp_evpn_cfgd_rt_free(to_delete);
-
-		if(!found_rt) {
-			return -1; /* RT doesn't exist as "both", nothing to unconfigure */
-		}
-
-		/* Remove from "both" list */
-		bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
-		bgp_evpn_cfgd_rt_free(found_rt);
-
-		import_changed = true;
-		export_changed = true;
-	} else {
-		/* Branch for import or export - the logic is pretty much identical, just on different lists */
-		struct bgp_evpn_cfgd_rt_slu_head* relevant_list;
-		struct bgp_evpn_cfgd_rt_slu_head* other_list;
-		bool* relevant_changed_flag;
-
-		if (direction == BGP_EVPN_RT_DIRECTION_IMPORT) {
-			relevant_list = &bgp_vrf->vrf_route_target_config->cfgd_import;
-			other_list = &bgp_vrf->vrf_route_target_config->cfgd_export;
-			relevant_changed_flag = &import_changed;
-		} else { /* BGP_EVPN_RT_DIRECTION_EXPORT */
-			relevant_list = &bgp_vrf->vrf_route_target_config->cfgd_export;
-			other_list = &bgp_vrf->vrf_route_target_config->cfgd_import;
-			relevant_changed_flag = &export_changed;
-		}
-
-		/* Note that if one branch is hit, the other one should NOT be hit - but we perform both checks for robustness */
-
-		/* Check if the route target exists in the "both" configuration
-		 * (shouldn't be configured as "import" or "export" in that case!)
-		 * if yes: split up the "both" statement
-		 */
-		struct bgp_evpn_cfgd_rt* found_rt;
-		found_rt = bgp_evpn_cfgd_rt_slu_find(&bgp_vrf->vrf_route_target_config->cfgd_both, to_delete);
-		if(found_rt) {
-			/* Route-Target to deconfigure is configured as "both" -> Split it up */
-			*relevant_changed_flag = true;
-
-			/* Extract / Remove from "both" list */
-			bgp_evpn_cfgd_rt_slu_del(&bgp_vrf->vrf_route_target_config->cfgd_both, found_rt);
-			/* And move the node into the other list */
-			bgp_evpn_cfgd_rt_slu_add(other_list, found_rt);
-		}
-
-		/* Check if RT exists in the relevant list ("both" shouldn't be configured in that case!) */
-		found_rt = bgp_evpn_cfgd_rt_slu_find(relevant_list, to_delete);
-		if(found_rt) {
-			/* Route-Target to deconfigure is configured in relevant list */
-			*relevant_changed_flag = true;
-
-			/* Simply delete it */
-			bgp_evpn_cfgd_rt_slu_del(relevant_list, found_rt);
-			bgp_evpn_cfgd_rt_free(found_rt);
-		}
-		bgp_evpn_cfgd_rt_free(to_delete);
-
-		if(!*relevant_changed_flag) {
-			return -1; /* RT doesn't exist, nothing to unconfigure */
-		}
-	}
+	if(ret != 0)
+		return ret;
 
 	if(import_changed)
 		bgp_evpn_vrf_handle_import_rt_change(bgp_vrf);
@@ -2705,7 +2735,40 @@ int bgp_evpn_evi_configure_rt_manual(struct bgp_evpn_evi *evi,
 	return 0;
 }
 
+/* Unified function for de-configuring manual route targets, meant to be called by VTY
+ * Will call the appropriate bgp_evpn_evi_handle_..._rt_change functions
+ *
+ * For direction "both", it will err if the route target does not exist in "both"
+ *
+ * For direction "import" or "export", a "both" statement will be split up into "import" and "export"
+ * if the route target exists as "both" and the user tries to deconfigure it as "import" or "export"
+ * Function will err if it exists neither as "both" nor in the relevant direction list
+ *
+ * Note that this function does NOT optimize the path when an explicit RT is active, the user
+ * deconfigures it and the implicit RT with the same value kicks in - full change handling logic will be called!
+ *
+ * Takes ownership of cfgd_rt and will always free, even in case of error
+ */
+int bgp_evpn_evi_unconfigure_rt_manual(struct bgp_evpn_evi *evi,
+				       enum bgp_evpn_rt_direction direction,
+				       struct bgp_evpn_cfgd_rt *to_delete)
+{
+	bool import_changed = false;
+	bool export_changed = false;
 
+	int ret = _bgp_evpn_unconfigure_rt_manual_common(evi->evi_rt_config, direction, to_delete,
+		&import_changed, &export_changed);
+
+	if(ret != 0)
+		return ret;
+
+	if(import_changed)
+		bgp_evpn_evi_handle_import_rt_change(evi);
+	if(export_changed)
+		bgp_evpn_evi_handle_export_rt_change(evi);
+
+	return 0;
+}
 
 /* Flag if the route is injectable into EVPN.
  * This would be following category:
