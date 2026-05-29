@@ -2020,12 +2020,12 @@ DEFUN(no_evpnrt5_network,
 
 static void evpn_import_rt_delete_auto(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
+	legacy_bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
 }
 
 static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
+	legacy_bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
 }
 
 /*
@@ -2043,7 +2043,7 @@ static void evpn_evi_configure_import_rt(struct bgp *bgp, struct bgp_evpn_evi *e
 		bgp_evpn_evi_uninstall_routes(bgp, evi);
 
 	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
-	bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
+	legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 
 	/* If the auto route-target is in use we must remove it */
 	evpn_import_rt_delete_auto(bgp, evi);
@@ -2052,7 +2052,7 @@ static void evpn_evi_configure_import_rt(struct bgp *bgp, struct bgp_evpn_evi *e
 	listnode_add_sort(evi->evi_import_rtl, ecomadd);
 
 	SET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
-	bgp_evpn_map_vni_to_its_rts(bgp, evi);
+	legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
 
 	/* Install routes that match new import RT */
 	if (is_evi_live(evi))
@@ -2075,7 +2075,7 @@ static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgp_evpn_evi 
 		bgp_evpn_evi_uninstall_routes(bgp, evi);
 
 	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
-	bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
+	legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 
 	/* Delete all import RTs */
 	if (ecomdel == NULL) {
@@ -2109,7 +2109,7 @@ static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgp_evpn_evi 
 	}
 	/* Rebuild the RT to VNI mapping */
 	else
-		bgp_evpn_map_vni_to_its_rts(bgp, evi);
+		legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
 
 	/* Install routes that match new import RT */
 	if (is_evi_live(evi))

@@ -1409,7 +1409,7 @@ static void evi_wildcard_irt_node_free(struct evi_wildcard_irt_node *node)
 /*
  * Hash key function for import route target.
  */
-uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt)
+uint32_t legacy_evi_irt_node_hash_key(const struct evi_irt_node *irt)
 {
 	uint32_t hashval = jhash_1word(irt->is_wildcard, 0xdeadbeef);
 	return jhash(irt->rt.val, 8, hashval);
@@ -1419,7 +1419,7 @@ uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt)
  * Comparison function for evi_irt_node hash(-map)
  * Does NOT compare values, only key (is_wildcard + RT value)
  */
-int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
+int legacy_evi_irt_node_hash_cmp(const struct evi_irt_node *a,
 			  const struct evi_irt_node *b)
 {
 	/* Sort Wildcard RTs first */
@@ -1433,7 +1433,7 @@ int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
  * Legacy!
  * Create a new import_rt
  */
-static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
+static struct evi_irt_node *legacy_evi_irt_node_new(struct bgp *bgp,
 						 struct ecommunity_val rt, bool is_wildcard)
 {
 	struct evi_irt_node *irt;
@@ -1454,7 +1454,7 @@ static struct evi_irt_node *evi_irt_node_new(struct bgp *bgp,
  * Legacy!
  * Free the import rt node
  */
-static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
+static void legacy_evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
 {
 	evi_irt_nodes_del(&bgp->evpn_master_instance_info.evi_irt_nodes, irt);
 	/* No need to free the EVIs themselves, they are held in vnihash */
@@ -1467,7 +1467,7 @@ static void evi_irt_node_free(struct bgp *bgp, struct evi_irt_node *irt)
  * Function to lookup Import RT node - used to map a RT to set of
  * VNIs importing routes with that RT.
  */
-static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
+static struct evi_irt_node *legacy_lookup_evi_irt_node(struct bgp *bgp,
 						struct ecommunity_val *rt)
 {
 	struct evi_irt_node tmp;
@@ -1481,7 +1481,7 @@ static struct evi_irt_node *lookup_evi_irt_node(struct bgp *bgp,
  * Legacy!
  * Is specified VNI present on the RT's list of "importing" VNIs?
  */
-static int is_evi_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgp_evpn_evi *evi)
+static int legacy_is_evi_present_in_evi_irt_node(struct evi_irt_node *irt_node, struct bgp_evpn_evi *evi)
 {
 	struct listnode *node, *nnode;
 	struct bgp_evpn_evi *tmp_evi;
@@ -1552,7 +1552,7 @@ void bgp_evpn_xxport_delete_ecomm(void *val)
 /* Legacy!
  * Map one RT to specified VNI.
  */
-static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_evi *evi,
+static void legacy_bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_evi *evi,
 			  struct ecommunity_val *eval)
 {
 	struct evi_irt_node *irt;
@@ -1567,13 +1567,13 @@ static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_e
 	if (rt_is_wildcard)
 		mask_ecom_global_admin(&eval_tmp, eval);
 
-	irt = lookup_evi_irt_node(bgp, &eval_tmp);
-	if (irt && is_evi_present_in_evi_irt_node(irt, evi))
+	irt = legacy_lookup_evi_irt_node(bgp, &eval_tmp);
+	if (irt && legacy_is_evi_present_in_evi_irt_node(irt, evi))
 		/* Already mapped. */
 		return;
 
 	if (!irt)
-		irt = evi_irt_node_new(bgp, eval_tmp, rt_is_wildcard);
+		irt = legacy_evi_irt_node_new(bgp, eval_tmp, rt_is_wildcard);
 
 	/* Add VNI to the hash list for this RT. */
 	listnode_add(irt->evis, evi);
@@ -1583,13 +1583,13 @@ static void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_e
  * Unmap specified VNI from specified RT. If there are no other
  * VNIs for this RT, then the RT hash is deleted.
  */
-static void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_evi *evi,
+static void legacy_bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp *bgp, struct bgp_evpn_evi *evi,
 			      struct evi_irt_node *irt)
 {
 	/* Delete VNI from hash list for this RT. */
 	listnode_delete(irt->evis, evi);
 	if (!listnode_head(irt->evis)) {
-		evi_irt_node_free(bgp, irt);
+		legacy_evi_irt_node_free(bgp, irt);
 	}
 }
 
@@ -1601,7 +1601,7 @@ static void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp *bgp, struct bgp_ev
  * VNIs but the same across routers (in the same AS) for a particular
  * VNI.
  */
-static void bgp_evpn_evi_form_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
+static void legacy_bgp_evpn_evi_form_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
 {
 	struct ecommunity_val eval;
 	struct ecommunity *ecomadd;
@@ -1694,14 +1694,14 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 /* Legacy!
  * Handle autort change for a given VNI.
  */
-static void bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *bgp)
+static void legacy_bgp_evpn_evi_update_autorts(struct hash_bucket *bucket, struct bgp *bgp)
 {
 	struct bgp_evpn_evi *evi = bucket->data;
 
 	if (!is_import_rt_configured(evi)) {
 		if (is_evi_live(evi))
 			bgp_evpn_evi_uninstall_routes(bgp, evi);
-		bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
+		legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 		list_delete_all_node(evi->evi_import_rtl);
 		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
 		if (is_evi_live(evi))
@@ -1738,7 +1738,7 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool
 
 	hash_iterate(bgp_vrf->evpn_master_instance_info.vnihash,
 		     (void (*)(struct hash_bucket *,
-			       void*))bgp_evpn_evi_update_autorts,
+			       void*))legacy_bgp_evpn_evi_update_autorts,
 		     bgp_vrf);
 }
 
@@ -1892,7 +1892,7 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
  * Map the RTs (configured or automatically derived) of a VNI to the VNI.
  * The mapping will be used during route processing.
  */
-void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	uint32_t i;
 	struct ecommunity_val *eval;
@@ -1904,7 +1904,7 @@ void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
 			eval = (struct ecommunity_val *)(ecom->val
 							 + (i
 							    * ECOMMUNITY_SIZE));
-			bgp_evpn_evi_map_to_evi_irt_nodes(bgp, evi, eval);
+			legacy_bgp_evpn_evi_map_to_evi_irt_nodes(bgp, evi, eval);
 		}
 	}
 }
@@ -1912,7 +1912,7 @@ void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
 /*
  * Unmap the RTs (configured or automatically derived) of a VNI from the VNI.
  */
-void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void legacy_bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	uint32_t i;
 	struct ecommunity_val *eval;
@@ -1936,9 +1936,9 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
 			if (!is_import_rt_configured(evi))
 				mask_ecom_global_admin(&eval_tmp, eval);
 
-			irt = lookup_evi_irt_node(bgp, &eval_tmp);
+			irt = legacy_lookup_evi_irt_node(bgp, &eval_tmp);
 			if (irt)
-				bgp_evpn_evi_unmap_from_evi_irt_nodes(bgp, evi, irt);
+				legacy_bgp_evpn_evi_unmap_from_evi_irt_nodes(bgp, evi, irt);
 		}
 	}
 }
@@ -1949,11 +1949,11 @@ void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp, struct bgp_evpn_evi *evi)
  */
 void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
+	legacy_bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
 
 	/* Map RT to VNI */
-	bgp_evpn_map_vni_to_its_rts(bgp, evi);
+	legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
 }
 
 /*
@@ -1961,7 +1961,7 @@ void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp, struct bgp_evpn_
  */
 void legacy_bgp_evpn_evi_derive_export_auto_rt(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
+	legacy_bgp_evpn_evi_form_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
 	UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
 }
 
@@ -1982,7 +1982,7 @@ static void bgp_evpn_rt_list_remove_by_ecom(struct list *rt_list, struct ecommun
 		list_delete_node(rt_list, node_to_del);
 }
 
-void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
+void legacy_bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl)
 {
 	struct ecommunity *ecom_auto;
 	struct ecommunity_val eval;
@@ -8178,7 +8178,7 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	bgp_evpn_evi_unlink_from_vrf(evi);
 	bgp_table_unlock(evi->ip_table);
 	bgp_table_unlock(evi->mac_table);
-	bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
+	legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
 	/* Free legacy RT lists */
 	list_delete(&evi->evi_import_rtl);
 	list_delete(&evi->evi_export_rtl);

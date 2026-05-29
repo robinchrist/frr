@@ -326,12 +326,12 @@ struct evi_irt_node {
 	struct list *evis;
 };
 
-extern int evi_irt_node_hash_cmp(const struct evi_irt_node *a,
+extern int legacy_evi_irt_node_hash_cmp(const struct evi_irt_node *a,
 				 const struct evi_irt_node *b);
-extern uint32_t evi_irt_node_hash_key(const struct evi_irt_node *irt);
+extern uint32_t legacy_evi_irt_node_hash_key(const struct evi_irt_node *irt);
 
 DECLARE_HASH(evi_irt_nodes, struct evi_irt_node, hash_item,
-	     evi_irt_node_hash_cmp, evi_irt_node_hash_key);
+	     legacy_evi_irt_node_hash_cmp, legacy_evi_irt_node_hash_key);
 
 
 
@@ -1086,7 +1086,7 @@ extern int bgp_evpn_vrf_unconfigure_export_rt_manual(struct bgp *bgp_vrf, struct
 extern void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf);
 
-extern void bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
+extern void legacy_bgp_evpn_evi_delete_auto_rt(struct bgp *bgp, vni_t vni, struct list *rtl);
 
 extern int bgp_evpn_evi_handle_export_rt_change(struct bgp *bgp, struct bgp_evpn_evi *evi);
 
@@ -1104,8 +1104,8 @@ extern void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_setup_import(struct bgp *bgp_vrf);
 extern void bgp_evpn_vrf_teardown_import(struct bgp *bgp_vrf);
 
-extern void bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *vpn);
-extern void bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp,
+extern void legacy_bgp_evpn_map_vni_to_its_rts(struct bgp *bgp, struct bgp_evpn_evi *vpn);
+extern void legacy_bgp_evpn_unmap_vni_from_its_rts(struct bgp *bgp,
 					    struct bgp_evpn_evi *evi);
 extern void legacy_bgp_evpn_evi_derive_import_auto_rt(struct bgp *bgp,
 					   struct bgp_evpn_evi *evi);
