@@ -52,7 +52,7 @@ static inline int bgp_evpn_should_originate_type5_routes_bestpath(const struct b
 {
 	uint16_t flags = bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN];
 
-	/* TODO: Use is_l3vni_cfgd -> Move is_l3vni_cfgd to this header? */
+	/* TODO: Use bgp_evpn_vrf_has_l3vni -> Move bgp_evpn_vrf_has_l3vni to this header? */
 	if (!bgp_vrf->l3vni)
 		return 0;
 
@@ -76,7 +76,7 @@ static inline int bgp_evpn_should_originate_type5_routes_multipath(const struct 
 {
 	uint16_t flags = bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN];
 
-	/* TODO: Use is_l3vni_cfgd -> Move is_l3vni_cfgd to this header? */
+	/* TODO: Use bgp_evpn_vrf_has_l3vni -> Move bgp_evpn_vrf_has_l3vni to this header? */
 	if (!bgp_vrf->l3vni)
 		return 0;
 

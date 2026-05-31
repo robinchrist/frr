@@ -206,8 +206,7 @@ struct bgp_encap_type_pbb {
 	struct bgp_tea_subtlv_encap_pbb st_encap;
 };
 
-static inline void encode_encap_extcomm(bgp_encap_types tnl_type,
-					struct ecommunity_val *eval)
+static inline void encode_encap_extcomm(struct ecommunity_val *eval, bgp_encap_types tnl_type)
 {
 	memset(eval, 0, sizeof(*eval));
 	eval->val[0] = ECOMMUNITY_ENCODE_OPAQUE;

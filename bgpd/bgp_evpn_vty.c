@@ -96,24 +96,17 @@ static void display_vrf_irt_node_common(struct vty *vty, const char *rt_buf,
 	}
 }
 
-static void display_evi_irt_node(struct vty *vty, struct evi_irt_node *irt,
-			      json_object *json)
+static void display_evi_irt_node_common(struct vty *vty, const char *rt_buf,
+				  struct evi_mapped_evi_slu_head *evis,
+				  json_object *json)
 {
-	struct listnode *node, *nnode;
-	struct bgp_evpn_evi *tmp_evi;
+	struct evi_mapped_evi *evi_item;
 	json_object *json_rt = NULL;
 	json_object *json_vnis = NULL;
-	char rt_buf[BGP_EVPN_RT_STR_LEN];
-
-	if (json) {
-		json_rt = json_object_new_object();
-		json_vnis = json_object_new_array();
-	}
-
-	/* FIXME: Use proper EVPN route target formatting function once evi_irt_node is also refactored */
-	bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), irt->rt);
 
 	if(json) {
+		json_rt = json_object_new_object();
+		json_vnis = json_object_new_array();
 		json_object_string_add(json_rt, "rt", rt_buf);
 	} else {
 		vty_out(vty, "Route-target: %s\n", rt_buf);
@@ -121,16 +114,15 @@ static void display_evi_irt_node(struct vty *vty, struct evi_irt_node *irt,
 			"List of EVIs importing routes with this route-target:\n");
 	}
 
-	for (ALL_LIST_ELEMENTS(irt->evis, node, nnode, tmp_evi)) {
+	frr_each (evi_mapped_evi_slu, evis, evi_item) {
 		if (json)
-			json_object_array_add(
-				json_vnis, json_object_new_int(tmp_evi->vni));
+			json_object_array_add(json_vnis, json_object_new_int(evi_item->evi->vni));
 		else
-			vty_out(vty, "  %u\n", tmp_evi->vni);
+			vty_out(vty, "  %u\n", evi_item->evi->vni);
 	}
 
 	if (json) {
-		json_object_object_add(json_rt, "vnis", json_vnis);
+		json_object_object_add(json_rt, "evis", json_vnis);
 		json_object_object_add(json, rt_buf, json_rt);
 	}
 }
@@ -221,8 +213,16 @@ static void bgp_evpn_show_route_header(struct vty *vty, struct bgp *bgp,
 /* Helper function for display_vrf_common to print a route target or push it to the JSON array
  * returns whether to abort calling loop that iterates through the route targets
  * json_rtl must be an array
+ * 
+ * if json_rtl != NULL, output is pushed to json array (no VTY output)
+ * in detail mode, every RT is processed.
+ * In non-detail mode, only the first RT is processed and reformatted with an ellipsis
+ * if there are more than 1 RTs in total (also for JSON!)
+ *
+ * in detail mode, VTY output is "    <rt_str>\n"
+ * in non-detail mode, VTY output is " %-25s" for <rt_str> (partial table line / column of table)
  */
-static bool display_vrf_push_rt(json_object *json_rtl, struct vty *vty,
+static bool display_push_rt_common(struct vty *vty, json_object *json_rtl,
 				bool detail, const char *rt_str, size_t total)
 {
 	/* Temporary buffer for route target ellipsis string if necessary */
@@ -250,17 +250,100 @@ static bool display_vrf_push_rt(json_object *json_rtl, struct vty *vty,
 	return !detail;
 }
 
+/* Common helper function for VRFs & EVIs display / show to print the effective RTs
+ * to VTY or push to JSON object as arrays
+ * 
+ * if json != NULL, output is pushed to json arrays (no VTY output)
+ * 
+ * in detail mode, every RT is processed.
+ * In non-detail mode, only the first RT is processed and reformatted with an ellipsis
+ * if there are more than 1 RTs in total (also for JSON!)
+ *
+ * in detail mode, VTY output is "    <rt_str>\n" and subsection headers "  Effective Import/Export Route Targets:\n"
+ * in non-detail mode, VTY output is " %-25s" for <rt_str> (partial table line / column of table)
+ */
+static void display_rts_common(
+	struct vty *vty,
+	struct json_object *json,
+	struct bgp_evpn_effective_wildcard_rt_slu_head *effective_wildcard_import_rts,
+	struct bgp_evpn_effective_fq_rt_slu_head *effective_fq_import_rts,
+	struct bgp_evpn_effective_fq_rt_slu_head *effective_fq_export_rts,
+	bool detail
+) {
+	struct bgp_evpn_effective_wildcard_rt *wcard;
+	struct bgp_evpn_effective_fq_rt *fq;
+
+	json_object *json_import_rtl = NULL;
+	json_object *json_export_rtl = NULL;
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+
+	/* TODO: Auto Route Target handling:
+	 * - Mark if an RT was autoderived, e.g. "123:456 (auto-derived)"?
+	 * - Warn if Auto RT is configured but not active due to missing L3VNI etc?
+	 */
+
+	if(json) {
+		json_import_rtl = json_object_new_array();
+		json_export_rtl = json_object_new_array();
+	}
+
+	/* Import RTs */
+	size_t total_import_rts = bgp_evpn_effective_wildcard_rt_slu_count(effective_wildcard_import_rts)
+		+ bgp_evpn_effective_fq_rt_slu_count(effective_fq_import_rts);
+	
+	bool done = false;
+
+	if(!json && detail)
+		vty_out(vty, "  Effective Import Route Targets:\n");
+
+	frr_each (bgp_evpn_effective_wildcard_rt_slu, effective_wildcard_import_rts, wcard) {
+		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wcard->local_admin_nbo);
+		done = display_push_rt_common(vty, json_import_rtl, detail, rt_buf, total_import_rts);
+		
+		if (done)
+			break;
+	}
+	if (!done) {
+		frr_each (bgp_evpn_effective_fq_rt_slu, effective_fq_import_rts, fq) {
+			bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+			done = display_push_rt_common(vty, json_import_rtl, detail, rt_buf, total_import_rts);
+			
+			if(done)
+				break;
+		}
+	}
+	
+
+	if (json)
+		json_object_object_add(json, "importRts", json_import_rtl);
+
+	if (!json && detail)
+		vty_out(vty, "  Effective Export Route Targets:\n");
+
+	/* Export RTs */
+	size_t total_export_rts = bgp_evpn_effective_fq_rt_slu_count(effective_fq_export_rts);
+	
+	done = false;
+
+	frr_each (bgp_evpn_effective_fq_rt_slu, effective_fq_export_rts, fq) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+		done = display_push_rt_common(vty, json_export_rtl, detail, rt_buf, total_export_rts);
+		
+		if (done)
+			break;
+	}
+	
+	if (json) {
+		json_object_object_add(json, "exportRts", json_export_rtl);
+	}
+}
+
 static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object *json, bool detail)
 {
 	char *mac_soo_str;
 	char flags_buf[10];
-	char rt_buf[BGP_EVPN_RT_STR_LEN];
 	char vni_buf[VNI_STR_LEN];
-	struct bgp_evpn_effective_wildcard_rt *wcard;
-	struct bgp_evpn_effective_fq_rt *fq;
 	struct bgp *bgp_evpn_mi;
-	json_object *json_import_rtl = NULL;
-	json_object *json_export_rtl = NULL;
 	struct listnode *node;
 	struct bgp_evpn_evi *evi;
 
@@ -270,7 +353,7 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 
 	assert(bgp_evpn_mi->evpn_info != NULL);
 
-	snprintf(flags_buf, sizeof(flags_buf), "%c", is_l3vni_live(bgp_vrf) ? '*' : ' ');
+	snprintf(flags_buf, sizeof(flags_buf), "%c", bgp_evpn_vrf_is_l3vni_live(bgp_vrf) ? '*' : ' ');
 
 
 	if(bgp_vrf->l3vni)
@@ -305,11 +388,9 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 
 
 	if (json) {
-		json_import_rtl = json_object_new_array();
-		json_export_rtl = json_object_new_array();
 		json_object_string_add(json, "vni", vni_buf);
 		json_object_string_add(json, "type", "L3");
-		json_object_string_add(json, "inKernel", is_l3vni_live(bgp_vrf) ? "True" : "False");
+		json_object_string_add(json, "inKernel", bgp_evpn_vrf_is_l3vni_live(bgp_vrf) ? "True" : "False");
 		json_object_string_addf(json, "rd", BGP_RD_AS_FORMAT(bgp_vrf->asnotation), &bgp_vrf->vrf_prd);
 		json_object_string_addf(json, "originatorIp", "%pIA", &bgp_vrf->originator_ip);
 		json_object_string_add(json, "siteOfOrigin", mac_soo_str);
@@ -330,7 +411,7 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 		json_object_string_add(json, "vniFilter",CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY) ? "prefix-routes-only" : "none");
 	} else if (detail) { /* !json && detail */
 		vty_out(vty, "VNI: %s", vni_buf);
-		if (is_l3vni_live(bgp_vrf))
+		if (bgp_evpn_vrf_is_l3vni_live(bgp_vrf))
 			vty_out(vty, " (known to the kernel)");
 		vty_out(vty, "\n");
 
@@ -365,62 +446,17 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 		vty_out(vty, BGP_RD_AS_FORMAT_SPACE(bgp_vrf->asnotation), &bgp_vrf->vrf_prd);
 	}
 
-	/* TODO: Auto Route Target handling:
-	 * - Mark if an RT was autoderived, e.g. "123:456 (auto-derived)"?
-	 * - Warn if Auto RT is configured but not active due to missing L3VNI etc?
+	/* This will print the effective RTs or push them to JSON
+	 * Common for both VRFs and EVIs. Respects the detail parameter for table output.
 	 */
-
-	/* Import RTs */
-	size_t total_import_rts = bgp_evpn_effective_wildcard_rt_slu_count(&bgp_vrf->effective_wildcard_import_rts)
-		+ bgp_evpn_effective_fq_rt_slu_count(&bgp_vrf->effective_fq_import_rts);
-	
-	bool done = false;
-
-	if(!json && detail)
-		vty_out(vty, "  Effective Import Route Targets:\n");
-
-	frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp_vrf->effective_wildcard_import_rts, wcard) {
-		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wcard->local_admin_nbo);
-
-		done = display_vrf_push_rt(json_import_rtl, vty, detail,rt_buf, total_import_rts);
-		if (done)
-			break;
-	}
-	if (!done) {
-		frr_each (bgp_evpn_effective_fq_rt_slu, &bgp_vrf->effective_fq_import_rts, fq) {
-			bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
-
-			done = display_vrf_push_rt(json_import_rtl, vty, detail, rt_buf, total_import_rts);
-			if(done)
-				break;
-		}
-	}
-	
-
-	if (json)
-		json_object_object_add(json, "importRts", json_import_rtl);
-
-	if (!json && detail)
-		vty_out(vty, "  Effective Export Route Targets:\n");
-
-	/* Export RTs */
-	size_t total_export_rts = bgp_evpn_effective_fq_rt_slu_count(
-		&bgp_vrf->effective_fq_export_rts);
-	
-	done = false;
-
-	frr_each (bgp_evpn_effective_fq_rt_slu,&bgp_vrf->effective_fq_export_rts, fq) {
-		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf),
-							fq->ecom_val);
-		done = display_vrf_push_rt(json_export_rtl, vty, detail, rt_buf, total_export_rts);
-		if (done)
-			break;
-	}
-	
-
-	if (json) {
-		json_object_object_add(json, "exportRts", json_export_rtl);
-	}
+	display_rts_common(
+		vty,
+		json,
+		&bgp_vrf->effective_wildcard_import_rts,
+		&bgp_vrf->effective_fq_import_rts,
+		&bgp_vrf->effective_fq_export_rts,
+		detail
+	);
 
 	if(!json && !detail) { /* Last part of table line */
 		vty_out(vty, " %-25s", mac_soo_str);
@@ -457,150 +493,115 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 	ecommunity_strfree(&mac_soo_str);
 }
 
-static void display_vni(struct vty *vty, struct bgp_evpn_evi *evi, json_object *json)
+static void display_evi_common(struct vty *vty, struct bgp_evpn_evi *evi,
+			       json_object *json, bool detail)
 {
-	char *ecom_str;
-	struct listnode *node, *nnode;
-	struct ecommunity *ecom;
-	json_object *json_import_rtl = NULL;
-	json_object *json_export_rtl = NULL;
+	char *mac_soo_str;
+	char flags_buf[10];
 	struct bgp *bgp_evpn_mi;
 	enum asnotation_mode asnotation;
 
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if(!bgp_evpn_mi)
+		return;
+	assert(bgp_evpn_mi->evpn_info != NULL);
+
 	asnotation = bgp_get_asnotation(bgp_evpn_mi);
 
+	snprintf(flags_buf, sizeof(flags_buf), "%c", bgp_evpn_evi_is_live(evi) ? '*' : ' ');
+
+	mac_soo_str = ecommunity_ecom2str(bgp_evpn_mi->evpn_info->soo, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+
+	/* per EVI knob is enabled -- Enabled
+	 * Global knob is enabled  -- Active
+	 * default  -- Disabled
+	 * 
+	 * The texts are not optimal - better would be "Enabled" -> "Enabled (per-EVI flag)"
+	 * "Active" -> "Enabled (global flag)" and "Disabled" stays
+	 */
+	const char* advertiseGatewayMacipStatus;
+	if (evi->advertise_gw_macip)
+		advertiseGatewayMacipStatus = "Enabled";
+	else if (bgp_evpn_mi->advertise_gw_macip)
+		advertiseGatewayMacipStatus = "Active";
+	else
+		advertiseGatewayMacipStatus = "Disabled";
+
+	const char* advertiseSviMacipStatus;
+	if (evi->advertise_svi_macip)
+		advertiseSviMacipStatus = "Enabled";
+	else if (bgp_evpn_mi->evpn_info->advertise_svi_macip)
+		advertiseSviMacipStatus = "Active";
+	else
+		advertiseSviMacipStatus = "Disabled";
+
 	if (json) {
-		json_import_rtl = json_object_new_array();
-		json_export_rtl = json_object_new_array();
 		json_object_int_add(json, "vni", evi->vni);
 		json_object_string_add(json, "type", "L2");
-		json_object_string_add(json, "inKernel",
-				       is_evi_live(evi) ? "True" : "False");
-		json_object_string_addf(
-			json, "rd", BGP_RD_AS_FORMAT(asnotation), &evi->prd);
-		json_object_string_addf(json, "originatorIp", "%pIA",
-					&evi->originator_ip);
-		json_object_string_addf(json, "mcastGroup", "%pI4",
-					&evi->mcast_grp);
-		if (bgp_evpn_mi && bgp_evpn_mi->evpn_info) {
-			ecom_str = ecommunity_ecom2str(
-				bgp_evpn_mi->evpn_info->soo,
-				ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-			json_object_string_add(json, "siteOfOrigin", ecom_str);
-			ecommunity_strfree(&ecom_str);
-		}
-		/* per vni knob is enabled -- Enabled
-		 * Global knob is enabled  -- Active
-		 * default  -- Disabled
-		 */
-		if (!evi->advertise_gw_macip &&
-		    bgp_evpn_mi && bgp_evpn_mi->advertise_gw_macip)
-			json_object_string_add(json, "advertiseGatewayMacip",
-					       "Active");
-		else if (evi->advertise_gw_macip)
-			json_object_string_add(json, "advertiseGatewayMacip",
-					       "Enabled");
-		else
-			json_object_string_add(json, "advertiseGatewayMacip",
-					       "Disabled");
-		if (!evi->advertise_svi_macip && bgp_evpn_mi &&
-		    bgp_evpn_mi->evpn_info &&
-		    bgp_evpn_mi->evpn_info->advertise_svi_macip)
-			json_object_string_add(json, "advertiseSviMacIp",
-					       "Active");
-		else if (evi->advertise_svi_macip)
-			json_object_string_add(json, "advertiseSviMacIp",
-					       "Enabled");
-		else
-			json_object_string_add(json, "advertiseSviMacIp",
-					       "Disabled");
-		json_object_string_add(
-			json, "sviInterface",
-			ifindex2ifname(evi->svi_ifindex, evi->tenant_vrf_id));
-	} else {
+		json_object_string_add(json, "inKernel", bgp_evpn_evi_is_live(evi) ? "True" : "False");
+		json_object_string_addf(json, "rd", BGP_RD_AS_FORMAT(asnotation), &evi->prd);
+		json_object_string_addf(json, "originatorIp", "%pIA", &evi->originator_ip);
+		json_object_string_addf(json, "mcastGroup", "%pI4", &evi->mcast_grp);
+		
+		json_object_string_add(json, "siteOfOrigin", mac_soo_str);
+			
+		json_object_string_add(json, "advertiseGatewayMacip", advertiseGatewayMacipStatus);
+		json_object_string_add(json, "advertiseSviMacIp", advertiseSviMacipStatus);
+		
+		json_object_string_add(json, "sviInterface",ifindex2ifname(evi->svi_ifindex,evi->tenant_vrf_id));
+	} else if (detail) {
 		vty_out(vty, "VNI: %u", evi->vni);
-		if (is_evi_live(evi))
+		if (bgp_evpn_evi_is_live(evi))
 			vty_out(vty, " (known to the kernel)");
 		vty_out(vty, "\n");
 
 		vty_out(vty, "  Type: %s\n", "L2");
-		vty_out(vty, "  Tenant-Vrf: %s\n",
-			vrf_id_to_name(evi->tenant_vrf_id));
+		vty_out(vty, "  Tenant-Vrf: %s\n", vrf_id_to_name(evi->tenant_vrf_id));
+		
 		vty_out(vty, "  RD: ");
 		vty_out(vty, BGP_RD_AS_FORMAT(asnotation), &evi->prd);
 		vty_out(vty, "\n");
+
 		vty_out(vty, "  Originator IP: %pIA\n", &evi->originator_ip);
 		vty_out(vty, "  Mcast group: %pI4\n", &evi->mcast_grp);
-		if (bgp_evpn_mi && bgp_evpn_mi->evpn_info) {
-			ecom_str = ecommunity_ecom2str(
-				bgp_evpn_mi->evpn_info->soo,
-				ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-			vty_out(vty, "  MAC-VRF Site-of-Origin: %s\n",
-				ecom_str);
-			ecommunity_strfree(&ecom_str);
-		}
-		if (!evi->advertise_gw_macip &&
-		    bgp_evpn_mi && bgp_evpn_mi->advertise_gw_macip)
-			vty_out(vty, "  Advertise-gw-macip : %s\n",
-				"Active");
-		else if (evi->advertise_gw_macip)
-			vty_out(vty, "  Advertise-gw-macip : %s\n",
-				"Enabled");
-		else
-			vty_out(vty, "  Advertise-gw-macip : %s\n",
-				"Disabled");
-		if (!evi->advertise_svi_macip && bgp_evpn_mi &&
-		    bgp_evpn_mi->evpn_info &&
-		    bgp_evpn_mi->evpn_info->advertise_svi_macip)
-			vty_out(vty, "  Advertise-svi-macip : %s\n",
-				"Active");
-		else if (evi->advertise_svi_macip)
-			vty_out(vty, "  Advertise-svi-macip : %s\n",
-				"Enabled");
-		else
-			vty_out(vty, "  Advertise-svi-macip : %s\n",
-				"Disabled");
-		vty_out(vty, "  SVI interface : %s\n",
-			ifindex2ifname(evi->svi_ifindex, evi->tenant_vrf_id));
+
+		vty_out(vty, "  MAC-VRF Site-of-Origin: %s\n", mac_soo_str);
+
+		vty_out(vty, "  Advertise-gw-macip: %s\n", advertiseGatewayMacipStatus);
+		
+		vty_out(vty, "  Advertise-svi-macip: %s\n", advertiseSviMacipStatus);
+		
+		vty_out(vty, "  SVI interface : %s\n", ifindex2ifname(evi->svi_ifindex, evi->tenant_vrf_id));
+	} else {
+		/* Print table line
+		 * Flags: * - Kernel
+		 * %-1s   %-10s  %-4s  %-21s  %-25s      %-25s      %-25s                   %-37s
+		 * Flags  VNI    Type  RD     Import RT  Export RT  MAC-VRF Site-of-Origin  Tenant VRF
+		 */
+		vty_out(vty, "%-1s %-10u %-4s ", flags_buf, evi->vni, "L2");
+		vty_out(vty, BGP_RD_AS_FORMAT_SPACE(asnotation), &evi->prd);
 	}
 
-	if (!json)
-		vty_out(vty, "  Import Route Target:\n");
+	/* This will print the effective RTs or push them to JSON
+	 * Common for both VRFs and EVIs. Respects the detail parameter for table output.
+	 */
+	display_rts_common(
+		vty,
+		json,
+		&evi->effective_wildcard_import_rts,
+		&evi->effective_fq_import_rts,
+		&evi->effective_fq_export_rts,
+		detail
+	);
 
-	for (ALL_LIST_ELEMENTS(evi->evi_import_rtl, node, nnode, ecom)) {
-		ecom_str = ecommunity_ecom2str(ecom,
-					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
-		if (json)
-			json_object_array_add(json_import_rtl,
-					      json_object_new_string(ecom_str));
-		else
-			vty_out(vty, "    %s\n", ecom_str);
-
-		ecommunity_strfree(&ecom_str);
+	if(!json && !detail) { /* Last part of table line */
+		vty_out(vty, " %-25s", mac_soo_str);
+		vty_out(vty, " %-37s\n", vrf_id_to_name(evi->tenant_vrf_id));
 	}
 
-	if (json)
-		json_object_object_add(json, "importRts", json_import_rtl);
-	else
-		vty_out(vty, "  Export Route Target:\n");
 
-	for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode, ecom)) {
-		ecom_str = ecommunity_ecom2str(ecom,
-					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-
-		if (json)
-			json_object_array_add(json_export_rtl,
-					      json_object_new_string(ecom_str));
-		else
-			vty_out(vty, "    %s\n", ecom_str);
-
-		ecommunity_strfree(&ecom_str);
-	}
-
-	if (json)
-		json_object_object_add(json, "exportRts", json_export_rtl);
+	ecommunity_strfree(&mac_soo_str);
 }
 
 static void show_esi_routes(struct bgp *bgp,
@@ -983,160 +984,6 @@ static void show_vni_routes_all_hash(struct hash_bucket *bucket, void *arg)
 
 	if (json)
 		json_object_object_add(json_vni, "macTable", json_vni_mac);
-}
-
-static void show_vni_entry(struct hash_bucket *bucket, void *args[])
-{
-	struct vty *vty;
-	json_object *json;
-	json_object *json_vni = NULL;
-	json_object *json_import_rtl = NULL;
-	json_object *json_export_rtl = NULL;
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
-	char buf1[10];
-	char rt_buf[25];
-	char *ecom_str;
-	struct listnode *node, *nnode;
-	struct ecommunity *ecom;
-	struct bgp *bgp_evpn_mi;
-	enum asnotation_mode asnotation;
-
-	vty = args[0];
-	json = args[1];
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	asnotation = bgp_get_asnotation(bgp_evpn_mi);
-
-	if (json) {
-		json_vni = json_object_new_object();
-		json_import_rtl = json_object_new_array();
-		json_export_rtl = json_object_new_array();
-	}
-
-	buf1[0] = '\0';
-	if (is_evi_live(evi))
-		snprintf(buf1, sizeof(buf1), "*");
-
-	if (json) {
-		json_object_int_add(json_vni, "vni", evi->vni);
-		json_object_string_add(json_vni, "type", "L2");
-		json_object_string_add(json_vni, "inKernel",
-				       is_evi_live(evi) ? "True" : "False");
-		json_object_string_addf(json_vni, "rd",
-					BGP_RD_AS_FORMAT(asnotation),
-					&evi->prd);
-		json_object_string_addf(json_vni, "originatorIp", "%pIA",
-					&evi->originator_ip);
-		json_object_string_addf(json_vni, "mcastGroup", "%pI4",
-					&evi->mcast_grp);
-		/* per vni knob is enabled -- Enabled
-		 * Global knob is enabled  -- Active
-		 * default  -- Disabled
-		 */
-		if (!evi->advertise_gw_macip && bgp_evpn_mi
-		    && bgp_evpn_mi->advertise_gw_macip)
-			json_object_string_add(
-				json_vni, "advertiseGatewayMacip", "Active");
-		else if (evi->advertise_gw_macip)
-			json_object_string_add(
-				json_vni, "advertiseGatewayMacip", "Enabled");
-		else
-			json_object_string_add(
-				json_vni, "advertiseGatewayMacip", "Disabled");
-		if (!evi->advertise_svi_macip && bgp_evpn_mi
-		    && bgp_evpn_mi->evpn_info->advertise_svi_macip)
-			json_object_string_add(json_vni, "advertiseSviMacIp",
-					       "Active");
-		else if (evi->advertise_svi_macip)
-			json_object_string_add(json_vni, "advertiseSviMacIp",
-					       "Enabled");
-		else
-			json_object_string_add(json_vni, "advertiseSviMacIp",
-					       "Disabled");
-	} else {
-		vty_out(vty, "%-1s %-10u %-4s ", buf1, evi->vni, "L2");
-		vty_out(vty, BGP_RD_AS_FORMAT_SPACE(asnotation), &evi->prd);
-	}
-
-	for (ALL_LIST_ELEMENTS(evi->evi_import_rtl, node, nnode, ecom)) {
-		ecom_str = ecommunity_ecom2str(ecom,
-					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-
-		if (json) {
-			json_object_array_add(json_import_rtl,
-					      json_object_new_string(ecom_str));
-		} else {
-			if (listcount(evi->evi_import_rtl) > 1)
-				snprintf(rt_buf, sizeof(rt_buf), "%s, ...",
-					 ecom_str);
-			else
-				snprintf(rt_buf, sizeof(rt_buf), "%s",
-					 ecom_str);
-			vty_out(vty, " %-25s", rt_buf);
-		}
-
-		XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-
-		/* If there are multiple import RTs we break here and show only
-		 * one */
-		if (!json)
-			break;
-	}
-
-	if (json)
-		json_object_object_add(json_vni, "importRTs", json_import_rtl);
-
-	for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode, ecom)) {
-		ecom_str = ecommunity_ecom2str(ecom,
-					       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-
-		if (json) {
-			json_object_array_add(json_export_rtl,
-					      json_object_new_string(ecom_str));
-		} else {
-			if (listcount(evi->evi_export_rtl) > 1)
-				snprintf(rt_buf, sizeof(rt_buf), "%s, ...",
-					 ecom_str);
-			else
-				snprintf(rt_buf, sizeof(rt_buf), "%s",
-					 ecom_str);
-			vty_out(vty, " %-25s", rt_buf);
-		}
-
-		XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-
-		/* If there are multiple export RTs we break here and show only
-		 * one */
-		if (!json) {
-			if (bgp_evpn_mi && bgp_evpn_mi->evpn_info) {
-				ecom_str = ecommunity_ecom2str(
-					bgp_evpn_mi->evpn_info->soo,
-					ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-				vty_out(vty, " %-25s", ecom_str);
-				ecommunity_strfree(&ecom_str);
-			}
-			vty_out(vty, " %-37s",
-				vrf_id_to_name(evi->tenant_vrf_id));
-			break;
-		}
-	}
-
-	if (json) {
-		char vni_str[VNI_STR_LEN];
-
-		json_object_object_add(json_vni, "exportRTs", json_export_rtl);
-		if (bgp_evpn_mi && bgp_evpn_mi->evpn_info) {
-			ecom_str = ecommunity_ecom2str(
-				bgp_evpn_mi->evpn_info->soo,
-				ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-			json_object_string_add(json_vni, "siteOfOrigin",
-					       ecom_str);
-			ecommunity_strfree(&ecom_str);
-		}
-		snprintf(vni_str, sizeof(vni_str), "%u", evi->vni);
-		json_object_object_add(json, vni_str, json_vni);
-	} else
-		vty_out(vty, "\n");
 }
 
 static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
@@ -2018,256 +1865,6 @@ DEFUN(no_evpnrt5_network,
 			      argv[idx_gwip]->arg, argv[idx_ethtag]->arg, NULL);
 }
 
-static void evpn_import_rt_delete_auto(struct bgp *bgp, struct bgp_evpn_evi *evi)
-{
-	legacy_bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_import_rtl);
-}
-
-static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgp_evpn_evi *evi)
-{
-	legacy_bgp_evpn_evi_delete_auto_rt(bgp, evi->vni, evi->evi_export_rtl);
-}
-
-/*
- * Configure the Import RTs for a VNI (vty handler). Caller expected to
- * check that this is a change.
- */
-static void evpn_evi_configure_import_rt(struct bgp *bgp, struct bgp_evpn_evi *evi,
-				     struct ecommunity *ecomadd)
-{
-	/* If the VNI is "live", we need to uninstall routes using the current
-	 * import RT(s) first before we update the import RT, and subsequently
-	 * install routes.
-	 */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_uninstall_global_routes(evi);
-
-	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
-	legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
-
-	/* If the auto route-target is in use we must remove it */
-	evpn_import_rt_delete_auto(bgp, evi);
-
-	/* Add new RT and rebuild the RT to VNI mapping */
-	listnode_add_sort(evi->evi_import_rtl, ecomadd);
-
-	SET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
-	legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
-
-	/* Install routes that match new import RT */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_install_global_routes(evi);
-}
-
-/*
- * Unconfigure Import RT(s) for a VNI (vty handler).
- */
-static void evpn_evi_unconfigure_import_rt(struct bgp *bgp, struct bgp_evpn_evi *evi,
-				       struct ecommunity *ecomdel)
-{
-	struct listnode *node, *nnode, *node_to_del;
-	struct ecommunity *ecom;
-
-	/* Along the lines of "configure" except we have to reset to the
-	 * automatic value.
-	 */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_uninstall_global_routes(evi);
-
-	/* Cleanup the RT to VNI mapping and get rid of existing import RT. */
-	legacy_bgp_evpn_unmap_vni_from_its_rts(bgp, evi);
-
-	/* Delete all import RTs */
-	if (ecomdel == NULL) {
-		for (ALL_LIST_ELEMENTS(evi->evi_import_rtl, node, nnode, ecom)) {
-			ecommunity_free(&ecom);
-			list_delete_node(evi->evi_import_rtl, node);
-		}
-	}
-
-	/* Delete a specific import RT */
-	else {
-		node_to_del = NULL;
-
-		for (ALL_LIST_ELEMENTS(evi->evi_import_rtl, node, nnode, ecom)) {
-			if (ecommunity_match(ecom, ecomdel)) {
-				ecommunity_free(&ecom);
-				node_to_del = node;
-				break;
-			}
-		}
-
-		if (node_to_del)
-			list_delete_node(evi->evi_import_rtl, node_to_del);
-	}
-
-	assert(evi->evi_import_rtl);
-	/* Reset to auto RT - this also rebuilds the RT to VNI mapping */
-	if (list_isempty(evi->evi_import_rtl)) {
-		UNSET_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD);
-		legacy_bgp_evpn_evi_derive_import_auto_rt(bgp, evi);
-	}
-	/* Rebuild the RT to VNI mapping */
-	else
-		legacy_bgp_evpn_map_vni_to_its_rts(bgp, evi);
-
-	/* Install routes that match new import RT */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_install_global_routes(evi);
-}
-
-/*
- * Configure the Export RT for a VNI (vty handler). Caller expected to
- * check that this is a change. Note that only a single export RT is
- * allowed for a VNI and any change to configuration is implemented as
- * a "replace" (similar to other configuration).
- */
-static void evpn_evi_configure_export_rt(struct bgp *bgp, struct bgp_evpn_evi *evi,
-				     struct ecommunity *ecomadd)
-{
-	/* If the auto route-target is in use we must remove it */
-	evpn_export_rt_delete_auto(bgp, evi);
-
-	listnode_add_sort(evi->evi_export_rtl, ecomadd);
-	SET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
-
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_export_rt_change(evi);
-}
-
-/*
- * Unconfigure the Export RT for a VNI (vty handler)
- */
-static void evpn_evi_unconfigure_export_rt(struct bgp *bgp, struct bgp_evpn_evi *evi,
-				       struct ecommunity *ecomdel)
-{
-	struct listnode *node, *nnode, *node_to_del;
-	struct ecommunity *ecom;
-
-	/* Delete all export RTs */
-	if (ecomdel == NULL) {
-		/* Reset to default and process all routes. */
-		for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode, ecom)) {
-			ecommunity_free(&ecom);
-			list_delete_node(evi->evi_export_rtl, node);
-		}
-	}
-
-	/* Delete a specific export RT */
-	else {
-		node_to_del = NULL;
-
-		for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode, ecom)) {
-			if (ecommunity_match(ecom, ecomdel)) {
-				ecommunity_free(&ecom);
-				node_to_del = node;
-				break;
-			}
-		}
-
-		if (node_to_del)
-			list_delete_node(evi->evi_export_rtl, node_to_del);
-	}
-
-	assert(evi->evi_export_rtl);
-	if (list_isempty(evi->evi_export_rtl)) {
-		UNSET_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD);
-		legacy_bgp_evpn_evi_derive_export_auto_rt(bgp, evi);
-	}
-
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_export_rt_change(evi);
-}
-
-/*
- * Configure RD for VRF
- */
-static void evpn_vrf_configure_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
-				  const char *rd_pretty)
-{
-	/* If we have already advertise type-5 routes with a different RD, we
-	 * have to delete and withdraw them first
-	 */
-	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 1);
-
-	if (bgp_vrf->vrf_prd_pretty)
-		XFREE(MTYPE_BGP_NAME, bgp_vrf->vrf_prd_pretty);
-
-	/* update RD */
-	memcpy(&bgp_vrf->vrf_prd, rd, sizeof(struct prefix_rd));
-	bgp_vrf->vrf_prd_pretty = XSTRDUP(MTYPE_BGP_NAME, rd_pretty);
-	SET_FLAG(bgp_vrf->vrf_flags, BGP_EVPN_VRF_RD_CFGD);
-
-	/* We have a new RD for VRF.
-	 * Advertise all type-5 routes again with the new RD
-	 */
-	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 0);
-}
-
-/*
- * Unconfigure RD for VRF
- */
-static void evpn_vrf_unconfigure_rd(struct bgp *bgp_vrf)
-{
-	/* If we have already advertise type-5 routes with a different RD, we
-	 * have to delete and withdraw them first
-	 */
-	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 1);
-
-	/* fall back to default RD */
-	UNSET_FLAG(bgp_vrf->vrf_flags, BGP_EVPN_VRF_RD_CFGD);
-	bgp_evpn_vrf_derive_auto_rd(bgp_vrf);
-	if (bgp_vrf->vrf_prd_pretty)
-		XFREE(MTYPE_BGP_NAME, bgp_vrf->vrf_prd_pretty);
-	/* We have a new RD for VRF.
-	 * Advertise all type-5 routes again with the new RD
-	 */
-	bgp_evpn_vrf_handle_rd_change(bgp_vrf, 0);
-}
-
-/*
- * Configure RD for a VNI (vty handler)
- */
-static void evpn_evi_configure_rd(struct bgp *bgp, struct bgp_evpn_evi *evi,
-			      struct prefix_rd *rd, const char *rd_pretty)
-{
-	/* If the VNI is "live", we need to delete and withdraw this VNI's
-	 * local routes with the prior RD first. Then, after updating RD,
-	 * need to re-advertise.
-	 */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_rd_change(bgp, evi, 1);
-
-	if (evi->prd_pretty)
-		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
-	/* update RD */
-	memcpy(&evi->prd, rd, sizeof(struct prefix_rd));
-	evi->prd_pretty = XSTRDUP(MTYPE_BGP_NAME, rd_pretty);
-	SET_FLAG(evi->flags, EVI_FLAG_RD_CFGD);
-
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_rd_change(bgp, evi, 0);
-}
-
-/*
- * Unconfigure RD for a VNI (vty handler)
- */
-static void evpn_evi_unconfigure_rd(struct bgp *bgp, struct bgp_evpn_evi *evi)
-{
-	/* If the VNI is "live", we need to delete and withdraw this VNI's
-	 * local routes with the prior RD first. Then, after resetting RD
-	 * to automatic value, need to re-advertise.
-	 */
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_rd_change(bgp, evi, 1);
-
-	/* reset RD to default */
-	bgp_evpn_evi_derive_auto_rd(bgp, evi);
-
-	if (is_evi_live(evi))
-		bgp_evpn_evi_handle_rd_change(bgp, evi, 0);
-}
-
 /*
  * Create VNI, if not already present (VTY handler). Mark as configured.
  */
@@ -2277,7 +1874,7 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
 	struct in_addr mcast_grp = {INADDR_ANY};
 	struct ipaddr orignator_ip = {};
 
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
 	if (!evi) {
 		/* Check if this L2VNI is already configured as L3VNI */
 		if (bgp_evpn_lookup_l3vni_l2vni_table(vni)) {
@@ -2297,7 +1894,7 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
 	}
 
 	/* Mark as configured. */
-	SET_FLAG(evi->flags, EVI_FLAG_CFGD);
+	SET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
 	return evi;
 }
 
@@ -2310,50 +1907,66 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
  */
 static void evpn_delete_vni(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
-	if (!is_evi_live(evi)) {
+	if (!bgp_evpn_evi_is_live(evi)) {
+		/* bgp_evpn_evi_is_user_configured should be true then - how would we know about it otherwise? */
 		bgp_evpn_evi_free(bgp, evi);
 		return;
 	}
+
+	/* EVI is live (so we cannot remove it), but we have to remove the users configuration */
 
 	/* We need to take the unconfigure action for each parameter of this VNI
 	 * that is configured. Some optimization is possible, but not worth the
 	 * additional code for an operation that should be pretty rare.
 	 */
-	UNSET_FLAG(evi->flags, EVI_FLAG_CFGD);
+	UNSET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
+
+	if(evi->advertise_svi_macip) {
+		/* TODO: re-use evpn_set_advertise_svi_macip? */
+		evi->advertise_svi_macip = false;
+		bgp_zebra_advertise_svi_macip(bgp, evi->advertise_svi_macip ? 1 : 0, evi->vni);
+	}
+	if(evi->advertise_gw_macip) {
+		/* TODO: re-use evpn_unset_advertise_default_gw? */
+		evi->advertise_gw_macip = false;
+		bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip ? 1 : 0, evi->vni);
+	}
+	if(evi->advertise_subnet) {
+		/* TODO: re-use evpn_unset_advertise_subnet? */
+		evi->advertise_subnet = false;
+		bgp_zebra_advertise_subnet(bgp, evi->advertise_subnet ? 1 : 0, evi->vni);
+	}	
+
+	/* Easier to just dealloc and re-alloc cleanly */
+	bgp_evpn_rt_config_free(evi->evi_rt_config);
+	evi->evi_rt_config = bgp_evpn_rt_config_new();
+
 
 	/* First, deal with the export side - RD and export RT changes. */
-	if (is_rd_configured(evi))
-		evpn_evi_unconfigure_rd(bgp, evi);
-	if (is_export_rt_configured(evi))
-		evpn_evi_unconfigure_export_rt(bgp, evi, NULL);
-
-	/* Next, deal with the import side. */
-	if (is_import_rt_configured(evi))
-		evpn_evi_unconfigure_import_rt(bgp, evi, NULL);
+	if (bgp_evpn_evi_is_rd_configured(evi))
+		bgp_evpn_evi_unconfigure_rd(bgp, evi);
+	
+	bgp_evpn_evi_handle_export_rt_change(evi);
+	bgp_evpn_evi_handle_import_rt_change(evi);
 }
 
 /*
  * Display import RT mapping to VRFs (vty handler)
  * bgp_evpn: evpn bgp instance
  */
-static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
-				     json_object *json)
+static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn_mi, json_object *json)
 {
 	struct vrf_fq_irt_node *fq_irt;
 	struct vrf_wildcard_irt_node *wildcard_irt;
 	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
-	frr_each (vrf_fq_irt_nodes,
-		  &bgp_evpn->evpn_master_instance_info.vrf_fq_irt_nodes, fq_irt) {
+	frr_each (vrf_fq_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes, fq_irt) {
 		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq_irt->rt);
 		display_vrf_irt_node_common(vty, rt_buf, &fq_irt->vrfs, json);
 	}
 
-	frr_each (vrf_wildcard_irt_nodes,
-		  &bgp_evpn->evpn_master_instance_info.vrf_wildcard_irt_nodes,
-		  wildcard_irt) {
-		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf),
-							wildcard_irt->local_admin_nbo);
+	frr_each (vrf_wildcard_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes, wildcard_irt) {
+		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wildcard_irt->local_admin_nbo);
 		display_vrf_irt_node_common(vty, rt_buf, &wildcard_irt->vrfs, json);
 	}
 }
@@ -2361,12 +1974,21 @@ static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn,
 /*
  * Display import RT mapping to VNIs (vty handler)
  */
-static void evpn_show_import_rts(struct vty *vty, struct bgp *bgp, json_object *json)
+static void evpn_show_evi_import_rts(struct vty *vty, struct bgp *bgp_evpn_mi, json_object *json)
 {
-	struct evi_irt_node *irt;
+	struct evi_fq_irt_node *fq_irt;
+	struct evi_wildcard_irt_node *wildcard_irt;
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
-	frr_each (evi_irt_nodes, &bgp->evpn_master_instance_info.evi_irt_nodes, irt)
-		display_evi_irt_node(vty, irt, json);
+	frr_each (evi_fq_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes, fq_irt) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq_irt->rt);
+		display_evi_irt_node_common(vty, rt_buf, &fq_irt->evis, json);
+	}
+
+	frr_each (evi_wildcard_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes, wildcard_irt) {
+		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wildcard_irt->local_admin_nbo);
+		display_evi_irt_node_common(vty, rt_buf, &wildcard_irt->evis, json);
+	}
 }
 
 /*
@@ -2459,7 +2081,7 @@ static void evpn_show_route_vni_multicast(struct vty *vty, struct bgp *bgp,
 	safi = SAFI_EVPN;
 
 	/* Locate VNI. */
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
 	if (!evi) {
 		vty_out(vty, "VNI not found\n");
 		return;
@@ -2539,7 +2161,7 @@ static void evpn_show_route_vni_macip(struct vty *vty, struct bgp *bgp,
 	safi = SAFI_EVPN;
 
 	/* Locate VNI. */
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
 	if (!evi) {
 		if (!json)
 			vty_out(vty, "VNI not found\n");
@@ -2672,7 +2294,7 @@ static void evpn_show_routes_vni(struct vty *vty, struct bgp *bgp, vni_t vni,
 	struct ipaddr vtep_ip;
 
 	/* Locate VNI. */
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
 	if (!evi) {
 		if (!json)
 			vty_out(vty, "VNI not found\n");
@@ -3438,7 +3060,7 @@ int bgp_evpn_show_all_routes(struct vty *vty, struct bgp *bgp, int type,
 }
 
 /*
- * Display specified VNI (can be a L3VNI / VRF or L2VNI / EVI) (vty handler)
+ * Display specified VNI (can be a L3VNI / VRF or L2VNI / EVI) in detail
  */
 static void evpn_show_vni(struct vty *vty, struct bgp *bgp, vni_t vni,
 			  json_object *json)
@@ -3446,10 +3068,10 @@ static void evpn_show_vni(struct vty *vty, struct bgp *bgp, vni_t vni,
 	uint8_t found = 0;
 	struct bgp_evpn_evi *evi;
 
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
 	if (evi) {
 		found = 1;
-		display_vni(vty, evi, json);
+		display_evi_common(vty, evi, json, true);
 	} else {
 		struct bgp *bgp_temp;
 		struct listnode *node = NULL;
@@ -3465,6 +3087,27 @@ static void evpn_show_vni(struct vty *vty, struct bgp *bgp, vni_t vni,
 	if (!found && !json) {
 		vty_out(vty, "VNI not found\n");
 		return;
+	}
+}
+
+
+/* Helper function for hash_iterate to display a VNI as table line */
+static void show_vni_entry_hash(struct hash_bucket *bucket, void *args[])
+{
+	struct vty *vty = args[0];
+	json_object *json = args[1];
+	json_object *json_evi = NULL;
+	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
+	char vni_str[VNI_STR_LEN];
+
+	if (json)
+		json_evi = json_object_new_object();
+
+	display_evi_common(vty, evi, json_evi, false);
+
+	if (json) {
+		snprintf(vni_str, sizeof(vni_str), "%u", evi->vni);
+		json_object_object_add(json, vni_str, json_evi);
 	}
 }
 
@@ -3488,17 +3131,17 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 
 	/* print all L3 VNIs */
 	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_temp)) {
-		json_object *json_vni = NULL;
+		json_object *json_vrf = NULL;
 		char vni_str[VNI_STR_LEN];
 
 		if (json)
-			json_vni = json_object_new_object();
+			json_vrf = json_object_new_object();
 
-		display_vrf_common(vty, bgp_temp, json_vni, false);
+		display_vrf_common(vty, bgp_temp, json_vrf, false);
 
 		if(json) {
 			snprintf(vni_str, sizeof(vni_str), "%u", bgp_temp->l3vni);
-			json_object_object_add(json, vni_str, json_vni);
+			json_object_object_add(json, vni_str, json_vrf);
 		}
 	}
 
@@ -3506,7 +3149,7 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 	args[0] = vty;
 	args[1] = json;
 	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vnihash,
-		     (void (*)(struct hash_bucket *, void *))show_vni_entry,
+		     (void (*)(struct hash_bucket *, void *))show_vni_entry_hash,
 		     args);
 }
 
@@ -3613,7 +3256,7 @@ static void evpn_process_default_originate_cmd(struct bgp *bgp_vrf,
 				   BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6);
 	}
 
-	if (is_l3vni_live(bgp_vrf))
+	if (bgp_evpn_vrf_is_l3vni_live(bgp_vrf))
 		bgp_evpn_install_uninstall_default_route(bgp_vrf, afi, safi, NULL, add);
 }
 
@@ -3686,15 +3329,53 @@ static void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp_evpn_mi, bo
 	}
 }
 
-static void bgp_evpn_write_evi_config(struct vty *vty, struct bgp_evpn_evi *evi)
+/* Common helper function for VRFs & EVIs to write route target config
+ * Order is auto both,import,export then manual both,import,export
+ * The manual RTs should be ordered by wildcard, AS, IP4, AS4 (but we don't care and just write them)
+*/
+static void bgp_evpn_config_write_rts_common(struct vty *vty, struct bgp_evpn_rt_config *rtcfg,
+					     const char *prefix)
 {
-	char *ecom_str;
-	struct listnode *node, *nnode;
-	struct ecommunity *ecom;
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
 
-	if (is_vni_configured(evi)) {
+	if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_AUTO_CFGD)
+		vty_out(vty, "%sroute-target both auto\n", prefix);
+	else if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "%sroute-target both auto disable\n", prefix);
+
+	if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_AUTO_CFGD)
+		vty_out(vty, "%sroute-target import auto\n", prefix);
+	else if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "%sroute-target import auto disable\n", prefix);
+
+	if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_AUTO_CFGD)
+		vty_out(vty, "%sroute-target export auto\n", prefix);
+	else if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_DISABLE_CFGD)
+		vty_out(vty, "%sroute-target export auto disable\n", prefix);
+
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_both, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "%sroute-target both %s\n", prefix, rt_buf);
+	}
+
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_import, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "%sroute-target import %s\n", prefix, rt_buf);
+	}
+
+	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_export, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "%sroute-target export %s\n", prefix, rt_buf);
+	}
+}
+
+static void bgp_evpn_config_write_evi(struct vty *vty, struct bgp_evpn_evi *evi)
+{
+	/* Only write when the EVI was configured by the user and is not auto created / learnt */
+	if (bgp_evpn_evi_is_user_configured(evi)) {
 		vty_out(vty, "  vni %u\n", evi->vni);
-		if (is_rd_configured(evi))
+		if (bgp_evpn_evi_is_rd_configured(evi))
 			vty_out(vty, "   rd %s\n", evi->prd_pretty);
 
 		if (!evi->bgp_vrf ||
@@ -3705,27 +3386,7 @@ static void bgp_evpn_write_evi_config(struct vty *vty, struct bgp_evpn_evi *evi)
 				vty_out(vty, "   flooding head-end-replication\n");
 		}
 
-		if (is_import_rt_configured(evi)) {
-			for (ALL_LIST_ELEMENTS(evi->evi_import_rtl, node, nnode,
-					       ecom)) {
-				ecom_str = ecommunity_ecom2str(
-					ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-				vty_out(vty, "   route-target import %s\n",
-					ecom_str);
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-		}
-
-		if (is_export_rt_configured(evi)) {
-			for (ALL_LIST_ELEMENTS(evi->evi_export_rtl, node, nnode,
-					       ecom)) {
-				ecom_str = ecommunity_ecom2str(
-					ecom, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
-				vty_out(vty, "   route-target export %s\n",
-					ecom_str);
-				XFREE(MTYPE_ECOMMUNITY_STR, ecom_str);
-			}
-		}
+		bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, "   ");
 
 		if (evi->advertise_gw_macip)
 			vty_out(vty, "   advertise-default-gw\n");
@@ -3784,8 +3445,7 @@ DEFUN (bgp_evpn_advertise_default_gw_vni,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3807,8 +3467,7 @@ DEFUN (no_bgp_evpn_advertise_default_vni_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3829,8 +3488,7 @@ DEFUN (bgp_evpn_advertise_default_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3851,8 +3509,7 @@ DEFUN (no_bgp_evpn_advertise_default_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6154,7 +5811,7 @@ DEFUN(show_bgp_l2vpn_evpn_import_rt,
 	if (uj)
 		json = json_object_new_object();
 
-	evpn_show_import_rts(vty, bgp_evpn_mi, json);
+	evpn_show_evi_import_rts(vty, bgp_evpn_mi, json);
 
 	if (uj)
 		vty_json(vty, json);
@@ -6412,13 +6069,13 @@ DEFPY(bgp_evpn_flood_control_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN_NOSH (bgp_evpn_vni,
+DEFPY_NOSH (bgp_evpn_vni,
             bgp_evpn_vni_cmd,
             "vni " CMD_VNI_RANGE,
             "VXLAN Network Identifier\n"
             "VNI number\n")
 {
-	vni_t vni;
+	vni_t validated_vni;
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	struct bgp_evpn_evi *evi;
 
@@ -6430,10 +6087,14 @@ DEFUN_NOSH (bgp_evpn_vni,
 		return CMD_WARNING;
 	}
 
-	vni = strtoul(argv[1]->arg, NULL, 10);
+	if(vni < 0 || vni > VNI_MAX) {
+		vty_out(vty, "%% VNI must be in range 0..%u\n", VNI_MAX);
+		return CMD_WARNING;
+	}
+	validated_vni = vni;
 
 	/* Create VNI, or mark as configured. */
-	evi = evpn_create_update_vni(bgp_evpn_mi, vni);
+	evi = evpn_create_update_vni(bgp_evpn_mi, validated_vni);
 	if (!evi) {
 		vty_out(vty, "%% Failed to create VNI \n");
 		return CMD_WARNING;
@@ -6443,38 +6104,48 @@ DEFUN_NOSH (bgp_evpn_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vni,
+DEFPY (no_bgp_evpn_vni,
        no_bgp_evpn_vni_cmd,
        "no vni " CMD_VNI_RANGE,
        NO_STR
        "VXLAN Network Identifier\n"
        "VNI number\n")
 {
-	vni_t vni;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	vni_t validated_vni;
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	struct bgp_evpn_evi *evi;
 
-	if (!bgp)
+	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	vni = strtoul(argv[2]->arg, NULL, 10);
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return CMD_WARNING;
+	}
+
+	if(vni < 0 || vni > VNI_MAX) {
+		vty_out(vty, "%% VNI must be in range 0..%u\n", VNI_MAX);
+		return CMD_WARNING;
+	}
+	validated_vni = vni;
+
 
 	/* Check if we should disallow. */
-	evi = bgp_evpn_lookup_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, validated_vni);
 	if (!evi) {
 		vty_out(vty, "%% Specified VNI does not exist\n");
 		return CMD_WARNING;
 	}
-	if (!is_vni_configured(evi)) {
+	if (!bgp_evpn_evi_is_user_configured(evi)) {
 		vty_out(vty, "%% Specified VNI is not configured\n");
 		return CMD_WARNING;
 	}
 
-	evpn_delete_vni(bgp, evi);
+	evpn_delete_vni(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
-DEFUN_NOSH (exit_vni,
+DEFPY_NOSH (exit_vni,
             exit_vni_cmd,
             "exit-vni",
             "Exit from VNI mode\n")
@@ -6484,7 +6155,7 @@ DEFUN_NOSH (exit_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_vrf_rd,
+DEFPY (bgp_evpn_vrf_rd,
        bgp_evpn_vrf_rd_cmd,
        "rd ASN:NN_OR_IP-ADDRESS:NN",
        EVPN_RT_DIST_HELP_STR
@@ -6494,10 +6165,10 @@ DEFUN (bgp_evpn_vrf_rd,
 	struct prefix_rd prd;
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp_vrf)
+	if (!bgp_vrf || !asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
-	ret = str2prefix_rd(argv[1]->arg, &prd);
+	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
 		vty_out(vty, "%% Malformed Route Distinguisher\n");
 		return CMD_WARNING;
@@ -6508,11 +6179,11 @@ DEFUN (bgp_evpn_vrf_rd,
 		return CMD_SUCCESS;
 
 	/* Configure or update the RD. */
-	evpn_vrf_configure_rd(bgp_vrf, &prd, argv[1]->arg);
+	bgp_evpn_vrf_configure_rd(bgp_vrf, &prd, asn_nn_or_ip_address_nn);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vrf_rd,
+DEFPY (no_bgp_evpn_vrf_rd,
        no_bgp_evpn_vrf_rd_cmd,
        "no rd ASN:NN_OR_IP-ADDRESS:NN",
        NO_STR
@@ -6523,10 +6194,10 @@ DEFUN (no_bgp_evpn_vrf_rd,
 	struct prefix_rd prd;
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
-	if (!bgp_vrf)
+	if (!bgp_vrf || !asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
-	ret = str2prefix_rd(argv[2]->arg, &prd);
+	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
 		vty_out(vty, "%% Malformed Route Distinguisher\n");
 		return CMD_WARNING;
@@ -6544,11 +6215,11 @@ DEFUN (no_bgp_evpn_vrf_rd,
 		return CMD_WARNING;
 	}
 
-	evpn_vrf_unconfigure_rd(bgp_vrf);
+	bgp_evpn_vrf_unconfigure_rd(bgp_vrf);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vrf_rd_without_val,
+DEFPY (no_bgp_evpn_vrf_rd_without_val,
        no_bgp_evpn_vrf_rd_without_val_cmd,
        "no rd",
        NO_STR
@@ -6565,11 +6236,11 @@ DEFUN (no_bgp_evpn_vrf_rd_without_val,
 		return CMD_WARNING;
 	}
 
-	evpn_vrf_unconfigure_rd(bgp_vrf);
+	bgp_evpn_vrf_unconfigure_rd(bgp_vrf);
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_vni_rd,
+DEFPY (bgp_evpn_vni_rd,
        bgp_evpn_vni_rd_cmd,
        "rd ASN:NN_OR_IP-ADDRESS:NN",
        EVPN_RT_DIST_HELP_STR
@@ -6580,7 +6251,7 @@ DEFUN (bgp_evpn_vni_rd,
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp_evpn_mi)
+	if (!bgp_evpn_mi || !asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
@@ -6588,7 +6259,7 @@ DEFUN (bgp_evpn_vni_rd,
 		return CMD_WARNING;
 	}
 
-	ret = str2prefix_rd(argv[1]->arg, &prd);
+	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
 		vty_out(vty, "%% Malformed Route Distinguisher\n");
 		return CMD_WARNING;
@@ -6599,11 +6270,11 @@ DEFUN (bgp_evpn_vni_rd,
 		return CMD_SUCCESS;
 
 	/* Configure or update the RD. */
-	evpn_evi_configure_rd(bgp_evpn_mi, evi, &prd, argv[1]->arg);
+	bgp_evpn_evi_configure_rd(bgp_evpn_mi, evi, &prd, asn_nn_or_ip_address_nn);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vni_rd,
+DEFPY (no_bgp_evpn_vni_rd,
        no_bgp_evpn_vni_rd_cmd,
        "no rd ASN:NN_OR_IP-ADDRESS:NN",
        NO_STR
@@ -6615,23 +6286,22 @@ DEFUN (no_bgp_evpn_vni_rd,
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp_evpn_mi)
+	if (!bgp_evpn_mi || !asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	ret = str2prefix_rd(argv[2]->arg, &prd);
+	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
 		vty_out(vty, "%% Malformed Route Distinguisher\n");
 		return CMD_WARNING;
 	}
 
 	/* Check if we should disallow. */
-	if (!is_rd_configured(evi)) {
+	if (!bgp_evpn_evi_is_rd_configured(evi)) {
 		vty_out(vty, "%% RD is not configured for this VNI\n");
 		return CMD_WARNING;
 	}
@@ -6642,11 +6312,11 @@ DEFUN (no_bgp_evpn_vni_rd,
 		return CMD_WARNING;
 	}
 
-	evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
+	bgp_evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vni_rd_without_val,
+DEFPY (no_bgp_evpn_vni_rd_without_val,
        no_bgp_evpn_vni_rd_without_val_cmd,
        "no rd",
        NO_STR
@@ -6664,12 +6334,12 @@ DEFUN (no_bgp_evpn_vni_rd_without_val,
 	}
 
 	/* Check if we should disallow. */
-	if (!is_rd_configured(evi)) {
+	if (!bgp_evpn_evi_is_rd_configured(evi)) {
 		vty_out(vty, "%% RD is not configured for this VNI\n");
 		return CMD_WARNING;
 	}
 
-	evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
+	bgp_evpn_evi_unconfigure_rd(bgp_evpn_mi, evi);
 	return CMD_SUCCESS;
 }
 
@@ -6692,9 +6362,9 @@ static bool bgp_evpn_rt_matches_existing(struct list *rtl,
 }
 
 /* display L3VNI related info for a VRF instance */
-DEFUN (show_bgp_vrf_l3vni_info,
+DEFPY (show_bgp_vrf_l3vni_info,
        show_bgp_vrf_l3vni_info_cmd,
-       "show bgp vrf VRFNAME vni [json]",
+       "show bgp vrf VRFNAME vni [json$uj]",
        SHOW_STR
        BGP_STR
        "show bgp vrf\n"
@@ -6702,22 +6372,19 @@ DEFUN (show_bgp_vrf_l3vni_info,
        "L3-VNI\n"
        JSON_STR)
 {
-	int idx_vrf = 3;
-	const char *name = NULL;
 	struct bgp *bgp_vrf = NULL;
 	json_object *json = NULL;
 
-	if (use_json(argc, argv))
+	if (uj)
 		json = json_object_new_object();
 
-	name = argv[idx_vrf]->arg;
-	bgp_vrf = bgp_lookup_by_name(name);
-	if (strmatch(name, VRF_DEFAULT_NAME))
+	bgp_vrf = bgp_lookup_by_name(vrfname);
+	if (strmatch(vrfname, VRF_DEFAULT_NAME))
 		bgp_vrf = bgp_get_default();
 
 	if (!bgp_vrf) {
 		if (!json)
-			vty_out(vty, "BGP instance for VRF %s not found\n", name);
+			vty_out(vty, "BGP instance for VRF %s not found\n", vrfname);
 		else {
 			json_object_string_add(json, "warning", "BGP instance not found");
 			vty_json(vty, json);
@@ -6733,107 +6400,262 @@ DEFUN (show_bgp_vrf_l3vni_info,
 	return CMD_SUCCESS;
 }
 
-static int vrf_process_rtlist(struct bgp *bgp_vrf, struct vty *vty, int argc,
-			struct cmd_token **argv, int rt_idx, bool is_add,
-			enum bgp_evpn_rt_direction direction)
+/* Common helper functions for both VRFs and EVIs
+ * Parse DEFPY direction tokens into bgp_evpn_rt_direction enum.
+ * Returns false and prints error if no direction matched (shouldn't happen with DEFPY).
+ */
+static bool parse_rt_direction(struct vty *vty, const char *both, const char *import,
+				const char *export_str,
+				enum bgp_evpn_rt_direction *dir)
+{
+	if (both)
+		*dir = BGP_EVPN_RT_DIRECTION_BOTH;
+	else if (import)
+		*dir = BGP_EVPN_RT_DIRECTION_IMPORT;
+	else if (export_str)
+		*dir = BGP_EVPN_RT_DIRECTION_EXPORT;
+	else {
+		vty_out(vty, "%% Invalid Route Target direction\n");
+		return false;
+	}
+	return true;
+}
+
+/* Common helper function for both VRF and EVI RT list processing.
+ * Performs some validation on the RTList passed via VTY
+ * e.g. checks for empty list, "auto" keyword, and wildcard-on-non-import.
+ * rtlist_idx: index in argv where the RT list begins.
+ * Returns false and prints error if validation fails, true and fills out_rtlist_argc/argv if successful.
+ * out_rtlist_argv / out_rtlist_argc point to the RT list portion of argv for further processing by caller if successful
+ */
+static bool extract_and_validate_rtlist(struct vty *vty, int argc,
+					struct cmd_token **argv, int rtlist_idx,
+					bool is_add,
+					enum bgp_evpn_rt_direction direction,
+					int *out_rtlist_argc,
+					struct cmd_token ***out_rtlist_argv)
+{
+	int rtlist_argc;
+	struct cmd_token** rtlist_argv;
+
+	if (argc < rtlist_idx + 1) {
+		vty_out(vty, "%% Route Target list is required\n");
+		return false;
+	}
+	rtlist_argc = argc - rtlist_idx;
+	rtlist_argv = argv + rtlist_idx;
+
+	/* Pre-validate to catch some common errors */
+	for (int i = 0; i < rtlist_argc; i++) {
+		if (!strcmp(rtlist_argv[i]->arg, "auto")) {
+			vty_out(vty, "%% `auto` cannot be %s via list\n", is_add ? "configured" : "unconfigured");
+
+			return false;
+		}
+
+		if (direction != BGP_EVPN_RT_DIRECTION_IMPORT) {
+			if (rtlist_argv[i]->arg[0] == '*') {
+				vty_out(vty, "%% Wildcard Route Targets '*:...' are only applicable for import\n");
+
+				return false;
+			}
+		}
+	}
+
+	*out_rtlist_argc = rtlist_argc;
+	*out_rtlist_argv = rtlist_argv;
+	return true;
+}
+
+/* Common callback type for both VRFs and EVIs for per-item RT configure or unconfigure operation
+ * void is either a struct bgp or struct bgp_evpn_evi depending on context
+ * The function MUST take ownership of the passed cfgd_rt (e.g. free in case of error!)
+ */
+typedef int (*evpn_rt_cfg_fn)(void *obj, enum bgp_evpn_rt_direction direction,
+			       struct bgp_evpn_cfgd_rt *cfgd_rt);
+
+/* Wrapper functions for better type safety */
+static int vrf_configure_rt_cb(void *obj, enum bgp_evpn_rt_direction dir,
+				struct bgp_evpn_cfgd_rt *rt)
+{
+	return bgp_evpn_vrf_configure_rt_manual((struct bgp *)obj, dir, rt);
+}
+
+static int vrf_unconfigure_rt_cb(void *obj, enum bgp_evpn_rt_direction dir,
+				  struct bgp_evpn_cfgd_rt *rt)
+{
+	return bgp_evpn_vrf_unconfigure_rt_manual((struct bgp *)obj, dir, rt);
+}
+
+static int evi_configure_rt_cb(void *obj, enum bgp_evpn_rt_direction dir,
+				struct bgp_evpn_cfgd_rt *rt)
+{
+	return bgp_evpn_evi_configure_rt_manual((struct bgp_evpn_evi *)obj, dir, rt);
+}
+
+static int evi_unconfigure_rt_cb(void *obj, enum bgp_evpn_rt_direction dir,
+				  struct bgp_evpn_cfgd_rt *rt)
+{
+	return bgp_evpn_evi_unconfigure_rt_manual((struct bgp_evpn_evi *)obj, dir, rt);
+}
+
+/* Common RT list processing: parse each token, convert to cfgd_rt, apply op.
+ * obj_str is "VRF" or "VNI" for error messages.
+ *
+ * configure_fn / unconfigure_fn MUST take ownership of the passed cfgd_rt (e.g. free in case of error!)
+ */
+static int process_rtlist_common(void *obj, struct vty *vty,
+				  int rtlist_argc, struct cmd_token **rtlist_argv,
+				  bool is_add, enum bgp_evpn_rt_direction direction,
+				  evpn_rt_cfg_fn configure_fn,
+				  evpn_rt_cfg_fn unconfigure_fn,
+				  const char *obj_str)
 {
 	int ret = CMD_SUCCESS;
-	bool is_wildcard = false;
-	struct ecommunity *ecom = NULL;
+	bool is_wildcard;
+	struct ecommunity *ecom;
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+	evpn_rt_cfg_fn op_fn = is_add ? configure_fn : unconfigure_fn;
 
-	for (int i = rt_idx; i < argc; i++) {
+	for (int i = 0; i < rtlist_argc; i++) {
 		is_wildcard = false;
 
 		/*
-		 * Special handling for wildcard '*' here.
+		 * Special handling for parsing wildcard route targets '*:...' here.
 		 *
-		 * Let's just convert it to 0 here so we dont have to modify
+		 * Let's just convert the '*' to 0 here (-> '0:...') so we dont have to modify
 		 * the ecommunity parser.
 		 *
 		 * This is so cursed...
 		 */
-		if ((argv[i]->arg)[0] == '*') {
-			(argv[i]->arg)[0] = '0';
+		if ((rtlist_argv[i]->arg)[0] == '*') {
+			(rtlist_argv[i]->arg)[0] = '0';
 			is_wildcard = true;
 		}
 
-		ecom = ecommunity_str2com(argv[i]->arg, ECOMMUNITY_ROUTE_TARGET,
-					  0);
+		/* Convert / parse the route target string to an ecommunity structure */
+		ecom = ecommunity_str2com(rtlist_argv[i]->arg, ECOMMUNITY_ROUTE_TARGET, 0);
 
-		/* Put it back as was */
+		/* Put wildcard back as was if required */
 		if (is_wildcard)
-			(argv[i]->arg)[0] = '*';
+			(rtlist_argv[i]->arg)[0] = '*';
 
-		struct bgp_evpn_cfgd_rt* cfgd_rt = bgp_evpn_cfgd_rt_from_ecom(ecom, is_wildcard);
-		if(!cfgd_rt) {
-			vty_out(vty, "%% Malformed Route Target list item '%s'\n", argv[i]->arg);
+		/* Convert the parsed ecommunity to a cfgd_rt structure */
+		cfgd_rt = bgp_evpn_cfgd_rt_from_ecom(ecom, is_wildcard);
+		ecommunity_free(&ecom);
+
+		if (!cfgd_rt) {
+			vty_out(vty, "%% Malformed Route Target list item '%s'\n", rtlist_argv[i]->arg);
 			ret = CMD_WARNING;
 			continue;
 		}
 
-		if(is_add) {
-			if(bgp_evpn_vrf_configure_rt_manual(bgp_vrf, direction, cfgd_rt) != 0) {
-				vty_out(vty, "%% Route Target '%s' already configured for this VRF\n", argv[i]->arg);
-				ret = CMD_WARNING;
-			}
-		} else {
-			if(bgp_evpn_vrf_unconfigure_rt_manual(bgp_vrf, direction, cfgd_rt) != 0) {
-				vty_out(vty, "%% Route Target '%s' does not match configuration for this VRF\n", argv[i]->arg);
-				ret = CMD_WARNING;
-			}
+		/* Actually configure the obtained route target
+		 * This call chain ends at e.g. bgp_evpn_vrf_configure_import_rt_manual
+		 * or deeper _bgp_evpn_configure_rt_manual_common (or respective functions for EVI)
+		 * 
+		 * This function is guaranteed to take ownership / consume cfgd_rt!
+		 */
+		if (op_fn(obj, direction, cfgd_rt) != 0) {
+			vty_out(vty, "%% Route Target '%s' %s for this %s\n",
+				rtlist_argv[i]->arg, is_add ? "already configured" : "does not match configuration", obj_str);
+			ret = CMD_WARNING;
 		}
 	}
 
 	return ret;
 }
 
+static int vrf_process_rtlist(struct bgp *bgp_vrf, struct vty *vty, int rtlist_argc,
+			       struct cmd_token **rtlist_argv, bool is_add,
+			       enum bgp_evpn_rt_direction direction)
+{
+	return process_rtlist_common(bgp_vrf, vty, rtlist_argc, rtlist_argv, is_add,
+				     direction, vrf_configure_rt_cb,
+				     vrf_unconfigure_rt_cb, "VRF");
+}
+
+
+static int evi_process_rtlist(struct bgp_evpn_evi *evi, struct vty *vty,
+			      int rtlist_argc, struct cmd_token **rtlist_argv,
+			      bool is_add, enum bgp_evpn_rt_direction direction)
+{
+	return process_rtlist_common(evi, vty, rtlist_argc, rtlist_argv, is_add,
+				     direction, evi_configure_rt_cb,
+				     evi_unconfigure_rt_cb, "VNI");
+}
+
 /* Configure EVPN route targets for a VRF instance */
-DEFUN (bgp_evpn_vrf_rt,
+DEFPY (bgp_evpn_vrf_rt,
        bgp_evpn_vrf_rt_cmd,
-       "route-target <both|import|export> RTLIST...",
+       "route-target <both$both|import$import|export$export> RTLIST...",
        "Route Target\n"
        "import and export\n"
        "import\n"
        "export\n"
        "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
 {
+	/* DEFPY doesn't really have support for variadics, so we have to hack a bit here */
+	int rtlist_idx = 2; /* "route-target" "<direction>" RTLIST... */
+	int rtlist_argc;
+	struct cmd_token **rtlist_argv;
 	enum bgp_evpn_rt_direction direction;
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (!strcmp(argv[1]->arg, "import"))
-		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[1]->arg, "export"))
-		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[1]->arg, "both"))
-		direction = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target direction\n");
+
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
 		return CMD_WARNING_CONFIG_FAILED;
-	}
 
-	if (!strcmp(argv[2]->arg, "auto")) {
-		vty_out(vty, "%% `auto` cannot be configured via list\n");
+	/* Extract rtlist argc / argv and perform pre-validation */
+	if (!extract_and_validate_rtlist(vty, argc, argv, rtlist_idx, true, direction,
+					 &rtlist_argc, &rtlist_argv))
 		return CMD_WARNING_CONFIG_FAILED;
-	}
 
-	if (direction != BGP_EVPN_RT_DIRECTION_IMPORT) {
-		for (int i = 2; i < argc; i++) {
-			if ((argv[i]->arg)[0] == '*') {
-				vty_out(vty, "%% Wildcard Route Targets '*:...' are only applicable for import\n");
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-		}
-	}
+	/* Process the rt list, this calls the necessary configure / unconfigure functions */
+	return vrf_process_rtlist(bgp, vty, rtlist_argc, rtlist_argv, true, direction);
+}
 
-	return vrf_process_rtlist(bgp, vty, argc, argv, 2, true, direction);
+DEFPY (no_bgp_evpn_vrf_rt,
+       no_bgp_evpn_vrf_rt_cmd,
+       "no route-target <both$both|import$import|export$export> RTLIST...",
+       NO_STR
+       "Route Target\n"
+       "import and export\n"
+       "import\n"
+       "export\n"
+       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
+{
+	/* DEFPY doesn't really have support for variadics, so we have to hack a bit here */
+	int rtlist_idx = 3; /* "no" "route-target" "<direction>" RTLIST... */
+	int rtlist_argc;
+	struct cmd_token **rtlist_argv;
+	enum bgp_evpn_rt_direction direction;
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Extract rtlist argc / argv and perform pre-validation */
+	if (!extract_and_validate_rtlist(vty, argc, argv, rtlist_idx, false, direction,
+					 &rtlist_argc, &rtlist_argv))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Process the rt list, this calls the necessary configure / unconfigure functions */
+	return vrf_process_rtlist(bgp, vty, rtlist_argc, rtlist_argv, false, direction);
 }
 
 DEFPY (bgp_evpn_vrf_rt_auto,
        bgp_evpn_vrf_rt_auto_cmd,
-       "route-target <both|import|export>$type auto [disable$disable]",
+       "route-target <both$both|import$import|export$export> auto [disable$disable]",
        "Route Target\n"
        "import and export\n"
        "import\n"
@@ -6843,28 +6665,19 @@ DEFPY (bgp_evpn_vrf_rt_auto,
 {
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 	enum bgp_evpn_rt_direction direction;
+	enum bgp_evpn_autort_cfgd cfg;
 
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (!strcmp(type, "import"))
-		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(type, "export"))
-		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(type, "both"))
-		direction = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target direction\n");
+
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
 		return CMD_WARNING_CONFIG_FAILED;
-	}
 
-	enum bgp_evpn_autort_cfgd cfg;
-	if(disable)
-		cfg = BGP_EVPN_AUTORT_DISABLE_CFGD;
-	else
-		cfg = BGP_EVPN_AUTORT_AUTO_CFGD;
+	cfg = disable ? BGP_EVPN_AUTORT_DISABLE_CFGD : BGP_EVPN_AUTORT_AUTO_CFGD;
 
-	if(bgp_evpn_vrf_configure_auto_rt(bgp, direction, cfg) != 0) {
+	if (bgp_evpn_vrf_configure_auto_rt(bgp, direction, cfg) != 0) {
 		vty_out(vty, "%% Auto Route Target effective state did not change!");
 		return CMD_WARNING;
 	}
@@ -6872,54 +6685,10 @@ DEFPY (bgp_evpn_vrf_rt_auto,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vrf_rt,
-       no_bgp_evpn_vrf_rt_cmd,
-       "no route-target <both|import|export> RTLIST...",
-       NO_STR
-       "Route Target\n"
-       "import and export\n"
-       "import\n"
-       "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
-{
-	enum bgp_evpn_rt_direction direction;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!strcmp(argv[1]->arg, "import"))
-		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[1]->arg, "export"))
-		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[1]->arg, "both"))
-		direction = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target direction\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (!strcmp(argv[3]->arg, "auto")) {
-		vty_out(vty, "%% `auto` cannot be unconfigured via list\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (direction != BGP_EVPN_RT_DIRECTION_IMPORT) {
-		for (int i = 2; i < argc; i++) {
-			if ((argv[i]->arg)[0] == '*') {
-				vty_out(vty, "%% Wildcard Route Targets '*:...' are only applicable for import\n");
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-		}
-	}
-
-	return vrf_process_rtlist(bgp, vty, argc, argv, 2, false, direction);
-}
-
-/* No extra disable token for now? */
-DEFPY (no_bgp_evpn_vrf_rt_auto,
-       no_bgp_evpn_vrf_rt_auto_cmd,
-       "no route-target <both|import|export>$type auto",
+/* No extra [disable] token for now, deconfigure is without value */
+DEFPY (no_bgp_evpn_vrf_rt_auto_without_val,
+       no_bgp_evpn_vrf_rt_auto_without_val_cmd,
+       "no route-target <both$both|import$import|export$export> auto",
        NO_STR
        "Route Target\n"
        "import and export\n"
@@ -6933,18 +6702,12 @@ DEFPY (no_bgp_evpn_vrf_rt_auto,
 	if (!bgp)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (!strcmp(argv[1]->arg, "import"))
-		direction = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[1]->arg, "export"))
-		direction = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[1]->arg, "both"))
-		direction = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target direction\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
 
-	if(bgp_evpn_vrf_configure_auto_rt(bgp, direction, BGP_EVPN_AUTORT_NOT_CFGD) != 0) {
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (bgp_evpn_vrf_configure_auto_rt(bgp, direction, BGP_EVPN_AUTORT_NOT_CFGD) != 0) {
 		vty_out(vty, "%% Auto Route Target effective state did not change!");
 		return CMD_WARNING;
 	}
@@ -7037,237 +6800,156 @@ DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_vni_rt,
+DEFPY (bgp_evpn_vni_rt,
        bgp_evpn_vni_rt_cmd,
-       "route-target <both|import|export> RT",
+       "route-target <both$both|import$import|export$export> RTLIST...",
        "Route Target\n"
        "import and export\n"
        "import\n"
        "export\n"
-       "Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
 {
+	/* DEFPY doesn't really have support for variadics, so we have to hack a bit here */
+	int rtlist_idx = 2; /* "route-target" "<direction>" RTLIST... */
+	int rtlist_argc;
+	struct cmd_token **rtlist_argv;
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
-	int rt_type;
-	struct ecommunity *ecomadd = NULL;
+	enum bgp_evpn_rt_direction direction;
 
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	if (!strcmp(argv[1]->text, "import"))
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[1]->text, "export"))
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[1]->text, "both"))
-		rt_type = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING;
-	}
 
-	/* Add/update the import route-target */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		/* Note that first of the two RTs is created for "both" type */
-		ecomadd = ecommunity_str2com(argv[2]->arg,
-					     ECOMMUNITY_ROUTE_TARGET, 0);
-		if (!ecomadd) {
-			vty_out(vty, "%% Malformed Route Target list\n");
-			return CMD_WARNING;
-		}
-		ecommunity_str(ecomadd);
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
 
-		/* Do nothing if we already have this import route-target */
-		if (CHECK_FLAG(evi->flags, EVI_FLAG_IMPRT_CFGD) &&
-		    bgp_evpn_rt_matches_existing(evi->evi_import_rtl, ecomadd))
-			ecommunity_free(&ecomadd);
-		else
-			evpn_evi_configure_import_rt(bgp_evpn_mi, evi, ecomadd);
-	}
+	/* Extract rtlist argc / argv and perform pre-validation */
+	if (!extract_and_validate_rtlist(vty, argc, argv, rtlist_idx, true, direction,
+					 &rtlist_argc, &rtlist_argv))
+		return CMD_WARNING_CONFIG_FAILED;
 
-	/* Add/update the export route-target */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH || rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
-		/* Note that second of the two RTs is created for "both" type */
-		ecomadd = ecommunity_str2com(argv[2]->arg,
-					     ECOMMUNITY_ROUTE_TARGET, 0);
-		if (!ecomadd) {
-			vty_out(vty, "%% Malformed Route Target list\n");
-			return CMD_WARNING;
-		}
-		ecommunity_str(ecomadd);
-
-		/* Do nothing if we already have this export route-target */
-		if (CHECK_FLAG(evi->flags, EVI_FLAG_EXPRT_CFGD) &&
-		    bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomadd))
-			ecommunity_free(&ecomadd);
-		else
-			evpn_evi_configure_export_rt(bgp_evpn_mi, evi, ecomadd);
-	}
-
-	return CMD_SUCCESS;
+	/* Process the rt list, this calls the necessary configure / unconfigure functions */
+	return evi_process_rtlist(evi, vty, rtlist_argc, rtlist_argv, true, direction);
 }
 
-DEFUN (no_bgp_evpn_vni_rt,
+DEFPY (no_bgp_evpn_vni_rt,
        no_bgp_evpn_vni_rt_cmd,
-       "no route-target <both|import|export> RT",
+       "no route-target <both$both|import$import|export$export> RTLIST...",
        NO_STR
        "Route Target\n"
        "import and export\n"
        "import\n"
        "export\n"
-       EVPN_ASN_IP_HELP_STR)
+       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
 {
+	/* DEFPY doesn't really have support for variadics, so we have to hack a bit here */
+	int rtlist_idx = 3; /* "no" "route-target" "<direction>" RTLIST... */
+	int rtlist_argc;
+	struct cmd_token **rtlist_argv;
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
-	int rt_type, found_ecomdel;
-	struct ecommunity *ecomdel = NULL;
+	enum bgp_evpn_rt_direction direction;
 
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	if (!strcmp(argv[2]->text, "import"))
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
-	else if (!strcmp(argv[2]->text, "export"))
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
-	else if (!strcmp(argv[2]->text, "both"))
-		rt_type = BGP_EVPN_RT_DIRECTION_BOTH;
-	else {
-		vty_out(vty, "%% Invalid Route Target type\n");
+
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Extract rtlist argc / argv and perform pre-validation */
+	if (!extract_and_validate_rtlist(vty, argc, argv, rtlist_idx, false, direction,
+					 &rtlist_argc, &rtlist_argv))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Process the rt list, this calls the necessary configure / unconfigure functions */
+	return evi_process_rtlist(evi, vty, rtlist_argc, rtlist_argv, false, direction);
+}
+
+DEFPY (bgp_evpn_vni_rt_auto,
+       bgp_evpn_vni_rt_auto_cmd,
+       "route-target <both$both|import$import|export$export>$type auto [disable$disable]",
+       "Route Target\n"
+       "import and export\n"
+       "import\n"
+       "export\n"
+       "Automatically derive route target\n"
+       "Explicitly disable automatic route target derivation\n")
+{
+	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
+	enum bgp_evpn_rt_direction direction;
+	enum bgp_evpn_autort_cfgd cfg;
+
+	if (!bgp_evpn_mi)
+		return CMD_WARNING;
+
+	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	/* The user did "no route-target import", check to see if there are any
-	 * import route-targets configured. */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		if (!is_import_rt_configured(evi)) {
-			vty_out(vty,
-				"%% Import RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
-		if (!is_export_rt_configured(evi)) {
-			vty_out(vty,
-				"%% Export RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
-		if (!is_import_rt_configured(evi)
-		    && !is_export_rt_configured(evi)) {
-			vty_out(vty,
-				"%% Import/Export RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	}
 
-	ecomdel = ecommunity_str2com(argv[3]->arg, ECOMMUNITY_ROUTE_TARGET, 0);
-	if (!ecomdel) {
-		vty_out(vty, "%% Malformed Route Target list\n");
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	cfg = disable ? BGP_EVPN_AUTORT_DISABLE_CFGD : BGP_EVPN_AUTORT_AUTO_CFGD;
+
+	if (bgp_evpn_evi_configure_auto_rt(evi, direction, cfg) != 0) {
+		vty_out(vty, "%% Auto Route Target effective state did not change!");
 		return CMD_WARNING;
 	}
-	ecommunity_str(ecomdel);
 
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		if (!bgp_evpn_rt_matches_existing(evi->evi_import_rtl, ecomdel)) {
-			ecommunity_free(&ecomdel);
-			vty_out(vty,
-				"%% RT specified does not match configuration for this VNI\n");
-			return CMD_WARNING;
-		}
-		evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, ecomdel);
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_EXPORT) {
-		if (!bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomdel)) {
-			ecommunity_free(&ecomdel);
-			vty_out(vty,
-				"%% RT specified does not match configuration for this VNI\n");
-			return CMD_WARNING;
-		}
-		evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, ecomdel);
-	} else if (rt_type == BGP_EVPN_RT_DIRECTION_BOTH) {
-		found_ecomdel = 0;
-
-		if (bgp_evpn_rt_matches_existing(evi->evi_import_rtl, ecomdel)) {
-			evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, ecomdel);
-			found_ecomdel = 1;
-		}
-
-		if (bgp_evpn_rt_matches_existing(evi->evi_export_rtl, ecomdel)) {
-			evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, ecomdel);
-			found_ecomdel = 1;
-		}
-
-		if (!found_ecomdel) {
-			ecommunity_free(&ecomdel);
-			vty_out(vty,
-				"%% RT specified does not match configuration for this VNI\n");
-			return CMD_WARNING;
-		}
-	}
-
-	ecommunity_free(&ecomdel);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_vni_rt_without_val,
-       no_bgp_evpn_vni_rt_without_val_cmd,
-       "no route-target <import|export>",
+/* No extra [disable] token for no, deconfigure is without value*/
+DEFPY (no_bgp_evpn_vni_rt_auto_without_val,
+       no_bgp_evpn_vni_rt_auto_without_val_cmd,
+       "no route-target <both$both|import$import|export$export>$type auto",
        NO_STR
        "Route Target\n"
+       "import and export\n"
        "import\n"
-       "export\n")
+       "export\n"
+       "Automatically derive route target\n")
 {
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
-	int rt_type;
+	enum bgp_evpn_rt_direction direction;
 
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
 		return CMD_WARNING;
 	}
 
-	if (!strcmp(argv[2]->text, "import")) {
-		rt_type = BGP_EVPN_RT_DIRECTION_IMPORT;
-	} else if (!strcmp(argv[2]->text, "export")) {
-		rt_type = BGP_EVPN_RT_DIRECTION_EXPORT;
-	} else {
-		vty_out(vty, "%% Invalid Route Target type\n");
+
+	/* Convert the both / import / export token to bgp_evpn_rt_direction */
+	if (!parse_rt_direction(vty, both, import, export, &direction))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (bgp_evpn_evi_configure_auto_rt(evi, direction, BGP_EVPN_AUTORT_NOT_CFGD) != 0) {
+		vty_out(vty, "%% Auto Route Target effective state did not change!");
 		return CMD_WARNING;
 	}
 
-	/* Check if we should disallow. */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT) {
-		if (!is_import_rt_configured(evi)) {
-			vty_out(vty,
-				"%% Import RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	} else {
-		if (!is_export_rt_configured(evi)) {
-			vty_out(vty,
-				"%% Export RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	}
-
-	/* Unconfigure the RT. */
-	if (rt_type == BGP_EVPN_RT_DIRECTION_IMPORT)
-		evpn_evi_unconfigure_import_rt(bgp_evpn_mi, evi, NULL);
-	else
-		evpn_evi_unconfigure_export_rt(bgp_evpn_mi, evi, NULL);
 	return CMD_SUCCESS;
 }
 
@@ -7298,7 +6980,7 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 
 		list_sort(vnilist, vni_cmp);
 		for (ALL_LIST_ELEMENTS_RO(vnilist, ln, data))
-			bgp_evpn_write_evi_config(vty, data);
+			bgp_evpn_config_write_evi(vty, data);
 
 		list_delete(&vnilist);
 	}
@@ -7460,41 +7142,7 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 		vty_out(vty, "  rd %s\n", bgp_vrf->vrf_prd_pretty);
 
 	/* route-target config: order is both, import, export; auto before manual */
-	struct bgp_evpn_rt_config *rtcfg = bgp_vrf->vrf_route_target_config;
-
-	char rt_buf[BGP_EVPN_RT_STR_LEN];
-	struct bgp_evpn_cfgd_rt *cfgd_rt;
-
-	if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_AUTO_CFGD)
-		vty_out(vty, "  route-target both auto\n");
-	else if (rtcfg->autort_cfgd_both == BGP_EVPN_AUTORT_DISABLE_CFGD)
-		vty_out(vty, "  route-target both auto disable\n");
-
-	if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_AUTO_CFGD)
-		vty_out(vty, "  route-target import auto\n");
-	else if (rtcfg->autort_cfgd_import == BGP_EVPN_AUTORT_DISABLE_CFGD)
-		vty_out(vty, "  route-target import auto disable\n");
-
-	if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_AUTO_CFGD)
-		vty_out(vty, "  route-target export auto\n");
-	else if (rtcfg->autort_cfgd_export == BGP_EVPN_AUTORT_DISABLE_CFGD)
-		vty_out(vty, "  route-target export auto disable\n");
-
-
-	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_both, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "  route-target both %s\n", rt_buf);
-	}
-
-	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_import, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "  route-target import %s\n", rt_buf);
-	}
-
-	frr_each (bgp_evpn_cfgd_rt_slu, &rtcfg->cfgd_export, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "  route-target export %s\n", rt_buf);
-	}
+	bgp_evpn_config_write_rts_common(vty, bgp_vrf->vrf_route_target_config, "  ");
 }
 
 void bgp_ethernetvpn_init(void)
@@ -7609,15 +7257,16 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_without_val_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rt_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rt_auto_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_without_val_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_auto_without_val_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rd_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rd_cmd);
 	install_element(BGP_NODE, &no_bgp_evpn_vrf_rd_without_val_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_without_val_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cmd);

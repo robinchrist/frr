@@ -49,7 +49,8 @@ void ecommunity_strfree(char **s)
 	XFREE(MTYPE_ECOMMUNITY_STR, *s);
 }
 
-/* Free ecommunities.  */
+/* Free ecommunities. */
+/* TODO: That function is very questionable. it pretends to free a list, but does not?? Why double ptr? */
 void ecommunity_free(struct ecommunity **ecom)
 {
 	if (!(*ecom))
