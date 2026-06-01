@@ -6513,7 +6513,7 @@ int bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool 
  * for more details until we document this properly!)
  */
 int bgp_evpn_evi_install_uninstall_global_routes_fifo(bool install) {
-	return _bgp_evpn_evi_install_uninstall_global_routes(NULL, install, false);
+	return _bgp_evpn_evi_install_uninstall_global_routes(NULL, install, true);
 }
 
 
