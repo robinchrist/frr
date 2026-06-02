@@ -24,7 +24,6 @@ PREDECL_LIST(zebra_l2_vni);
 /* it's bit cursed that this is located here, but the include
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
-PREDECL_HASH(evi_irt_nodes);
 PREDECL_HASH(vrf_fq_irt_nodes);
 PREDECL_HASH(vrf_wildcard_irt_nodes);
 PREDECL_HASH(evi_fq_irt_nodes);
@@ -972,8 +971,6 @@ struct bgp {
 		/* Hash table of Fully Qualified VRF import RTs to VRFs */
 		struct vrf_fq_irt_nodes_head vrf_fq_irt_nodes;
 
-		/* Legacy Hash table of Import RTs to EVIs */
-		struct evi_irt_nodes_head evi_irt_nodes;
 		/* Hash table of Wildcard EVI import RTs to EVIs */
 		struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
 		/* Hash table of Fully Qualified EVI import RTs to EVIs */
