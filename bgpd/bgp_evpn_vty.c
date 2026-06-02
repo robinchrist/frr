@@ -4473,8 +4473,8 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_remote_ip_hash,
 	return CMD_SUCCESS;
 }
 
-DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_svi_hash,
-	     show_bgp_l2vpn_evpn_vni_svi_hash_cmd,
+DEFUN_HIDDEN(show_bgp_l2vpn_evpn_evi_svi_hash,
+	     show_bgp_l2vpn_evpn_evi_svi_hash_cmd,
 	     "show bgp l2vpn evpn vni-svi-hash",
 	     SHOW_STR
 	     BGP_STR
@@ -4492,9 +4492,9 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_svi_hash,
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
 
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash,
+	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash,
 		     (void (*)(struct hash_bucket *,
-			       void *))bgp_evpn_show_vni_svi_hash,
+			       void *))bgp_evpn_show_evi_svi_hash,
 		     vty);
 
 	return CMD_SUCCESS;
@@ -7200,7 +7200,7 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_nh_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_remote_ip_hash_cmd);
-	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_svi_hash_cmd);
+	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_evi_svi_hash_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_summary_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_route_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_route_rd_cmd);

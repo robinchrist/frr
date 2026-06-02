@@ -76,11 +76,11 @@ static void bgp_evpn_remote_ip_hash_iterate(struct bgp_evpn_evi *evi,
 					    void (*func)(struct hash_bucket *,
 							 void *),
 					    void *arg);
-static void bgp_evpn_link_to_vni_svi_hash(struct bgp *bgp, struct bgp_evpn_evi *evi);
-static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp,
+static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp, struct bgp_evpn_evi *evi);
+static void bgp_evpn_unlink_from_evi_svi_hash(struct bgp *bgp,
 					      struct bgp_evpn_evi *evi);
-static unsigned int vni_svi_hash_key_make(const void *p);
-static bool vni_svi_hash_cmp(const void *p1, const void *p2);
+static unsigned int evi_svi_hash_key_make(const void *p);
+static bool evi_svi_hash_cmp(const void *p1, const void *p2);
 static void bgp_evpn_remote_ip_process_nexthops(struct bgp_evpn_evi *evi,
 						struct ipaddr *addr,
 						bool resolve);
@@ -8457,7 +8457,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.evihash, evi, hash_alloc_intern);
 
 	bgp_evpn_remote_ip_hash_init(evi);
-	bgp_evpn_link_to_vni_svi_hash(bgp_evpn_mi, evi);
+	bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
 
 	/* add to l2vni list on corresponding vrf */
 	bgp_evpn_evi_link_to_vrf(evi);
@@ -8502,7 +8502,7 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 
 
 	bf_release_index(bm->rd_idspace, evi->rd_id);
-	hash_release(bgp->evpn_master_instance_info.vni_svi_hash, evi);
+	hash_release(bgp->evpn_master_instance_info.evi_svi_hash, evi);
 	hash_release(bgp->evpn_master_instance_info.evihash, evi);
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -9380,7 +9380,7 @@ int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni)
 	 */
 	bgp_evpn_evi_delete_routes(bgp, evi);
 
-	bgp_evpn_unlink_from_vni_svi_hash(bgp, evi);
+	bgp_evpn_unlink_from_evi_svi_hash(bgp, evi);
 
 	evi->svi_ifindex = 0;
 	/* Tunnel is no longer active.
@@ -9439,9 +9439,9 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 				(void (*)(struct hash_bucket *, void *))
 					bgp_evpn_remote_ip_hash_unlink_nexthop,
 				evi);
-			bgp_evpn_unlink_from_vni_svi_hash(bgp, evi);
+			bgp_evpn_unlink_from_evi_svi_hash(bgp, evi);
 			evi->svi_ifindex = svi_ifindex;
-			bgp_evpn_link_to_vni_svi_hash(bgp, evi);
+			bgp_evpn_link_to_evi_svi_hash(bgp, evi);
 
 			/*
 			 * Resolve all the gateway IP nexthops for this VNI
@@ -9634,7 +9634,7 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 
 	hash_clean_and_free(&bgp->evpn_master_instance_info.evihash, NULL);
 
-	hash_clean_and_free(&bgp->evpn_master_instance_info.vni_svi_hash,
+	hash_clean_and_free(&bgp->evpn_master_instance_info.evi_svi_hash,
 			    (void (*)(void *))hash_evpn_free);
 
 
@@ -9676,8 +9676,8 @@ void bgp_evpn_init(struct bgp *bgp)
 
 	bgp->evpn_master_instance_info.evihash =
 		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
-	bgp->evpn_master_instance_info.vni_svi_hash =
-		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
+	bgp->evpn_master_instance_info.evi_svi_hash =
+		hash_create(evi_svi_hash_key_make, evi_svi_hash_cmp,
 			    "BGP VNI hash based on SVI ifindex");
 
 	bgp->l2vnis = list_new();
@@ -9967,14 +9967,14 @@ static void bgp_evpn_remote_ip_hash_unlink_nexthop(struct hash_bucket *bucket,
 	bgp_evpn_remote_ip_process_nexthops(evi, &ip->addr, false);
 }
 
-static unsigned int vni_svi_hash_key_make(const void *p)
+static unsigned int evi_svi_hash_key_make(const void *p)
 {
 	const struct bgp_evpn_evi *evi = p;
 
 	return jhash_1word(evi->svi_ifindex, 0);
 }
 
-static bool vni_svi_hash_cmp(const void *p1, const void *p2)
+static bool evi_svi_hash_cmp(const void *p1, const void *p2)
 {
 	const struct bgp_evpn_evi *evi1 = p1;
 	const struct bgp_evpn_evi *evi2 = p2;
@@ -9982,7 +9982,7 @@ static bool vni_svi_hash_cmp(const void *p1, const void *p2)
 	return (evi1->svi_ifindex == evi2->svi_ifindex);
 }
 
-static struct bgp_evpn_evi *bgp_evpn_vni_svi_hash_lookup(struct bgp *bgp,
+static struct bgp_evpn_evi *bgp_evpn_evi_svi_hash_lookup(struct bgp *bgp,
 						    ifindex_t svi)
 {
 	struct bgp_evpn_evi *evi;
@@ -9990,28 +9990,28 @@ static struct bgp_evpn_evi *bgp_evpn_vni_svi_hash_lookup(struct bgp *bgp,
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.svi_ifindex = svi;
-	evi = hash_lookup(bgp->evpn_master_instance_info.vni_svi_hash, &tmp);
+	evi = hash_lookup(bgp->evpn_master_instance_info.evi_svi_hash, &tmp);
 	return evi;
 }
 
-static void bgp_evpn_link_to_vni_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
+static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	if (evi->svi_ifindex == 0)
 		return;
 
-	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash, evi, hash_alloc_intern);
+	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi, hash_alloc_intern);
 }
 
-static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp_evpn_mi,
+static void bgp_evpn_unlink_from_evi_svi_hash(struct bgp *bgp_evpn_mi,
 					      struct bgp_evpn_evi *evi)
 {
 	if (evi->svi_ifindex == 0)
 		return;
 
-	hash_release(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash, evi);
+	hash_release(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
 }
 
-void bgp_evpn_show_vni_svi_hash(struct hash_bucket *bucket, void *args)
+void bgp_evpn_show_evi_svi_hash(struct hash_bucket *bucket, void *args)
 {
 	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
 	struct vty *vty = (struct vty *)args;
@@ -10046,7 +10046,7 @@ bool bgp_evpn_is_gateway_ip_resolved(struct bgp_nexthop_cache *bnc)
 	 * Gateway IP is resolved by nht over SVI interface.
 	 * Use this SVI to find corresponding EVI(L2 context)
 	 */
-	evi = bgp_evpn_vni_svi_hash_lookup(bgp_evpn_mi, bnc->nexthop->ifindex);
+	evi = bgp_evpn_evi_svi_hash_lookup(bgp_evpn_mi, bnc->nexthop->ifindex);
 	if (!evi)
 		return false;
 

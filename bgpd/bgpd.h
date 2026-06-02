@@ -965,7 +965,7 @@ struct bgp {
 		 * overlay index recursive lookup.
 		 * For this purpose, a hashtable is added which optimizes this lookup.
 		 */
-		struct hash *vni_svi_hash;
+		struct hash *evi_svi_hash;
 
 		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
