@@ -8502,7 +8502,7 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 
 
 	bf_release_index(bm->rd_idspace, evi->rd_id);
-	hash_release(bgp->vni_svi_hash, evi);
+	hash_release(bgp->evpn_master_instance_info.vni_svi_hash, evi);
 	hash_release(bgp->evpn_master_instance_info.evihash, evi);
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -9634,7 +9634,7 @@ void bgp_evpn_cleanup(struct bgp *bgp)
 
 	hash_clean_and_free(&bgp->evpn_master_instance_info.evihash, NULL);
 
-	hash_clean_and_free(&bgp->vni_svi_hash,
+	hash_clean_and_free(&bgp->evpn_master_instance_info.vni_svi_hash,
 			    (void (*)(void *))hash_evpn_free);
 
 
@@ -9676,7 +9676,7 @@ void bgp_evpn_init(struct bgp *bgp)
 
 	bgp->evpn_master_instance_info.evihash =
 		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
-	bgp->vni_svi_hash =
+	bgp->evpn_master_instance_info.vni_svi_hash =
 		hash_create(vni_svi_hash_key_make, vni_svi_hash_cmp,
 			    "BGP VNI hash based on SVI ifindex");
 
@@ -9990,7 +9990,7 @@ static struct bgp_evpn_evi *bgp_evpn_vni_svi_hash_lookup(struct bgp *bgp,
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.svi_ifindex = svi;
-	evi = hash_lookup(bgp->vni_svi_hash, &tmp);
+	evi = hash_lookup(bgp->evpn_master_instance_info.vni_svi_hash, &tmp);
 	return evi;
 }
 
@@ -9999,7 +9999,7 @@ static void bgp_evpn_link_to_vni_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_ev
 	if (evi->svi_ifindex == 0)
 		return;
 
-	(void)hash_get(bgp_evpn_mi->vni_svi_hash, evi, hash_alloc_intern);
+	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash, evi, hash_alloc_intern);
 }
 
 static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp_evpn_mi,
@@ -10008,7 +10008,7 @@ static void bgp_evpn_unlink_from_vni_svi_hash(struct bgp *bgp_evpn_mi,
 	if (evi->svi_ifindex == 0)
 		return;
 
-	hash_release(bgp_evpn_mi->vni_svi_hash, evi);
+	hash_release(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash, evi);
 }
 
 void bgp_evpn_show_vni_svi_hash(struct hash_bucket *bucket, void *args)

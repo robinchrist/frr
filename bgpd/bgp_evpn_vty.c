@@ -4492,7 +4492,7 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_svi_hash,
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
 
-	hash_iterate(bgp_evpn_mi->vni_svi_hash,
+	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.vni_svi_hash,
 		     (void (*)(struct hash_bucket *,
 			       void *))bgp_evpn_show_vni_svi_hash,
 		     vty);

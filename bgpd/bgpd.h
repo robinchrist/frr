@@ -956,8 +956,16 @@ struct bgp {
 	 * EVPN master instance / VRF
 	 */
 	struct evpn_master_instance_info {
-		/* EVI hash table */
+		/* EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->vni as key */
 		struct hash *evihash;
+
+		/*
+		 * EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->svi_ifindex as key
+		 * We use SVI ifindex as key to lookup a VNI table for gateway IP
+		 * overlay index recursive lookup.
+		 * For this purpose, a hashtable is added which optimizes this lookup.
+		 */
+		struct hash *vni_svi_hash;
 
 		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
@@ -971,14 +979,6 @@ struct bgp {
 		/* Hash table of Fully Qualified EVI import RTs to EVIs */
 		struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
 	} evpn_master_instance_info;
-
-	/*
-	 * VNI hash table based on SVI ifindex as its key.
-	 * We use SVI ifindex as key to lookup a VNI table for gateway IP
-	 * overlay index recursive lookup.
-	 * For this purpose, a hashtable is added which optimizes this lookup.
-	 */
-	struct hash *vni_svi_hash;
 
 	/* This flag was completely undocumented, the following was derived from a code analysis:
 	 * so take it with a grain of salt
