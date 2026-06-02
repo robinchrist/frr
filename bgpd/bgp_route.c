@@ -5809,8 +5809,11 @@ void bgp_update(struct peer *peer, const struct prefix *p, uint32_t addpath_id,
 	 * (which is also used as underlay VRF), bad things will happen.
 	 */
 	if(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bm->bgp_evpn_mi) { 
-		/* TODO: Should we check that advertise-all-vni is actually set in this VRF?
-		 * or still allow importing routes if it's not set?
+		/* TODO: This is probably not a good idea though
+		 * If the route is rejected and the master VRF changes, we won't have that route
+		 * because it was rejected. Rejection works for stuff like ASPATH, because once the condition
+		 * that caused the rejection changes, the route would be re-advertised by the peer.
+		 * Should that just be downgraded to a warning?
 		 */
 		
 		reason = "EVPN route received EVPN NON-master VRF";
