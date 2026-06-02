@@ -957,7 +957,7 @@ struct bgp {
 	 */
 	struct evpn_master_instance_info {
 		/* EVI hash table */
-		struct hash *vnihash;
+		struct hash *evihash;
 
 		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
@@ -1093,7 +1093,9 @@ struct bgp {
 	struct prefix_rd vrf_prd;
 	char *vrf_prd_pretty;
 
-	/* list of corresponding l2vnis (struct bgp_evpn_evi) */
+	/* list of EVIs that are assigned to this VRF (struct bgp_evpn_evi) 
+	 * (EVIs whose Tenant VRF is this VRF)
+	 */
 	struct list *l2vnis;
 
 	/* route map for advertise ipv4/ipv6 unicast (type-5 routes) */
