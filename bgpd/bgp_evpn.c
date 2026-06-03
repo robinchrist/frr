@@ -9585,6 +9585,13 @@ void bgp_evpn_release_all_from_evihash(struct bgp *bgp)
 
 static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 {
+	bgp->evpn_master_instance_info.evihash =
+		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
+
+	bgp->evpn_master_instance_info.evi_svi_hash =
+		hash_create(evi_svi_hash_key_make, evi_svi_hash_cmp,
+			    "BGP VNI hash based on SVI ifindex");
+
 	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
 	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
 	evi_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes);
@@ -9675,12 +9682,6 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 void bgp_evpn_init(struct bgp *bgp)
 {
 	bgp_evpn_master_instance_info_init(bgp);
-
-	bgp->evpn_master_instance_info.evihash =
-		hash_create(vni_hash_key_make, vni_hash_cmp, "BGP VNI Hash");
-	bgp->evpn_master_instance_info.evi_svi_hash =
-		hash_create(evi_svi_hash_key_make, evi_svi_hash_cmp,
-			    "BGP VNI hash based on SVI ifindex");
 
 	bgp->l2vnis = list_new();
 	bgp->l2vnis->cmp = vni_list_cmp;
