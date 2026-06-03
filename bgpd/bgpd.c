@@ -1121,7 +1121,7 @@ static unsigned int connection_hash_key_make(const void *p)
 	uint32_t val;
 
 	val = sockunion_hash(&connection->su);
-	if (peer->ifname_in_address)
+	if (peer->ifname_is_ipv6_zoneid)
 		val = jhash(peer->ifname, strlen(peer->ifname), val);
 	return val;
 }
@@ -1132,8 +1132,8 @@ static bool connection_hash_same(const void *p1, const void *p2)
 	const struct peer_connection *c2 = p2;
 	const struct peer *peer1 = c1->peer;
 	const struct peer *peer2 = c2->peer;
-	const char *ifname1 = peer1->ifname_in_address ? peer1->ifname : NULL;
-	const char *ifname2 = peer2->ifname_in_address ? peer2->ifname : NULL;
+	const char *ifname1 = peer1->ifname_is_ipv6_zoneid ? peer1->ifname : NULL;
+	const char *ifname2 = peer2->ifname_is_ipv6_zoneid ? peer2->ifname : NULL;
 
 	if (!sockunion_same(&c1->su, &c2->su))
 		return false;
@@ -1952,7 +1952,7 @@ void peer_xfer_config(struct peer *peer_dst, struct peer *peer_src)
 		peer_dst->ifname =
 			XSTRDUP(MTYPE_BGP_PEER_IFNAME, peer_src->ifname);
 	}
-	peer_dst->ifname_in_address = peer_src->ifname_in_address;
+	peer_dst->ifname_is_ipv6_zoneid = peer_src->ifname_is_ipv6_zoneid;
 	peer_dst->ttl = peer_src->ttl;
 	peer_dst->gtsm_hops = peer_src->gtsm_hops;
 }
@@ -2235,7 +2235,7 @@ struct peer *peer_create(union sockunion *su, const char *conf_if, struct bgp *b
 		if (conf_if && conf_if[0]) {
 			peer->host = asprintfrr(MTYPE_BGP_PEER_HOST, "%pSU%%%s", su, conf_if);
 			peer->ifname = XSTRDUP(MTYPE_BGP_PEER_IFNAME, conf_if);
-			peer->ifname_in_address = true;
+			peer->ifname_is_ipv6_zoneid = true;
 		} else {
 			peer->host = asprintfrr(MTYPE_BGP_PEER_HOST, "%pSU", su);
 		}
@@ -4959,7 +4959,7 @@ struct peer *peer_lookup_with_zoneid(struct bgp *bgp, union sockunion *su, const
 	tmp_peer.connection = &connection;
 	if (zoneid && zoneid[0]) {
 		tmp_peer.ifname = (char *)zoneid; /* FIXME: Store in the sockunion instead? */
-		tmp_peer.ifname_in_address = true;
+		tmp_peer.ifname_is_ipv6_zoneid = true;
 	}
 	connection.peer = &tmp_peer;
 
