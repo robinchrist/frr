@@ -38,19 +38,6 @@
 /* Why so long? Max value is "4294967295" -> 10 characters + 1 null terminator */
 #define VNI_STR_LEN 32
 
-/*
- * Context for VNI hash walk - used by callbacks.
- */
-struct vni_walk_ctx {
-	struct bgp *bgp;
-	struct vty *vty;
-	struct ipaddr vtep_ip;
-	json_object *json;
-	int detail;
-	int type;
-	bool mac_table;
-};
-
 /* Find and parse the gateway-ip option in advertise <afi> <safi> command */
 int argv_find_and_parse_overlay_option(struct cmd_token **argv, int argc, int *oly_idx,
 				enum overlay_index_type *oly)
@@ -922,12 +909,9 @@ static void show_vni_routes(struct bgp *bgp, struct bgp_evpn_evi *evi,
 	}
 }
 
-static void show_vni_routes_hash(struct hash_bucket *bucket, void *arg)
+static void show_vni_routes_hash(struct bgp_evpn_evi *evi, struct bgp *bgp, struct vty *vty,
+	struct ipaddr vtep_ip, json_object *json, int detail, int type, bool mac_table)
 {
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
-	struct vni_walk_ctx *wctx = arg;
-	struct vty *vty = wctx->vty;
-	json_object *json = wctx->json;
 	json_object *json_vni = NULL;
 	char vni_str[VNI_STR_LEN];
 
@@ -939,19 +923,15 @@ static void show_vni_routes_hash(struct hash_bucket *bucket, void *arg)
 		vty_out(vty, "\nVNI: %u\n\n", evi->vni);
 	}
 
-	show_vni_routes(wctx->bgp, evi, wctx->vty, wctx->type, wctx->mac_table,
-			&wctx->vtep_ip, json_vni, wctx->detail);
+	show_vni_routes(bgp, evi, vty, type, mac_table, &vtep_ip, json_vni, detail);
 
 	if (json)
 		json_object_object_add(json, vni_str, json_vni);
 }
 
-static void show_vni_routes_all_hash(struct hash_bucket *bucket, void *arg)
+static void show_vni_routes_all_hash(struct bgp_evpn_evi *evi, struct bgp *bgp, struct vty *vty,
+	struct ipaddr vtep_ip, json_object *json, int detail, int type, bool mac_table)
 {
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
-	struct vni_walk_ctx *wctx = arg;
-	struct vty *vty = wctx->vty;
-	json_object *json = wctx->json;
 	json_object *json_vni = NULL;
 	json_object *json_vni_mac = NULL;
 	char vni_str[VNI_STR_LEN];
@@ -964,8 +944,7 @@ static void show_vni_routes_all_hash(struct hash_bucket *bucket, void *arg)
 		vty_out(vty, "\nVNI: %u\n\n", evi->vni);
 	}
 
-	show_vni_routes(wctx->bgp, evi, wctx->vty, 0, false, &wctx->vtep_ip,
-			json_vni, wctx->detail);
+	show_vni_routes(bgp, evi, vty, 0, false, &vtep_ip, json_vni, detail);
 
 	if (json)
 		json_object_object_add(json, vni_str, json_vni);
@@ -975,8 +954,7 @@ static void show_vni_routes_all_hash(struct hash_bucket *bucket, void *arg)
 	else
 		vty_out(vty, "\nVNI: %u MAC Table\n\n", evi->vni);
 
-	show_vni_routes(wctx->bgp, evi, wctx->vty, 0, true, &wctx->vtep_ip,
-			json_vni_mac, wctx->detail);
+	show_vni_routes(bgp, evi, vty, 0, true, &vtep_ip, json_vni_mac, detail);
 
 	if (json)
 		json_object_object_add(json_vni, "macTable", json_vni_mac);
@@ -1995,31 +1973,28 @@ static void evpn_show_routes_vni_all(struct vty *vty, struct bgp *bgp_evpn_mi, i
 				     json_object *json, int detail)
 {
 	uint32_t num_vnis;
-	struct vni_walk_ctx wctx;
+	struct bgp_evpn_evi *evi;
+	struct ipaddr vtep_ip_addr;
 
-	num_vnis = hashcount(bgp_evpn_mi->evpn_master_instance_info.evihash);
+	num_vnis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
 	if (!num_vnis)
 		return;
-	memset(&wctx, 0, sizeof(wctx));
-	wctx.bgp = bgp_evpn_mi;
-	wctx.vty = vty;
-	wctx.type = type;
-	wctx.mac_table = mac_table;
-	SET_IPADDR_NONE(&wctx.vtep_ip);
+
+	SET_IPADDR_NONE(&vtep_ip_addr);
 	if (vtep_ip) {
 		if (sockunion_family(vtep_ip) == AF_INET) {
-			SET_IPADDR_V4(&wctx.vtep_ip);
-			wctx.vtep_ip.ipaddr_v4 = vtep_ip->sin.sin_addr;
+			SET_IPADDR_V4(&vtep_ip_addr);
+			vtep_ip_addr.ipaddr_v4 = vtep_ip->sin.sin_addr;
 		} else if (sockunion_family(vtep_ip) == AF_INET6) {
-			SET_IPADDR_V6(&wctx.vtep_ip);
-			wctx.vtep_ip.ipaddr_v6 = vtep_ip->sin6.sin6_addr;
+			SET_IPADDR_V6(&vtep_ip_addr);
+			vtep_ip_addr.ipaddr_v6 = vtep_ip->sin6.sin6_addr;
 		}
 	}
-	wctx.json = json;
-	wctx.detail = detail;
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash, (void (*)(struct hash_bucket *,
-					     void *))show_vni_routes_hash,
-		     &wctx);
+
+
+	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		show_vni_routes_hash(evi, bgp_evpn_mi, vty, vtep_ip_addr, json, detail, type, mac_table);
+	}
 }
 
 /*
@@ -2030,31 +2005,29 @@ static void evpn_show_routes_vni_all_type_all(struct vty *vty, struct bgp *bgp_e
 					      json_object *json, int detail)
 {
 	uint32_t num_vnis;
-	struct vni_walk_ctx wctx;
+	struct bgp_evpn_evi *evi;
+	struct ipaddr vtep_ip_addr;
 
-	num_vnis = hashcount(bgp_evpn_mi->evpn_master_instance_info.evihash);
+	num_vnis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
 	if (!num_vnis)
 		return;
 
-	memset(&wctx, 0, sizeof(struct vni_walk_ctx));
-	wctx.bgp = bgp_evpn_mi;
-	wctx.vty = vty;
-	SET_IPADDR_NONE(&wctx.vtep_ip);
+
+	SET_IPADDR_NONE(&vtep_ip_addr);
 	if (vtep_ip) {
 		if (sockunion_family(vtep_ip) == AF_INET) {
-			SET_IPADDR_V4(&wctx.vtep_ip);
-			wctx.vtep_ip.ipaddr_v4 = vtep_ip->sin.sin_addr;
+			SET_IPADDR_V4(&vtep_ip_addr);
+			vtep_ip_addr.ipaddr_v4 = vtep_ip->sin.sin_addr;
 		} else if (sockunion_family(vtep_ip) == AF_INET6) {
-			SET_IPADDR_V6(&wctx.vtep_ip);
-			wctx.vtep_ip.ipaddr_v6 = vtep_ip->sin6.sin6_addr;
+			SET_IPADDR_V6(&vtep_ip_addr);
+			vtep_ip_addr.ipaddr_v6 = vtep_ip->sin6.sin6_addr;
 		}
 	}
-	wctx.json = json;
-	wctx.detail = detail;
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash,
-		     (void (*)(struct hash_bucket *,
-			       void *))show_vni_routes_all_hash,
-		     &wctx);
+
+	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		show_vni_routes_all_hash(evi, bgp_evpn_mi, vty, vtep_ip_addr, json, detail, 0, false);
+
+	}
 }
 
 /*
@@ -3088,12 +3061,9 @@ static void evpn_show_vni(struct vty *vty, struct bgp *bgp, vni_t vni,
 
 
 /* Helper function for hash_iterate to display a VNI as table line */
-static void show_vni_entry_hash(struct hash_bucket *bucket, void *args[])
+static void show_vni_entry_hash(struct bgp_evpn_evi *evi, struct vty *vty, json_object *json)
 {
-	struct vty *vty = args[0];
-	json_object *json = args[1];
 	json_object *json_evi = NULL;
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
 	char vni_str[VNI_STR_LEN];
 
 	if (json)
@@ -3113,7 +3083,6 @@ static void show_vni_entry_hash(struct hash_bucket *bucket, void *args[])
 static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 			       json_object *json)
 {
-	void *args[2];
 	struct bgp *bgp_temp = NULL;
 	struct listnode *node;
 
@@ -3142,11 +3111,10 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 	}
 
 	/* print all L2 VNIS */
-	args[0] = vty;
-	args[1] = json;
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash,
-		     (void (*)(struct hash_bucket *, void *))show_vni_entry_hash,
-		     args);
+	struct bgp_evpn_evi *evi;
+	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		show_vni_entry_hash(evi, vty, json);
+	}
 }
 
 /*
@@ -3309,18 +3277,14 @@ static void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp_evpn_mi, bo
 	if (set == bgp_evpn_mi->resolve_overlay_index)
 		return;
 
+	struct bgp_evpn_evi *evi;
 	if (set) {
 		bgp_evpn_mi->resolve_overlay_index = true;
-		hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash,
-			     (void (*)(struct hash_bucket *, void *))
-				     bgp_evpn_handle_resolve_overlay_index_set,
-			     NULL);
+		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+			bgp_evpn_handle_resolve_overlay_index_set(evi);
 	} else {
-		hash_iterate(
-			bgp_evpn_mi->evpn_master_instance_info.evihash,
-			(void (*)(struct hash_bucket *, void *))
-				bgp_evpn_handle_resolve_overlay_index_unset,
-			NULL);
+		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+			bgp_evpn_handle_resolve_overlay_index_unset(evi);
 		bgp_evpn_mi->resolve_overlay_index = false;
 	}
 }
@@ -4365,7 +4329,7 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 
 	if ((uj && argc == ((idx + 1) + 2)) || (!uj && argc == (idx + 1) + 1)) {
 
-		num_evis = hashcount(bgp_evpn_mi->evpn_master_instance_info.evihash);
+		num_evis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
 
 		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_temp)) {
 			if (bgp_temp->l3vni)
@@ -4460,10 +4424,11 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_remote_ip_hash,
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
 
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash,
-		     (void (*)(struct hash_bucket *,
-			       void *))bgp_evpn_show_remote_ip_hash,
-		     vty);
+	{
+		struct bgp_evpn_evi *evi;
+		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+			bgp_evpn_show_remote_ip_hash(evi, vty);
+	}
 
 	return CMD_SUCCESS;
 }
@@ -6968,10 +6933,14 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	if (bgp_vrf->advertise_all_vni)
 		vty_out(vty, "  advertise-all-vni\n");
 
-	if (hashcount(bgp_vrf->evpn_master_instance_info.evihash)) {
-		struct list *vnilist = hash_to_list(bgp_vrf->evpn_master_instance_info.evihash);
+	if (evihash_count(&bgp_vrf->evpn_master_instance_info.evihash)) {
+		struct list *vnilist = list_new();
+		struct bgp_evpn_evi *evi_entry;
 		struct listnode *ln;
 		struct bgp_evpn_evi *data;
+
+		frr_each(evihash, &bgp_vrf->evpn_master_instance_info.evihash, evi_entry)
+			listnode_add(vnilist, evi_entry);
 
 		list_sort(vnilist, vni_cmp);
 		for (ALL_LIST_ELEMENTS_RO(vnilist, ln, data))

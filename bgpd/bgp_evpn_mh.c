@@ -4338,36 +4338,17 @@ static void bgp_evpn_es_evi_show_one_vni(struct bgp_evpn_evi *evi, struct vty *v
 	}
 }
 
-struct es_evi_show_ctx {
-	struct vty *vty;
-	json_object *json;
-	int detail;
-};
-
-static void bgp_evpn_es_evi_show_one_vni_hash_cb(struct hash_bucket *bucket,
-		void *ctxt)
-{
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
-	struct es_evi_show_ctx *wctx = (struct es_evi_show_ctx *)ctxt;
-
-	bgp_evpn_es_evi_show_one_vni(evi, wctx->vty, wctx->json, wctx->detail);
-}
-
 /* Display all ES EVIs */
 void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 {
 	json_object *json_array = NULL;
-	struct es_evi_show_ctx wctx;
 	struct bgp *bgp_evpn_mi;
+	struct bgp_evpn_evi *evi;
 
 	if (uj) {
 		/* create an array of ES-EVIs */
 		json_array = json_object_new_array();
 	}
-
-	wctx.vty = vty;
-	wctx.json = json_array;
-	wctx.detail = detail;
 
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
 
@@ -4378,11 +4359,10 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 				"VNI", "ESI", "Flags", "VTEPs");
 	}
 
-	if (bgp_evpn_mi)
-		hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evihash,
-				(void (*)(struct hash_bucket *,
-				  void *))bgp_evpn_es_evi_show_one_vni_hash_cb,
-				&wctx);
+	if (bgp_evpn_mi) {
+		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+			bgp_evpn_es_evi_show_one_vni(evi, vty, json_array, detail);
+	}
 	if (uj)
 		vty_json(vty, json_array);
 }

@@ -24,6 +24,7 @@ PREDECL_LIST(zebra_l2_vni);
 /* it's bit cursed that this is located here, but the include
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
+PREDECL_HASH(evihash);
 PREDECL_HASH(vrf_fq_irt_nodes);
 PREDECL_HASH(vrf_wildcard_irt_nodes);
 PREDECL_HASH(evi_fq_irt_nodes);
@@ -957,7 +958,7 @@ struct bgp {
 	 */
 	struct evpn_master_instance_info {
 		/* EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->vni as key */
-		struct hash *evihash;
+		struct evihash_head evihash;
 
 		/*
 		 * EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->svi_ifindex as key

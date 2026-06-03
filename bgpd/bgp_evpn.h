@@ -222,16 +222,11 @@ extern void bgp_evpn_init(struct bgp *bgp);
 extern int bgp_evpn_get_type5_prefixlen(const struct prefix *pfx);
 extern bool bgp_evpn_is_prefix_nht_supported(const struct prefix *pfx);
 extern void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf);
-extern void bgp_evpn_show_remote_ip_hash(struct hash_bucket *bucket,
-					 void *args);
+extern void bgp_evpn_show_remote_ip_hash(struct bgp_evpn_evi *evi, struct vty *vty);
 extern void bgp_evpn_show_evi_svi_hash(struct hash_bucket *bucket, void *args);
 extern bool bgp_evpn_is_gateway_ip_resolved(struct bgp_nexthop_cache *bnc);
-extern void
-bgp_evpn_handle_resolve_overlay_index_set(struct hash_bucket *bucket,
-					  void *arg);
-extern void
-bgp_evpn_handle_resolve_overlay_index_unset(struct hash_bucket *bucket,
-					    void *arg);
+extern void bgp_evpn_handle_resolve_overlay_index_set(struct bgp_evpn_evi *evi);
+extern void bgp_evpn_handle_resolve_overlay_index_unset(struct bgp_evpn_evi *evi);
 extern mpls_label_t *bgp_evpn_path_info_labels_get_l3vni(mpls_label_t *labels,
 							 uint8_t num_labels);
 extern vni_t bgp_evpn_path_info_get_l3vni(const struct bgp_path_info *pi);

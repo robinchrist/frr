@@ -295,6 +295,9 @@ struct bgp_evpn_evi {
 	/* intrusive list item for bgp->evis */
 	struct bgp_evis_slu_item bgp_evis_item;
 
+	/* intrusive hash item for evpn_master_instance_info.evihash */
+	struct evihash_item evihash_item;
+
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
 	QOBJ_FIELDS;
@@ -313,6 +316,19 @@ static inline int bgp_evis_slu_cmp(const struct bgp_evpn_evi *a,
 DECLARE_SORTLIST_UNIQ(bgp_evis_slu, struct bgp_evpn_evi, bgp_evis_item,
 		      bgp_evis_slu_cmp);
 
+static inline uint32_t evihash_key(const struct bgp_evpn_evi *evi)
+{
+	return jhash_1word(evi->vni, 0);
+}
+
+static inline int evihash_cmp(const struct bgp_evpn_evi *a,
+			      const struct bgp_evpn_evi *b)
+{
+	return a->vni > b->vni ? 1 : (a->vni < b->vni ? -1 : 0);
+}
+
+DECLARE_HASH(evihash, struct bgp_evpn_evi, evihash_item, evihash_cmp,
+	     evihash_key);
 
 
 PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
@@ -1083,7 +1099,7 @@ extern struct bgp_path_info *bgp_evpn_delete_route_entry(struct bgp *bgp, afi_t 
 						     struct bgp_dest *dest,
 						     const struct bgp_path_info *originator,
 						     uint32_t addpaht_id);
-int vni_list_cmp(void *p1, void *p2);
+
 extern int evpn_route_select_install(struct bgp *bgp, struct bgp_evpn_evi *evi,
 				     struct bgp_dest *dest,
 				     struct bgp_path_info *pi);
