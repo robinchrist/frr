@@ -4616,7 +4616,8 @@ int bgp_delete(struct bgp *bgp)
 	 */
 	if (bm->terminating && bm->bgp_evpn_mi == bgp) {
 		bgp_evpn_es_cleanup_routes(bgp);
-		bgp_evpn_cleanup(bgp);
+		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free */
+		bgp_evpn_release_all_from_evihash(bgp);
 	}
 
 	for (afi = 0; afi < AFI_MAX; ++afi) {
@@ -4755,7 +4756,7 @@ void bgp_free(struct bgp *bgp)
 	/* release the auto RD id */
 	bf_release_index(bm->rd_idspace, bgp->vrf_rd_id);
 
-	bgp_evpn_cleanup(bgp);
+	bgp_evpn_clean_and_free(bgp);
 	bgp_pbr_cleanup(bgp);
 	bgp_ls_cleanup(bgp);
 

@@ -7573,9 +7573,9 @@ static void evpn_mpattr_encode_type5(struct stream *s, const struct prefix *p,
  * be processed regardless of VNI is configured or not.
  *
  * NOTE: NO need to pop the VPN routes in two cases
- *  1) In free_vni_entry
- *     - Called by bgp_free()->bgp_evpn_cleanup() or
- *       bgp_delete()->bgp_evpn_cleanup() when terminating.
+ *  1) In free_evi_entry
+ *     - Called by bgp_free()->bgp_evpn_clean_and_free() or
+ *       bgp_delete()->bgp_evpn_clean_and_free() when terminating.
  *     - Since bgp_delete is called before bgp_free and we pop all the dest
  *       pertaining to bgp under delete.
  *  2) evpn_delete_vni() when user configures "no vni" since the withdraw
@@ -7638,7 +7638,7 @@ static void cleanup_vni_on_disable(struct hash_bucket *bucket, struct bgp *bgp)
 /*
  * Free a VNI entry; iterator function called during cleanup.
  */
-static void free_vni_entry(struct hash_bucket *bucket, struct bgp *bgp)
+static void free_evi_entry(struct hash_bucket *bucket, struct bgp *bgp)
 {
 	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
 
@@ -9575,6 +9575,14 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp)
 		     bgp);
 }
 
+/* Clean and free all EVIs of a VRF */
+void bgp_evpn_release_all_from_evihash(struct bgp *bgp)
+{
+	hash_iterate(bgp->evpn_master_instance_info.evihash,
+		     (void (*)(struct hash_bucket *, void *))free_evi_entry,
+		     bgp);
+}
+
 static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 {
 	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
@@ -9583,8 +9591,17 @@ static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 	evi_fq_irt_nodes_init(&bgp->evpn_master_instance_info.evi_fq_irt_nodes);
 }
 
-static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
+static void bgp_evpn_master_instance_info_clean_and_free(struct bgp *bgp)
 {
+	/* Cleans up evihash */
+	bgp_evpn_release_all_from_evihash(bgp);
+	/* Deallocate vnihash */
+	hash_clean_and_free(&bgp->evpn_master_instance_info.evihash, NULL);
+
+	/* Clean & Deallocate evi_svi_hash */
+	hash_clean_and_free(&bgp->evpn_master_instance_info.evi_svi_hash,
+			    (void (*)(void *))hash_evpn_free);
+
 	uint32_t idx = 0;
 
 	struct vrf_wildcard_irt_node *vrf_wildcard_irt;
@@ -9617,28 +9634,13 @@ static void bgp_evpn_master_instance_info_cleanup(struct bgp *bgp)
 }
 
 /*
- * Cleanup EVPN information - invoked at the time of bgpd exit or when the
- * BGP instance (default) is being freed.
+ * Cleanup EVPN information - invoked in bgp_free
  */
-void bgp_evpn_cleanup(struct bgp *bgp)
+void bgp_evpn_clean_and_free(struct bgp *bgp)
 {
-	/* Guard against double-call during termination */
-	if (!bgp->evpn_master_instance_info.evihash)
-		return;
+	bgp_evpn_master_instance_info_clean_and_free(bgp);
 
-	bgp_evpn_master_instance_info_cleanup(bgp);
-
-	hash_iterate(bgp->evpn_master_instance_info.evihash,
-		     (void (*)(struct hash_bucket *, void *))free_vni_entry,
-		     bgp);
-
-	hash_clean_and_free(&bgp->evpn_master_instance_info.evihash, NULL);
-
-	hash_clean_and_free(&bgp->evpn_master_instance_info.evi_svi_hash,
-			    (void (*)(void *))hash_evpn_free);
-
-
-	/* No need to free the items themselves, they are held in evihash */
+	/* No need to free the items themselves, they were held in evihash */
 	list_delete(&bgp->l2vnis);
 
 	if (bgp->evpn_info) {

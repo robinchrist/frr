@@ -216,7 +216,8 @@ extern int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 				  ifindex_t svi_ifindex);
 extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
-extern void bgp_evpn_cleanup(struct bgp *bgp);
+extern void bgp_evpn_clean_and_free(struct bgp *bgp);
+extern void bgp_evpn_release_all_from_evihash(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);
 extern int bgp_evpn_get_type5_prefixlen(const struct prefix *pfx);
 extern bool bgp_evpn_is_prefix_nht_supported(const struct prefix *pfx);
