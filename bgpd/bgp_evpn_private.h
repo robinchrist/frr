@@ -292,6 +292,9 @@ struct bgp_evpn_evi {
 
 	struct zebra_l2_vni_item zl2vni;
 
+	/* intrusive list item for bgp->evis */
+	struct bgp_evis_slu_item bgp_evis_item;
+
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
 	QOBJ_FIELDS;
@@ -300,6 +303,15 @@ struct bgp_evpn_evi {
 DECLARE_QOBJ_TYPE(bgp_evpn_evi);
 
 DECLARE_LIST(zebra_l2_vni, struct bgp_evpn_evi, zl2vni);
+
+static inline int bgp_evis_slu_cmp(const struct bgp_evpn_evi *a,
+			       const struct bgp_evpn_evi *b)
+{
+	return a->vni > b->vni ? 1 : (a->vni < b->vni ? -1 : 0);
+}
+
+DECLARE_SORTLIST_UNIQ(bgp_evis_slu, struct bgp_evpn_evi, bgp_evis_item,
+		      bgp_evis_slu_cmp);
 
 
 
@@ -520,63 +532,8 @@ static inline struct bgp_evpn_effective_fq_rt_slu_head *bgp_evpn_evi_get_vrf_exp
 extern void bgp_evpn_es_handle_evi_linked_to_vrf(struct bgp_evpn_evi *evi);
 extern void bgp_evpn_es_handle_evi_unlinked_from_vrf(struct bgp_evpn_evi *evi);
 
-static inline void bgp_evpn_evi_unlink_from_vrf(struct bgp_evpn_evi *evi)
-{
-	/* bail if vpn is not associated to bgp_vrf */
-	if (!evi->bgp_vrf)
-		return;
-
-	UNSET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
-	/* During daemon shutdown, VRF EVPN cleanup may already have freed
-	 * bgp_vrf->l2vnis before late VNI teardown runs.
-	 */
-	if (evi->bgp_vrf->l2vnis)
-		listnode_delete(evi->bgp_vrf->l2vnis, evi);
-
-	bgp_evpn_es_handle_evi_unlinked_from_vrf(evi);
-
-	/* remove the backpointer to the vrf instance */
-	bgp_unlock(evi->bgp_vrf);
-	evi->bgp_vrf = NULL;
-}
-
-static inline void bgp_evpn_evi_link_to_vrf(struct bgp_evpn_evi *evi)
-{
-	struct bgp *bgp_vrf = NULL;
-
-	/* bail if vpn is already associated to vrf */
-	if (evi->bgp_vrf)
-		return;
-
-	/* bail if VRF still doesn't exist */
-	bgp_vrf = bgp_lookup_by_vrf_id(evi->tenant_vrf_id);
-	if (!bgp_vrf)
-		return;
-
-	/* or if there is no l3vni */
-	/* TODO: Why? Just because a VRF doesn't have an L3VNI doesn't mean that the
-	 * EVI doesn't belong to this (Tenant) VRF? Or is this a design choice
-	 * that prevents issues at other places due to missing checks (assumption L2VNI belongs
-	 * to a VRF -> VRF must have L3VNI configured?)
-	 */
-	if (!bgp_vrf->l3vni)
-		return;
-
-	/* associate the vpn to the bgp_vrf instance */
-	evi->bgp_vrf = bgp_lock(bgp_vrf);
-	listnode_add_sort(bgp_vrf->l2vnis, evi);
-
-	/*
-	 * check if we advertise two labels (Always: MPLS Label1 -> EVI VNI,
-	 * but we may also want to advertise MPLS Label2 -> VRF's L3VNI)
-	 * for this EVI
-	 * TODO: This logic should probably be elsewhere, i.e. in the caller.
-	 */
-	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY))
-		SET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
-
-	bgp_evpn_es_handle_evi_linked_to_vrf(evi);
-}
+extern void bgp_evpn_evi_link_to_vrf(struct bgp_evpn_evi *evi);
+extern void bgp_evpn_evi_unlink_from_vrf(struct bgp_evpn_evi *evi);
 
 static inline int bgp_evpn_evi_is_user_configured(const struct bgp_evpn_evi *evi)
 {

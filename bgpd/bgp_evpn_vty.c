@@ -344,8 +344,7 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 	char flags_buf[10];
 	char vni_buf[VNI_STR_LEN];
 	struct bgp *bgp_evpn_mi;
-	struct listnode *node;
-	struct bgp_evpn_evi *evi;
+	struct bgp_evpn_evi *evi_item;
 
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
 	if(!bgp_evpn_mi)
@@ -466,27 +465,24 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 	if (json) {
 		char vni_ellipsis_buf[VNI_STR_LEN + 5]; /* VNI + ", ..." */
 		json_object *json_vnis = json_object_new_array();
-		unsigned int total_l2vnis = listcount(bgp_vrf->l2vnis);
+		unsigned int total_evis = bgp_evis_slu_count(&bgp_vrf->evis);
 
-		if (!detail && total_l2vnis > 1) {
-			evi = listnode_head(bgp_vrf->l2vnis);
-			if (evi) {
-				snprintf(vni_ellipsis_buf, sizeof(vni_ellipsis_buf),
-					 "%u, ...", evi->vni);
-				json_object_array_add(json_vnis,
-						      json_object_new_string(vni_ellipsis_buf));
-			}
+		if (!detail && total_evis > 1) {
+			evi_item = bgp_evis_slu_first(&bgp_vrf->evis);
+
+			snprintf(vni_ellipsis_buf, sizeof(vni_ellipsis_buf), "%u, ...", evi_item->vni);
+			json_object_array_add(json_vnis, json_object_new_string(vni_ellipsis_buf));
 		} else {
-			for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi))
-				json_object_array_add(json_vnis,
-						      json_object_new_int(evi->vni));
+			frr_each(bgp_evis_slu, &bgp_vrf->evis, evi_item)
+				json_object_array_add(json_vnis, json_object_new_int(evi_item->vni));
 		}
-		json_object_object_add(json, "l2vnis", json_vnis);
+		json_object_object_add(json, "evis", json_vnis);
 	} else if (detail) {
 		vty_out(vty, "  L2-VNI List:\n");
 		vty_out(vty, "    ");
-		for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi))
-			vty_out(vty, "%u  ", evi->vni);
+		frr_each(bgp_evis_slu, &bgp_vrf->evis, evi_item)
+			vty_out(vty, "%u  ", evi_item->vni);
+			
 		vty_out(vty, "\n");
 	}
 
@@ -4205,6 +4201,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 {
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
 	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp_evpn_evi *evi_item = NULL;
 
 	if(!bgp_vrf)
 		return CMD_WARNING;
@@ -4309,8 +4306,6 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 	}
 
 	if (is_evpn_enabled()) {
-		struct listnode *node = NULL;
-		struct bgp_evpn_evi *evi = NULL;
 
 		/*
 		 * At this point if bgp_evpn is NULL and evpn is enabled
@@ -4321,10 +4316,10 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
 
 		/* Update (svi) type-2 routes */
-		for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi)) {
-			if (!bgp_evpn_is_svi_macip_enabled(evi))
+		frr_each(bgp_evis_slu, &bgp_vrf->evis, evi_item) {
+			if (!bgp_evpn_is_svi_macip_enabled(evi_item))
 				continue;
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi_item);
 		}
 	}
 
@@ -4350,7 +4345,7 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 	int idx = 0;
 	bool uj = false;
 	json_object *json = NULL;
-	uint32_t num_l2vnis = 0;
+	uint32_t num_evis = 0;
 	uint32_t num_l3vnis = 0;
 	uint32_t num_vnis = 0;
 	struct listnode *node = NULL;
@@ -4370,13 +4365,13 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 
 	if ((uj && argc == ((idx + 1) + 2)) || (!uj && argc == (idx + 1) + 1)) {
 
-		num_l2vnis = hashcount(bgp_evpn_mi->evpn_master_instance_info.evihash);
+		num_evis = hashcount(bgp_evpn_mi->evpn_master_instance_info.evihash);
 
 		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_temp)) {
 			if (bgp_temp->l3vni)
 				num_l3vnis++;
 		}
-		num_vnis = num_l2vnis + num_l3vnis;
+		num_vnis = num_evis + num_l3vnis;
 		if (uj) {
 			json_object_string_add(json, "advertiseGatewayMacip",
 					       bgp_evpn_mi->advertise_gw_macip
@@ -4401,7 +4396,7 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 					? "Enabled"
 					: "Disabled");
 			json_object_int_add(json, "numVnis", num_vnis);
-			json_object_int_add(json, "numL2Vnis", num_l2vnis);
+			json_object_int_add(json, "numL2Vnis", num_evis);
 			json_object_int_add(json, "numL3Vnis", num_l3vnis);
 		} else {
 			vty_out(vty, "Advertise Gateway Macip: %s\n",
@@ -4422,7 +4417,7 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 						VXLAN_FLOOD_HEAD_END_REPL
 					? "Enabled"
 					: "Disabled");
-			vty_out(vty, "Number of L2 VNIs: %u\n", num_l2vnis);
+			vty_out(vty, "Number of L2 VNIs: %u\n", num_evis);
 			vty_out(vty, "Number of L3 VNIs: %u\n", num_l3vnis);
 		}
 		evpn_show_all_vnis(vty, bgp_evpn_mi, json);

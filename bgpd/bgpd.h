@@ -31,6 +31,7 @@ PREDECL_HASH(evi_wildcard_irt_nodes);
 
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_fq_rt_slu);
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_wildcard_rt_slu);
+PREDECL_SORTLIST_UNIQ(bgp_evis_slu);
 
 enum bgp_bp_install_type {
 	BGP_BP_INSTALL_ROUTE,
@@ -1090,10 +1091,10 @@ struct bgp {
 	struct prefix_rd vrf_prd;
 	char *vrf_prd_pretty;
 
-	/* list of EVIs that are assigned to this VRF (struct bgp_evpn_evi) 
+	/* list of EVIs that are assigned to this VRF (struct bgp_evpn_evi)
 	 * (EVIs whose Tenant VRF is this VRF)
 	 */
-	struct list *l2vnis;
+	struct bgp_evis_slu_head evis;
 
 	/* route map for advertise ipv4/ipv6 unicast (type-5 routes) */
 	struct bgp_rmap adv_cmd_rmap[AFI_MAX][SAFI_MAX];

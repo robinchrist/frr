@@ -1495,7 +1495,6 @@ void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
 void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 {
 	struct bgp *bgp_evpn_mi = NULL;
-	struct listnode *node = NULL;
 	struct bgp_evpn_evi *evi = NULL;
 
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
@@ -1530,8 +1529,9 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	 * No need to update the type 1 or type 3 routes, as they only carry the EVIs own route targets, never the
 	 * EVI's tenant VRF route targets
 	 */
-	for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi))
-		bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
+	frr_each(bgp_evis_slu, &bgp_vrf->evis, evi) {
+		bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+	}
 }
 
 
@@ -8479,6 +8479,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 	evi->mac_table = bgp_table_init(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN);
 
 	/* Add to hash */
+	/* TODO: Return code / success is ignored? Not good! */
 	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.evihash, evi, hash_alloc_intern);
 
 	bgp_evpn_remote_ip_hash_init(evi);
@@ -8931,6 +8932,68 @@ int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni, struct ethaddr *mac,
 	return 0;
 }
 
+void bgp_evpn_evi_link_to_vrf(struct bgp_evpn_evi *evi)
+{
+	struct bgp *bgp_vrf = NULL;
+
+	/* bail if vpn is already associated to vrf */
+	if (evi->bgp_vrf)
+		return;
+
+	/* bail if VRF still doesn't exist */
+	bgp_vrf = bgp_lookup_by_vrf_id(evi->tenant_vrf_id);
+	if (!bgp_vrf)
+		return;
+
+	/* or if there is no l3vni */
+	/* TODO: Why? Just because a VRF doesn't have an L3VNI doesn't mean that the
+	 * EVI doesn't belong to this (Tenant) VRF? Or is this a design choice
+	 * that prevents issues at other places due to missing checks (assumption L2VNI belongs
+	 * to a VRF -> VRF must have L3VNI configured?)
+	 */
+	if (!bgp_vrf->l3vni)
+		return;
+
+	
+	/* associate the vpn to the bgp_vrf instance */
+	if (bgp_evis_slu_add(&bgp_vrf->evis, evi) != NULL) {
+		/* This shouldn't fail... anyway, bail out */
+		return;
+	}
+	/* Increase the lock count so the bgp instance doesn't accidently get freed while we're still associated to it */
+	evi->bgp_vrf = bgp_lock(bgp_vrf);
+
+	/*
+	 * check if we advertise two labels (Always: MPLS Label1 -> EVI VNI,
+	 * but we may also want to advertise MPLS Label2 -> VRF's L3VNI)
+	 * for this EVI
+	 * TODO: This logic should probably be elsewhere, i.e. in the caller.
+	 */
+	if (!CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY))
+		SET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
+
+	bgp_evpn_es_handle_evi_linked_to_vrf(evi);
+}
+
+
+void bgp_evpn_evi_unlink_from_vrf(struct bgp_evpn_evi *evi)
+{
+	/* bail if vpn is not associated to bgp_vrf */
+	if (!evi->bgp_vrf)
+		return;
+
+	UNSET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
+
+	bgp_evis_slu_del(&evi->bgp_vrf->evis, evi);
+
+	bgp_evpn_es_handle_evi_unlinked_from_vrf(evi);
+
+	/* remove the backpointer to the vrf instance */
+	bgp_unlock(evi->bgp_vrf);
+	evi->bgp_vrf = NULL;
+}
+
+
 /* Helper function around bgp_evpn_evi_link_to_vrf for hash_iterate */
 static void bgp_evpn_evi_link_to_vrf_hash(struct hash_bucket *bucket,
 				     struct bgp *bgp_vrf)
@@ -8966,7 +9029,6 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 {
 	struct bgp *bgp_vrf = NULL; /* bgp VRF instance */
 	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
-	struct listnode *node = NULL;
 	struct bgp_evpn_evi *evi = NULL;
 	as_t as = 0;
 
@@ -9182,7 +9244,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 		     bgp_vrf);
 
 	/* Go through all our linked EVIs */
-	for (ALL_LIST_ELEMENTS_RO(bgp_vrf->l2vnis, node, evi)) {
+	frr_each(bgp_evis_slu, &bgp_vrf->evis, evi) {
 		bool old_use_two_labels = CHECK_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
 		bool new_use_two_labels = !prefix_routes_only;
 		/* Make sure the EVI_FLAG_USE_TWO_LABELS flag is correct */
@@ -9220,9 +9282,7 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 {
 	struct bgp *bgp_vrf = NULL;  /* bgp vrf instance */
 	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
-	struct listnode *node = NULL;
-	struct listnode *next = NULL;
-	struct bgp_evpn_evi *evi = NULL;
+	struct bgp_evpn_evi *evi_item = NULL;
 
 	bgp_vrf = bgp_lookup_by_vrf_id(vrf_id);
 	if (!bgp_vrf) {
@@ -9307,13 +9367,13 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 	 * doesn't mean the EVIs shouldn't be mapped to their proper tenant VRF... Probably
 	 * a workaround for something else..
 	 */
-	for (ALL_LIST_ELEMENTS(bgp_vrf->l2vnis, node, next, evi)) {
+	frr_each(bgp_evis_slu, &bgp_vrf->evis, evi_item) {
 		/* Only need to update the exported routes if they made use of the VRF (VNI + Export RTs) */
-		if (CHECK_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS)) {
-			UNSET_FLAG(evi->flags, EVI_FLAG_USE_TWO_LABELS);
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+		if (CHECK_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS)) {
+			UNSET_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi_item);
 		}
-		bgp_evpn_evi_unlink_from_vrf(evi);
+		bgp_evpn_evi_unlink_from_vrf(evi_item);
 	}
 
 	/* Reset the flag, because why not? Seems more like an attempt to mask / hide bugs.. */
@@ -9678,10 +9738,15 @@ static void bgp_evpn_master_instance_info_clean_and_free(struct bgp *bgp)
  */
 void bgp_evpn_clean_and_free(struct bgp *bgp)
 {
+	/* Even though only the master info has content in there, it must be freed because 
+	 * it is allocated for every instance regardless of whether it's a master instance or not
+	 */
 	bgp_evpn_master_instance_info_clean_and_free(bgp);
 
-	/* No need to free the items themselves, they were held in evihash */
-	list_delete(&bgp->l2vnis);
+	/* EVIs are owned by evihash; just drain the intrusive list */
+	while (bgp_evis_slu_pop(&bgp->evis))
+		;
+	bgp_evis_slu_fini(&bgp->evis);
 
 	if (bgp->evpn_info) {
 		ecommunity_free(&bgp->evpn_info->soo);
@@ -9716,8 +9781,8 @@ void bgp_evpn_init(struct bgp *bgp)
 {
 	bgp_evpn_master_instance_info_init(bgp);
 
-	bgp->l2vnis = list_new();
-	bgp->l2vnis->cmp = vni_list_cmp;
+	bgp_evis_slu_init(&bgp->evis);
+
 	bgp->evpn_info = XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
 	assert(bgp->evpn_info);
 
