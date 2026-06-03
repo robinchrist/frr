@@ -5194,40 +5194,28 @@ static int bgp_evpn_evi_mcast_grp_change(struct bgp *bgp, struct bgp_evpn_evi *e
 	return 0;
 }
 
+
 /*
- * If there is a tunnel endpoint IP address (VTEP-IP) change for this VNI.
-     - Deletes tip_hash entry for old VTEP-IP
-     - Adds tip_hash entry/refcount for new VTEP-IP
-     - Deletes prior type-3 route for L2VNI (if needed)
-     - Updates originator_ip
+ * If there is a tunnel endpoint IP address (VTEP-IP) change for this VRF.
+ *   - Deletes tip_hash entry for old VTEP-IP
+ *   - Adds tip_hash entry/refcount for new VTEP-IP
+ *   - trigger re-filtering of routes if the new VTEP-IP has not been in tip hash before
+ *   - Updates originator_ip
  * Note: Route re-advertisement happens elsewhere after other processing
  * other changes.
  */
-static void handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *bgp_evpn,
-				    struct bgp_evpn_evi *evi,
+static void vrf_handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *bgp_evpn,
 				    struct ipaddr *originator_ip)
 {
-	struct prefix_evpn p;
 	struct ipaddr old_vtep_ip;
 
-	if (bgp_vrf) /* L3VNI */
-		old_vtep_ip = bgp_vrf->originator_ip;
-	else /* L2VNI */
-		old_vtep_ip = evi->originator_ip;
+	old_vtep_ip = bgp_vrf->originator_ip;
 
 	/* TIP didn't change, nothing to do */
 	if (ipaddr_is_same(&old_vtep_ip, originator_ip))
 		return;
 
-	/* If L2VNI is not live, we only need to update the originator_ip.
-	 * L3VNIs are updated immediately, so we can't bail out early.
-	 */
-	if (!bgp_vrf && !bgp_evpn_evi_is_live(evi)) {
-		evi->originator_ip = *originator_ip;
-		return;
-	}
-
-	/* Update the tunnel-ip hash */
+	/* Update the tunnel-ip hash - the tunnel-ip hash is refcounted! */
 	bgp_tip_del(bgp_evpn, &old_vtep_ip);
 	if (bgp_tip_add(bgp_evpn, originator_ip))
 		/* The originator_ip was not already present in the
@@ -5238,19 +5226,56 @@ static void handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *bgp_evpn,
 		bgp_filter_evpn_routes_upon_martian_change(bgp_evpn,
 							   BGP_MARTIAN_TUN_IP);
 
-	if (!bgp_vrf) {
-		/* Need to withdraw type-3 route as the originator IP is part
-		 * of the key.
-		 */
-		build_evpn_type3_prefix(&p, &evi->originator_ip);
-		bgp_evpn_evi_delete_route(bgp_evpn, evi, &p);
-
-		evi->originator_ip = *originator_ip;
-	} else
-		bgp_vrf->originator_ip = *originator_ip;
-
-	return;
+	bgp_vrf->originator_ip = *originator_ip;
 }
+
+/*
+ * If there is a tunnel endpoint IP address (VTEP-IP) change for this VNI.
+ *   - Deletes tip_hash entry for old VTEP-IP
+ *   - Adds tip_hash entry/refcount for new VTEP-IP
+ *   - trigger re-filtering of routes if the new VTEP-IP has not been in tip hash before
+ *   - Deletes prior type-3 route for EVI 
+ *   - Updates originator_ip
+ * Note: Route re-advertisement happens elsewhere after other processing
+ * other changes.
+ */
+static void evi_handle_tunnel_ip_change(struct bgp *bgp_evpn_mi,
+				    struct bgp_evpn_evi *evi,
+				    struct ipaddr *originator_ip)
+{
+	struct prefix_evpn p;
+	struct ipaddr old_vtep_ip;
+
+	old_vtep_ip = evi->originator_ip;
+
+	/* TIP didn't change, nothing to do */
+	if (ipaddr_is_same(&old_vtep_ip, originator_ip))
+		return;
+
+	/* If L2VNI is not live, we only need to update the originator_ip.
+	 */
+	if (!bgp_evpn_evi_is_live(evi)) {
+		evi->originator_ip = *originator_ip;
+		return;
+	}
+
+	/* Update the tunnel-ip hash - the tunnel-ip hash is refcounted! */
+	bgp_tip_del(bgp_evpn_mi, &old_vtep_ip);
+	if (bgp_tip_add(bgp_evpn_mi, originator_ip))
+		/* The originator_ip was not already present in the
+		 * bgp martian next-hop table as a tunnel-ip, so we
+		 * need to go back and filter routes matching the new
+		 * martian next-hop.
+		 */
+		bgp_filter_evpn_routes_upon_martian_change(bgp_evpn_mi,BGP_MARTIAN_TUN_IP);
+
+
+	build_evpn_type3_prefix(&p, &evi->originator_ip);
+	bgp_evpn_evi_delete_route(bgp_evpn_mi, evi, &p);
+
+	evi->originator_ip = *originator_ip;
+}
+
 
 static struct bgp_path_info *
 bgp_create_evpn_bgp_path_info(struct bgp_path_info *parent_pi,
@@ -8952,7 +8977,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 	if (!bgp_evpn_mi) {
 		flog_err(
 			EC_BGP_NO_DFLT,
-			"Cannot process L3VNI  %u ADD - EVPN BGP instance not yet created",
+			"Cannot process L3VNI  %u ADD - EVPN Master BGP instance not yet created",
 			l3vni);
 		return -1;
 	}
@@ -9004,7 +9029,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 	/* Update tip_hash of the EVPN underlay BGP instance (bgp_evpn)
 	 * if the VTEP-IP (originator_ip) has changed
 	 */
-	handle_tunnel_ip_change(bgp_vrf, bgp_evpn_mi, evi, originator_ip);
+	vrf_handle_tunnel_ip_change(bgp_vrf, bgp_evpn_mi, originator_ip);
 
 	/* copy anycast MAC from VRR MAC */
 	memcpy(&bgp_vrf->rmac, vrr_rmac, ETH_ALEN);
@@ -9402,7 +9427,7 @@ int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni)
  * Handle add (or update) of a local L2VNI. The VNI changes we care
  * about are for the local-tunnel-ip and the (tenant) VRF.
  */
-int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
+int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 			   struct ipaddr *originator_ip,
 			   vrf_id_t tenant_vrf_id,
 			   struct in_addr mcast_grp,
@@ -9412,8 +9437,16 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 	struct prefix_evpn p;
 	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
 
+	if (!bgp_evpn_mi) {
+		flog_err(
+			EC_BGP_NO_DFLT,
+			"Cannot process L2VNI %u ADD - EVPN Master BGP instance not yet created",
+			vni);
+		return -1;
+	}
+
 	/* Lookup VNI. If present and no change, exit. */
-	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
 	if (evi) {
 
 		if (bgp_evpn_evi_is_live(evi)
@@ -9426,7 +9459,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 			 */
 			return 0;
 
-		bgp_evpn_evi_mcast_grp_change(bgp, evi, mcast_grp);
+		bgp_evpn_evi_mcast_grp_change(bgp_evpn_mi, evi, mcast_grp);
 
 		if (evi->svi_ifindex != svi_ifindex) {
 
@@ -9439,9 +9472,9 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 				(void (*)(struct hash_bucket *, void *))
 					bgp_evpn_remote_ip_hash_unlink_nexthop,
 				evi);
-			bgp_evpn_unlink_from_evi_svi_hash(bgp, evi);
+			bgp_evpn_unlink_from_evi_svi_hash(bgp_evpn_mi, evi);
 			evi->svi_ifindex = svi_ifindex;
-			bgp_evpn_link_to_evi_svi_hash(bgp, evi);
+			bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
 
 			/*
 			 * Resolve all the gateway IP nexthops for this VNI
@@ -9484,16 +9517,16 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 		/* If tunnel endpoint IP has changed, update (and delete prior
 		 * type-3 route, if needed.)
 		 */
-		handle_tunnel_ip_change(NULL, bgp, evi, originator_ip);
+		evi_handle_tunnel_ip_change(bgp_evpn_mi, evi, originator_ip);
 
 		/* Update all routes with new endpoint IP and/or export RT
 		 * for VRFs
 		 */
 		if (bgp_evpn_evi_is_live(evi))
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
 	} else {
 		/* Create or update as appropriate. */
-		evi = bgp_evpn_evi_new(bgp, vni, originator_ip, tenant_vrf_id,
+		evi = bgp_evpn_evi_new(bgp_evpn_mi, vni, originator_ip, tenant_vrf_id,
 				   mcast_grp, svi_ifindex);
 	}
 
@@ -9507,7 +9540,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 	/* Tunnel is newly active.
 	 * Add TIP to tip_hash of the EVPN underlay instance (bgp_get_evpn_master_instance()).
 	 */
-	if (bgp_tip_add(bgp, originator_ip))
+	if (bgp_tip_add(bgp_evpn_mi, originator_ip))
 		/* The originator_ip was not already present in the
 		 * bgp martian next-hop table as a tunnel-ip, so we
 		 * need to go back and filter routes matching the new
@@ -9521,22 +9554,22 @@ int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 	 *
 	 * RT-3 only if doing head-end replication
 	 */
-	if (bgp_evpn_evi_get_flood_mode(bgp, evi) == VXLAN_FLOOD_HEAD_END_REPL) {
+	if (bgp_evpn_evi_get_flood_mode(bgp_evpn_mi, evi) == VXLAN_FLOOD_HEAD_END_REPL) {
 		build_evpn_type3_prefix(&p, &evi->originator_ip);
-		if (bgp_evpn_evi_update_route(bgp, evi, &p, 0, 0, NULL)) {
+		if (bgp_evpn_evi_update_route(bgp_evpn_mi, evi, &p, 0, 0, NULL)) {
 			flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 				 "%u: Type3 route creation failure for VNI %u",
-				 bgp->vrf_id, vni);
+				 bgp_evpn_mi->vrf_id, vni);
 			return -1;
 		}
 	}
 
 	/* If we are advertising gateway mac-ip
 	   It needs to be conveyed again to zebra */
-	bgp_zebra_advertise_gw_macip(bgp, evi->advertise_gw_macip, evi->vni);
+	bgp_zebra_advertise_gw_macip(bgp_evpn_mi, evi->advertise_gw_macip, evi->vni);
 
 	/* advertise svi mac-ip knob to zebra */
-	bgp_zebra_advertise_svi_macip(bgp, evi->advertise_svi_macip, evi->vni);
+	bgp_zebra_advertise_svi_macip(bgp_evpn_mi, evi->advertise_svi_macip, evi->vni);
 
 	bgp_evpn_l2vni_remote_route_processing(evi);
 
