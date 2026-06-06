@@ -77,10 +77,6 @@ static void bgp_evpn_remote_ip_hash_iterate(struct bgp_evpn_evi *evi,
 							 void *),
 					    void *arg);
 static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp, struct bgp_evpn_evi *evi);
-static void bgp_evpn_unlink_from_evi_svi_hash(struct bgp *bgp,
-					      struct bgp_evpn_evi *evi);
-static unsigned int evi_svi_hash_key_make(const void *p);
-static bool evi_svi_hash_cmp(const void *p1, const void *p2);
 static void bgp_evpn_remote_ip_process_nexthops(struct bgp_evpn_evi *evi,
 						struct ipaddr *addr,
 						bool resolve);
@@ -5083,7 +5079,7 @@ int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp_evpn_mi, struct bgp_ev
  * the per-EVI table. Invoked upon the EVI being deleted or EVPN
  * (advertise-all-vni) being disabled.
  */
-static int bgp_evpn_evi_delete_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
+static int bgp_evpn_evi_delete_routes(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	int ret;
 	struct prefix_evpn p;
@@ -5091,7 +5087,7 @@ static int bgp_evpn_evi_delete_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	/* Delete and withdraw locally learnt type-2 routes (MACIP)
 	 * followed by type-3 routes (only one) - for this VNI.
 	 */
-	bgp_evpn_evi_delete_all_type2_routes(bgp, evi);
+	bgp_evpn_evi_delete_all_type2_routes(bgp_evpn_mi, evi);
 
 	build_evpn_type3_prefix(&p, &evi->originator_ip);
 
@@ -5107,14 +5103,14 @@ static int bgp_evpn_evi_delete_routes(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	 *    2) before we blow up the vni table, we need to walk the list and
 	 *       pop all the dest whose za_evi points to this vni.
 	 */
-	SET_FLAG(bgp->flags, BGP_FLAG_VNI_DOWN);
-	ret = bgp_evpn_evi_delete_route(bgp, evi, &p);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_VNI_DOWN);
+	SET_FLAG(bgp_evpn_mi->flags, BGP_FLAG_VNI_DOWN);
+	ret = bgp_evpn_evi_delete_route(bgp_evpn_mi, evi, &p);
+	UNSET_FLAG(bgp_evpn_mi->flags, BGP_FLAG_VNI_DOWN);
 	if (ret)
 		return ret;
 
 	/* Delete all routes from the per-VNI table. */
-	bgp_evpn_evi_delete_all_routes(bgp, evi);
+	bgp_evpn_evi_delete_all_routes(bgp_evpn_mi, evi);
 	return 0;
 }
 
@@ -7582,15 +7578,6 @@ void bgp_zebra_evpn_pop_items_from_announce_fifo(struct bgp_evpn_evi *evi)
 }
 
 /*
- * Free a VNI entry; iterator function called during cleanup.
- */
-static void free_evi_entry(struct bgp_evpn_evi *evi, struct bgp *bgp)
-{
-	bgp_evpn_evi_delete_all_routes(bgp, evi);
-	bgp_evpn_evi_free(bgp, evi);
-}
-
-/*
  * Public functions.
  */
 
@@ -8399,12 +8386,13 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 }
 
 /*
- * Free a given VPN - called in multiple scenarios such as zebra
+ * Free a given EVI - called in multiple scenarios such as zebra
  * notification, configuration being deleted, advertise-all-vni disabled etc.
- * This just frees appropriate memory, caller should have taken other
- * needed actions.
+ * This mostly just frees appropriate memory (e.g. also releases from the evihash,
+ * unlinks from the Tenant VRF, etc..).
+ * If e.g. routes need to be deleted and withdrawn, caller is expected to handle this!
  */
-void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
+void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
 	bgp_evpn_remote_ip_hash_destroy(evi);
 	bgp_evpn_vni_es_cleanup(evi);
@@ -8412,7 +8400,7 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	bgp_table_unlock(evi->ip_table);
 	bgp_table_unlock(evi->mac_table);
 	
-	/* Routes are deleted in some other function? */
+	/* Caller is expected to delete / withdraw routes */
 	bgp_evpn_evi_unmap_from_evi_irt_nodes(evi);
 
 
@@ -8422,26 +8410,31 @@ void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	while((eff_wildcard_rt = bgp_evpn_effective_wildcard_rt_slu_pop(&evi->effective_wildcard_import_rts))) {
 		bgp_evpn_effective_wildcard_rt_free(eff_wildcard_rt);
 	}
+	bgp_evpn_effective_wildcard_rt_slu_fini(&evi->effective_wildcard_import_rts);
+
 	struct bgp_evpn_effective_fq_rt* eff_fq_rt;
 	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_import_rts))) {
 		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
 	}
+	bgp_evpn_effective_fq_rt_slu_fini(&evi->effective_fq_import_rts);
+
 	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&evi->effective_fq_export_rts))) {
 		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
 	}
+	bgp_evpn_effective_fq_rt_slu_fini(&evi->effective_fq_export_rts);
 
 
 	bf_release_index(bm->rd_idspace, evi->rd_id);
-	hash_release(bgp->evpn_master_instance_info.evi_svi_hash, evi);
-	evihash_del(&bgp->evpn_master_instance_info.evihash, evi);
+
+	/* Shouldn't happen, but let's rather be safe than sorry for now... */
+	if (bgp_evpn_mi) {
+		evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
+		evihash_del(&bgp_evpn_mi->evpn_master_instance_info.evihash, evi);
+	}
+
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
 	QOBJ_UNREG(evi);
-	XFREE(MTYPE_BGP_EVPN_EVI, evi);
-}
-
-static void hash_evpn_free(struct bgp_evpn_evi *evi)
-{
 	XFREE(MTYPE_BGP_EVPN_EVI, evi);
 }
 
@@ -9337,12 +9330,12 @@ void bgp_evpn_instance_down(struct bgp *bgp)
 /*
  * Handle deletion of a local L2VNI.
  */
-int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni)
+int bgp_evpn_del_local_l2vni(struct bgp *bgp_evpn_mi, vni_t vni)
 {
 	struct bgp_evpn_evi *evi;
 
 	/* Locate VNI hash */
-	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
 	if (!evi)
 		return 0;
 
@@ -9353,22 +9346,22 @@ int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni)
 	/* Remove all local EVPN routes and schedule for processing (to
 	 * withdraw from peers).
 	 */
-	bgp_evpn_evi_delete_routes(bgp, evi);
+	bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
 
-	bgp_evpn_unlink_from_evi_svi_hash(bgp, evi);
+	evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
 
 	evi->svi_ifindex = 0;
 	/* Tunnel is no longer active.
 	 * Delete VTEP-IP from EVPN underlay's tip_hash.
 	 */
-	bgp_tip_del(bgp, &evi->originator_ip);
+	bgp_tip_del(bgp_evpn_mi, &evi->originator_ip);
 
 	/* Clear "live" flag and see if hash needs to be freed. */
 	UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
 	/* Pop items from bgp_zebra_announce FIFO for any VPN routes pending*/
 	bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
 	if (!bgp_evpn_evi_is_user_configured(evi))
-		bgp_evpn_evi_free(bgp, evi);
+		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
 
 	return 0;
 }
@@ -9422,7 +9415,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				(void (*)(struct hash_bucket *, void *))
 					bgp_evpn_remote_ip_hash_unlink_nexthop,
 				evi);
-			bgp_evpn_unlink_from_evi_svi_hash(bgp_evpn_mi, evi);
+			evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
 			evi->svi_ifindex = svi_ifindex;
 			bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
 
@@ -9543,10 +9536,15 @@ void bgp_evpn_flood_control_change(struct bgp *bgp_evpn_mi)
 }
 
 /*
- * Cleanup EVPN information on disable - Need to delete and withdraw
- * EVPN routes from peers.
+ * Cleanup EVPN information on disable, i.e. when this BGP instance stops being the
+ * master instance 
+ * Need to delete and withdraw EVPN routes from peers.
+ * Delete all autoconfigured EVIs (EVIs that are not user configured and
+ * were learned from the kernel / through Zebra)
+ *
+ * TODO: Does this even make sense?
  */
-void bgp_evpn_cleanup_on_disable(struct bgp *bgp)
+void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 {
 	struct bgp_evpn_evi *evi = NULL;
 	uint32_t vni_count = zebra_l2_vni_count(&bm->zebra_l2_vni_head);
@@ -9567,43 +9565,47 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp)
 	evihash_init(&evihash_temp);
 
 	uint32_t idx = 0;
-	while ((evi = evihash_pop_all(&bgp->evpn_master_instance_info.evihash, &idx))) {
+	/* Delete all autoconfigured EVIs, but keep the user configured ones */
+	while ((evi = evihash_pop_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &idx))) {
 		/* Remove EVPN routes and schedule for processing. */
-		bgp_evpn_evi_delete_routes(bgp, evi);
+		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
 		/* Clear "live" flag and see if hash needs to be freed. */
 		UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
 		/* Pop items from bgp_zebra_announce FIFO for any VPN routes pending*/
 		bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
 		if (!bgp_evpn_evi_is_user_configured(evi)) {
-			bgp_evpn_evi_free(bgp, evi);
+			bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
 		} else {
 			/* need to move it to the temporary evihash in order to keep it */
 			evihash_add(&evihash_temp, evi);
 		}
 	}
 
-	evihash_swap_all(&bgp->evpn_master_instance_info.evihash, &evihash_temp);
+	evihash_swap_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &evihash_temp);
 	evihash_fini(&evihash_temp);
 
 }
 
-/* Clean and free all EVIs of a VRF */
-void bgp_evpn_release_all_from_evihash(struct bgp *bgp)
+/* Clean and free all EVIs of an EVPN Master Instance
+ * Will also work for non-master instance, but should just be
+ * no-op as those should not have anything in evihash anyway.
+ */
+void bgp_evpn_master_delete_and_free_all_evis(struct bgp *bgp_evpn_mi)
 {
 	struct bgp_evpn_evi *item;
 	uint32_t idx = 0;
 
-	while ((item = evihash_pop_all(&bgp->evpn_master_instance_info.evihash, &idx)))
-		free_evi_entry(item, bgp);
+	while ((item = evihash_pop_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &idx))) {
+		bgp_evpn_evi_delete_all_routes(bgp_evpn_mi, item);
+		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, item);
+	}
 }
 
 static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 {
 	evihash_init(&bgp->evpn_master_instance_info.evihash);
 
-	bgp->evpn_master_instance_info.evi_svi_hash =
-		hash_create(evi_svi_hash_key_make, evi_svi_hash_cmp,
-			    "BGP VNI hash based on SVI ifindex");
+	evi_svi_hash_init(&bgp->evpn_master_instance_info.evi_svi_hash);
 
 	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
 	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
@@ -9613,16 +9615,14 @@ static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
 
 static void bgp_evpn_master_instance_info_clean_and_free(struct bgp *bgp)
 {
-	/* Cleans up evihash */
-	bgp_evpn_release_all_from_evihash(bgp);
-	/* Deallocate evihash - bgp_evpn_release_all_from_evihash has ensured
-	 * all entries are removed
-	 */
+	/* This deletes all EVIs and also removes them from evihash etc... */
+	bgp_evpn_master_delete_and_free_all_evis(bgp);
+	
+	/* Deallocate the hash maps, bgp_evpn_master_delete_and_free_all_evis should have emptied them */
+	assert(evihash_count(&bgp->evpn_master_instance_info.evihash) == 0);
+	assert(evi_svi_hash_count(&bgp->evpn_master_instance_info.evi_svi_hash) == 0);
 	evihash_fini(&bgp->evpn_master_instance_info.evihash);
-
-	/* Clean & Deallocate evi_svi_hash */
-	hash_clean_and_free(&bgp->evpn_master_instance_info.evi_svi_hash,
-			    (void (*)(void *))hash_evpn_free);
+	evi_svi_hash_fini(&bgp->evpn_master_instance_info.evi_svi_hash);
 
 	uint32_t idx = 0;
 
@@ -9662,12 +9662,18 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 {
 	/* Even though only the master info has content in there, it must be freed because 
 	 * it is allocated for every instance regardless of whether it's a master instance or not
+	 *
+	 * Note that if this IS the master instance, you should have called bgp_evpn_master_delete_and_free_all_evis
+	 * on the master instance separately before!
 	 */
 	bgp_evpn_master_instance_info_clean_and_free(bgp);
 
-	/* EVIs are owned by evihash; just drain the intrusive list */
-	while (bgp_evis_slu_pop(&bgp->evis))
-		;
+	/* Our tenant VRF EVIs should be cleaned up by now 
+	 * Deallocating an EVI requires knowledge of the master instance (to free from evihash etc)
+	 * Which we don't want to fetch here - so we insist that the proper cleanup sequence has been
+	 * called (bgp_evpn_vrf_delete() beforehand)
+	 */
+	assert(bgp_evis_slu_count(&bgp->evis) == 0);
 	bgp_evis_slu_fini(&bgp->evis);
 
 	if (bgp->evpn_info) {
@@ -9681,13 +9687,18 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 	while((eff_wildcard_rt = bgp_evpn_effective_wildcard_rt_slu_pop(&bgp->effective_wildcard_import_rts))) {
 		bgp_evpn_effective_wildcard_rt_free(eff_wildcard_rt);
 	}
+	bgp_evpn_effective_wildcard_rt_slu_fini(&bgp->effective_wildcard_import_rts);
+
 	struct bgp_evpn_effective_fq_rt* eff_fq_rt;
 	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&bgp->effective_fq_import_rts))) {
 		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
 	}
+	bgp_evpn_effective_fq_rt_slu_fini(&bgp->effective_fq_import_rts);
+
 	while((eff_fq_rt = bgp_evpn_effective_fq_rt_slu_pop(&bgp->effective_fq_export_rts))) {
 		bgp_evpn_effective_fq_rt_free(eff_fq_rt);
 	}
+	bgp_evpn_effective_fq_rt_slu_fini(&bgp->effective_fq_export_rts);
 
 	if (bgp->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp->vrf_prd_pretty);
@@ -9746,8 +9757,24 @@ void bgp_evpn_init(struct bgp *bgp)
 	bgp_evpn_nh_init(bgp);
 }
 
+/* Call this always when you delete a VRF
+ * This cleans up and frees the EVIs of which the VRF is the tenant VRF
+ * It also unmaps the VRF from any IRT nodes (this also removes any routes imported into the VRF)
+ * and then cleans up some nexthop tracking state related to the VRF
+ */
 void bgp_evpn_vrf_delete(struct bgp *bgp_vrf)
 {
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+
+	/* Clean up the EVIs of which we are the Tenant VRF */
+	struct bgp_evpn_evi *evi_item = NULL;
+	while ((evi_item = bgp_evis_slu_pop(&bgp_vrf->evis)) != NULL) {
+		if (bgp_evpn_mi)
+			bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi_item);
+
+		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi_item);
+	}
+
 	bgp_evpn_vrf_unmap_from_vrf_irt_nodes(bgp_vrf);
 	bgp_evpn_nh_finish(bgp_vrf);
 }
@@ -9987,21 +10014,6 @@ static void bgp_evpn_remote_ip_hash_unlink_nexthop(struct hash_bucket *bucket,
 	bgp_evpn_remote_ip_process_nexthops(evi, &ip->addr, false);
 }
 
-static unsigned int evi_svi_hash_key_make(const void *p)
-{
-	const struct bgp_evpn_evi *evi = p;
-
-	return jhash_1word(evi->svi_ifindex, 0);
-}
-
-static bool evi_svi_hash_cmp(const void *p1, const void *p2)
-{
-	const struct bgp_evpn_evi *evi1 = p1;
-	const struct bgp_evpn_evi *evi2 = p2;
-
-	return (evi1->svi_ifindex == evi2->svi_ifindex);
-}
-
 static struct bgp_evpn_evi *bgp_evpn_evi_svi_hash_lookup(struct bgp *bgp,
 						    ifindex_t svi)
 {
@@ -10010,7 +10022,7 @@ static struct bgp_evpn_evi *bgp_evpn_evi_svi_hash_lookup(struct bgp *bgp,
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.svi_ifindex = svi;
-	evi = hash_lookup(bgp->evpn_master_instance_info.evi_svi_hash, &tmp);
+	evi = evi_svi_hash_find(&bgp->evpn_master_instance_info.evi_svi_hash, &tmp);
 	return evi;
 }
 
@@ -10019,24 +10031,7 @@ static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_ev
 	if (evi->svi_ifindex == 0)
 		return;
 
-	(void)hash_get(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi, hash_alloc_intern);
-}
-
-static void bgp_evpn_unlink_from_evi_svi_hash(struct bgp *bgp_evpn_mi,
-					      struct bgp_evpn_evi *evi)
-{
-	if (evi->svi_ifindex == 0)
-		return;
-
-	hash_release(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
-}
-
-void bgp_evpn_show_evi_svi_hash(struct hash_bucket *bucket, void *args)
-{
-	struct bgp_evpn_evi *evi = (struct bgp_evpn_evi *)bucket->data;
-	struct vty *vty = (struct vty *)args;
-
-	vty_out(vty, "SVI: %u VNI: %u\n", evi->svi_ifindex, evi->vni);
+	evi_svi_hash_add(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
 }
 
 /*

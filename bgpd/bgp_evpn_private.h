@@ -298,6 +298,9 @@ struct bgp_evpn_evi {
 	/* intrusive hash item for evpn_master_instance_info.evihash */
 	struct evihash_item evihash_item;
 
+	/* intrusive hash item for evpn_master_instance_info.evi_svi_hash */
+	struct evi_svi_hash_item evi_svi_hash_item;
+
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
 	QOBJ_FIELDS;
@@ -330,6 +333,19 @@ static inline int evihash_cmp(const struct bgp_evpn_evi *a,
 DECLARE_HASH(evihash, struct bgp_evpn_evi, evihash_item, evihash_cmp,
 	     evihash_key);
 
+static inline uint32_t evi_svi_hash_key(const struct bgp_evpn_evi *evi)
+{
+	return jhash_1word(evi->svi_ifindex, 0);
+}
+
+static inline int evi_svi_hash_cmp(const struct bgp_evpn_evi *a,
+				  const struct bgp_evpn_evi *b)
+{
+	return a->svi_ifindex > b->svi_ifindex ? 1
+		: (a->svi_ifindex < b->svi_ifindex ? -1 : 0);
+}
+
+DECLARE_HASH(evi_svi_hash, struct bgp_evpn_evi, evi_svi_hash_item, evi_svi_hash_cmp, evi_svi_hash_key);
 
 PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
 
@@ -1092,7 +1108,7 @@ extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		vrf_id_t tenant_vrf_id,
 		struct in_addr mcast_grp,
 		ifindex_t svi_ifindex);
-extern void bgp_evpn_evi_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
+extern void bgp_evpn_evi_delete_and_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni);
 extern int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern struct bgp_path_info *bgp_evpn_delete_route_entry(struct bgp *bgp, afi_t afi, safi_t safi,

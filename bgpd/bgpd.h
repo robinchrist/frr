@@ -25,6 +25,7 @@ PREDECL_LIST(zebra_l2_vni);
  * dependencies are a nightmare to sort out, so for now we keep it here
  */
 PREDECL_HASH(evihash);
+PREDECL_HASH(evi_svi_hash);
 PREDECL_HASH(vrf_fq_irt_nodes);
 PREDECL_HASH(vrf_wildcard_irt_nodes);
 PREDECL_HASH(evi_fq_irt_nodes);
@@ -961,12 +962,12 @@ struct bgp {
 		struct evihash_head evihash;
 
 		/*
-		 * EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->svi_ifindex as key
+		 * EVI hash table, uses bgp_evpn_evi->svi_ifindex as key
 		 * We use SVI ifindex as key to lookup a VNI table for gateway IP
 		 * overlay index recursive lookup.
 		 * For this purpose, a hashtable is added which optimizes this lookup.
 		 */
-		struct hash *evi_svi_hash;
+		struct evi_svi_hash_head evi_svi_hash;
 
 		/* Hash table of Wildcard VRF import RTs to VRFs */
 		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;

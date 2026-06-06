@@ -217,13 +217,12 @@ extern int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
 extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
 extern void bgp_evpn_clean_and_free(struct bgp *bgp);
-extern void bgp_evpn_release_all_from_evihash(struct bgp *bgp);
+extern void bgp_evpn_master_delete_and_free_all_evis(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);
 extern int bgp_evpn_get_type5_prefixlen(const struct prefix *pfx);
 extern bool bgp_evpn_is_prefix_nht_supported(const struct prefix *pfx);
 extern void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf);
 extern void bgp_evpn_show_remote_ip_hash(struct bgp_evpn_evi *evi, struct vty *vty);
-extern void bgp_evpn_show_evi_svi_hash(struct hash_bucket *bucket, void *args);
 extern bool bgp_evpn_is_gateway_ip_resolved(struct bgp_nexthop_cache *bnc);
 extern void bgp_evpn_handle_resolve_overlay_index_set(struct bgp_evpn_evi *evi);
 extern void bgp_evpn_handle_resolve_overlay_index_unset(struct bgp_evpn_evi *evi);

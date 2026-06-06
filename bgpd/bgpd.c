@@ -4513,9 +4513,24 @@ int bgp_delete(struct bgp *bgp)
 				   bgp->name);
 	}
 
-	/* unmap from RT list */
-	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating)
-		bgp_evpn_vrf_delete(bgp);
+	/* unmap from RT list, delete the EVIs of which this instance is the Tenant VRF
+	 * EVIs hold a reference to their Tenant VRF / BGP instance, which is released when
+	 * the EVIs are deleted / freed
+	 */
+	bgp_evpn_vrf_delete(bgp);
+
+	/*
+	 * If the current instance is the EVPN Master Instance / VRF, clean ES route tables
+	 * while bgp is still alive, then release all EVIs, because these hold a lock reference
+	 * to their tenant VRF / BGP instance
+	 */
+	if (bm->bgp_evpn_mi == bgp) {
+		bgp_evpn_es_cleanup_routes(bgp);
+		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free 
+		 * bgp_evpn_clean_and_free is reserved for bgp_free
+		 */
+		bgp_evpn_master_delete_and_free_all_evis(bgp);
+	}
 
 	/* unmap bgp vrf label */
 	vpn_leak_zebra_vrf_label_withdraw(bgp, AFI_IP);
@@ -4608,17 +4623,6 @@ int bgp_delete(struct bgp *bgp)
 	}
 
 	bgp_cleanup_routes(bgp);
-
-	/*
-	 * If the current instance is the EVPN Master Instance / VRF, clean ES route tables
-	 * while bgp is still alive, then release EVPN VNI bgp_lock references so the
-	 * subsequent bgp_unlock() can drive refcount to zero and trigger bgp_free().
-	 */
-	if (bm->terminating && bm->bgp_evpn_mi == bgp) {
-		bgp_evpn_es_cleanup_routes(bgp);
-		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free */
-		bgp_evpn_release_all_from_evihash(bgp);
-	}
 
 	for (afi = 0; afi < AFI_MAX; ++afi) {
 		if (!bgp->vpn_policy[afi].import_redirect_rtlist)

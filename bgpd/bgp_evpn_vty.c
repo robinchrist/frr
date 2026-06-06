@@ -1883,7 +1883,7 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgp_evpn_evi *evi)
 {
 	if (!bgp_evpn_evi_is_live(evi)) {
 		/* bgp_evpn_evi_is_user_configured should be true then - how would we know about it otherwise? */
-		bgp_evpn_evi_free(bgp, evi);
+		bgp_evpn_evi_delete_and_free(bgp, evi);
 		return;
 	}
 
@@ -3333,32 +3333,34 @@ static void bgp_evpn_config_write_rts_common(struct vty *vty, struct bgp_evpn_rt
 static void bgp_evpn_config_write_evi(struct vty *vty, struct bgp_evpn_evi *evi)
 {
 	/* Only write when the EVI was configured by the user and is not auto created / learnt */
-	if (bgp_evpn_evi_is_user_configured(evi)) {
-		vty_out(vty, "  vni %u\n", evi->vni);
-		if (bgp_evpn_evi_is_rd_configured(evi))
-			vty_out(vty, "   rd %s\n", evi->prd_pretty);
+	if (!bgp_evpn_evi_is_user_configured(evi))
+		return;
 
-		if (!evi->bgp_vrf ||
-		    (evi->bgp_vrf && (evi->vxlan_flood_ctrl != evi->bgp_vrf->vxlan_flood_ctrl))) {
-			if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
-				vty_out(vty, "   flooding disable\n");
-			else if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL)
-				vty_out(vty, "   flooding head-end-replication\n");
-		}
 
-		bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, "   ");
+	vty_out(vty, "  vni %u\n", evi->vni);
+	if (bgp_evpn_evi_is_rd_configured(evi))
+		vty_out(vty, "   rd %s\n", evi->prd_pretty);
 
-		if (evi->advertise_gw_macip)
-			vty_out(vty, "   advertise-default-gw\n");
-
-		if (evi->advertise_svi_macip)
-			vty_out(vty, "   advertise-svi-ip\n");
-
-		if (evi->advertise_subnet)
-			vty_out(vty, "   advertise-subnet\n");
-
-		vty_out(vty, "  exit-vni\n");
+	if (!evi->bgp_vrf ||
+		(evi->bgp_vrf && (evi->vxlan_flood_ctrl != evi->bgp_vrf->vxlan_flood_ctrl))) {
+		if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
+			vty_out(vty, "   flooding disable\n");
+		else if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL)
+			vty_out(vty, "   flooding head-end-replication\n");
 	}
+
+	bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, "   ");
+
+	if (evi->advertise_gw_macip)
+		vty_out(vty, "   advertise-default-gw\n");
+
+	if (evi->advertise_svi_macip)
+		vty_out(vty, "   advertise-svi-ip\n");
+
+	if (evi->advertise_subnet)
+		vty_out(vty, "   advertise-subnet\n");
+
+	vty_out(vty, "  exit-vni\n");
 }
 
 #include "bgpd/bgp_evpn_vty_clippy.c"
@@ -4452,10 +4454,10 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_evi_svi_hash,
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
 
-	hash_iterate(bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash,
-		     (void (*)(struct hash_bucket *,
-			       void *))bgp_evpn_show_evi_svi_hash,
-		     vty);
+	struct bgp_evpn_evi *evi;
+
+	frr_each (evi_svi_hash, &bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi)
+		vty_out(vty, "SVI: %u VNI: %u\n", evi->svi_ifindex, evi->vni);
 
 	return CMD_SUCCESS;
 }
