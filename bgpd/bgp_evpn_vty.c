@@ -554,7 +554,7 @@ static void display_evi_common(struct vty *vty, struct bgp_evpn_evi *evi,
 		
 		vty_out(vty, "  Advertise-svi-macip: %s\n", advertiseSviMacipStatus);
 		
-		vty_out(vty, "  SVI interface : %s\n", ifindex2ifname(evi->svi_ifindex, evi->tenant_vrf_id));
+		vty_out(vty, "  SVI interface: %s\n", ifindex2ifname(evi->svi_ifindex, evi->tenant_vrf_id));
 	} else {
 		/* Print table line
 		 * Flags: * - Kernel
