@@ -729,7 +729,7 @@ static int bgp_evpn_push_effective_rt_common(
 		if(!wildcard_rt)
 			return -1; /* shouldn't happen */
 
-		if(!bgp_evpn_effective_wildcard_rt_slu_add(wildcard_list, wildcard_rt)) {
+		if(bgp_evpn_effective_wildcard_rt_slu_add(wildcard_list, wildcard_rt) != NULL) {
 			bgp_evpn_effective_wildcard_rt_free(wildcard_rt);
 			return -1; /* insertion failure */
 		}
@@ -743,7 +743,7 @@ static int bgp_evpn_push_effective_rt_common(
 		if(!fq_rt)
 			return -1; /* shouldn't happen - malformed config? */
 
-		if(!bgp_evpn_effective_fq_rt_slu_add(fq_list, fq_rt)) {
+		if(bgp_evpn_effective_fq_rt_slu_add(fq_list, fq_rt) != NULL) {
 			bgp_evpn_effective_fq_rt_free(fq_rt);
 			return -1; /* insertion failure - duplicate route target in config?? */
 		}
