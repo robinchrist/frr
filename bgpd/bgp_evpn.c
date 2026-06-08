@@ -8554,7 +8554,7 @@ void bgp_reimport_evpn_routes_upon_macvrf_soo_change(struct bgp *bgp,
  * events occurring on the local system,
  * e.g.
  * - New VTEP-IP
- *   + bgp_zebra_process_local_vni
+ *   + bgp_zebra_process_local_l2vni
  *   + bgp_zebra_process_local_l3vni
  * - New MAC-VRF Site-of-Origin
  *   + bgp_evpn_handle_global_macvrf_soo_change
@@ -8679,7 +8679,7 @@ void bgp_filter_evpn_routes_upon_martian_change(
  *   + bgp_evpn_handle_global_macvrf_soo_change
  * This will likely be extended in the future to cover these events too:
  * - Del VTEP-IP
- *   + bgp_zebra_process_local_vni
+ *   + bgp_zebra_process_local_l2vni
  *   + bgp_zebra_process_local_l3vni
  * - Del Interface IP
  *   + bgp_interface_address_delete

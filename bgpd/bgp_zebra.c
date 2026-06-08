@@ -3489,14 +3489,15 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
-static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
+static int _bgp_zebra_process_local_l2vni(int cmd, struct zclient *zclient, uint16_t length,
+					vrf_id_t underlay_vrf_id)
 {
 	struct stream *s;
 	vni_t vni;
-	struct bgp *bgp;
+	struct bgp *underlay_vrf;
 	struct ipaddr vtep_ip = { .ipa_type = IPADDR_NONE };
 	vrf_id_t tenant_vrf_id = VRF_DEFAULT;
-	struct in_addr mcast_grp = {INADDR_ANY};
+	struct in_addr mcast_grp = { INADDR_ANY };
 	ifindex_t svi_ifindex = 0;
 
 	s = zclient->ibuf;
@@ -3512,35 +3513,41 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 		stream_get(&svi_ifindex, s, sizeof(ifindex_t));
 	}
 
-	bgp = bgp_lookup_by_vrf_id(vrf_id);
-	if (!bgp)
-		return 0;
-
 	if (BGP_DEBUG(zebra, ZEBRA))
-		zlog_debug(
-			"Rx VNI %s VRF %s VNI %u tenant-vrf %s SVI ifindex %u",
-			(cmd == ZEBRA_L2VNI_ADD) ? "add" : "del",
-			vrf_id_to_name(vrf_id), vni,
-			vrf_id_to_name(tenant_vrf_id), svi_ifindex);
+		zlog_debug("Rx VNI %s Underlay VRF %s VNI %u tenant-vrf %s SVI ifindex %u",
+			   (cmd == ZEBRA_L2VNI_ADD) ? "add" : "del", vrf_id_to_name(underlay_vrf_id),
+			   vni, vrf_id_to_name(tenant_vrf_id), svi_ifindex);
+
+
+	underlay_vrf = bgp_lookup_by_vrf_id(underlay_vrf_id);
+	if (!underlay_vrf) {
+		zlog_err("Cannot %s L2VNI %u - Underlay VRF with ID %u not found",
+			 (cmd == ZEBRA_L2VNI_ADD) ? "add" : "del", vni, underlay_vrf_id);
+		return 0;
+	}
 
 	if (ipaddr_is_zero(&vtep_ip)) {
 		SET_IPADDR_V4(&vtep_ip);
-		vtep_ip.ipaddr_v4 = bgp->router_id;
+		vtep_ip.ipaddr_v4 = underlay_vrf->router_id;
 	}
 
 	if (cmd == ZEBRA_L2VNI_ADD) {
 		frrtrace(4, frr_bgp, evpn_local_vni_add_zrecv, vni, &vtep_ip, tenant_vrf_id,
 			 mcast_grp);
 
-		return bgp_evpn_add_local_l2vni(
-			bgp, vni,
-			&vtep_ip,
-			tenant_vrf_id, mcast_grp, svi_ifindex);
+		return bgp_evpn_add_local_l2vni(underlay_vrf, vni, &vtep_ip, tenant_vrf_id,
+						mcast_grp, svi_ifindex);
 	} else {
 		frrtrace(1, frr_bgp, evpn_local_vni_del_zrecv, vni);
 
-		return bgp_evpn_del_local_l2vni(bgp, vni);
+		return bgp_evpn_del_local_l2vni(underlay_vrf, vni);
 	}
+}
+
+/* Little ugly wrapper to alias vrf_id to underlay_vrf_id... */
+static int bgp_zebra_process_local_l2vni(ZAPI_CALLBACK_ARGS)
+{
+	return _bgp_zebra_process_local_l2vni(cmd, zclient, length, vrf_id);
 }
 
 static int bgp_zebra_process_local_macip(ZAPI_CALLBACK_ARGS)
@@ -4453,10 +4460,10 @@ static zclient_handler *const bgp_handlers[] = {
 	[ZEBRA_FEC_UPDATE] = bgp_read_fec_update,
 	[ZEBRA_LOCAL_ES_ADD] = bgp_zebra_process_local_es_add,
 	[ZEBRA_LOCAL_ES_DEL] = bgp_zebra_process_local_es_del,
-	[ZEBRA_L2VNI_ADD] = bgp_zebra_process_local_vni,
+	[ZEBRA_L2VNI_ADD] = bgp_zebra_process_local_l2vni,
 	[ZEBRA_LOCAL_ES_EVI_ADD] = bgp_zebra_process_local_es_evi,
 	[ZEBRA_LOCAL_ES_EVI_DEL] = bgp_zebra_process_local_es_evi,
-	[ZEBRA_L2VNI_DEL] = bgp_zebra_process_local_vni,
+	[ZEBRA_L2VNI_DEL] = bgp_zebra_process_local_l2vni,
 	[ZEBRA_MACIP_ADD] = bgp_zebra_process_local_macip,
 	[ZEBRA_MACIP_DEL] = bgp_zebra_process_local_macip,
 	[ZEBRA_L3VNI_ADD] = bgp_zebra_process_local_l3vni,
