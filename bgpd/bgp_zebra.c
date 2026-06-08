@@ -3419,7 +3419,7 @@ static int bgp_zebra_process_local_es_evi(ZAPI_CALLBACK_ARGS)
 
 	if (BGP_DEBUG(zebra, ZEBRA))
 		zlog_debug("Rx %s ESI %s VNI %u",
-			   (cmd == ZEBRA_VNI_ADD) ? "add" : "del",
+			   (cmd == ZEBRA_L2VNI_ADD) ? "add" : "del",
 			   esi_to_str(&esi, buf, sizeof(buf)), vni);
 
 	if (cmd == ZEBRA_LOCAL_ES_EVI_ADD) {
@@ -3501,7 +3501,7 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 
 	s = zclient->ibuf;
 	vni = stream_getl(s);
-	if (cmd == ZEBRA_VNI_ADD) {
+	if (cmd == ZEBRA_L2VNI_ADD) {
 		if (!stream_get_ipaddr(s, &vtep_ip)) {
 			if (BGP_DEBUG(zebra, ZEBRA))
 				zlog_err("Unable to read VTEP IP address from stream");
@@ -3519,7 +3519,7 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 	if (BGP_DEBUG(zebra, ZEBRA))
 		zlog_debug(
 			"Rx VNI %s VRF %s VNI %u tenant-vrf %s SVI ifindex %u",
-			(cmd == ZEBRA_VNI_ADD) ? "add" : "del",
+			(cmd == ZEBRA_L2VNI_ADD) ? "add" : "del",
 			vrf_id_to_name(vrf_id), vni,
 			vrf_id_to_name(tenant_vrf_id), svi_ifindex);
 
@@ -3528,7 +3528,7 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 		vtep_ip.ipaddr_v4 = bgp->router_id;
 	}
 
-	if (cmd == ZEBRA_VNI_ADD) {
+	if (cmd == ZEBRA_L2VNI_ADD) {
 		frrtrace(4, frr_bgp, evpn_local_vni_add_zrecv, vni, &vtep_ip, tenant_vrf_id,
 			 mcast_grp);
 
@@ -4453,10 +4453,10 @@ static zclient_handler *const bgp_handlers[] = {
 	[ZEBRA_FEC_UPDATE] = bgp_read_fec_update,
 	[ZEBRA_LOCAL_ES_ADD] = bgp_zebra_process_local_es_add,
 	[ZEBRA_LOCAL_ES_DEL] = bgp_zebra_process_local_es_del,
-	[ZEBRA_VNI_ADD] = bgp_zebra_process_local_vni,
+	[ZEBRA_L2VNI_ADD] = bgp_zebra_process_local_vni,
 	[ZEBRA_LOCAL_ES_EVI_ADD] = bgp_zebra_process_local_es_evi,
 	[ZEBRA_LOCAL_ES_EVI_DEL] = bgp_zebra_process_local_es_evi,
-	[ZEBRA_VNI_DEL] = bgp_zebra_process_local_vni,
+	[ZEBRA_L2VNI_DEL] = bgp_zebra_process_local_vni,
 	[ZEBRA_MACIP_ADD] = bgp_zebra_process_local_macip,
 	[ZEBRA_MACIP_DEL] = bgp_zebra_process_local_macip,
 	[ZEBRA_L3VNI_ADD] = bgp_zebra_process_local_l3vni,
