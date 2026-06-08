@@ -259,12 +259,6 @@ static struct log_ref ferr_zebra_err[] = {
 		.suggestion = "Notify a developer.",
 	},
 	{
-		.code = EC_ZEBRA_VNI_ADD_FAILED,
-		.title = "Adding VNI failed",
-		.description = "Zebra attempted to add a VNI hash to an interface and failed",
-		.suggestion = "Notify a developer.",
-	},
-	{
 		.code = EC_ZEBRA_NS_NOTIFY_READ,
 		.title = "Zebra failed to read namespace inotify information",
 		.description = "Zebra received an event from inotify, but failed to read what it was.",
