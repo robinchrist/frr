@@ -390,7 +390,7 @@ void zebra_evpn_es_evi_show(struct vty *vty, bool uj, int detail)
 	struct zebra_vrf *zvrf;
 	struct evpn_mh_show_ctx wctx;
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 	if (uj)
 		json_array = json_object_new_array();
 
@@ -2323,7 +2323,7 @@ static void zebra_evpn_mh_dup_addr_detect_off(void)
 	if (zmh_info->flags & ZEBRA_EVPN_MH_DUP_ADDR_DETECT_OFF)
 		return;
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 	old_detect = zebra_evpn_do_dup_addr_detect(zvrf);
 	zmh_info->flags |= ZEBRA_EVPN_MH_DUP_ADDR_DETECT_OFF;
 	new_detect = zebra_evpn_do_dup_addr_detect(zvrf);
@@ -3678,7 +3678,7 @@ static void zebra_evpn_es_get_one_base_evpn(void)
 {
 	struct zebra_vrf *zvrf;
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 	hash_walk(zvrf->evpn_table, zebra_evpn_es_get_one_base_evpn_cb, NULL);
 }
 

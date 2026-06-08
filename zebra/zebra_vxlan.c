@@ -1158,7 +1158,7 @@ static void zevpn_build_hash_table(void)
 {
 	struct zebra_vrf *zvrf;
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 	if (zvrf == NULL)
 		return;
 
@@ -2183,7 +2183,7 @@ struct interface *zl3vni_map_to_vxlan_if(struct zebra_l3vni *zl3vni)
 	struct zl3vni_map_arg arg = {};
 
 	arg.zl3vni = zl3vni;
-	arg.zvrf = zebra_vrf_get_evpn();
+	arg.zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	if (arg.zvrf == NULL)
 		return NULL;
@@ -4111,7 +4111,7 @@ void zebra_vxlan_print_evpn(struct vty *vty, bool uj)
 		return;
 	}
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	num_l3vnis = hashcount(zrouter.l3vni_table);
 	num_l2vnis = hashcount(zvrf->evpn_table);
@@ -4835,7 +4835,7 @@ int zebra_vxlan_local_mac_add_update(struct interface *ifp,
 		return -1;
 	}
 
-	zvrf = zebra_vrf_get_evpn();
+	zvrf = zebra_evpn_get_master_underlay_vrf();
 	return zebra_evpn_add_update_local_mac(zvrf, zevpn, ifp, macaddr, vid,
 					       sticky, local_inactive,
 					       dp_static, NULL);
@@ -5444,7 +5444,7 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 	struct zebra_if *vxlan_if_zif = NULL;
 	struct interface *br_if = NULL;
 
-	zvrf_evpn = zebra_vrf_get_evpn();
+	zvrf_evpn = zebra_evpn_get_master_underlay_vrf();
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug("vrf %s vni %u %s", zvrf_name(zvrf), vni,
@@ -6067,7 +6067,7 @@ void zebra_vxlan_init_tables(struct zebra_vrf *zvrf)
 /* Cleanup EVPN info, but don't free the table. */
 void zebra_vxlan_cleanup_tables(struct zebra_vrf *zvrf)
 {
-	struct zebra_vrf *evpn_zvrf = zebra_vrf_get_evpn();
+	struct zebra_vrf *evpn_zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	hash_iterate(zvrf->evpn_table, zebra_evpn_vxlan_cleanup_all, zvrf);
 	zebra_vxlan_cleanup_sg_table(zvrf);
@@ -6540,7 +6540,7 @@ static int zebra_evpn_bgp_cfg_clean_up(struct zserv *client)
 
 static int zebra_evpn_pim_cfg_clean_up(struct zserv *client)
 {
-	struct zebra_vrf *zvrf = zebra_vrf_get_evpn();
+	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	if (CHECK_FLAG(zvrf->flags, ZEBRA_PIM_SEND_VXLAN_SG)) {
 		if (IS_ZEBRA_DEBUG_VXLAN)

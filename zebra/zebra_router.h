@@ -280,7 +280,7 @@ static inline vrf_id_t zebra_evpn_get_master_underlay_vrf_id(void)
 {
 	return zrouter.evpn_vrf ? zvrf_id(zrouter.evpn_vrf) : VRF_DEFAULT;
 }
-static inline struct zebra_vrf *zebra_vrf_get_evpn(void)
+static inline struct zebra_vrf *zebra_evpn_get_master_underlay_vrf(void)
 {
 	return zrouter.evpn_vrf ? zrouter.evpn_vrf
 			        : zebra_vrf_lookup_by_id(VRF_DEFAULT);

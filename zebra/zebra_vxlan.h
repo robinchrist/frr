@@ -17,7 +17,7 @@
 
 #include "zebra/zserv.h" /* ZAPI_HANDLER_ARGS */
 #include "zebra/zebra_vrf.h"
-#include "zebra/zebra_router.h" /* zebra_vrf_get_evpn */
+#include "zebra/zebra_router.h" /* zebra_evpn_get_master_underlay_vrf */
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,7 +31,7 @@ struct zebra_vxlan_if_update_ctx;
 #define EVPN_ENABLED(zvrf)  (zvrf)->advertise_all_vni
 static inline int is_evpn_enabled(void)
 {
-	return EVPN_ENABLED(zebra_vrf_get_evpn());
+	return EVPN_ENABLED(zebra_evpn_get_master_underlay_vrf());
 }
 
 #ifndef INET6_GUA_ADDRSTRLEN
@@ -48,7 +48,7 @@ static inline int is_evpn_enabled(void)
 static inline int
 is_vxlan_flooding_head_end(void)
 {
-	struct zebra_vrf *zvrf = zebra_vrf_get_evpn();
+	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
 	return (zvrf->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL);
 }
 
