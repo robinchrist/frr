@@ -283,6 +283,12 @@ static void display_rts_common(
 	if(!json && detail)
 		vty_out(vty, "  Effective Import Route Targets:\n");
 
+	/* Special Case for table output and no route targets - need to print empty column to preserve layout 
+	 * could also print a different special value there
+	 */
+	if(total_import_rts == 0 && !json && !detail) 
+		display_push_rt_common(vty, json_import_rtl, detail, "", total_import_rts);
+
 	frr_each (bgp_evpn_effective_wildcard_rt_slu, effective_wildcard_import_rts, wcard) {
 		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wcard->local_admin_nbo);
 		done = display_push_rt_common(vty, json_import_rtl, detail, rt_buf, total_import_rts);
@@ -304,11 +310,17 @@ static void display_rts_common(
 	if (json)
 		json_object_object_add(json, "importRts", json_import_rtl);
 
+	/* Export RTs */
+	size_t total_export_rts = bgp_evpn_effective_fq_rt_slu_count(effective_fq_export_rts);
+
 	if (!json && detail)
 		vty_out(vty, "  Effective Export Route Targets:\n");
 
-	/* Export RTs */
-	size_t total_export_rts = bgp_evpn_effective_fq_rt_slu_count(effective_fq_export_rts);
+	/* Special Case for table output and no route targets - need to print empty column to preserve layout 
+	 * could also print a different special value there
+	 */
+	if(total_export_rts == 0 && !json && !detail) 
+		display_push_rt_common(vty, json_export_rtl, detail, "", total_export_rts);
 	
 	done = false;
 
