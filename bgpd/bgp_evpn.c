@@ -9330,12 +9330,26 @@ void bgp_evpn_instance_down(struct bgp *bgp)
 /*
  * Handle deletion of a local L2VNI.
  */
-int bgp_evpn_del_local_l2vni(struct bgp *bgp_evpn_mi, vni_t vni)
+int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 {
 	struct bgp_evpn_evi *evi;
 
-	/* Locate VNI hash */
-	evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
+	if(!underlay_vrf) {
+		zlog_err("Cannot delete local L2VNI %u - underlay VRF is NULL", vni);
+		return -1;
+	}
+	if(!underlay_vrf->advertise_all_vni) {
+		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
+		return -1;
+	}
+	/* Limitation for now until we have proper multi-underlay-VRF support */
+	if(bm->bgp_evpn_mi != underlay_vrf) {
+		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s is not the EVPN master instance", vni, underlay_vrf->name);
+		return -1;
+	}
+
+	/* Lookup EVI by VNI within the underlay VRF */
+	evi = bgp_evpn_lookup_evi_by_vni(underlay_vrf, vni);
 	if (!evi)
 		return 0;
 
@@ -9346,29 +9360,32 @@ int bgp_evpn_del_local_l2vni(struct bgp *bgp_evpn_mi, vni_t vni)
 	/* Remove all local EVPN routes and schedule for processing (to
 	 * withdraw from peers).
 	 */
-	bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+	bgp_evpn_evi_delete_routes(underlay_vrf, evi);
 
-	evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
+	evi_svi_hash_del(&underlay_vrf->evpn_master_instance_info.evi_svi_hash, evi);
 
 	evi->svi_ifindex = 0;
 	/* Tunnel is no longer active.
 	 * Delete VTEP-IP from EVPN underlay's tip_hash.
 	 */
-	bgp_tip_del(bgp_evpn_mi, &evi->originator_ip);
+	bgp_tip_del(underlay_vrf, &evi->originator_ip);
 
 	/* Clear "live" flag and see if hash needs to be freed. */
 	UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
 	/* Pop items from bgp_zebra_announce FIFO for any VPN routes pending*/
 	bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
 	if (!bgp_evpn_evi_is_user_configured(evi))
-		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
+		bgp_evpn_evi_delete_and_free(underlay_vrf, evi);
 
 	return 0;
 }
 
 /*
- * Handle add (or update) of a local L2VNI. The VNI changes we care
- * about are for the local-tunnel-ip and the (tenant) VRF.
+ * Handle add (or update) of a local L2VNI.
+ * FRR only implements the VLAN-Based Service Interface EVPN Instance Type.
+ * FRR forces a 1:1 mapping between L2VNI and EVI (LAN-Based Service Interface type)
+ * 
+ * The VNI changes we care about are for the local-tunnel-ip and the tenant VRF.
  */
 int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 			   struct ipaddr *originator_ip,
@@ -9378,18 +9395,23 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 {
 	struct bgp_evpn_evi *evi;
 	struct prefix_evpn p;
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
 
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"Cannot process L2VNI %u ADD - EVPN Master BGP instance not yet created",
-			vni);
+	if(!underlay_vrf) {
+		zlog_err("Cannot add local L2VNI %u - underlay VRF is NULL", vni);
+		return -1;
+	}
+	if(!underlay_vrf->advertise_all_vni) {
+		zlog_err("Cannot add local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
+		return -1;
+	}
+	/* Limitation for now until we have proper multi-underlay-VRF support */
+	if(bm->bgp_evpn_mi != underlay_vrf) {
+		zlog_err("Cannot add local L2VNI %u - underlay VRF %s is not the EVPN master instance", vni, underlay_vrf->name);
 		return -1;
 	}
 
-	/* Lookup VNI. If present and no change, exit. */
-	evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
+	/* Lookup EVI by VNI within the underlay VRF. If present and no change, exit. */
+	evi = bgp_evpn_lookup_evi_by_vni(underlay_vrf, vni);
 	if (evi) {
 
 		if (bgp_evpn_evi_is_live(evi)
@@ -9402,7 +9424,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 			 */
 			return 0;
 
-		bgp_evpn_evi_mcast_grp_change(bgp_evpn_mi, evi, mcast_grp);
+		bgp_evpn_evi_mcast_grp_change(underlay_vrf, evi, mcast_grp);
 
 		if (evi->svi_ifindex != svi_ifindex) {
 
@@ -9415,9 +9437,9 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				(void (*)(struct hash_bucket *, void *))
 					bgp_evpn_remote_ip_hash_unlink_nexthop,
 				evi);
-			evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
+			evi_svi_hash_del(&underlay_vrf->evpn_master_instance_info.evi_svi_hash, evi);
 			evi->svi_ifindex = svi_ifindex;
-			bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
+			bgp_evpn_link_to_evi_svi_hash(underlay_vrf, evi);
 
 			/*
 			 * Resolve all the gateway IP nexthops for this VNI
@@ -9460,16 +9482,16 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 		/* If tunnel endpoint IP has changed, update (and delete prior
 		 * type-3 route, if needed.)
 		 */
-		evi_handle_tunnel_ip_change(bgp_evpn_mi, evi, originator_ip);
+		evi_handle_tunnel_ip_change(underlay_vrf, evi, originator_ip);
 
 		/* Update all routes with new endpoint IP and/or export RT
 		 * for VRFs
 		 */
 		if (bgp_evpn_evi_is_live(evi))
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+			bgp_evpn_evi_update_type_1_2_3_routes(underlay_vrf, evi);
 	} else {
 		/* Create or update as appropriate. */
-		evi = bgp_evpn_evi_new(bgp_evpn_mi, vni, originator_ip, tenant_vrf_id,
+		evi = bgp_evpn_evi_new(underlay_vrf, vni, originator_ip, tenant_vrf_id,
 				   mcast_grp, svi_ifindex);
 	}
 
@@ -9483,13 +9505,13 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 	/* Tunnel is newly active.
 	 * Add TIP to tip_hash of the EVPN underlay instance (bgp_get_evpn_master_instance()).
 	 */
-	if (bgp_tip_add(bgp_evpn_mi, originator_ip))
+	if (bgp_tip_add(underlay_vrf, originator_ip))
 		/* The originator_ip was not already present in the
 		 * bgp martian next-hop table as a tunnel-ip, so we
 		 * need to go back and filter routes matching the new
 		 * martian next-hop.
 		 */
-		bgp_filter_evpn_routes_upon_martian_change(bgp_evpn_mi,
+		bgp_filter_evpn_routes_upon_martian_change(underlay_vrf,
 							   BGP_MARTIAN_TUN_IP);
 
 	/*
@@ -9497,22 +9519,22 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 	 *
 	 * RT-3 only if doing head-end replication
 	 */
-	if (bgp_evpn_evi_get_flood_mode(bgp_evpn_mi, evi) == VXLAN_FLOOD_HEAD_END_REPL) {
+	if (bgp_evpn_evi_get_flood_mode(underlay_vrf, evi) == VXLAN_FLOOD_HEAD_END_REPL) {
 		build_evpn_type3_prefix(&p, &evi->originator_ip);
-		if (bgp_evpn_evi_update_route(bgp_evpn_mi, evi, &p, 0, 0, NULL)) {
+		if (bgp_evpn_evi_update_route(underlay_vrf, evi, &p, 0, 0, NULL)) {
 			flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 				 "%u: Type3 route creation failure for VNI %u",
-				 bgp_evpn_mi->vrf_id, vni);
+				 underlay_vrf->vrf_id, vni);
 			return -1;
 		}
 	}
 
 	/* If we are advertising gateway mac-ip
 	   It needs to be conveyed again to zebra */
-	bgp_zebra_advertise_gw_macip(bgp_evpn_mi, evi->advertise_gw_macip, evi->vni);
+	bgp_zebra_advertise_gw_macip(underlay_vrf, evi->advertise_gw_macip, evi->vni);
 
 	/* advertise svi mac-ip knob to zebra */
-	bgp_zebra_advertise_svi_macip(bgp_evpn_mi, evi->advertise_svi_macip, evi->vni);
+	bgp_zebra_advertise_svi_macip(underlay_vrf, evi->advertise_svi_macip, evi->vni);
 
 	bgp_evpn_l2vni_remote_route_processing(evi);
 
@@ -9590,14 +9612,14 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
  * Will also work for non-master instance, but should just be
  * no-op as those should not have anything in evihash anyway.
  */
-void bgp_evpn_master_delete_and_free_all_evis(struct bgp *bgp_evpn_mi)
+void bgp_evpn_master_delete_and_free_all_evis(struct bgp *underlay_vrf)
 {
 	struct bgp_evpn_evi *item;
 	uint32_t idx = 0;
 
-	while ((item = evihash_pop_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &idx))) {
-		bgp_evpn_evi_delete_all_routes(bgp_evpn_mi, item);
-		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, item);
+	while ((item = evihash_pop_all(&underlay_vrf->evpn_master_instance_info.evihash, &idx))) {
+		bgp_evpn_evi_delete_all_routes(underlay_vrf, item);
+		bgp_evpn_evi_delete_and_free(underlay_vrf, item);
 	}
 }
 
