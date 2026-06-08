@@ -4350,51 +4350,28 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 				num_l3vnis++;
 		}
 		num_vnis = num_evis + num_l3vnis;
+
+		const char* advertiseGatewayMacipStatus = bgp_evpn_mi->advertise_gw_macip ? "Enabled" : "Disabled";
+		const char* advertiseSviMacIpStatus = bgp_evpn_mi->evpn_info->advertise_svi_macip ? "Enabled" : "Disabled";
+		const char* advertiseAllVnisStatus = is_evpn_enabled() ? "Enabled" : "Disabled";
+		const char* BUMfloodingStatus = bgp_evpn_mi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL ? "Head-end replication" : "Disabled";
+		const char* vxlanFloodingStatus = bgp_evpn_mi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL ? "Enabled" : "Disabled";
+
 		if (uj) {
-			json_object_string_add(json, "advertiseGatewayMacip",
-					       bgp_evpn_mi->advertise_gw_macip
-						       ? "Enabled"
-						       : "Disabled");
-			json_object_string_add(json, "advertiseSviMacIp",
-					bgp_evpn_mi->evpn_info->advertise_svi_macip
-					? "Enabled" : "Disabled");
-			json_object_string_add(json, "advertiseAllVnis",
-					       is_evpn_enabled() ? "Enabled"
-								 : "Disabled");
-			json_object_string_add(
-				json, "flooding",
-				bgp_evpn_mi->vxlan_flood_ctrl ==
-						VXLAN_FLOOD_HEAD_END_REPL
-					? "Head-end replication"
-					: "Disabled");
-			json_object_string_add(
-				json, "vxlanFlooding",
-				bgp_evpn_mi->vxlan_flood_ctrl ==
-						VXLAN_FLOOD_HEAD_END_REPL
-					? "Enabled"
-					: "Disabled");
+			json_object_string_add(json, "advertiseGatewayMacip", advertiseGatewayMacipStatus);
+			json_object_string_add(json, "advertiseSviMacIp", advertiseSviMacIpStatus);
+			json_object_string_add(json, "advertiseAllVnis", advertiseAllVnisStatus);
+			json_object_string_add(json, "flooding", BUMfloodingStatus);
+			json_object_string_add(json, "vxlanFlooding", vxlanFloodingStatus);
 			json_object_int_add(json, "numVnis", num_vnis);
 			json_object_int_add(json, "numL2Vnis", num_evis);
 			json_object_int_add(json, "numL3Vnis", num_l3vnis);
 		} else {
-			vty_out(vty, "Advertise Gateway Macip: %s\n",
-				bgp_evpn_mi->advertise_gw_macip ? "Enabled"
-							    : "Disabled");
-			vty_out(vty, "Advertise SVI Macip: %s\n",
-				bgp_evpn_mi->evpn_info->advertise_svi_macip ? "Enabled"
-							: "Disabled");
-			vty_out(vty, "Advertise All VNI flag: %s\n",
-				is_evpn_enabled() ? "Enabled" : "Disabled");
-			vty_out(vty, "BUM flooding: %s\n",
-				bgp_evpn_mi->vxlan_flood_ctrl ==
-						VXLAN_FLOOD_HEAD_END_REPL
-					? "Head-end replication"
-					: "Disabled");
-			vty_out(vty, "VXLAN flooding: %s\n",
-				bgp_evpn_mi->vxlan_flood_ctrl ==
-						VXLAN_FLOOD_HEAD_END_REPL
-					? "Enabled"
-					: "Disabled");
+			vty_out(vty, "Advertise Gateway Macip: %s\n", advertiseGatewayMacipStatus);
+			vty_out(vty, "Advertise SVI Macip: %s\n", advertiseSviMacIpStatus);
+			vty_out(vty, "Advertise All VNI flag: %s\n", advertiseAllVnisStatus);
+			vty_out(vty, "BUM flooding: %s\n", BUMfloodingStatus);
+			vty_out(vty, "VXLAN flooding: %s\n", vxlanFloodingStatus);
 			vty_out(vty, "Number of L2 VNIs: %u\n", num_evis);
 			vty_out(vty, "Number of L3 VNIs: %u\n", num_l3vnis);
 		}
