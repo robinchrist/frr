@@ -4553,8 +4553,8 @@ DEFPY(show_bgp_l2vpn_evpn_nh,
 /*
  * Display EVPN neighbor summary.
  */
-DEFUN(show_bgp_l2vpn_evpn_summary, show_bgp_l2vpn_evpn_summary_cmd,
-      "show bgp [vrf VRFNAME] l2vpn evpn summary [established|failed] [<neighbor <A.B.C.D|X:X::X:X|WORD>|remote-as <(1-4294967295)|internal|external>>] [terse] [wide] [json]",
+DEFPY(show_bgp_l2vpn_evpn_summary, show_bgp_l2vpn_evpn_summary_cmd,
+      "show bgp [vrf VRFNAME] l2vpn evpn summary [established$established|failed$failed] [<neighbor <A.B.C.D|X:X::X:X|WORD>|remote-as <ASNUM$asnum|internal$internal|external$external>>] [terse$terse] [wide$wide] [json$uj]",
       SHOW_STR BGP_STR
       "bgp vrf\n"
       "vrf name\n" L2VPN_HELP_STR EVPN_HELP_STR
@@ -4572,46 +4572,36 @@ DEFUN(show_bgp_l2vpn_evpn_summary, show_bgp_l2vpn_evpn_summary_cmd,
       "Shorten the information on BGP instances\n"
       "Increase table width for longer output\n" JSON_STR)
 {
-	int idx_vrf = 0;
-	int idx = 0;
-	char *vrf = NULL;
-	char *neighbor = NULL;
 	as_t as = 0; /* 0 means AS filter not set */
 	enum peer_asn_type as_type = AS_UNSPECIFIED;
 	uint16_t show_flags = 0;
 
-	if (argv_find(argv, argc, "vrf", &idx_vrf))
-		vrf = argv[++idx_vrf]->arg;
-
-	if (argv_find(argv, argc, "failed", &idx))
+	if(failed)
 		SET_FLAG(show_flags, BGP_SHOW_OPT_FAILED);
-
-	if (argv_find(argv, argc, "established", &idx))
+	else if(established)
 		SET_FLAG(show_flags, BGP_SHOW_OPT_ESTABLISHED);
 
-
-	if (argv_find(argv, argc, "neighbor", &idx))
-		neighbor = argv[idx + 1]->arg;
-
-	if (argv_find(argv, argc, "remote-as", &idx)) {
-		if (argv[idx + 1]->arg[0] == 'i')
-			as_type = AS_INTERNAL;
-		else if (argv[idx + 1]->arg[0] == 'e')
-			as_type = AS_EXTERNAL;
-		else
-			as = (as_t)atoi(argv[idx + 1]->arg);
+	if(asnum_str) {
+		as = asnum;
+		as_type = AS_UNSPECIFIED;
+	} else if(internal) {
+		as = 0;
+		as_type = AS_INTERNAL;
+	} else if(external) {
+		as = 0;
+		as_type = AS_EXTERNAL;
 	}
 
-	if (argv_find(argv, argc, "terse", &idx))
+	if (terse)
 		SET_FLAG(show_flags, BGP_SHOW_OPT_TERSE);
 
-	if (argv_find(argv, argc, "wide", &idx))
+	if (wide)
 		SET_FLAG(show_flags, BGP_SHOW_OPT_WIDE);
 
-	if (use_json(argc, argv))
+	if (uj)
 		SET_FLAG(show_flags, BGP_SHOW_OPT_JSON);
 
-	return bgp_show_summary_vty(vty, vrf, AFI_L2VPN, SAFI_EVPN, neighbor,
+	return bgp_show_summary_vty(vty, vrfname, AFI_L2VPN, SAFI_EVPN, neighbor,
 				    as_type, as, show_flags);
 }
 
