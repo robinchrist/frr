@@ -3108,6 +3108,9 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 
 	/* print all L3 VNIs */
 	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_temp)) {
+		if(!bgp_temp->l3vni)
+			continue;
+
 		json_object *json_vrf = NULL;
 		char vni_str[VNI_STR_LEN];
 
@@ -3125,6 +3128,9 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 	/* print all L2 VNIS */
 	struct bgp_evpn_evi *evi;
 	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		if(!evi->vni)
+			continue;
+
 		show_vni_entry_hash(evi, vty, json);
 	}
 }
