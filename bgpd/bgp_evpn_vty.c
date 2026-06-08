@@ -3413,7 +3413,7 @@ DEFPY(bgp_evpn_flood_control,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_advertise_default_gw_vni,
+DEFPY (bgp_evpn_advertise_default_gw_vni,
        bgp_evpn_advertise_default_gw_vni_cmd,
        "advertise-default-gw",
        "Advertise default g/w mac-ip routes in EVPN for a VNI\n")
@@ -3434,7 +3434,7 @@ DEFUN (bgp_evpn_advertise_default_gw_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_advertise_default_vni_gw,
+DEFPY (no_bgp_evpn_advertise_default_vni_gw,
        no_bgp_evpn_advertise_default_gw_vni_cmd,
        "no advertise-default-gw",
        NO_STR
@@ -3457,7 +3457,7 @@ DEFUN (no_bgp_evpn_advertise_default_vni_gw,
 }
 
 
-DEFUN (bgp_evpn_advertise_default_gw,
+DEFPY (bgp_evpn_advertise_default_gw,
        bgp_evpn_advertise_default_gw_cmd,
        "advertise-default-gw",
        "Advertise All default g/w mac-ip routes in EVPN\n")
@@ -3477,7 +3477,7 @@ DEFUN (bgp_evpn_advertise_default_gw,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_advertise_default_gw,
+DEFPY (no_bgp_evpn_advertise_default_gw,
        no_bgp_evpn_advertise_default_gw_cmd,
        "no advertise-default-gw",
        NO_STR
@@ -3498,7 +3498,7 @@ DEFUN (no_bgp_evpn_advertise_default_gw,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_advertise_all_vni,
+DEFPY (bgp_evpn_advertise_all_vni,
        bgp_evpn_advertise_all_vni_cmd,
        "advertise-all-vni",
        "Advertise All local VNIs\n")
@@ -3521,7 +3521,7 @@ DEFUN (bgp_evpn_advertise_all_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_advertise_all_vni,
+DEFPY (no_bgp_evpn_advertise_all_vni,
        no_bgp_evpn_advertise_all_vni_cmd,
        "no advertise-all-vni",
        NO_STR
@@ -3541,7 +3541,7 @@ DEFUN (no_bgp_evpn_advertise_all_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_evpn_autort_rfc8365_compatible,
+DEFPY (bgp_evpn_evpn_autort_rfc8365_compatible,
        bgp_evpn_evpn_autort_rfc8365_compatible_cmd,
        "autort rfc8365-compatible",
        "Auto-derivation of RT\n"
@@ -3557,7 +3557,7 @@ DEFUN (bgp_evpn_evpn_autort_rfc8365_compatible,
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_evpn_autort_rfc8365_compatible,
+DEFPY (no_bgp_evpn_evpn_autort_rfc8365_compatible,
        no_bgp_evpn_evpn_autort_rfc8365_compatible_cmd,
        "no autort rfc8365-compatible",
        NO_STR
@@ -3574,39 +3574,51 @@ DEFUN (no_bgp_evpn_evpn_autort_rfc8365_compatible,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_default_originate,
+DEFPY (bgp_evpn_default_originate,
        bgp_evpn_default_originate_cmd,
-       "default-originate <ipv4 | ipv6>",
+       "default-originate <ipv4$ipv4 | ipv6$ipv6>",
        "originate a default route\n"
        "ipv4 address family\n"
        "ipv6 address family\n")
 {
 	afi_t afi = 0;
-	int idx_afi = 0;
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
 	if (!bgp_vrf)
 		return CMD_WARNING;
-	argv_find_and_parse_afi(argv, argc, &idx_afi, &afi);
+
+	if(ipv4)
+		afi = AFI_IP;
+	else if(ipv6)
+		afi = AFI_IP6;
+	else
+		return CMD_WARNING;
+
 	evpn_process_default_originate_cmd(bgp_vrf, afi, true);
 	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_default_originate,
+DEFPY (no_bgp_evpn_default_originate,
        no_bgp_evpn_default_originate_cmd,
-       "no default-originate <ipv4 | ipv6>",
+       "no default-originate <ipv4$ipv4 | ipv6$ipv6>",
        NO_STR
        "withdraw a default route\n"
        "ipv4 address family\n"
        "ipv6 address family\n")
 {
 	afi_t afi = 0;
-	int idx_afi = 0;
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
 
 	if (!bgp_vrf)
 		return CMD_WARNING;
-	argv_find_and_parse_afi(argv, argc, &idx_afi, &afi);
+	
+	if(ipv4)
+		afi = AFI_IP;
+	else if(ipv6)
+		afi = AFI_IP6;
+	else
+		return CMD_WARNING;
+
 	evpn_process_default_originate_cmd(bgp_vrf, afi, false);
 	return CMD_SUCCESS;
 }
