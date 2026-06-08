@@ -2395,7 +2395,9 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	/* The message is used for both vni add and/or update like
 	 * vrr mac is added for l3vni SVI.
 	 */
-	zclient_create_header(s, ZEBRA_L3VNI_ADD, zl3vni_vrf_id(zl3vni));
+	/* TODO: EVPN Multi-Underlay-VRF */
+	zclient_create_header(s, ZEBRA_L3VNI_ADD, zebra_evpn_get_master_underlay_vrf_id());
+	stream_putl(s, zl3vni_vrf_id(zl3vni)); /* Actual VRF ID */
 	stream_putl(s, zl3vni->vni);
 	stream_put(s, &svi_rmac, sizeof(struct ethaddr));
 	stream_put_ipaddr(s, &zl3vni->local_vtep_ip);
@@ -2408,11 +2410,13 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_putw_at(s, 0, stream_get_endp(s));
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Send L3VNI ADD %u VRF %s RMAC %pEA VRR %pEA local-ip %pIA filter %s to %s",
-			   zl3vni->vni, vrf_id_to_name(zl3vni_vrf_id(zl3vni)), &svi_rmac, &vrr_rmac,
-			   &zl3vni->local_vtep_ip,
-			   CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY) ? "prefix-routes-only"
-									  : "none",
+		zlog_debug("Send L3VNI_ADD %u VRF %s Underlay VRF %s RMAC %pEA VRR %pEA local-ip %pIA filter %s to %s",
+			   zl3vni->vni, vrf_id_to_name(zl3vni_vrf_id(zl3vni)),
+			   vrf_id_to_name(zebra_evpn_get_master_underlay_vrf_id()), &svi_rmac,
+			   &vrr_rmac, &zl3vni->local_vtep_ip,
+			   CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
+				   ? "prefix-routes-only"
+				   : "none",
 			   zebra_route_string(client->proto));
 
 	client->l3vniadd_cnt++;
@@ -2434,15 +2438,18 @@ static int zl3vni_send_del_to_client(struct zebra_l3vni *zl3vni)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	zclient_create_header(s, ZEBRA_L3VNI_DEL, zl3vni_vrf_id(zl3vni));
+	/* TODO: EVPN Multi-Underlay-VRF */
+	zclient_create_header(s, ZEBRA_L3VNI_DEL, zebra_evpn_get_master_underlay_vrf_id());
+	stream_putl(s, zl3vni_vrf_id(zl3vni)); /* Actual VRF ID */
 	stream_putl(s, zl3vni->vni);
 
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Send L3VNI DEL %u VRF %s to %s", zl3vni->vni,
+		zlog_debug("Send L3VNI_DEL %u VRF %s Underlay VRF %s to %s", zl3vni->vni,
 			   vrf_id_to_name(zl3vni_vrf_id(zl3vni)),
+			   vrf_id_to_name(zebra_evpn_get_master_underlay_vrf_id()),
 			   zebra_route_string(client->proto));
 
 	client->l3vnidel_cnt++;

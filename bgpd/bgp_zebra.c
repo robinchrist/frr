@@ -3435,9 +3435,12 @@ static int bgp_zebra_process_local_es_evi(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
-static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
+static int _bgp_zebra_process_local_l3vni(int cmd, struct zclient *zclient, uint16_t length,
+					  vrf_id_t underlay_vrf_id)
 {
 	/* Filter flags - currently only PREFIX_ROUTES_ONLY */
+	struct bgp *underlay_vrf;
+	vrf_id_t vrf_id;
 	int filter_flags = 0;
 	vni_t l3vni = 0;
 	struct ethaddr svi_rmac, vrr_rmac = {.octet = {0} };
@@ -3446,9 +3449,12 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 	ifindex_t svi_ifindex;
 	bool is_anycast_mac = false;
 
+	underlay_vrf = bgp_lookup_by_vrf_id(underlay_vrf_id);
+
 	memset(&svi_rmac, 0, sizeof(svi_rmac));
 	memset(&originator_ip, 0, sizeof(originator_ip));
 	s = zclient->ibuf;
+	vrf_id = stream_getl(s);
 	l3vni = stream_getl(s);
 	if (cmd == ZEBRA_L3VNI_ADD) {
 		stream_get(&svi_rmac, s, sizeof(struct ethaddr));
@@ -3464,29 +3470,46 @@ static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
 		is_anycast_mac = stream_getl(s);
 
 		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug("Rx L3VNI ADD VRF %s VNI %u Originator-IP %pIA RMAC svi-mac %pEA vrr-mac %pEA filter %s svi-if %u",
-				   vrf_id_to_name(vrf_id), l3vni,
+			zlog_debug("Rx L3VNI_ADD VNI %u VRF %s Underlay VRF %sOriginator-IP %pIA RMAC svi-mac %pEA vrr-mac %pEA filter %s svi-if %u",
+				   l3vni, vrf_id_to_name(vrf_id), vrf_id_to_name(underlay_vrf_id),
 				   &originator_ip, &svi_rmac, &vrr_rmac,
 				   l3vni_prefix_routes_only ? "prefix-routes-only" : "none",
 				   svi_ifindex);
 
-		frrtrace(8, frr_bgp, evpn_local_l3vni_add_zrecv, l3vni, vrf_id, &svi_rmac,
+		frrtrace(8, frr_bgp, evpn_local_l3vni_add_zrecv, l3vni, underlay_vrf_id, &svi_rmac,
 			 &vrr_rmac, filter_flags, &originator_ip, svi_ifindex, is_anycast_mac);
 
-		bgp_evpn_add_local_l3vni(l3vni, vrf_id, &svi_rmac, &vrr_rmac,
-					 &originator_ip, l3vni_prefix_routes_only, svi_ifindex,
-					 is_anycast_mac);
-	} else {
+		if (!underlay_vrf) {
+			zlog_err("Cannot add L3VNI %u - Underlay VRF with ID %u not found", l3vni,
+				 vrf_id);
+			return 0;
+		}
+
+		return bgp_evpn_add_local_l3vni(underlay_vrf, l3vni, vrf_id, &svi_rmac, &vrr_rmac,
+						&originator_ip, l3vni_prefix_routes_only,
+						svi_ifindex, is_anycast_mac);
+	} else { /* cmd == ZEBRA_L3VNI_DEL */
 		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug("Rx L3VNI DEL VRF %s VNI %u",
-				   vrf_id_to_name(vrf_id), l3vni);
+			zlog_debug("Rx L3VNI_DEL VNI %u VRF %s Underlay VRF %s", l3vni,
+				   vrf_id_to_name(vrf_id), vrf_id_to_name(underlay_vrf_id));
 
-		frrtrace(2, frr_bgp, evpn_local_l3vni_del_zrecv, l3vni, vrf_id);
+		frrtrace(2, frr_bgp, evpn_local_l3vni_del_zrecv, l3vni, underlay_vrf_id);
 
-		bgp_evpn_del_local_l3vni(l3vni, vrf_id);
+		if (!underlay_vrf) {
+			zlog_err("Cannot del L3VNI %u - Underlay VRF with ID %u not found", l3vni,
+				 vrf_id);
+			return 0;
+		}
+
+		return bgp_evpn_del_local_l3vni(underlay_vrf, l3vni, vrf_id);
 	}
 
 	return 0;
+}
+
+static int bgp_zebra_process_local_l3vni(ZAPI_CALLBACK_ARGS)
+{
+	return _bgp_zebra_process_local_l3vni(cmd, zclient, length, vrf_id);
 }
 
 static int _bgp_zebra_process_local_l2vni(int cmd, struct zclient *zclient, uint16_t length,

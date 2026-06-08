@@ -201,19 +201,16 @@ extern int bgp_evpn_local_macip_del(struct bgp *bgp, vni_t vni,
 extern int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni,
 				    struct ethaddr *mac, struct ipaddr *ip,
 				    uint8_t flags, uint32_t seq, esi_t *esi);
-extern int bgp_evpn_add_local_l3vni(vni_t vni, vrf_id_t vrf_id,
-				    struct ethaddr *rmac,
-				    struct ethaddr *vrr_rmac,
+extern int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t vni, vrf_id_t vrf_id,
+				    struct ethaddr *rmac, struct ethaddr *vrr_rmac,
 				    struct ipaddr *originator_ip, bool prefix_routes_only,
 				    ifindex_t svi_ifindex, bool is_anycast_mac);
-extern int bgp_evpn_del_local_l3vni(vni_t vni, vrf_id_t vrf_id);
+extern int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf_id);
 extern void bgp_evpn_instance_down(struct bgp *bgp);
-extern int bgp_evpn_del_local_l2vni(struct bgp *bgp, vni_t vni);
-extern int bgp_evpn_add_local_l2vni(struct bgp *bgp, vni_t vni,
-				  struct ipaddr *originator_ip,
-				  vrf_id_t tenant_vrf_id,
-				  struct in_addr mcast_grp,
-				  ifindex_t svi_ifindex);
+extern int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni);
+extern int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
+				    struct ipaddr *originator_ip, vrf_id_t tenant_vrf_id,
+				    struct in_addr mcast_grp, ifindex_t svi_ifindex);
 extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
 extern void bgp_evpn_clean_and_free(struct bgp *bgp);

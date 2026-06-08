@@ -3758,12 +3758,6 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 				   name, bgp->as_pretty);
 	}
 
-	/* Default the EVPN Master Instance / VRF to the default instance / VRF */
-	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT && !bgp_master.bgp_evpn_mi) {
-		bgp_lock(bgp);
-		bm->bgp_evpn_mi = bgp;
-	}
-
 	bgp_lock(bgp);
 
 	bgp->allow_martian = false;
@@ -4030,12 +4024,21 @@ void bgp_set_evpn_master_instance(struct bgp *bgp)
 }
 
 /* Returns the BGP EVPN master instance if exists
- * The master intsance is the one where `advertise-all-vni` is configured
+ * The master instance is the one where `advertise-all-vni` is configured
  * and serves a special role (it stores some "global EVPN info" such as
  * import route target hash tables)
  */
 struct bgp *bgp_get_evpn_master_instance(void)
 {
+	if(!bm->bgp_evpn_mi)
+		return NULL;
+
+	if(!bm->bgp_evpn_mi->advertise_all_vni) {
+		zlog_err("%s: EVPN Master Instance %s does not have `advertise-all-vni` configured",
+			 __func__, bm->bgp_evpn_mi->name);
+		return NULL;
+	}
+
 	return bm->bgp_evpn_mi;
 }
 
@@ -4670,10 +4673,7 @@ int bgp_delete(struct bgp *bgp)
 
 	/* Update EVPN Master Instance / VRF pointer */
 	if (bm->bgp_evpn_mi == bgp) {
-		if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT)
-			bgp_set_evpn_master_instance(NULL);
-		else
-			bgp_set_evpn_master_instance(bgp_get_default());
+		bgp_set_evpn_master_instance(NULL);
 	}
 
 	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating) {

@@ -1112,6 +1112,7 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
+	/* TODO: EVPN Multi-Underlay-VRF */
 	zclient_create_header(s, ZEBRA_L2VNI_ADD, zebra_evpn_get_master_underlay_vrf_id());
 	stream_putl(s, zevpn->vni);
 	stream_put_ipaddr(s, &zevpn->local_vtep_ip);
@@ -1123,7 +1124,7 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	stream_putw_at(s, 0, stream_get_endp(s));
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Send EVPN_ADD %u %pIA tenant vrf %s(%u) SVI index %u to %s", zevpn->vni,
+		zlog_debug("Send ZEBRA_L2VNI_ADD %u %pIA tenant vrf %s(%u) SVI index %u to %s", zevpn->vni,
 			   &zevpn->local_vtep_ip, vrf_id_to_name(zevpn->vrf_id), zevpn->vrf_id,
 			   (zevpn->svi_if ? zevpn->svi_if->ifindex : 0),
 			   zebra_route_string(client->proto));
@@ -1163,6 +1164,7 @@ int zebra_evpn_send_del_to_client(struct zebra_evpn *zevpn)
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 	stream_reset(s);
 
+	/* TODO: EVPN Multi-Underlay-VRF */
 	zclient_create_header(s, ZEBRA_L2VNI_DEL, zebra_evpn_get_master_underlay_vrf_id());
 	stream_putl(s, zevpn->vni);
 
@@ -1170,7 +1172,7 @@ int zebra_evpn_send_del_to_client(struct zebra_evpn *zevpn)
 	stream_putw_at(s, 0, stream_get_endp(s));
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Send EVPN_DEL %u to %s", zevpn->vni,
+		zlog_debug("Send ZEBRA_L2VNI_DEL %u to %s", zevpn->vni,
 			   zebra_route_string(client->proto));
 
 	client->vnidel_cnt++;

@@ -1039,6 +1039,9 @@ struct bgp {
 	/* Effective Fully-Qualified Export Route Targets (Export RT cannot be wildcard!) */
 	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
 
+	/* EVPN Underlay VRF to which this VRF is linked */
+	struct bgp *evpn_underlay_vrf;
+
 	/* L3-VNI corresponding to this vrf */
 	vni_t l3vni;
 

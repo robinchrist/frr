@@ -5144,7 +5144,7 @@ static int bgp_evpn_evi_mcast_grp_change(struct bgp *bgp, struct bgp_evpn_evi *e
  * Note: Route re-advertisement happens elsewhere after other processing
  * other changes.
  */
-static void vrf_handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *bgp_evpn,
+static void vrf_handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *underlay_vrf,
 				    struct ipaddr *originator_ip)
 {
 	struct ipaddr old_vtep_ip;
@@ -5156,14 +5156,14 @@ static void vrf_handle_tunnel_ip_change(struct bgp *bgp_vrf, struct bgp *bgp_evp
 		return;
 
 	/* Update the tunnel-ip hash - the tunnel-ip hash is refcounted! */
-	bgp_tip_del(bgp_evpn, &old_vtep_ip);
-	if (bgp_tip_add(bgp_evpn, originator_ip))
+	bgp_tip_del(underlay_vrf, &old_vtep_ip);
+	if (bgp_tip_add(underlay_vrf, originator_ip))
 		/* The originator_ip was not already present in the
 		 * bgp martian next-hop table as a tunnel-ip, so we
 		 * need to go back and filter routes matching the new
 		 * martian next-hop.
 		 */
-		bgp_filter_evpn_routes_upon_martian_change(bgp_evpn,
+		bgp_filter_evpn_routes_upon_martian_change(underlay_vrf,
 							   BGP_MARTIAN_TUN_IP);
 
 	bgp_vrf->originator_ip = *originator_ip;
@@ -8899,7 +8899,7 @@ void bgp_evpn_evi_unlink_from_vrf(struct bgp_evpn_evi *evi)
  * created
  * prefix_routes_only is configured by the user via "vrf <X> vni <Y> prefix-routes-only"
  */
-int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
+int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf_id,
 			     struct ethaddr *svi_rmac,
 			     struct ethaddr *vrr_rmac,
 			     struct ipaddr *originator_ip,
@@ -8911,62 +8911,48 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 			     bool is_anycast_mac)
 {
 	struct bgp *bgp_vrf = NULL; /* bgp VRF instance */
-	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
 	struct bgp_evpn_evi *evi = NULL;
-	as_t as = 0;
 
-	/* get the EVPN master instance - required to get the AS number for VRF
-	 * auto-creation
-	 */
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"Cannot process L3VNI  %u ADD - EVPN Master BGP instance not yet created",
-			l3vni);
+	if(!underlay_vrf) {
+		zlog_err("Cannot add local L3VNI %u - underlay VRF is NULL", l3vni);
+		return -1;
+	}
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("EVPN enter add local L3VNI %u, VRF %s, Underlay VRF %s, prefix only %s, is_anycast_mac %s",
+			   l3vni, vrf_id_to_name(vrf_id),
+			   underlay_vrf->name,
+			   prefix_routes_only ? "yes" : "no",
+			   is_anycast_mac ? "yes" : "no");
+
+	if(!underlay_vrf->advertise_all_vni) {
+		zlog_err("Cannot add local L3VNI %u - underlay VRF %s does not have advertise_all_vni enabled", l3vni, underlay_vrf->name);
+		return -1;
+	}
+	/* Limitation for now until we have proper multi-underlay-VRF support */
+	if(bm->bgp_evpn_mi != underlay_vrf) {
+		zlog_err("Cannot add local L3VNI %u - underlay VRF %s is not the EVPN master instance", l3vni, underlay_vrf->name);
 		return -1;
 	}
 
-	if (CHECK_FLAG(bgp_evpn_mi->flags, BGP_FLAG_DELETE_IN_PROGRESS)) {
+	if (CHECK_FLAG(underlay_vrf->flags, BGP_FLAG_DELETE_IN_PROGRESS)) {
 		flog_err(EC_BGP_NO_DFLT,
 			  "Cannot process L3VNI %u ADD - EVPN BGP instance is shutting down",
 			  l3vni);
 		return -1;
 	}
 
-	as = bgp_evpn_mi->as;
-
-	/* if the BGP vrf instance doesn't exist - create one */
+	/* bail out if the vrf BGP instance doesn't exist */
 	bgp_vrf = bgp_lookup_by_vrf_id(vrf_id);
 	if (!bgp_vrf) {
-
-		int ret = 0;
-
-		ret = bgp_get_vty(&bgp_vrf, &as, vrf_id_to_name(vrf_id),
-				  vrf_id == VRF_DEFAULT
-					  ? BGP_INSTANCE_TYPE_DEFAULT
-					  : BGP_INSTANCE_TYPE_VRF,
-				  NULL, ASNOTATION_UNDEFINED);
-		switch (ret) {
-		case BGP_ERR_AS_MISMATCH:
-			flog_err(EC_BGP_EVPN_AS_MISMATCH,
-				 "BGP instance is already running; AS is %s",
-				 bgp_vrf->as_pretty);
-			return -1;
-		case BGP_ERR_INSTANCE_MISMATCH:
-			flog_err(EC_BGP_EVPN_INSTANCE_MISMATCH,
-				 "BGP instance type mismatch");
-			return -1;
-		}
-
-		/* mark as auto created */
-		SET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_AUTO);
+		zlog_err("Cannot add local L3VNI %u - VRF with ID %u does not exist", l3vni, vrf_id);
+		return -1;
 	}
 
 	bool import_auto_rt_active_before = bgp_evpn_vrf_should_generate_import_autort(bgp_vrf);
 	bool export_auto_rt_active_before = bgp_evpn_vrf_should_generate_export_autort(bgp_vrf);
 
 	/* associate the vrf with l3vni and related parameters */
+	bgp_vrf->evpn_underlay_vrf = underlay_vrf;
 	bgp_vrf->l3vni = l3vni;
 	bgp_vrf->l3vni_svi_ifindex = svi_ifindex;
 	bgp_vrf->evpn_info->is_anycast_mac = is_anycast_mac;
@@ -8974,7 +8960,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 	/* Update tip_hash of the EVPN underlay BGP instance (bgp_evpn)
 	 * if the VTEP-IP (originator_ip) has changed
 	 */
-	vrf_handle_tunnel_ip_change(bgp_vrf, bgp_evpn_mi, originator_ip);
+	vrf_handle_tunnel_ip_change(bgp_vrf, underlay_vrf, originator_ip);
 
 	/* copy anycast MAC from VRR MAC */
 	memcpy(&bgp_vrf->rmac, vrr_rmac, ETH_ALEN);
@@ -8992,13 +8978,13 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 
 		ifp = if_get_vrf_loopback(VRF_DEFAULT);
 		if (ifp && if_get_ipv6_global(ifp, &addr)) {
-			if (bgp_debug_zebra(NULL))
+			if (BGP_DEBUG(zebra, ZEBRA))
 				zlog_debug("%s vni %u ifp %s addr %pI6 copy as pip", __func__,
 					   bgp_vrf->l3vni, ifp->name, &addr);
 			SET_IPADDR_V6(&bgp_vrf->evpn_info->pip_ip);
 			IPV6_ADDR_COPY(&bgp_vrf->evpn_info->pip_ip.ipaddr_v6, &addr);
 		} else if (ifp)
-			if (bgp_debug_zebra(NULL))
+			if (BGP_DEBUG(zebra, ZEBRA))
 				zlog_debug("%s vni %u ifp %s v6 addr not found, skip pip assignment",
 					   __func__, bgp_vrf->l3vni, ifp->name);
 	}
@@ -9012,11 +8998,12 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 		UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY);
 	}
 
-	if (bgp_debug_zebra(NULL))
-		zlog_debug("VRF %s, VNI %u, RD %u, prefix only %s, pip %s, pip IP %pIA, pip RMAC %pEA, sys RMAC %pEA, static RMAC %pEA, is_anycast_mac %s",
-			   vrf_id_to_name(bgp_vrf->vrf_id), bgp_vrf->l3vni,
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("EVPN late add local L3VNI %u, VRF %s, Underlay VRF %s, RD %u, prefix only %s, pip %s, pip IP %pIA, pip RMAC %pEA, sys RMAC %pEA, static RMAC %pEA, is_anycast_mac %s",
+			   l3vni, vrf_id_to_name(vrf_id),
+			   underlay_vrf->name,
 			   bgp_vrf->vrf_rd_id,
-			   CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_L3VNI_PREFIX_ROUTES_ONLY) ? "yes" : "no",
+			   prefix_routes_only ? "yes" : "no",
 			   bgp_vrf->evpn_info->advertise_pip ? "enable" : "disable",
 			   &bgp_vrf->evpn_info->pip_ip, &bgp_vrf->rmac,
 			   &bgp_vrf->evpn_info->pip_rmac, &bgp_vrf->evpn_info->pip_rmac_static,
@@ -9121,7 +9108,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 	 * v
 	 * install_evpn_route_entry_in_vrf
 	 */
-	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &underlay_vrf->evpn_master_instance_info.evihash, evi) {
 		if (evi->tenant_vrf_id == bgp_vrf->vrf_id)
 			bgp_evpn_evi_link_to_vrf(evi);
 	}
@@ -9145,7 +9132,7 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 		* would be set to false even after bgp_evpn_evi_link_to_vrf_hash
 		*/
 		if(new_use_two_labels || old_use_two_labels != new_use_two_labels) {
-			bgp_evpn_evi_update_all_type2_routes(bgp_evpn_mi, evi);
+			bgp_evpn_evi_update_all_type2_routes(underlay_vrf, evi);
 		}
 	}
 
@@ -9161,11 +9148,29 @@ int bgp_evpn_add_local_l3vni(vni_t l3vni, vrf_id_t vrf_id,
 /*
  * called whenever the IP-VRF's L3VNI becomes inactive
  */
-int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
+int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf_id)
 {
 	struct bgp *bgp_vrf = NULL;  /* bgp vrf instance */
-	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
 	struct bgp_evpn_evi *evi_item = NULL;
+
+	if(!underlay_vrf) {
+		zlog_err("Cannot del local L3VNI %u - underlay VRF is NULL", l3vni);
+		return -1;
+	}
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("EVPN del local L3VNI %u, VRF %s, Underlay VRF %s", l3vni,
+			   vrf_id_to_name(vrf_id), underlay_vrf->name);
+
+
+	if(!underlay_vrf->advertise_all_vni) {
+		zlog_err("Cannot del local L3VNI %u - underlay VRF %s does not have advertise_all_vni enabled", l3vni, underlay_vrf->name);
+		return -1;
+	}
+	/* Limitation for now until we have proper multi-underlay-VRF support */
+	if(bm->bgp_evpn_mi != underlay_vrf) {
+		zlog_err("Cannot del local L3VNI %u - underlay VRF %s is not the EVPN master instance", l3vni, underlay_vrf->name);
+		return -1;
+	}
 
 	bgp_vrf = bgp_lookup_by_vrf_id(vrf_id);
 	if (!bgp_vrf) {
@@ -9174,16 +9179,9 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 		return -1;
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "Cannot process L3VNI %u Del - Could not find EVPN BGP instance", l3vni);
-		return -1;
-	}
-
-	if (CHECK_FLAG(bgp_evpn_mi->flags, BGP_FLAG_DELETE_IN_PROGRESS)) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "Cannot process L3VNI %u ADD - EVPN BGP instance is shutting down", l3vni);
+	if(bgp_vrf->evpn_underlay_vrf != underlay_vrf) {
+		zlog_err("Cannot del local L3VNI %u - BGP instance %s is not associated to the underlay VRF %s",
+				 l3vni, bgp_vrf->name, underlay_vrf->name);
 		return -1;
 	}
 
@@ -9199,7 +9197,10 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 	/* Tunnel is no longer active.
 	 * Delete VTEP-IP from EVPN underlay's tip_hash.
 	 */
-	bgp_tip_del(bgp_evpn_mi, &bgp_vrf->originator_ip);
+	bgp_tip_del(underlay_vrf, &bgp_vrf->originator_ip);
+
+	/* Unlink from the EVPN underlay VRF */
+	bgp_vrf->evpn_underlay_vrf = NULL;
 
 	/* remove the l3vni from vrf instance */
 	bgp_vrf->l3vni = 0;
@@ -9254,7 +9255,7 @@ int bgp_evpn_del_local_l3vni(vni_t l3vni, vrf_id_t vrf_id)
 		/* Only need to update the exported routes if they made use of the VRF (VNI + Export RTs) */
 		if (CHECK_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS)) {
 			UNSET_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS);
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi_item);
+			bgp_evpn_evi_update_type_1_2_3_routes(underlay_vrf, evi_item);
 		}
 		bgp_evpn_evi_unlink_from_vrf(evi_item);
 	}
@@ -9324,7 +9325,7 @@ void bgp_evpn_instance_down(struct bgp *bgp)
 {
 	/* If we have a stale local vni, delete it */
 	if (bgp->l3vni)
-		bgp_evpn_del_local_l3vni(bgp->l3vni, bgp->vrf_id);
+		bgp_evpn_del_local_l3vni(bgp->evpn_underlay_vrf, bgp->l3vni, bgp->vrf_id);
 }
 
 /*
@@ -9338,7 +9339,10 @@ int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 		zlog_err("Cannot delete local L2VNI %u - underlay VRF is NULL", vni);
 		return -1;
 	}
-	if(!underlay_vrf->advertise_all_vni) {
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("EVPN del local L2VNI %u, Underlay VRF %s", vni, underlay_vrf->name);
+
+	if(!underlay_vrf->advertise_all_vni) {zlog_debug("EVPN del local L2VNI %u, Underlay VRF %s", vni, underlay_vrf->name);
 		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
 		return -1;
 	}
@@ -9400,6 +9404,10 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 		zlog_err("Cannot add local L2VNI %u - underlay VRF is NULL", vni);
 		return -1;
 	}
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("EVPN add local L2VNI %u, Underlay VRF %s, originator IP %pIA, tenant VRF %s(ID %u), mcast group %pI4, svi ifindex %u",
+			   vni, underlay_vrf->name, originator_ip, vrf_id_to_name(tenant_vrf_id), tenant_vrf_id, &mcast_grp, svi_ifindex);
+
 	if(!underlay_vrf->advertise_all_vni) {
 		zlog_err("Cannot add local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
 		return -1;
