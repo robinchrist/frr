@@ -4313,9 +4313,9 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 /*
  * Display VNI information - for all or a specific VNI
  */
-DEFUN(show_bgp_l2vpn_evpn_vni,
+DEFPY(show_bgp_l2vpn_evpn_vni,
       show_bgp_l2vpn_evpn_vni_cmd,
-      "show bgp l2vpn evpn vni [" CMD_VNI_RANGE "] [json]",
+      "show bgp l2vpn evpn vni [" CMD_VNI_RANGE "] [json$uj]",
       SHOW_STR
       BGP_STR
       L2VPN_HELP_STR
@@ -4325,17 +4325,14 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
       JSON_STR)
 {
 	struct bgp *bgp_evpn_mi;
-	vni_t vni;
+	vni_t validated_vni;
 	int idx = 0;
-	bool uj = false;
 	json_object *json = NULL;
 	uint32_t num_evis = 0;
 	uint32_t num_l3vnis = 0;
 	uint32_t num_vnis = 0;
 	struct listnode *node = NULL;
 	struct bgp *bgp_temp = NULL;
-
-	uj = use_json(argc, argv);
 
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
 	if (!bgp_evpn_mi)
@@ -4347,7 +4344,7 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 	if (uj)
 		json = json_object_new_object();
 
-	if ((uj && argc == ((idx + 1) + 2)) || (!uj && argc == (idx + 1) + 1)) {
+	if (!vni_str) {
 
 		num_evis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
 
@@ -4383,16 +4380,14 @@ DEFUN(show_bgp_l2vpn_evpn_vni,
 		}
 		evpn_show_all_vnis(vty, bgp_evpn_mi, json);
 	} else {
-		int vni_idx = 0;
 
-		if (!argv_find(argv, argc, "vni", &vni_idx)) {
-			json_object_free(json);
+		if(vni < 0 || vni > VNI_MAX) {
+			vty_out(vty, "%% VNI must be in range 0..%u\n", VNI_MAX);
 			return CMD_WARNING;
 		}
+		validated_vni = vni;
 
-		/* Display specific VNI */
-		vni = strtoul(argv[vni_idx + 1]->arg, NULL, 10);
-		evpn_show_vni(vty, bgp_evpn_mi, vni, json);
+		evpn_show_vni(vty, bgp_evpn_mi, validated_vni, json);
 	}
 
 	if (uj)
