@@ -997,7 +997,7 @@ int zebra_evpn_macip_send_msg_to_client(vni_t vni, const struct ethaddr *macaddr
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	zclient_create_header(s, cmd, zebra_vrf_get_evpn_id());
+	zclient_create_header(s, cmd, zebra_evpn_get_master_underlay_vrf_id());
 	stream_putl(s, vni);
 	stream_put(s, macaddr->octet, ETH_ALEN);
 	if (ip) {

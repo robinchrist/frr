@@ -276,7 +276,7 @@ extern void zebra_router_show_table_summary(struct vty *vty);
 
 extern uint32_t zebra_router_get_next_sequence(void);
 
-static inline vrf_id_t zebra_vrf_get_evpn_id(void)
+static inline vrf_id_t zebra_evpn_get_master_underlay_vrf_id(void)
 {
 	return zrouter.evpn_vrf ? zvrf_id(zrouter.evpn_vrf) : VRF_DEFAULT;
 }

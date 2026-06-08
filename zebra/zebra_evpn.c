@@ -1112,7 +1112,7 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	zclient_create_header(s, ZEBRA_L2VNI_ADD, zebra_vrf_get_evpn_id());
+	zclient_create_header(s, ZEBRA_L2VNI_ADD, zebra_evpn_get_master_underlay_vrf_id());
 	stream_putl(s, zevpn->vni);
 	stream_put_ipaddr(s, &zevpn->local_vtep_ip);
 	stream_put(s, &zevpn->vrf_id, sizeof(vrf_id_t)); /* tenant vrf */
@@ -1163,7 +1163,7 @@ int zebra_evpn_send_del_to_client(struct zebra_evpn *zevpn)
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 	stream_reset(s);
 
-	zclient_create_header(s, ZEBRA_L2VNI_DEL, zebra_vrf_get_evpn_id());
+	zclient_create_header(s, ZEBRA_L2VNI_DEL, zebra_evpn_get_master_underlay_vrf_id());
 	stream_putl(s, zevpn->vni);
 
 	/* Write packet size. */
