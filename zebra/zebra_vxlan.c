@@ -4182,7 +4182,7 @@ void zebra_vxlan_print_evpn(struct vty *vty, bool uj)
  * Display VNI hash table (VTY command handler).
  */
 void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
-			    bool use_json)
+			    bool use_json, enum zebra_print_vni_filter filter)
 {
 	json_object *json = NULL;
 	void *args[2];
@@ -4204,16 +4204,17 @@ void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
 	args[0] = vty;
 	args[1] = json;
 
-	/* Display all L2-VNIs */
-	hash_iterate(
-		zvrf->evpn_table,
-		(void (*)(struct hash_bucket *, void *))zebra_evpn_print_hash,
-		args);
+	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
+		hash_iterate(zvrf->evpn_table,
+			     (void (*)(struct hash_bucket *,
+				       void *))zebra_evpn_print_hash,
+			     args);
 
-	/* Display all L3-VNIs */
-	hash_iterate(zrouter.l3vni_table,
-		     (void (*)(struct hash_bucket *, void *))zl3vni_print_hash,
-		     args);
+	if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
+		hash_iterate(zrouter.l3vni_table,
+			     (void (*)(struct hash_bucket *,
+				       void *))zl3vni_print_hash,
+			     args);
 
 	if (use_json)
 		vty_json(vty, json);
@@ -4268,7 +4269,7 @@ stream_failure:
  * Display VNI hash table in detail(VTY command handler).
  */
 void zebra_vxlan_print_vnis_detail(struct vty *vty, struct zebra_vrf *zvrf,
-				   bool use_json)
+				   bool use_json, enum zebra_print_vni_filter filter)
 {
 	json_object *json_array = NULL;
 	struct zebra_ns *zns = NULL;
@@ -4292,17 +4293,17 @@ void zebra_vxlan_print_vnis_detail(struct vty *vty, struct zebra_vrf *zvrf,
 	zes.zvrf = zvrf;
 	zes.use_json = use_json;
 
-	/* Display all L2-VNIs */
-	hash_iterate(zvrf->evpn_table,
-		     (void (*)(struct hash_bucket *,
-			       void *))zebra_evpn_print_hash_detail,
-		     &zes);
+	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
+		hash_iterate(zvrf->evpn_table,
+			     (void (*)(struct hash_bucket *,
+				       void *))zebra_evpn_print_hash_detail,
+			     &zes);
 
-	/* Display all L3-VNIs */
-	hash_iterate(zrouter.l3vni_table,
-		     (void (*)(struct hash_bucket *,
-			       void *))zl3vni_print_hash_detail,
-		     &zes);
+	if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
+		hash_iterate(zrouter.l3vni_table,
+			     (void (*)(struct hash_bucket *,
+				       void *))zl3vni_print_hash_detail,
+			     &zes);
 
 	/*
 	 * This is an extremely expensive operation at scale

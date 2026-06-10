@@ -140,11 +140,18 @@ extern void zebra_vxlan_print_neigh_vni_dad(struct vty *vty,
 extern void zebra_vxlan_print_vni(struct vty *vty, struct zebra_vrf *zvrf,
 				  vni_t vni, bool use_json,
 				  json_object *json_array);
+
+enum zebra_print_vni_filter {
+	ZEBRA_PRINT_VNI_FILTER_ALL = 0,
+	ZEBRA_PRINT_VNI_FILTER_L2,
+	ZEBRA_PRINT_VNI_FILTER_L3,
+};
+
 extern void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
-				   bool use_json);
+				   bool use_json, enum zebra_print_vni_filter filter);
 extern void zebra_vxlan_print_vnis_detail(struct vty *vty,
-					  struct zebra_vrf *zvrf,
-					  bool use_json);
+					  struct zebra_vrf *zvrf, bool use_json,
+					  enum zebra_print_vni_filter filter);
 extern void zebra_vxlan_print_rmacs_l3vni(struct vty *vty, vni_t vni,
 					  bool use_json);
 extern void zebra_vxlan_print_rmacs_all_l3vni(struct vty *vty, bool use_json);

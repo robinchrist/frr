@@ -2810,11 +2810,41 @@ DEFPY(evpn_mh_redirect_off, evpn_mh_redirect_off_cmd,
 	return zebra_evpn_mh_redirect_off(vty, redirect_off);
 }
 
+DEFPY(show_neigh,
+      show_neigh_cmd,
+      "show neighbor [json$json]",
+      SHOW_STR
+      "neighbors\n"
+      JSON_STR)
+{
+	zebra_neigh_show(vty, AF_UNSPEC, !!json);
+
+	return CMD_SUCCESS;
+}
+
+DEFPY(show_ip_neigh, show_ip_neigh_cmd, "show ip neighbor [json$json]",
+      SHOW_STR IP_STR "neighbors\n" JSON_STR)
+
+{
+	zebra_neigh_show(vty, AF_INET, !!json);
+
+	return CMD_SUCCESS;
+}
+
+DEFPY(show_ipv6_neigh, show_ipv6_neigh_cmd, "show ipv6 neighbor [json$json]",
+      SHOW_STR IPV6_STR "neighbors\n" JSON_STR)
+{
+	zebra_neigh_show(vty, AF_INET6, !!json);
+
+	return CMD_SUCCESS;
+}
+
 /* show vrf */
-DEFPY (show_vrf_vni,
-       show_vrf_vni_cmd,
-       "show vrf [<NAME$vrf_name|all$vrf_all>] vni [json]",
+DEFPY (show_zebra_vrf_vni,
+       show_zebra_vrf_vni_cmd,
+       "show zebra vrf [<NAME$vrf_name|all$vrf_all>] vni [json$json_str]",
        SHOW_STR
+	   ZEBRA_STR
        VRF_FULL_CMD_HELP_STR
        "VNI\n"
        JSON_STR)
@@ -2823,7 +2853,7 @@ DEFPY (show_vrf_vni,
 	struct zebra_vrf *zvrf;
 	json_object *json = NULL;
 	json_object *json_vrfs = NULL;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json_str;
 	bool use_vrf = false;
 
 	if (uj)
@@ -2899,52 +2929,25 @@ DEFPY (show_vrf_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_global,
-       show_evpn_global_cmd,
-       "show evpn [json]",
+DEFPY (show_zebra_evpn_global,
+       show_zebra_evpn_global_cmd,
+       "show zebra evpn [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        JSON_STR)
 {
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zebra_vxlan_print_evpn(vty, uj);
 	return CMD_SUCCESS;
 }
 
-DEFPY(show_ip_neigh, show_ip_neigh_cmd, "show ip neighbor [json$json]",
-      SHOW_STR IP_STR "neighbors\n" JSON_STR)
-
-{
-	zebra_neigh_show(vty, AF_INET, !!json);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(show_ipv6_neigh, show_ipv6_neigh_cmd, "show ipv6 neighbor [json$json]",
-      SHOW_STR IPV6_STR "neighbors\n" JSON_STR)
-{
-	zebra_neigh_show(vty, AF_INET6, !!json);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(show_neigh,
-      show_neigh_cmd,
-      "show neighbor [json$json]",
+DEFPY(show_zebra_evpn_l2_nh,
+      show_zebra_evpn_l2_nh_cmd,
+      "show zebra evpn l2-nh [json$json]",
       SHOW_STR
-      "neighbors\n"
-      JSON_STR)
-{
-	zebra_neigh_show(vty, AF_UNSPEC, !!json);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(show_evpn_l2_nh,
-      show_evpn_l2_nh_cmd,
-      "show evpn l2-nh [json$json]",
-      SHOW_STR
+      ZEBRA_STR
       "EVPN\n"
       "Layer2 nexthops\n"
       JSON_STR)
@@ -2956,10 +2959,11 @@ DEFPY(show_evpn_l2_nh,
 	return CMD_SUCCESS;
 }
 
-DEFPY(show_evpn_es,
-      show_evpn_es_cmd,
-      "show evpn es [NAME$esi_str|detail$detail] [json$json]",
+DEFPY(show_zebra_evpn_es,
+      show_zebra_evpn_es_cmd,
+      "show zebra evpn es [NAME$esi_str|detail$detail] [json$json]",
       SHOW_STR
+      ZEBRA_STR
       "EVPN\n"
       "Ethernet Segment\n"
       "ES ID\n"
@@ -2985,9 +2989,11 @@ DEFPY(show_evpn_es,
 	return CMD_SUCCESS;
 }
 
-DEFPY(show_evpn_es_peer, show_evpn_es_peer_cmd,
-      "show evpn es-peer [json$json]",
+DEFPY(show_zebra_evpn_es_peer,
+	  show_zebra_evpn_es_peer_cmd,
+      "show zebra evpn es-peer [json$json]",
       SHOW_STR
+      ZEBRA_STR
       "EVPN\n"
       "Ethernet Segment peer\n"
       JSON_STR)
@@ -2999,10 +3005,11 @@ DEFPY(show_evpn_es_peer, show_evpn_es_peer_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFPY(show_evpn_es_evi,
-      show_evpn_es_evi_cmd,
-      "show evpn es-evi [vni (1-16777215)$vni] [detail$detail] [json$json]",
+DEFPY(show_zebra_evpn_es_evi,
+      show_zebra_evpn_es_evi_cmd,
+      "show zebra evpn es-evi [vni " CMD_VNI_RANGE "$vni] [detail$detail] [json$json]",
       SHOW_STR
+      ZEBRA_STR
       "EVPN\n"
       "Ethernet Segment per EVI\n"
       "VxLAN Network Identifier\n"
@@ -3021,9 +3028,10 @@ DEFPY(show_evpn_es_evi,
 	return CMD_SUCCESS;
 }
 
-DEFPY(show_evpn_access_vlan, show_evpn_access_vlan_cmd,
-      "show evpn access-vlan [IFNAME$if_name (1-4094)$vid | detail$detail] [json$json]",
+DEFPY(show_zebra_evpn_access_vlan, show_zebra_evpn_access_vlan_cmd,
+      "show zebra evpn access-vlan [IFNAME$if_name (1-4094)$vid | detail$detail] [json$json]",
       SHOW_STR
+      ZEBRA_STR
       "EVPN\n"
       "Access VLANs\n"
       "Interface Name\n"
@@ -3062,61 +3070,62 @@ DEFPY(show_evpn_access_vlan, show_evpn_access_vlan_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_vni,
-       show_evpn_vni_cmd,
-       "show evpn vni [json]",
+DEFPY (show_zebra_evpn_vni_l2vni_l3vni,
+       show_zebra_evpn_vni_l2vni_l3vni_cmd,
+       "show zebra evpn <vni$vni | l2vni$l2vni | l3vni$l3vni> [detail$detail] [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "VxLAN Network Identifier\n"
-       JSON_STR)
-{
-	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
-
-	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_vnis(vty, zvrf, uj);
-	return CMD_SUCCESS;
-}
-
-DEFUN (show_evpn_vni_detail, show_evpn_vni_detail_cmd,
-       "show evpn vni detail [json]",
-       SHOW_STR
-       "EVPN\n"
-       "VxLAN Network Identifier\n"
+	   "L2 VxLAN Network Identifier\n"
+       "L3 VxLAN Network Identifier\n"
        "Detailed Information On Each VNI\n"
        JSON_STR)
 {
-	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
+	bool uj = !!json;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_vnis_detail(vty, zvrf, uj);
+	enum zebra_print_vni_filter print_filter;
+	if(vni)
+		print_filter = ZEBRA_PRINT_VNI_FILTER_ALL;
+	else if (l2vni)
+		print_filter = ZEBRA_PRINT_VNI_FILTER_L2;
+	else if (l3vni)
+		print_filter = ZEBRA_PRINT_VNI_FILTER_L3;
+	else {
+		vty_out(vty, "%% Invalid vni type??\n");
+		return CMD_WARNING;
+	}
+
+	if (detail)
+		zebra_vxlan_print_vnis_detail(vty, zvrf, uj, print_filter);
+	else
+		zebra_vxlan_print_vnis(vty, zvrf, uj, print_filter);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_vni_vni,
-       show_evpn_vni_vni_cmd,
-       "show evpn vni " CMD_VNI_RANGE "[json]",
+DEFPY (show_zebra_evpn_vni_vni,
+       show_zebra_evpn_vni_vni_cmd,
+       "show zebra evpn vni " CMD_VNI_RANGE "$vni [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "VxLAN Network Identifier\n"
        "VNI number\n"
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	vni_t vni;
-	bool uj = use_json(argc, argv);
 
-	vni = strtoul(argv[3]->arg, NULL, 10);
 	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_vni(vty, zvrf, vni, uj, NULL);
+	zebra_vxlan_print_vni(vty, zvrf, vni, !!json, NULL);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_rmac_vni_mac,
-       show_evpn_rmac_vni_mac_cmd,
-       "show evpn rmac vni " CMD_VNI_RANGE " mac WORD [json]",
+DEFPY (show_zebra_evpn_rmac_vni_mac,
+       show_zebra_evpn_rmac_vni_mac_cmd,
+       "show zebra evpn rmac vni " CMD_VNI_RANGE "$l3vni mac WORD$mac_str [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "RMAC\n"
        "L3 VNI\n"
@@ -3125,59 +3134,55 @@ DEFUN (show_evpn_rmac_vni_mac,
        "mac-address (e.g. 0a:0a:0a:0a:0a:0a)\n"
        JSON_STR)
 {
-	vni_t l3vni = 0;
 	struct ethaddr mac;
-	bool uj = use_json(argc, argv);
 
-	l3vni = strtoul(argv[4]->arg, NULL, 10);
-	if (!prefix_str2mac(argv[6]->arg, &mac)) {
+	if (!prefix_str2mac(mac_str, &mac)) {
 		vty_out(vty, "%% Malformed MAC address\n");
 		return CMD_WARNING;
 	}
-	zebra_vxlan_print_specific_rmac_l3vni(vty, l3vni, &mac, uj);
+	zebra_vxlan_print_specific_rmac_l3vni(vty, l3vni, &mac, !!json);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_rmac_vni,
-       show_evpn_rmac_vni_cmd,
-       "show evpn rmac vni " CMD_VNI_RANGE "[json]",
+DEFPY (show_zebra_evpn_rmac_vni,
+       show_zebra_evpn_rmac_vni_cmd,
+       "show zebra evpn rmac vni " CMD_VNI_RANGE "$l3vni [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "RMAC\n"
        "L3 VNI\n"
        "VNI number\n"
        JSON_STR)
 {
-	vni_t l3vni = 0;
-	bool uj = use_json(argc, argv);
-
-	l3vni = strtoul(argv[4]->arg, NULL, 10);
-	zebra_vxlan_print_rmacs_l3vni(vty, l3vni, uj);
+	zebra_vxlan_print_rmacs_l3vni(vty, l3vni, !!json);
 
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_rmac_vni_all,
-       show_evpn_rmac_vni_all_cmd,
-       "show evpn rmac vni all [json]",
+DEFPY (show_zebra_evpn_rmac_vni_all,
+       show_zebra_evpn_rmac_vni_all_cmd,
+       "show zebra evpn rmac vni all [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "RMAC addresses\n"
        "L3 VNI\n"
        "All VNIs\n"
        JSON_STR)
 {
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zebra_vxlan_print_rmacs_all_l3vni(vty, uj);
 
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_nh_vni_ip,
-       show_evpn_nh_vni_ip_cmd,
-       "show evpn next-hops vni " CMD_VNI_RANGE " ip WORD [json]",
+DEFPY (show_zebra_evpn_nh_vni_ip,
+       show_zebra_evpn_nh_vni_ip_cmd,
+       "show zebra evpn next-hops vni " CMD_VNI_RANGE "$l3vni ip WORD$ip_str [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "Remote Vteps\n"
        "L3 VNI\n"
@@ -3186,12 +3191,10 @@ DEFUN (show_evpn_nh_vni_ip,
        "Host address (ipv4 or ipv6)\n"
        JSON_STR)
 {
-	vni_t l3vni;
 	struct ipaddr ip;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
-	l3vni = strtoul(argv[4]->arg, NULL, 10);
-	if (str2ipaddr(argv[6]->arg, &ip) != 0) {
+	if (str2ipaddr(ip_str, &ip) != 0) {
 		if (!uj)
 			vty_out(vty, "%% Malformed Neighbor address\n");
 		return CMD_WARNING;
@@ -3201,10 +3204,11 @@ DEFUN (show_evpn_nh_vni_ip,
 	return CMD_SUCCESS;
 }
 
-DEFUN_HIDDEN (show_evpn_nh_svd_ip,
-              show_evpn_nh_svd_ip_cmd,
-              "show evpn next-hops svd ip WORD [json]",
+DEFPY_HIDDEN (show_zebra_evpn_nh_svd_ip,
+              show_zebra_evpn_nh_svd_ip_cmd,
+              "show zebra evpn next-hops svd ip WORD$ip_str [json$json]",
               SHOW_STR
+              ZEBRA_STR
               "EVPN\n"
               "Remote Vteps\n"
               "Single Vxlan Device\n"
@@ -3213,9 +3217,9 @@ DEFUN_HIDDEN (show_evpn_nh_svd_ip,
               JSON_STR)
 {
 	struct ipaddr ip;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
-	if (str2ipaddr(argv[5]->arg, &ip) != 0) {
+	if (str2ipaddr(ip_str, &ip) != 0) {
 		if (!uj)
 			vty_out(vty, "%% Malformed Neighbor address\n");
 		return CMD_WARNING;
@@ -3225,82 +3229,79 @@ DEFUN_HIDDEN (show_evpn_nh_svd_ip,
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_nh_vni,
-       show_evpn_nh_vni_cmd,
-       "show evpn next-hops vni " CMD_VNI_RANGE "[json]",
+DEFPY (show_zebra_evpn_nh_vni,
+       show_zebra_evpn_nh_vni_cmd,
+       "show zebra evpn next-hops vni " CMD_VNI_RANGE "$l3vni [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "Remote Vteps\n"
        "L3 VNI\n"
        "VNI number\n"
        JSON_STR)
 {
-	vni_t l3vni;
-	bool uj = use_json(argc, argv);
-
-	l3vni = strtoul(argv[4]->arg, NULL, 10);
-	zebra_vxlan_print_nh_l3vni(vty, l3vni, uj);
+	zebra_vxlan_print_nh_l3vni(vty, l3vni, !!json);
 
 	return CMD_SUCCESS;
 }
 
-DEFUN_HIDDEN (show_evpn_nh_svd,
-              show_evpn_nh_svd_cmd,
-              "show evpn next-hops svd [json]",
+DEFPY_HIDDEN (show_zebra_evpn_nh_svd,
+              show_zebra_evpn_nh_svd_cmd,
+              "show zebra evpn next-hops svd [json$json]",
               SHOW_STR
+              ZEBRA_STR
               "EVPN\n"
               "Remote VTEPs\n"
               "Single Vxlan Device\n"
               JSON_STR)
 {
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zebra_vxlan_print_nh_svd(vty, uj);
 
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_nh_vni_all,
-       show_evpn_nh_vni_all_cmd,
-       "show evpn next-hops vni all [json]",
+DEFPY (show_zebra_evpn_nh_vni_all,
+       show_zebra_evpn_nh_vni_all_cmd,
+       "show zebra evpn next-hops vni all [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "Remote VTEPs\n"
        "L3 VNI\n"
        "All VNIs\n"
        JSON_STR)
 {
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zebra_vxlan_print_nh_all_l3vni(vty, uj);
 
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_mac_vni,
-       show_evpn_mac_vni_cmd,
-       "show evpn mac vni " CMD_VNI_RANGE "[json]",
+DEFPY (show_zebra_evpn_mac_vni,
+       show_zebra_evpn_mac_vni_cmd,
+       "show zebra evpn mac vni " CMD_VNI_RANGE "$vni [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
        "VNI number\n"
        JSON_STR)
 {
-	struct zebra_vrf *zvrf;
-	vni_t vni;
-	bool uj = use_json(argc, argv);
+	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
 
-	vni = strtoul(argv[4]->arg, NULL, 10);
-	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_macs_vni(vty, zvrf, vni, uj, false);
+	zebra_vxlan_print_macs_vni(vty, zvrf, vni, !!json, false);
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_mac_vni_detail,
-       show_evpn_mac_vni_detail_cmd,
-       "show evpn mac vni " CMD_VNI_RANGE " detail [json]",
+DEFPY (show_zebra_evpn_mac_vni_detail,
+       show_zebra_evpn_mac_vni_detail_cmd,
+       "show zebra evpn mac vni " CMD_VNI_RANGE " detail [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VXLAN Network Identifier\n"
@@ -3309,17 +3310,18 @@ DEFPY (show_evpn_mac_vni_detail,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_macs_vni(vty, zvrf, vni, uj, true);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_mac_vni_all,
-       show_evpn_mac_vni_all_cmd,
-       "show evpn mac vni all [json]",
+DEFPY (show_zebra_evpn_mac_vni_all,
+       show_zebra_evpn_mac_vni_all_cmd,
+       "show zebra evpn mac vni all [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3327,16 +3329,17 @@ DEFUN (show_evpn_mac_vni_all,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_macs_all_vni(vty, zvrf, false, uj);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_mac_vni_all_detail, show_evpn_mac_vni_all_detail_cmd,
-       "show evpn mac vni all detail [json]",
+DEFPY (show_zebra_evpn_mac_vni_all_detail, show_zebra_evpn_mac_vni_all_detail_cmd,
+       "show zebra evpn mac vni all detail [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3345,17 +3348,18 @@ DEFUN (show_evpn_mac_vni_all_detail, show_evpn_mac_vni_all_detail_cmd,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_macs_all_vni_detail(vty, zvrf, false, uj);
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_mac_vni_all_vtep,
-       show_evpn_mac_vni_all_vtep_cmd,
-       "show evpn mac vni all vtep <A.B.C.D|X:X::X:X>$ip [json]",
+DEFPY (show_zebra_evpn_mac_vni_all_vtep,
+       show_zebra_evpn_mac_vni_all_vtep_cmd,
+       "show zebra evpn mac vni all vtep <A.B.C.D|X:X::X:X>$ip [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3367,7 +3371,7 @@ DEFPY (show_evpn_mac_vni_all_vtep,
 {
 	struct zebra_vrf *zvrf;
 	struct ipaddr vtep_ip = { .ipa_type = IPADDR_NONE };
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	if (ip) {
 		if (sockunion_family(ip) == AF_INET) {
@@ -3393,10 +3397,11 @@ DEFPY (show_evpn_mac_vni_all_vtep,
 }
 
 
-DEFUN (show_evpn_mac_vni_mac,
-       show_evpn_mac_vni_mac_cmd,
-       "show evpn mac vni " CMD_VNI_RANGE " mac WORD [json]",
+DEFPY (show_zebra_evpn_mac_vni_mac,
+       show_zebra_evpn_mac_vni_mac_cmd,
+       "show zebra evpn mac vni " CMD_VNI_RANGE "$vni mac WORD$mac_str [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3404,27 +3409,24 @@ DEFUN (show_evpn_mac_vni_mac,
        "MAC\n"
        "MAC address (e.g., 00:e0:ec:20:12:62)\n"
        JSON_STR)
-
 {
 	struct zebra_vrf *zvrf;
-	vni_t vni;
 	struct ethaddr mac;
-	bool uj = use_json(argc, argv);
 
-	vni = strtoul(argv[4]->arg, NULL, 10);
-	if (!prefix_str2mac(argv[6]->arg, &mac)) {
+	if (!prefix_str2mac(mac_str, &mac)) {
 		vty_out(vty, "%% Malformed MAC address\n");
 		return CMD_WARNING;
 	}
 	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_specific_mac_vni(vty, zvrf, vni, &mac, uj);
+	zebra_vxlan_print_specific_mac_vni(vty, zvrf, vni, &mac, !!json);
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_mac_vni_vtep,
-       show_evpn_mac_vni_vtep_cmd,
-       "show evpn mac vni " CMD_VNI_RANGE " vtep <A.B.C.D|X:X::X:X>$ip" "[json]",
+DEFPY (show_zebra_evpn_mac_vni_vtep,
+       show_zebra_evpn_mac_vni_vtep_cmd,
+       "show zebra evpn mac vni " CMD_VNI_RANGE " vtep <A.B.C.D|X:X::X:X>$ip" "[json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3436,7 +3438,7 @@ DEFPY (show_evpn_mac_vni_vtep,
 {
 	struct zebra_vrf *zvrf;
 	struct ipaddr vtep_ip = { .ipa_type = IPADDR_NONE };
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	if (ip) {
 		if (sockunion_family(ip) == AF_INET) {
@@ -3459,10 +3461,11 @@ DEFPY (show_evpn_mac_vni_vtep,
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_mac_vni_all_dad,
-       show_evpn_mac_vni_all_dad_cmd,
-       "show evpn mac vni all duplicate [json]",
+DEFPY (show_zebra_evpn_mac_vni_all_dad,
+       show_zebra_evpn_mac_vni_all_dad_cmd,
+       "show zebra evpn mac vni all duplicate [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3471,7 +3474,7 @@ DEFPY (show_evpn_mac_vni_all_dad,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_macs_all_vni(vty, zvrf, true, uj);
@@ -3479,10 +3482,11 @@ DEFPY (show_evpn_mac_vni_all_dad,
 }
 
 
-DEFPY (show_evpn_mac_vni_dad,
-       show_evpn_mac_vni_dad_cmd,
-       "show evpn mac vni " CMD_VNI_RANGE " duplicate [json]",
+DEFPY (show_zebra_evpn_mac_vni_dad,
+       show_zebra_evpn_mac_vni_dad_cmd,
+       "show zebra evpn mac vni " CMD_VNI_RANGE " duplicate [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "MAC addresses\n"
        "VxLAN Network Identifier\n"
@@ -3491,7 +3495,7 @@ DEFPY (show_evpn_mac_vni_dad,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 
@@ -3500,10 +3504,11 @@ DEFPY (show_evpn_mac_vni_dad,
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_neigh_vni_dad,
-       show_evpn_neigh_vni_dad_cmd,
-       "show evpn arp-cache vni " CMD_VNI_RANGE "duplicate [json]",
+DEFPY (show_zebra_evpn_neigh_vni_dad,
+       show_zebra_evpn_neigh_vni_dad_cmd,
+       "show zebra evpn arp-cache vni " CMD_VNI_RANGE "duplicate [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3512,17 +3517,18 @@ DEFPY (show_evpn_neigh_vni_dad,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_neigh_vni_dad(vty, zvrf, vni, uj);
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_neigh_vni_all_dad,
-       show_evpn_neigh_vni_all_dad_cmd,
-       "show evpn arp-cache vni all duplicate [json]",
+DEFPY (show_zebra_evpn_neigh_vni_all_dad,
+       show_zebra_evpn_neigh_vni_all_dad_cmd,
+       "show zebra evpn arp-cache vni all duplicate [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3531,7 +3537,7 @@ DEFPY (show_evpn_neigh_vni_all_dad,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_neigh_all_vni(vty, zvrf, true, uj);
@@ -3539,30 +3545,28 @@ DEFPY (show_evpn_neigh_vni_all_dad,
 }
 
 
-DEFUN (show_evpn_neigh_vni,
-       show_evpn_neigh_vni_cmd,
-       "show evpn arp-cache vni " CMD_VNI_RANGE "[json]",
+DEFPY (show_zebra_evpn_neigh_vni,
+       show_zebra_evpn_neigh_vni_cmd,
+       "show zebra evpn arp-cache vni " CMD_VNI_RANGE "$vni [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
        "VNI number\n"
        JSON_STR)
 {
-	struct zebra_vrf *zvrf;
-	vni_t vni;
-	bool uj = use_json(argc, argv);
+	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
 
-	vni = strtoul(argv[4]->arg, NULL, 10);
-	zvrf = zebra_evpn_get_master_underlay_vrf();
-	zebra_vxlan_print_neigh_vni(vty, zvrf, vni, uj);
+	zebra_vxlan_print_neigh_vni(vty, zvrf, vni, !!json);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_neigh_vni_all,
-       show_evpn_neigh_vni_all_cmd,
-       "show evpn arp-cache vni all [json]",
+DEFPY (show_zebra_evpn_neigh_vni_all,
+       show_zebra_evpn_neigh_vni_all_cmd,
+       "show zebra evpn arp-cache vni all [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3570,16 +3574,17 @@ DEFUN (show_evpn_neigh_vni_all,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_neigh_all_vni(vty, zvrf, false, uj);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_neigh_vni_all_detail, show_evpn_neigh_vni_all_detail_cmd,
-       "show evpn arp-cache vni all detail [json]",
+DEFPY (show_zebra_evpn_neigh_vni_all_detail, show_zebra_evpn_neigh_vni_all_detail_cmd,
+       "show zebra evpn arp-cache vni all detail [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3587,17 +3592,18 @@ DEFUN (show_evpn_neigh_vni_all_detail, show_evpn_neigh_vni_all_detail_cmd,
        "Neighbor details for all vnis in detail\n" JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 	zebra_vxlan_print_neigh_all_vni_detail(vty, zvrf, false, uj);
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_evpn_neigh_vni_neigh,
-       show_evpn_neigh_vni_neigh_cmd,
-       "show evpn arp-cache vni " CMD_VNI_RANGE " ip WORD [json]",
+DEFPY (show_zebra_evpn_neigh_vni_neigh,
+       show_zebra_evpn_neigh_vni_neigh_cmd,
+       "show zebra evpn arp-cache vni " CMD_VNI_RANGE "$vni ip WORD$ip_str [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3607,12 +3613,10 @@ DEFUN (show_evpn_neigh_vni_neigh,
        JSON_STR)
 {
 	struct zebra_vrf *zvrf;
-	vni_t vni;
 	struct ipaddr ip;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
-	vni = strtoul(argv[4]->arg, NULL, 10);
-	if (str2ipaddr(argv[6]->arg, &ip) != 0) {
+	if (str2ipaddr(ip_str, &ip) != 0) {
 		if (!uj)
 			vty_out(vty, "%% Malformed Neighbor address\n");
 		return CMD_WARNING;
@@ -3622,10 +3626,11 @@ DEFUN (show_evpn_neigh_vni_neigh,
 	return CMD_SUCCESS;
 }
 
-DEFPY (show_evpn_neigh_vni_vtep,
-       show_evpn_neigh_vni_vtep_cmd,
-       "show evpn arp-cache vni " CMD_VNI_RANGE " vtep <A.B.C.D|X:X::X:X>$ip [json]",
+DEFPY (show_zebra_evpn_neigh_vni_vtep,
+       show_zebra_evpn_neigh_vni_vtep_cmd,
+       "show zebra evpn arp-cache vni " CMD_VNI_RANGE " vtep <A.B.C.D|X:X::X:X>$ip [json$json]",
        SHOW_STR
+       ZEBRA_STR
        "EVPN\n"
        "ARP and ND cache\n"
        "VxLAN Network Identifier\n"
@@ -3637,7 +3642,7 @@ DEFPY (show_evpn_neigh_vni_vtep,
 {
 	struct zebra_vrf *zvrf;
 	struct ipaddr vtep_ip;
-	bool uj = use_json(argc, argv);
+	bool uj = !!json;
 
 	if (ip) {
 		if (sockunion_family(ip) == AF_INET) {
@@ -4288,7 +4293,7 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_interface_nexthop_group_cmd);
 
 	install_element(VIEW_NODE, &show_vrf_cmd);
-	install_element(VIEW_NODE, &show_vrf_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_vrf_vni_cmd);
 	install_element(VIEW_NODE, &show_route_cmd);
 	install_element(VIEW_NODE, &show_ip_rpf_cmd);
 	install_element(VIEW_NODE, &show_ro_cmd);
@@ -4297,39 +4302,38 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_ip_nht_cmd);
 
 	install_element(VIEW_NODE, &show_frr_cmd);
-	install_element(VIEW_NODE, &show_evpn_global_cmd);
-	install_element(VIEW_NODE, &show_evpn_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_vni_detail_cmd);
-	install_element(VIEW_NODE, &show_evpn_vni_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_l2_nh_cmd);
-	install_element(VIEW_NODE, &show_evpn_es_cmd);
-	install_element(VIEW_NODE, &show_evpn_es_peer_cmd);
-	install_element(VIEW_NODE, &show_evpn_es_evi_cmd);
-	install_element(VIEW_NODE, &show_evpn_access_vlan_cmd);
-	install_element(VIEW_NODE, &show_evpn_rmac_vni_mac_cmd);
-	install_element(VIEW_NODE, &show_evpn_rmac_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_rmac_vni_all_cmd);
-	install_element(VIEW_NODE, &show_evpn_nh_vni_ip_cmd);
-	install_element(VIEW_NODE, &show_evpn_nh_svd_ip_cmd);
-	install_element(VIEW_NODE, &show_evpn_nh_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_nh_svd_cmd);
-	install_element(VIEW_NODE, &show_evpn_nh_vni_all_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_all_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_all_detail_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_detail_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_all_vtep_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_mac_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_vtep_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_dad_cmd);
-	install_element(VIEW_NODE, &show_evpn_mac_vni_all_dad_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_all_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_all_detail_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_neigh_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_vtep_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_dad_cmd);
-	install_element(VIEW_NODE, &show_evpn_neigh_vni_all_dad_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_global_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_vni_l2vni_l3vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_vni_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_l2_nh_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_es_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_es_peer_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_es_evi_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_access_vlan_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_rmac_vni_mac_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_rmac_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_rmac_vni_all_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_nh_vni_ip_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_nh_svd_ip_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_nh_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_nh_svd_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_nh_vni_all_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_all_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_all_detail_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_detail_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_all_vtep_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_mac_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_vtep_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_dad_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_mac_vni_all_dad_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_all_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_all_detail_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_neigh_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_vtep_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_dad_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_neigh_vni_all_dad_cmd);
 	install_element(ENABLE_NODE, &clear_evpn_dup_addr_cmd);
 	install_element(CONFIG_NODE, &evpn_accept_bgp_seq_cmd);
 	install_element(CONFIG_NODE, &no_evpn_accept_bgp_seq_cmd);
