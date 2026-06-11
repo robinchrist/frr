@@ -1946,12 +1946,12 @@ static void evpn_show_vrf_import_rts(struct vty *vty, struct bgp *bgp_evpn_mi, j
 	struct vrf_wildcard_irt_node *wildcard_irt;
 	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
-	frr_each (vrf_fq_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes, fq_irt) {
+	frr_each (vrf_fq_irt_nodes, &bgp_evpn_gbl()->vrf_fq_irt_nodes, fq_irt) {
 		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq_irt->rt);
 		display_vrf_irt_node_common(vty, rt_buf, &fq_irt->vrfs, json);
 	}
 
-	frr_each (vrf_wildcard_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes, wildcard_irt) {
+	frr_each (vrf_wildcard_irt_nodes, &bgp_evpn_gbl()->vrf_wildcard_irt_nodes, wildcard_irt) {
 		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wildcard_irt->local_admin_nbo);
 		display_vrf_irt_node_common(vty, rt_buf, &wildcard_irt->vrfs, json);
 	}
@@ -1966,12 +1966,12 @@ static void evpn_show_evi_import_rts(struct vty *vty, struct bgp *bgp_evpn_mi, j
 	struct evi_wildcard_irt_node *wildcard_irt;
 	char rt_buf[BGP_EVPN_RT_STR_LEN];
 
-	frr_each (evi_fq_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes, fq_irt) {
+	frr_each (evi_fq_irt_nodes, &bgp_evpn_gbl()->evi_fq_irt_nodes, fq_irt) {
 		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq_irt->rt);
 		display_evi_irt_node_common(vty, rt_buf, &fq_irt->evis, json);
 	}
 
-	frr_each (evi_wildcard_irt_nodes, &bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes, wildcard_irt) {
+	frr_each (evi_wildcard_irt_nodes, &bgp_evpn_gbl()->evi_wildcard_irt_nodes, wildcard_irt) {
 		bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf), wildcard_irt->local_admin_nbo);
 		display_evi_irt_node_common(vty, rt_buf, &wildcard_irt->evis, json);
 	}
@@ -1988,7 +1988,7 @@ static void evpn_show_routes_vni_all(struct vty *vty, struct bgp *bgp_evpn_mi, i
 	struct bgp_evpn_evi *evi;
 	struct ipaddr vtep_ip_addr;
 
-	num_vnis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
+	num_vnis = evihash_count(&bgp_evpn_gbl()->evihash);
 	if (!num_vnis)
 		return;
 
@@ -2004,7 +2004,7 @@ static void evpn_show_routes_vni_all(struct vty *vty, struct bgp *bgp_evpn_mi, i
 	}
 
 
-	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		show_vni_routes_hash(evi, bgp_evpn_mi, vty, vtep_ip_addr, json, detail, type, mac_table);
 	}
 }
@@ -2020,7 +2020,7 @@ static void evpn_show_routes_vni_all_type_all(struct vty *vty, struct bgp *bgp_e
 	struct bgp_evpn_evi *evi;
 	struct ipaddr vtep_ip_addr;
 
-	num_vnis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
+	num_vnis = evihash_count(&bgp_evpn_gbl()->evihash);
 	if (!num_vnis)
 		return;
 
@@ -2036,7 +2036,7 @@ static void evpn_show_routes_vni_all_type_all(struct vty *vty, struct bgp *bgp_e
 		}
 	}
 
-	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		show_vni_routes_all_hash(evi, bgp_evpn_mi, vty, vtep_ip_addr, json, detail, 0, false);
 
 	}
@@ -3127,7 +3127,7 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp_evpn_mi,
 
 	/* print all L2 VNIS */
 	struct bgp_evpn_evi *evi;
-	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		if(!evi->vni)
 			continue;
 
@@ -3298,10 +3298,10 @@ static void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp_evpn_mi, bo
 	struct bgp_evpn_evi *evi;
 	if (set) {
 		bgp_evpn_mi->resolve_overlay_index = true;
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
 			bgp_evpn_handle_resolve_overlay_index_set(evi);
 	} else {
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
 			bgp_evpn_handle_resolve_overlay_index_unset(evi);
 		bgp_evpn_mi->resolve_overlay_index = false;
 	}
@@ -4358,7 +4358,7 @@ DEFPY(show_bgp_l2vpn_evpn_vni,
 
 	if (!vni_str) {
 
-		num_evis = evihash_count(&bgp_evpn_mi->evpn_master_instance_info.evihash);
+		num_evis = evihash_count(&bgp_evpn_gbl()->evihash);
 
 		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_temp)) {
 			if (bgp_temp->l3vni)
@@ -4430,7 +4430,7 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_remote_ip_hash,
 
 	{
 		struct bgp_evpn_evi *evi;
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
 			bgp_evpn_show_remote_ip_hash(evi, vty);
 	}
 
@@ -4458,7 +4458,7 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_evi_svi_hash,
 
 	struct bgp_evpn_evi *evi;
 
-	frr_each (evi_svi_hash, &bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi)
+	frr_each (evi_svi_hash, &bgp_evpn_gbl()->evi_svi_hash, evi)
 		vty_out(vty, "SVI: %u VNI: %u\n", evi->svi_ifindex, evi->vni);
 
 	return CMD_SUCCESS;
@@ -6927,13 +6927,13 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	if (bgp_vrf->advertise_all_vni)
 		vty_out(vty, "  advertise-all-vni\n");
 
-	if (evihash_count(&bgp_vrf->evpn_master_instance_info.evihash)) {
+	if (evihash_count(&bgp_evpn_gbl()->evihash)) {
 		struct list *vnilist = list_new();
 		struct bgp_evpn_evi *evi_entry;
 		struct listnode *ln;
 		struct bgp_evpn_evi *data;
 
-		frr_each(evihash, &bgp_vrf->evpn_master_instance_info.evihash, evi_entry)
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi_entry)
 			listnode_add(vnilist, evi_entry);
 
 		list_sort(vnilist, vni_cmp);

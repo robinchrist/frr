@@ -4360,7 +4360,7 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 	}
 
 	if (bgp_evpn_mi) {
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi)
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
 			bgp_evpn_es_evi_show_one_vni(evi, vty, json_array, detail);
 	}
 	if (uj)

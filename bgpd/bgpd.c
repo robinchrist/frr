@@ -9163,6 +9163,7 @@ void bgp_master_init(struct event_loop *master, const int buffer_size,
 	bgp_lp_init(bm->master, &bm->labelpool);
 
 	bgp_nhg_init();
+	bgp_evpn_global_init();
 	bgp_evpn_mh_init();
 	QOBJ_REG(bm, bgp_master);
 }

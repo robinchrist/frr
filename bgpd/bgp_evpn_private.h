@@ -295,10 +295,10 @@ struct bgp_evpn_evi {
 	/* intrusive list item for bgp->evis */
 	struct bgp_evis_slu_item bgp_evis_item;
 
-	/* intrusive hash item for evpn_master_instance_info.evihash */
+	/* intrusive hash item for bgp_evpn_global.evihash */
 	struct evihash_item evihash_item;
 
-	/* intrusive hash item for evpn_master_instance_info.evi_svi_hash */
+	/* intrusive hash item for bgp_evpn_global.evi_svi_hash */
 	struct evi_svi_hash_item evi_svi_hash_item;
 
 	enum vxlan_flood_control vxlan_flood_ctrl;

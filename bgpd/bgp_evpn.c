@@ -1089,21 +1089,12 @@ int vrf_fq_irt_node_hash_cmp(const struct vrf_fq_irt_node *a, const struct vrf_f
  */
 static struct vrf_fq_irt_node *lookup_vrf_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val)
 {
-	struct bgp *bgp_evpn_mi = NULL;
 	struct vrf_fq_irt_node tmp;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"vrf fq import rt lookup - evpn instance not created yet");
-		return NULL;
-	}
 
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.rt, &rt_val, sizeof(tmp.rt));
 
-	return vrf_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes, &tmp);
+	return vrf_fq_irt_nodes_find(&bgp_evpn_gbl()->vrf_fq_irt_nodes, &tmp);
 }
 
 
@@ -1131,16 +1122,7 @@ int vrf_wildcard_irt_node_hash_cmp(const struct vrf_wildcard_irt_node *a, const 
  */
 static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval)
 {
-	struct bgp *bgp_evpn_mi = NULL;
 	struct vrf_wildcard_irt_node tmp;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"vrf wildcard import rt lookup - evpn instance not created yet");
-		return NULL;
-	}
 
 	/* Wildcard RTs were only built with AS, AS4 and IP4 support in mind - filter other types! */
 	uint8_t type = eval.val[0];
@@ -1156,7 +1138,7 @@ static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(st
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.local_admin_nbo, &local_admin_val, sizeof(tmp.local_admin_nbo));
 
-	return vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes, &tmp);
+	return vrf_wildcard_irt_nodes_find(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes, &tmp);
 }
 
 static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp_vrf)
@@ -1245,21 +1227,12 @@ int evi_fq_irt_node_hash_cmp(const struct evi_fq_irt_node *a, const struct evi_f
  */
 static struct evi_fq_irt_node *lookup_evi_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val)
 {
-	struct bgp *bgp_evpn_mi = NULL;
 	struct evi_fq_irt_node tmp;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"evi fq import rt lookup - evpn instance not created yet");
-		return NULL;
-	}
 
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.rt, &rt_val, sizeof(tmp.rt));
 
-	return evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes, &tmp);
+	return evi_fq_irt_nodes_find(&bgp_evpn_gbl()->evi_fq_irt_nodes, &tmp);
 }
 
 
@@ -1287,16 +1260,7 @@ int evi_wildcard_irt_node_hash_cmp(const struct evi_wildcard_irt_node *a, const 
  */
 static struct evi_wildcard_irt_node *lookup_evi_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval)
 {
-	struct bgp *bgp_evpn_mi = NULL;
 	struct evi_wildcard_irt_node tmp;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(
-			EC_BGP_NO_DFLT,
-			"evi wildcard import rt lookup - evpn instance not created yet");
-		return NULL;
-	}
 
 	/* Wildcard RTs were only built with AS, AS4 and IP4 support in mind - filter other types! */
 	uint8_t type = eval.val[0];
@@ -1312,7 +1276,7 @@ static struct evi_wildcard_irt_node *lookup_evi_wildcard_irt_node_by_ecom_val(st
 	memset(&tmp, 0, sizeof(tmp));
 	memcpy(&tmp.local_admin_nbo, &local_admin_val, sizeof(tmp.local_admin_nbo));
 
-	return evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes, &tmp);
+	return evi_wildcard_irt_nodes_find(&bgp_evpn_gbl()->evi_wildcard_irt_nodes, &tmp);
 }
 
 static struct evi_mapped_evi *evi_mapped_evi_new(struct bgp_evpn_evi *evi)
@@ -1578,7 +1542,7 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool
 	if(bgp_evpn_vrf_should_generate_export_autort(bgp_vrf))
 		bgp_evpn_vrf_handle_export_rt_change(bgp_vrf);
 
-	frr_each(evihash, &bgp_vrf->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		/* Only trigger the update logic if Auto RT is actually being used */
 		if (bgp_evpn_evi_should_generate_import_autort(evi))
 			bgp_evpn_evi_handle_import_rt_change(evi);
@@ -1615,11 +1579,11 @@ void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
 
-		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,&tmp_lookup_node);
+		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes,&tmp_lookup_node);
 		/* Create the node if it doesn't exist */
 		if (!irt) {
 			irt = vrf_wildcard_irt_node_new(eff_w->local_admin_nbo);
-			vrf_wildcard_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,irt);
+			vrf_wildcard_irt_nodes_add(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes,irt);
 		}
 
 
@@ -1640,11 +1604,11 @@ void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
 
-		irt = vrf_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,&tmp_lookup_node);
+		irt = vrf_fq_irt_nodes_find(&bgp_evpn_gbl()->vrf_fq_irt_nodes,&tmp_lookup_node);
 		/* Create the node if it doesn't exist */
 		if (!irt) {
 			irt = vrf_fq_irt_node_new(eff_fq->ecom_val);
-			vrf_fq_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,irt);
+			vrf_fq_irt_nodes_add(&bgp_evpn_gbl()->vrf_fq_irt_nodes,irt);
 		}
 
 		vrf_item = vrf_mapped_bgp_instance_new(bgp_vrf);
@@ -1685,7 +1649,7 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
 
-		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,&tmp_lookup_node);
+		irt = vrf_wildcard_irt_nodes_find(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes,&tmp_lookup_node);
 		if (!irt)
 			continue; /* Node does not exist, nothing to do */
 
@@ -1699,7 +1663,7 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 
 		/* if the node doesn't hold any other mapped VRFs, delete it */
 		if (vrf_mapped_bgp_instance_slu_count(&irt->vrfs) == 0) {
-			vrf_wildcard_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.vrf_wildcard_irt_nodes,irt);
+			vrf_wildcard_irt_nodes_del(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes,irt);
 			vrf_wildcard_irt_node_free(irt);
 		}
 	}
@@ -1713,7 +1677,7 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
 
-		irt = vrf_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,&tmp_lookup_node);
+		irt = vrf_fq_irt_nodes_find(&bgp_evpn_gbl()->vrf_fq_irt_nodes,&tmp_lookup_node);
 		if (!irt)
 			continue; /* Node does not exist, nothing to do */
 
@@ -1727,7 +1691,7 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 
 		/* if the node doesn't hold any other mapped VRFs, delete it */
 		if (vrf_mapped_bgp_instance_slu_count(&irt->vrfs) == 0) {
-			vrf_fq_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.vrf_fq_irt_nodes,irt);
+			vrf_fq_irt_nodes_del(&bgp_evpn_gbl()->vrf_fq_irt_nodes,irt);
 			vrf_fq_irt_node_free(irt);
 		}
 	}
@@ -1759,11 +1723,11 @@ void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
 
-		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,&tmp_lookup_node);
+		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_gbl()->evi_wildcard_irt_nodes,&tmp_lookup_node);
 		/* Create the node if it doesn't exist */
 		if (!irt) {
 			irt = evi_wildcard_irt_node_new(eff_w->local_admin_nbo);
-			evi_wildcard_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,irt);
+			evi_wildcard_irt_nodes_add(&bgp_evpn_gbl()->evi_wildcard_irt_nodes,irt);
 		}
 
 
@@ -1784,11 +1748,11 @@ void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
 
-		irt = evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,&tmp_lookup_node);
+		irt = evi_fq_irt_nodes_find(&bgp_evpn_gbl()->evi_fq_irt_nodes,&tmp_lookup_node);
 		/* Create the node if it doesn't exist */
 		if (!irt) {
 			irt = evi_fq_irt_node_new(eff_fq->ecom_val);
-			evi_fq_irt_nodes_add(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,irt);
+			evi_fq_irt_nodes_add(&bgp_evpn_gbl()->evi_fq_irt_nodes,irt);
 		}
 
 		evi_item = evi_mapped_evi_new(evi);
@@ -1829,7 +1793,7 @@ void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		tmp_lookup_node.local_admin_nbo = eff_w->local_admin_nbo;
 
-		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,&tmp_lookup_node);
+		irt = evi_wildcard_irt_nodes_find(&bgp_evpn_gbl()->evi_wildcard_irt_nodes,&tmp_lookup_node);
 		if (!irt)
 			continue; /* Node does not exist, nothing to do */
 
@@ -1843,7 +1807,7 @@ void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
 
 		/* if the node doesn't hold any other mapped EVIs, delete it */
 		if (evi_mapped_evi_slu_count(&irt->evis) == 0) {
-			evi_wildcard_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.evi_wildcard_irt_nodes,irt);
+			evi_wildcard_irt_nodes_del(&bgp_evpn_gbl()->evi_wildcard_irt_nodes,irt);
 			evi_wildcard_irt_node_free(irt);
 		}
 	}
@@ -1857,7 +1821,7 @@ void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
 		memset(&tmp_lookup_node, 0, sizeof(tmp_lookup_node));
 		memcpy(&tmp_lookup_node.rt, &eff_fq->ecom_val, sizeof(tmp_lookup_node.rt));
 
-		irt = evi_fq_irt_nodes_find(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,&tmp_lookup_node);
+		irt = evi_fq_irt_nodes_find(&bgp_evpn_gbl()->evi_fq_irt_nodes,&tmp_lookup_node);
 		if (!irt)
 			continue; /* Node does not exist, nothing to do */
 
@@ -1871,7 +1835,7 @@ void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
 
 		/* if the node doesn't hold any other mapped EVIs, delete it */
 		if (evi_mapped_evi_slu_count(&irt->evis) == 0) {
-			evi_fq_irt_nodes_del(&bgp_evpn_mi->evpn_master_instance_info.evi_fq_irt_nodes,irt);
+			evi_fq_irt_nodes_del(&bgp_evpn_gbl()->evi_fq_irt_nodes,irt);
 			evi_fq_irt_node_free(irt);
 		}
 	}
@@ -7627,7 +7591,7 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 		/* delete all the VNI routes (type-2/type-3) routes for all the
 		 * L2-VNIs
 		 */
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 			withdraw_router_id_vni(evi, bgp_vrf);
 		}
 
@@ -7678,7 +7642,7 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 		/* advertise all the VNI routes (type-2/type-3) routes with the
 		 * new RD
 		 */
-		frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 			update_router_id_vni(evi, bgp_vrf);
 		}
 	}
@@ -7748,7 +7712,7 @@ void bgp_evpn_handle_deferred_bestpath_for_vnis(struct bgp *bgp, uint16_t cnt)
 	safi_t safi = SAFI_EVPN;
 
 
-	frr_each(evihash, &bgp->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		/*
 		* Now, walk this VNI's MAC & IP route table and do deferred bestpath
 		* selection
@@ -7913,7 +7877,7 @@ void bgp_evpn_handle_global_macvrf_soo_change(struct bgp *bgp,
 		bgp, BGP_MARTIAN_SOO, (void *)old_soo, (void *)new_soo);
 
 	/* Update locally originated routes for all L2VNIs */
-	frr_each(evihash, &bgp->evpn_master_instance_info.evihash, evi)
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
 		bgp_evpn_evi_update_type_1_2_3_routes(bgp, evi);
 
 	/* clear old_soo */
@@ -8325,7 +8289,7 @@ struct bgp_evpn_evi *bgp_evpn_lookup_evi_by_vni(struct bgp *bgp_evpn_mi, vni_t v
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.vni = vni;
-	evi = evihash_find(&bgp_evpn_mi->evpn_master_instance_info.evihash, &tmp);
+	evi = evihash_find(&bgp_evpn_gbl()->evihash, &tmp);
 	return evi;
 }
 
@@ -8371,7 +8335,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 
 	/* Add to hash */
 	/* What to do in case of error?? */
-	evihash_add(&bgp_evpn_mi->evpn_master_instance_info.evihash, evi);
+	evihash_add(&bgp_evpn_gbl()->evihash, evi);
 
 	bgp_evpn_remote_ip_hash_init(evi);
 	bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
@@ -8428,8 +8392,8 @@ void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *
 
 	/* Shouldn't happen, but let's rather be safe than sorry for now... */
 	if (bgp_evpn_mi) {
-		evi_svi_hash_del(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
-		evihash_del(&bgp_evpn_mi->evpn_master_instance_info.evihash, evi);
+		evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
+		evihash_del(&bgp_evpn_gbl()->evihash, evi);
 	}
 
 	if (evi->prd_pretty)
@@ -9108,7 +9072,7 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	 * v
 	 * install_evpn_route_entry_in_vrf
 	 */
-	frr_each(evihash, &underlay_vrf->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		if (evi->tenant_vrf_id == bgp_vrf->vrf_id)
 			bgp_evpn_evi_link_to_vrf(evi);
 	}
@@ -9366,7 +9330,7 @@ int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 	 */
 	bgp_evpn_evi_delete_routes(underlay_vrf, evi);
 
-	evi_svi_hash_del(&underlay_vrf->evpn_master_instance_info.evi_svi_hash, evi);
+	evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
 
 	evi->svi_ifindex = 0;
 	/* Tunnel is no longer active.
@@ -9445,7 +9409,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				(void (*)(struct hash_bucket *, void *))
 					bgp_evpn_remote_ip_hash_unlink_nexthop,
 				evi);
-			evi_svi_hash_del(&underlay_vrf->evpn_master_instance_info.evi_svi_hash, evi);
+			evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
 			evi->svi_ifindex = svi_ifindex;
 			bgp_evpn_link_to_evi_svi_hash(underlay_vrf, evi);
 
@@ -9560,7 +9524,7 @@ void bgp_evpn_flood_control_change(struct bgp *bgp_evpn_mi)
 {
 	struct bgp_evpn_evi *evi;
 
-	frr_each(evihash, &bgp_evpn_mi->evpn_master_instance_info.evihash, evi) {
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi) {
 		advertise_withdraw_type3(evi, bgp_evpn_mi);
 	}
 }
@@ -9596,7 +9560,7 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 
 	uint32_t idx = 0;
 	/* Delete all autoconfigured EVIs, but keep the user configured ones */
-	while ((evi = evihash_pop_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &idx))) {
+	while ((evi = evihash_pop_all(&bgp_evpn_gbl()->evihash, &idx))) {
 		/* Remove EVPN routes and schedule for processing. */
 		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
 		/* Clear "live" flag and see if hash needs to be freed. */
@@ -9611,7 +9575,7 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 		}
 	}
 
-	evihash_swap_all(&bgp_evpn_mi->evpn_master_instance_info.evihash, &evihash_temp);
+	evihash_swap_all(&bgp_evpn_gbl()->evihash, &evihash_temp);
 	evihash_fini(&evihash_temp);
 
 }
@@ -9625,64 +9589,69 @@ void bgp_evpn_master_delete_and_free_all_evis(struct bgp *underlay_vrf)
 	struct bgp_evpn_evi *item;
 	uint32_t idx = 0;
 
-	while ((item = evihash_pop_all(&underlay_vrf->evpn_master_instance_info.evihash, &idx))) {
+	while ((item = evihash_pop_all(&bgp_evpn_gbl()->evihash, &idx))) {
 		bgp_evpn_evi_delete_all_routes(underlay_vrf, item);
 		bgp_evpn_evi_delete_and_free(underlay_vrf, item);
 	}
 }
 
-static void bgp_evpn_master_instance_info_init(struct bgp *bgp)
+/* Initialize the global (process-wide) EVPN state.
+ * Called once from bgp_master_init(); independent of any BGP instance.
+ */
+void bgp_evpn_global_init(void)
 {
-	evihash_init(&bgp->evpn_master_instance_info.evihash);
+	evihash_init(&bgp_evpn_gbl()->evihash);
 
-	evi_svi_hash_init(&bgp->evpn_master_instance_info.evi_svi_hash);
+	evi_svi_hash_init(&bgp_evpn_gbl()->evi_svi_hash);
 
-	vrf_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
-	vrf_fq_irt_nodes_init(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
-	evi_wildcard_irt_nodes_init(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes);
-	evi_fq_irt_nodes_init(&bgp->evpn_master_instance_info.evi_fq_irt_nodes);
+	vrf_wildcard_irt_nodes_init(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes);
+	vrf_fq_irt_nodes_init(&bgp_evpn_gbl()->vrf_fq_irt_nodes);
+	evi_wildcard_irt_nodes_init(&bgp_evpn_gbl()->evi_wildcard_irt_nodes);
+	evi_fq_irt_nodes_init(&bgp_evpn_gbl()->evi_fq_irt_nodes);
 }
 
-static void bgp_evpn_master_instance_info_clean_and_free(struct bgp *bgp)
+/* Tear down the global (process-wide) EVPN state.
+ * Called once from bgp_exit() AFTER all BGP instances have been deleted:
+ * instance deletion deletes all EVIs (master instance) and unmaps VRFs/EVIs
+ * from the irt-node tables, so the EVI hashes must be empty here. Remaining
+ * irt nodes are freed defensively.
+ */
+void bgp_evpn_global_fini(void)
 {
-	/* This deletes all EVIs and also removes them from evihash etc... */
-	bgp_evpn_master_delete_and_free_all_evis(bgp);
-	
-	/* Deallocate the hash maps, bgp_evpn_master_delete_and_free_all_evis should have emptied them */
-	assert(evihash_count(&bgp->evpn_master_instance_info.evihash) == 0);
-	assert(evi_svi_hash_count(&bgp->evpn_master_instance_info.evi_svi_hash) == 0);
-	evihash_fini(&bgp->evpn_master_instance_info.evihash);
-	evi_svi_hash_fini(&bgp->evpn_master_instance_info.evi_svi_hash);
+	assert(evihash_count(&bgp_evpn_gbl()->evihash) == 0);
+	assert(evi_svi_hash_count(&bgp_evpn_gbl()->evi_svi_hash) == 0);
+	evihash_fini(&bgp_evpn_gbl()->evihash);
+	evi_svi_hash_fini(&bgp_evpn_gbl()->evi_svi_hash);
 
 	uint32_t idx = 0;
 
 	struct vrf_wildcard_irt_node *vrf_wildcard_irt;
 	idx = 0;
-	while ((vrf_wildcard_irt = vrf_wildcard_irt_nodes_pop_all(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes, &idx))) {
+	while ((vrf_wildcard_irt = vrf_wildcard_irt_nodes_pop_all(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes, &idx))) {
 		vrf_wildcard_irt_node_free(vrf_wildcard_irt);
 	}
-	vrf_wildcard_irt_nodes_fini(&bgp->evpn_master_instance_info.vrf_wildcard_irt_nodes);
+	vrf_wildcard_irt_nodes_fini(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes);
 
 	struct vrf_fq_irt_node *vrf_fq_irt;
 	idx = 0;
-	while ((vrf_fq_irt = vrf_fq_irt_nodes_pop_all(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes, &idx))) {
+	while ((vrf_fq_irt = vrf_fq_irt_nodes_pop_all(&bgp_evpn_gbl()->vrf_fq_irt_nodes, &idx))) {
 		vrf_fq_irt_node_free(vrf_fq_irt);
 	}
-	vrf_fq_irt_nodes_fini(&bgp->evpn_master_instance_info.vrf_fq_irt_nodes);
+	vrf_fq_irt_nodes_fini(&bgp_evpn_gbl()->vrf_fq_irt_nodes);
 
 	struct evi_wildcard_irt_node *evi_wildcard_irt;
 	idx = 0;
-	while ((evi_wildcard_irt = evi_wildcard_irt_nodes_pop_all(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes, &idx))) {
+	while ((evi_wildcard_irt = evi_wildcard_irt_nodes_pop_all(&bgp_evpn_gbl()->evi_wildcard_irt_nodes, &idx))) {
 		evi_wildcard_irt_node_free(evi_wildcard_irt);
 	}
-	evi_wildcard_irt_nodes_fini(&bgp->evpn_master_instance_info.evi_wildcard_irt_nodes);
+	evi_wildcard_irt_nodes_fini(&bgp_evpn_gbl()->evi_wildcard_irt_nodes);
 
 	struct evi_fq_irt_node *evi_fq_irt;
 	idx = 0;
-	while ((evi_fq_irt = evi_fq_irt_nodes_pop_all(&bgp->evpn_master_instance_info.evi_fq_irt_nodes, &idx))) {
+	while ((evi_fq_irt = evi_fq_irt_nodes_pop_all(&bgp_evpn_gbl()->evi_fq_irt_nodes, &idx))) {
 		evi_fq_irt_node_free(evi_fq_irt);
 	}
-	evi_fq_irt_nodes_fini(&bgp->evpn_master_instance_info.evi_fq_irt_nodes);
+	evi_fq_irt_nodes_fini(&bgp_evpn_gbl()->evi_fq_irt_nodes);
 }
 
 /*
@@ -9690,15 +9659,14 @@ static void bgp_evpn_master_instance_info_clean_and_free(struct bgp *bgp)
  */
 void bgp_evpn_clean_and_free(struct bgp *bgp)
 {
-	/* Even though only the master info has content in there, it must be freed because 
-	 * it is allocated for every instance regardless of whether it's a master instance or not
-	 *
-	 * Note that if this IS the master instance, you should have called bgp_evpn_master_delete_and_free_all_evis
-	 * on the master instance separately before!
+	/* The global EVPN tables (EVI registries, irt nodes) are process-wide
+	 * (see bgp_evpn_global_init/fini) and are NOT touched on instance
+	 * deletion. If this is the master instance, all EVIs must have been
+	 * deleted via bgp_evpn_master_delete_and_free_all_evis() in
+	 * bgp_delete() beforehand.
 	 */
-	bgp_evpn_master_instance_info_clean_and_free(bgp);
 
-	/* Our tenant VRF EVIs should be cleaned up by now 
+	/* Our tenant VRF EVIs should be cleaned up by now
 	 * Deallocating an EVI requires knowledge of the master instance (to free from evihash etc)
 	 * Which we don't want to fetch here - so we insist that the proper cleanup sequence has been
 	 * called (bgp_evpn_vrf_delete() beforehand)
@@ -9742,8 +9710,6 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
  */
 void bgp_evpn_init(struct bgp *bgp)
 {
-	bgp_evpn_master_instance_info_init(bgp);
-
 	bgp_evis_slu_init(&bgp->evis);
 
 	bgp->evpn_info = XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
@@ -10052,7 +10018,7 @@ static struct bgp_evpn_evi *bgp_evpn_evi_svi_hash_lookup(struct bgp *bgp,
 
 	memset(&tmp, 0, sizeof(tmp));
 	tmp.svi_ifindex = svi;
-	evi = evi_svi_hash_find(&bgp->evpn_master_instance_info.evi_svi_hash, &tmp);
+	evi = evi_svi_hash_find(&bgp_evpn_gbl()->evi_svi_hash, &tmp);
 	return evi;
 }
 
@@ -10061,7 +10027,7 @@ static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_ev
 	if (evi->svi_ifindex == 0)
 		return;
 
-	evi_svi_hash_add(&bgp_evpn_mi->evpn_master_instance_info.evi_svi_hash, evi);
+	evi_svi_hash_add(&bgp_evpn_gbl()->evi_svi_hash, evi);
 }
 
 /*

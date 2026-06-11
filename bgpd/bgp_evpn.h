@@ -216,6 +216,8 @@ extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
 extern void bgp_evpn_clean_and_free(struct bgp *bgp);
 extern void bgp_evpn_master_delete_and_free_all_evis(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);
+extern void bgp_evpn_global_init(void);
+extern void bgp_evpn_global_fini(void);
 extern int bgp_evpn_get_type5_prefixlen(const struct prefix *pfx);
 extern bool bgp_evpn_is_prefix_nht_supported(const struct prefix *pfx);
 extern void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf);

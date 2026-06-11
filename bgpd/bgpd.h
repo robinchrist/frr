@@ -135,6 +135,39 @@ extern struct frr_pthread *bgp_pth_ka;
 /* FIFO list for peer connections */
 PREDECL_LIST(peer_connection_fifo);
 
+/* Global (process-wide) EVPN state.
+ *
+ * The EVPN route table is logically shared across all underlay VRFs: overlay
+ * objects (tenant VRFs / EVIs) import routes received in ANY underlay
+ * instance. Hence the EVI registries and the import-RT -> object mapping
+ * tables are global, not per-instance.
+ *
+ * Lifecycle is tied to the process (bgp_master_init / bgp_exit), NOT to any
+ * BGP instance.
+ */
+struct bgp_evpn_global {
+	/* EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->vni as key */
+	struct evihash_head evihash;
+
+	/*
+	 * EVI hash table, uses bgp_evpn_evi->svi_ifindex as key
+	 * We use SVI ifindex as key to lookup a VNI table for gateway IP
+	 * overlay index recursive lookup.
+	 * For this purpose, a hashtable is added which optimizes this lookup.
+	 */
+	struct evi_svi_hash_head evi_svi_hash;
+
+	/* Hash table of Wildcard VRF import RTs to VRFs */
+	struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
+	/* Hash table of Fully Qualified VRF import RTs to VRFs */
+	struct vrf_fq_irt_nodes_head vrf_fq_irt_nodes;
+
+	/* Hash table of Wildcard EVI import RTs to EVIs */
+	struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
+	/* Hash table of Fully Qualified EVI import RTs to EVIs */
+	struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
+};
+
 /* BGP master for system wide configurations and variables.  */
 struct bgp_master {
 	/* BGP instance list.  */
@@ -189,6 +222,9 @@ struct bgp_master {
 
 	/* BGP-EVPN Master Instance / VRF. Defaults to default VRF (if any) */
 	struct bgp* bgp_evpn_mi;
+
+	/* Global EVPN state (EVI registries, import-RT mapping tables) */
+	struct bgp_evpn_global evpn_global;
 
 	/* How big should we set the socket buffer size */
 	uint32_t socket_buffer;
@@ -953,32 +989,6 @@ struct bgp {
 	/*
 	 * Start of EVPN related information
 	 */
-
-	/* Attempt to group and separate some EVPN info that is only present in the
-	 * EVPN master instance / VRF
-	 */
-	struct evpn_master_instance_info {
-		/* EVI hash table, struct bgp_evpn_evi, uses bgp_evpn_evi->vni as key */
-		struct evihash_head evihash;
-
-		/*
-		 * EVI hash table, uses bgp_evpn_evi->svi_ifindex as key
-		 * We use SVI ifindex as key to lookup a VNI table for gateway IP
-		 * overlay index recursive lookup.
-		 * For this purpose, a hashtable is added which optimizes this lookup.
-		 */
-		struct evi_svi_hash_head evi_svi_hash;
-
-		/* Hash table of Wildcard VRF import RTs to VRFs */
-		struct vrf_wildcard_irt_nodes_head vrf_wildcard_irt_nodes;
-		/* Hash table of Fully Qualified VRF import RTs to VRFs */
-		struct vrf_fq_irt_nodes_head vrf_fq_irt_nodes;
-
-		/* Hash table of Wildcard EVI import RTs to EVIs */
-		struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
-		/* Hash table of Fully Qualified EVI import RTs to EVIs */
-		struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
-	} evpn_master_instance_info;
 
 	/* This flag was completely undocumented, the following was derived from a code analysis:
 	 * so take it with a grain of salt
@@ -2707,6 +2717,12 @@ extern const char *bgp_martian_type2str(enum bgp_martian_type mt);
 
 extern struct bgp_master *bm;
 extern unsigned int multipath_num;
+
+/* Accessor for the global (process-wide) EVPN state */
+static inline struct bgp_evpn_global *bgp_evpn_gbl(void)
+{
+	return &bm->evpn_global;
+}
 
 /* Prototypes. */
 extern void bgp_terminate(void);
