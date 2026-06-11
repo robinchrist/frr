@@ -1861,6 +1861,15 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
 	struct ipaddr orignator_ip = {};
 
 	evi = bgp_evpn_lookup_evi_by_vni(bgp, vni);
+	if (evi && evi->origin == BGP_EVPN_EVI_ORIGIN_CFG) {
+		/* The VNI is claimed by a new-style configured EVI - the
+		 * legacy `vni X` config cannot take it over
+		 */
+		flog_err(EC_BGP_VNI,
+			 "%u: Cannot configure legacy VNI %u, it is in use by EVI %s",
+			 bgp->vrf_id, vni, evi->name);
+		return NULL;
+	}
 	if (!evi) {
 		/* Check if this L2VNI is already configured as L3VNI */
 		if (bgp_evpn_lookup_l3vni_l2vni_table(vni)) {
@@ -3274,25 +3283,62 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgp_evpn_evi *ev
 }
 
 /*
- * EVPN (VNI advertisement) enabled. Register with zebra.
+ * Designate this instance's VRF as a VXLAN underlay: enables EVPN processing
+ * for it in zebra (zebra scans the dataplane and starts reporting VNIs).
  */
-static void evpn_set_advertise_all_vni(struct bgp *bgp)
+static void evpn_set_vxlan_underlay(struct bgp *bgp)
 {
-	bgp->advertise_all_vni = true;
+	if (bgp->evpn_vxlan_underlay_cfgd)
+		return;
+
+	bgp->evpn_vxlan_underlay_cfgd = true;
 	bgp_set_evpn_master_instance(bgp);
-	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
+	bgp_zebra_advertise_all_vni(bgp, true);
 }
 
 /*
- * EVPN (VNI advertisement) disabled. De-register with zebra. Cleanup VNI
+ * Underlay designation removed. De-register with zebra. Cleanup VNI
  * cache, EVPN routes (delete and withdraw from peers).
  */
-static void evpn_unset_advertise_all_vni(struct bgp *bgp)
+static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 {
-	bgp->advertise_all_vni = false;
+	if (!bgp->evpn_vxlan_underlay_cfgd)
+		return;
+
+	bgp->evpn_vxlan_underlay_cfgd = false;
 	bgp_set_evpn_master_instance(bgp_get_default());
-	bgp_zebra_advertise_all_vni(bgp, bgp->advertise_all_vni);
+	bgp_zebra_advertise_all_vni(bgp, false);
 	bgp_evpn_cleanup_on_disable(bgp);
+}
+
+/*
+ * Opt into auto-creation of EVIs for VNIs discovered in this underlay's
+ * dataplane. Without it, only explicitly configured EVIs/VNIs are served.
+ */
+static void evpn_set_auto_discover_vnis(struct bgp *bgp)
+{
+	if (bgp->evpn_auto_discover_vnis)
+		return;
+
+	bgp->evpn_auto_discover_vnis = true;
+	/* Re-trigger the zebra scan so that enabling this at runtime picks up
+	 * already-existing dataplane VNIs immediately (zebra re-reports all
+	 * VNIs of the underlay; reports for known EVIs are idempotent).
+	 */
+	if (bgp->evpn_vxlan_underlay_cfgd)
+		bgp_zebra_advertise_all_vni(bgp, true);
+}
+
+static void evpn_unset_auto_discover_vnis(struct bgp *bgp)
+{
+	if (!bgp->evpn_auto_discover_vnis)
+		return;
+
+	bgp->evpn_auto_discover_vnis = false;
+	/* Drop EVIs that exist solely due to auto-discovery (withdraws their
+	 * routes); configured ones are kept.
+	 */
+	bgp_evpn_delete_auto_discovered_evis(bgp);
 }
 
 /* Set resolve overlay index flag */
@@ -3360,8 +3406,19 @@ static void bgp_evpn_config_write_evi(struct vty *vty, struct bgp_evpn_evi *evi)
 	if (!bgp_evpn_evi_is_user_configured(evi))
 		return;
 
+	/* Only legacy `vni X` EVIs are written here; new-style EVIs
+	 * (vlan-based-evi) are written under their tenant VRF
+	 */
+	if (evi->origin != BGP_EVPN_EVI_ORIGIN_LEGACY_VNI)
+		return;
+
 
 	vty_out(vty, "  vni %u\n", evi->vni);
+
+	/* auto-tenant-vrf is the (deprecated) default and not written */
+	if (evi->cfgd_tenant_vrf_name)
+		vty_out(vty, "   tenant-vrf %s\n", evi->cfgd_tenant_vrf_name);
+
 	if (bgp_evpn_evi_is_rd_configured(evi))
 		vty_out(vty, "   rd %s\n", evi->prd_pretty);
 
@@ -3504,26 +3561,188 @@ DEFPY (no_bgp_evpn_advertise_default_gw,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_evpn_advertise_all_vni,
-       bgp_evpn_advertise_all_vni_cmd,
-       "advertise-all-vni",
-       "Advertise All local VNIs\n")
+/* Check that no OTHER instance is already designated as underlay.
+ * Temporary limitation until full multi-underlay support: only one underlay
+ * may exist, and it is the EVPN master instance.
+ */
+static bool evpn_vxlan_underlay_allowed(struct vty *vty, struct bgp *bgp)
+{
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+
+	if (bgp_evpn_mi && bgp_evpn_mi != bgp && bgp_evpn_mi->evpn_vxlan_underlay_cfgd) {
+		vty_out(vty,
+			"%% Only one VXLAN underlay VRF is supported for now! Please unconfigure in VRF %s first\n",
+			bgp_evpn_mi->name_pretty);
+		return false;
+	}
+	return true;
+}
+
+DEFPY (bgp_evpn_vxlan_underlay,
+       bgp_evpn_vxlan_underlay_cmd,
+       "[no$no] vxlan-underlay",
+       NO_STR
+       "Designate this VRF as a VXLAN underlay (hosts VTEPs, enables EVPN processing for it)\n")
 {
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn_mi = NULL;
 
 	if (!bgp)
 		return CMD_WARNING;
 
-	/* How or WHY does this even work?? bgp_evpn_mi should never be null due to bgp_set_evpn_master_instance?  */
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (bgp_evpn_mi && bgp_evpn_mi != bgp) {
-		vty_out(vty, "%% There can only be one EVPN master VRF! Please unconfigure in VRF %s first\n",
-			bgp_evpn_mi->name_pretty);
-		return CMD_WARNING_CONFIG_FAILED;
+	if (no) {
+		if (!bgp->evpn_vxlan_underlay_cfgd) {
+			vty_out(vty, "%% vxlan-underlay is not configured in this VRF\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		evpn_unset_vxlan_underlay(bgp);
+		return CMD_SUCCESS;
 	}
 
-	evpn_set_advertise_all_vni(bgp);
+	if (!evpn_vxlan_underlay_allowed(vty, bgp))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	evpn_set_vxlan_underlay(bgp);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_auto_discover_vnis,
+       bgp_evpn_auto_discover_vnis_cmd,
+       "[no$no] auto-discover-vnis",
+       NO_STR
+       "Automatically create EVIs for VNIs discovered in this underlay's dataplane\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	if (no) {
+		evpn_unset_auto_discover_vnis(bgp);
+		return CMD_SUCCESS;
+	}
+
+	if (!bgp->evpn_vxlan_underlay_cfgd)
+		vty_out(vty,
+			"%% Note: auto-discover-vnis has no effect until vxlan-underlay is configured\n");
+
+	evpn_set_auto_discover_vnis(bgp);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_underlay_vrf,
+       bgp_evpn_underlay_vrf_cmd,
+       "[no$no] underlay-vrf ![VRFNAME$vrfname]",
+       NO_STR
+       "Bind this (tenant) VRF to its EVPN underlay VRF (used for route origination)\n"
+       "Name of the underlay VRF\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	if (no) {
+		if (!bgp->evpn_cfgd_underlay_vrf_name) {
+			vty_out(vty, "%% underlay-vrf is not configured\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vrfname && strcmp(vrfname, bgp->evpn_cfgd_underlay_vrf_name) != 0) {
+			vty_out(vty, "%% Configured underlay-vrf is %s, not %s\n",
+				bgp->evpn_cfgd_underlay_vrf_name, vrfname);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
+		return CMD_SUCCESS;
+	}
+
+	if (bgp->evpn_cfgd_underlay_vrf_name &&
+	    strcmp(bgp->evpn_cfgd_underlay_vrf_name, vrfname) == 0)
+		return CMD_SUCCESS;
+
+	XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
+	bgp->evpn_cfgd_underlay_vrf_name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
+
+	/* Resolution is lazy (by name): the underlay instance does not need
+	 * to exist (yet). Operative use of this binding comes with the
+	 * import/origination decoupling.
+	 */
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_origination_l3vni,
+       bgp_evpn_origination_l3vni_cmd,
+       "[no$no] origination-l3vni ![(1-16777215)$vni] [prefix-routes-only$pro]",
+       NO_STR
+       "L3VNI this (tenant) VRF uses to originate EVPN routes (without it the VRF is import-only)\n"
+       "VNI number\n"
+       "Do not advertise MAC/IP routes for this VRF (type-5 routes only)\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_iter;
+	struct listnode *node;
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	if (no) {
+		if (!bgp->evpn_cfgd_l3vni) {
+			vty_out(vty, "%% origination-l3vni is not configured\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vni && (vni_t)vni != bgp->evpn_cfgd_l3vni) {
+			vty_out(vty, "%% Configured origination-l3vni is %u, not %u\n",
+				bgp->evpn_cfgd_l3vni, (vni_t)vni);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		bgp->evpn_cfgd_l3vni = 0;
+		bgp->evpn_cfgd_l3vni_prefix_routes_only = false;
+		return CMD_SUCCESS;
+	}
+
+	/* VNI claim checks: a VNI may be claimed by at most one object */
+	if ((vni_t)vni != bgp->evpn_cfgd_l3vni) {
+		if (bgp_evpn_lookup_evi_by_vni(NULL, vni)) {
+			vty_out(vty, "%% VNI %u is already in use by an EVI (as L2VNI)\n",
+				(vni_t)vni);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_iter)) {
+			if (bgp_iter != bgp && bgp_iter->evpn_cfgd_l3vni == (vni_t)vni) {
+				vty_out(vty, "%% VNI %u is already configured as origination-l3vni of VRF %s\n",
+					(vni_t)vni, bgp_iter->name_pretty);
+				return CMD_WARNING_CONFIG_FAILED;
+			}
+		}
+	}
+
+	bgp->evpn_cfgd_l3vni = vni;
+	bgp->evpn_cfgd_l3vni_prefix_routes_only = !!pro;
+
+	/* NOTE: until the VNI intent direction reversal lands, this must
+	 * match the `vni X` configured for the VRF in zebra; zebra remains
+	 * the source for the operative L3VNI binding.
+	 */
+	return CMD_SUCCESS;
+}
+
+/* Legacy alias: advertise-all-vni = vxlan-underlay + auto-discover-vnis.
+ * Config write emits the new statements (one-way translation).
+ */
+DEFPY (bgp_evpn_advertise_all_vni,
+       bgp_evpn_advertise_all_vni_cmd,
+       "advertise-all-vni",
+       "Advertise All local VNIs (deprecated alias for vxlan-underlay + auto-discover-vnis)\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	if (!evpn_vxlan_underlay_allowed(vty, bgp))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	evpn_set_vxlan_underlay(bgp);
+	evpn_set_auto_discover_vnis(bgp);
 	return CMD_SUCCESS;
 }
 
@@ -3531,19 +3750,21 @@ DEFPY (no_bgp_evpn_advertise_all_vni,
        no_bgp_evpn_advertise_all_vni_cmd,
        "no advertise-all-vni",
        NO_STR
-       "Advertise All local VNIs\n")
+       "Advertise All local VNIs (deprecated alias for vxlan-underlay + auto-discover-vnis)\n")
 {
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 
 	if (!bgp)
 		return CMD_WARNING;
 
-	if(!bgp->advertise_all_vni) {
-		vty_out(vty, "%% VRF is not the EVPN master VRF, advertise-all-vni is not configured\n");
+	if(!bgp->evpn_vxlan_underlay_cfgd) {
+		vty_out(vty, "%% VRF is not a VXLAN underlay, advertise-all-vni is not configured\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	evpn_unset_advertise_all_vni(bgp);
+	/* The underlay-unset cleanup already removes auto-discovered EVIs */
+	evpn_unset_vxlan_underlay(bgp);
+	bgp->evpn_auto_discover_vnis = false;
 	return CMD_SUCCESS;
 }
 
@@ -5997,15 +6218,23 @@ DEFPY(bgp_evpn_flood_control_vni,
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	enum vxlan_flood_control flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
-	if (vty->node == BGP_EVPN_VNI_NODE)
+	if (vty->node == BGP_EVPN_VNI_NODE || vty->node == BGP_EVPN_EVI_NODE)
 		evpn = VTY_GET_CONTEXT_SUB(bgp_evpn_evi);
 
-	if (!bgp_evpn_mi)
-		return CMD_WARNING;
+	if (vty->node == BGP_EVPN_EVI_NODE) {
+		/* Context is the tenant VRF; flood-control change processing
+		 * needs the master instance (may be NULL without an underlay -
+		 * nothing to re-advertise then)
+		 */
+		bgp_evpn_mi = bgp_get_evpn_master_instance();
+	} else {
+		if (!bgp_evpn_mi)
+			return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
+		if (!is_evpn_master_instance(bgp_evpn_mi)) {
+			vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+			return CMD_WARNING;
+		}
 	}
 
 	if (!evpn)
@@ -6024,7 +6253,8 @@ DEFPY(bgp_evpn_flood_control_vni,
 		return CMD_SUCCESS;
 
 	evpn->vxlan_flood_ctrl = flood_ctrl;
-	bgp_evpn_flood_control_change(bgp_evpn_mi);
+	if (bgp_evpn_mi)
+		bgp_evpn_flood_control_change(bgp_evpn_mi);
 
 	return CMD_SUCCESS;
 }
@@ -6115,6 +6345,190 @@ DEFPY_NOSH (exit_vni,
 	return CMD_SUCCESS;
 }
 
+DEFPY_NOSH (bgp_evpn_vlan_based_evi,
+            bgp_evpn_vlan_based_evi_cmd,
+            "vlan-based-evi EVINAME$eviname",
+            "EVPN Instance with VLAN-Based Service Interface (one broadcast domain per EVI)\n"
+            "Name of the EVI (unique within this tenant VRF)\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp_evpn_evi *evi;
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	if (!bgp_evpn_evi_name_is_valid(eviname)) {
+		vty_out(vty, "%% Invalid EVI name (allowed characters: a-z A-Z 0-9 - _)\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	evi = bgp_evpn_evi_lookup_by_name(bgp, eviname);
+	if (!evi)
+		evi = bgp_evpn_evi_new_cfgd(bgp, eviname);
+
+	VTY_PUSH_CONTEXT_SUB(BGP_EVPN_EVI_NODE, evi);
+	return CMD_SUCCESS;
+}
+
+DEFPY (no_bgp_evpn_vlan_based_evi,
+       no_bgp_evpn_vlan_based_evi_cmd,
+       "no vlan-based-evi EVINAME$eviname",
+       NO_STR
+       "EVPN Instance with VLAN-Based Service Interface (one broadcast domain per EVI)\n"
+       "Name of the EVI (unique within this tenant VRF)\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp_evpn_evi *evi;
+
+	if (!bgp)
+		return CMD_WARNING;
+
+	evi = bgp_evpn_evi_lookup_by_name(bgp, eviname);
+	if (!evi) {
+		vty_out(vty, "%% EVI %s does not exist in this VRF\n", eviname);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_evpn_cfgd_evi_delete(evi);
+	return CMD_SUCCESS;
+}
+
+DEFPY_NOSH (exit_evi,
+            exit_evi_cmd,
+            "exit-evi",
+            "Exit from EVI mode\n")
+{
+	if (vty->node == BGP_EVPN_EVI_NODE)
+		vty->node = BGP_EVPN_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_evi_underlay_vrf,
+       bgp_evpn_evi_underlay_vrf_cmd,
+       "[no$no] underlay-vrf ![VRFNAME$vrfname]",
+       NO_STR
+       "Bind this EVI to its EVPN underlay VRF (used for route origination)\n"
+       "Name of the underlay VRF\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
+
+	if (no) {
+		if (!evi->cfgd_underlay_vrf_name) {
+			vty_out(vty, "%% underlay-vrf is not configured for this EVI\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vrfname && strcmp(vrfname, evi->cfgd_underlay_vrf_name) != 0) {
+			vty_out(vty, "%% Configured underlay-vrf is %s, not %s\n",
+				evi->cfgd_underlay_vrf_name, vrfname);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
+		return CMD_SUCCESS;
+	}
+
+	if (evi->cfgd_underlay_vrf_name && strcmp(evi->cfgd_underlay_vrf_name, vrfname) == 0)
+		return CMD_SUCCESS;
+
+	XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
+	evi->cfgd_underlay_vrf_name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
+
+	/* Resolution is lazy (by name). While the single-underlay limitation
+	 * is in place, the master instance serves all EVIs operatively.
+	 */
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_evi_origination_l2vni,
+       bgp_evpn_evi_origination_l2vni_cmd,
+       "[no$no] origination-l2vni ![(1-16777215)$vni]",
+       NO_STR
+       "L2VNI this EVI uses to originate EVPN routes (without it the EVI is import-only)\n"
+       "VNI number\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
+	struct bgp *bgp_iter;
+	struct listnode *node;
+	struct bgp_evpn_evi *other;
+
+	if (no) {
+		if (!evi->vni) {
+			vty_out(vty, "%% origination-l2vni is not configured for this EVI\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vni && evi->vni != (vni_t)vni) {
+			vty_out(vty, "%% Configured origination-l2vni is %u, not %u\n",
+				evi->vni, (vni_t)vni);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		bgp_evpn_evi_set_origination_l2vni(evi, 0);
+		return CMD_SUCCESS;
+	}
+
+	if (evi->vni == (vni_t)vni)
+		return CMD_SUCCESS;
+
+	/* VNI claim checks: a VNI may be claimed by at most one object */
+	other = bgp_evpn_lookup_evi_by_vni(NULL, vni);
+	if (other && other != evi) {
+		vty_out(vty, "%% VNI %u is already in use by EVI %s\n", (vni_t)vni, other->name);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	if (bgp_evpn_lookup_l3vni_l2vni_table(vni)) {
+		vty_out(vty, "%% VNI %u is already in use as an L3VNI\n", (vni_t)vni);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_iter)) {
+		if (bgp_iter->evpn_cfgd_l3vni == (vni_t)vni) {
+			vty_out(vty, "%% VNI %u is already configured as origination-l3vni of VRF %s\n",
+				(vni_t)vni, bgp_iter->name_pretty);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	}
+
+	bgp_evpn_evi_set_origination_l2vni(evi, vni);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_vni_tenant_vrf,
+       bgp_evpn_vni_tenant_vrf_cmd,
+       "[no$no] tenant-vrf ![VRFNAME$vrfname]",
+       NO_STR
+       "Explicitly bind this EVI to its tenant VRF (instead of deriving it from the dataplane)\n"
+       "Name of the tenant VRF\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
+
+	if (no) {
+		if (!evi->cfgd_tenant_vrf_name) {
+			vty_out(vty, "%% tenant-vrf is not configured for this VNI\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vrfname && strcmp(vrfname, evi->cfgd_tenant_vrf_name) != 0) {
+			vty_out(vty, "%% Configured tenant-vrf is %s, not %s\n",
+				evi->cfgd_tenant_vrf_name, vrfname);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		/* Back to (deprecated) dataplane-derived tenancy */
+		bgp_evpn_evi_set_cfgd_tenant_vrf(evi, NULL);
+		return CMD_SUCCESS;
+	}
+
+	bgp_evpn_evi_set_cfgd_tenant_vrf(evi, vrfname);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_vni_auto_tenant_vrf,
+       bgp_evpn_vni_auto_tenant_vrf_cmd,
+       "auto-tenant-vrf",
+       "Derive this EVI's tenant VRF from the dataplane (deprecated default)\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
+
+	vty_out(vty, "%% Warning: auto-tenant-vrf (dataplane-derived tenancy) is deprecated and will be removed; configure tenant-vrf explicitly\n");
+	bgp_evpn_evi_set_cfgd_tenant_vrf(evi, NULL);
+	return CMD_SUCCESS;
+}
+
 DEFPY (bgp_evpn_vrf_rd,
        bgp_evpn_vrf_rd_cmd,
        "rd ASN:NN_OR_IP-ADDRESS:NN",
@@ -6200,6 +6614,35 @@ DEFPY (no_bgp_evpn_vrf_rd_without_val,
 	return CMD_SUCCESS;
 }
 
+/* Resolve the EVPN (master) instance for commands shared between the legacy
+ * `vni X` node and the new `vlan-based-evi NAME` node. On the legacy node the
+ * vty context instance must BE the master instance. On the EVI node the
+ * context is the tenant VRF and the master instance is fetched globally - it
+ * may legitimately be NULL there (no underlay configured yet): it is only
+ * needed for live-EVI route actions, and an EVI cannot be live without an
+ * underlay. Returns false (with a message) when the command is not allowed.
+ */
+static bool evi_node_get_evpn_instance(struct vty *vty, struct bgp **bgp_evpn_mi)
+{
+	struct bgp *ctx = VTY_GET_CONTEXT(bgp);
+
+	if (vty->node == BGP_EVPN_EVI_NODE) {
+		*bgp_evpn_mi = bgp_get_evpn_master_instance();
+		return true;
+	}
+
+	if (!ctx)
+		return false;
+
+	if (!is_evpn_master_instance(ctx)) {
+		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		return false;
+	}
+
+	*bgp_evpn_mi = ctx;
+	return true;
+}
+
 DEFPY (bgp_evpn_vni_rd,
        bgp_evpn_vni_rd_cmd,
        "rd ASN:NN_OR_IP-ADDRESS:NN",
@@ -6207,17 +6650,15 @@ DEFPY (bgp_evpn_vni_rd,
        EVPN_ASN_IP_HELP_STR)
 {
 	struct prefix_rd prd;
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp_evpn_mi || !asn_nn_or_ip_address_nn)
+	if (!asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-	}
 
 	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
@@ -6242,17 +6683,15 @@ DEFPY (no_bgp_evpn_vni_rd,
        EVPN_ASN_IP_HELP_STR)
 {
 	struct prefix_rd prd;
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	int ret;
 
-	if (!bgp_evpn_mi || !asn_nn_or_ip_address_nn)
+	if (!asn_nn_or_ip_address_nn)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-	}
 
 	ret = str2prefix_rd(asn_nn_or_ip_address_nn, &prd);
 	if (!ret) {
@@ -6282,16 +6721,11 @@ DEFPY (no_bgp_evpn_vni_rd_without_val,
        NO_STR
        EVPN_RT_DIST_HELP_STR)
 {
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
-	if (!bgp_evpn_mi)
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
-	}
 
 	/* Check if we should disallow. */
 	if (!bgp_evpn_evi_is_rd_configured(evi)) {
@@ -6773,17 +7207,12 @@ DEFPY (bgp_evpn_vni_rt,
 	int rtlist_idx = 2; /* "route-target" "<direction>" RTLIST... */
 	int rtlist_argc;
 	struct cmd_token **rtlist_argv;
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	enum bgp_evpn_rt_direction direction;
 
-	if (!bgp_evpn_mi)
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
-	}
 
 
 	/* Convert the both / import / export token to bgp_evpn_rt_direction */
@@ -6813,17 +7242,12 @@ DEFPY (no_bgp_evpn_vni_rt,
 	int rtlist_idx = 3; /* "no" "route-target" "<direction>" RTLIST... */
 	int rtlist_argc;
 	struct cmd_token **rtlist_argv;
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	enum bgp_evpn_rt_direction direction;
 
-	if (!bgp_evpn_mi)
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
-	}
 
 
 	/* Convert the both / import / export token to bgp_evpn_rt_direction */
@@ -6849,18 +7273,13 @@ DEFPY (bgp_evpn_vni_rt_auto,
        "Automatically derive route target\n"
        "Explicitly disable automatic route target derivation\n")
 {
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	enum bgp_evpn_rt_direction direction;
 	enum bgp_evpn_autort_cfgd cfg;
 
-	if (!bgp_evpn_mi)
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
-	}
 
 
 	/* Convert the both / import / export token to bgp_evpn_rt_direction */
@@ -6888,17 +7307,12 @@ DEFPY (no_bgp_evpn_vni_rt_auto_without_val,
        "export\n"
        "Automatically derive route target\n")
 {
-	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp_evpn_mi = NULL;
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 	enum bgp_evpn_rt_direction direction;
 
-	if (!bgp_evpn_mi)
+	if (!evi_node_get_evpn_instance(vty, &bgp_evpn_mi))
 		return CMD_WARNING;
-
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
-		return CMD_WARNING;
-	}
 
 
 	/* Convert the both / import / export token to bgp_evpn_rt_direction */
@@ -6911,6 +7325,43 @@ DEFPY (no_bgp_evpn_vni_rt_auto_without_val,
 	}
 
 	return CMD_SUCCESS;
+}
+
+static int evi_name_cmp(const void **a, const void **b)
+{
+	const struct bgp_evpn_evi *first = *a;
+	const struct bgp_evpn_evi *secnd = *b;
+
+	return strcmp(first->name, secnd->name);
+}
+
+/* Config write for a new-style configured EVI (under its tenant VRF's l2vpn
+ * evpn address-family)
+ */
+static void bgp_evpn_config_write_cfgd_evi(struct vty *vty, struct bgp_evpn_evi *evi)
+{
+	vty_out(vty, "  vlan-based-evi %s\n", evi->name);
+
+	if (evi->cfgd_underlay_vrf_name)
+		vty_out(vty, "   underlay-vrf %s\n", evi->cfgd_underlay_vrf_name);
+
+	if (evi->vni)
+		vty_out(vty, "   origination-l2vni %u\n", evi->vni);
+
+	if (bgp_evpn_evi_is_rd_configured(evi))
+		vty_out(vty, "   rd %s\n", evi->prd_pretty);
+
+	if (!evi->bgp_vrf ||
+	    (evi->bgp_vrf && (evi->vxlan_flood_ctrl != evi->bgp_vrf->vxlan_flood_ctrl))) {
+		if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
+			vty_out(vty, "   flooding disable\n");
+		else if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL)
+			vty_out(vty, "   flooding head-end-replication\n");
+	}
+
+	bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, "   ");
+
+	vty_out(vty, "  exit-evi\n");
 }
 
 static int vni_cmp(const void **a, const void **b)
@@ -6930,10 +7381,24 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	assert(bgp_vrf->evpn_info != NULL);
 	assert(bgp_vrf->vrf_route_target_config != NULL);
 
-	if (bgp_vrf->advertise_all_vni)
-		vty_out(vty, "  advertise-all-vni\n");
+	/* Legacy advertise-all-vni is translated one-way: config write always
+	 * emits the new statements.
+	 */
+	if (bgp_vrf->evpn_vxlan_underlay_cfgd)
+		vty_out(vty, "  vxlan-underlay\n");
+	if (bgp_vrf->evpn_auto_discover_vnis)
+		vty_out(vty, "  auto-discover-vnis\n");
 
-	if (evihash_count(&bgp_evpn_gbl()->evihash)) {
+	if (bgp_vrf->evpn_cfgd_underlay_vrf_name)
+		vty_out(vty, "  underlay-vrf %s\n", bgp_vrf->evpn_cfgd_underlay_vrf_name);
+	if (bgp_vrf->evpn_cfgd_l3vni)
+		vty_out(vty, "  origination-l3vni %u%s\n", bgp_vrf->evpn_cfgd_l3vni,
+			bgp_vrf->evpn_cfgd_l3vni_prefix_routes_only ? " prefix-routes-only" : "");
+
+	/* Legacy `vni X` blocks: only allowed in (and written for) the master
+	 * instance - the VNI index is global, so don't dump it elsewhere
+	 */
+	if (is_evpn_master_instance(bgp_vrf) && evihash_count(&bgp_evpn_gbl()->evihash)) {
 		struct list *vnilist = list_new();
 		struct bgp_evpn_evi *evi_entry;
 		struct listnode *ln;
@@ -6947,6 +7412,23 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 			bgp_evpn_config_write_evi(vty, data);
 
 		list_delete(&vnilist);
+	}
+
+	/* New-style EVIs configured under this (tenant) VRF, by name */
+	if (evi_name_hash_count(&bgp_vrf->evis_by_name)) {
+		struct list *evilist = list_new();
+		struct bgp_evpn_evi *evi_entry;
+		struct listnode *ln;
+		struct bgp_evpn_evi *data;
+
+		frr_each(evi_name_hash, &bgp_vrf->evis_by_name, evi_entry)
+			listnode_add(evilist, evi_entry);
+
+		list_sort(evilist, evi_name_cmp);
+		for (ALL_LIST_ELEMENTS_RO(evilist, ln, data))
+			bgp_evpn_config_write_cfgd_evi(vty, data);
+
+		list_delete(&evilist);
 	}
 
 	if (bgp_vrf->evpn_autort_rfc8365_compatible)
@@ -7129,6 +7611,10 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_ip_bgp_l2vpn_evpn_all_overlay_cmd);
 	install_element(BGP_EVPN_NODE, &no_evpnrt5_network_cmd);
 	install_element(BGP_EVPN_NODE, &evpnrt5_network_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vxlan_underlay_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_auto_discover_vnis_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_underlay_vrf_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_origination_l3vni_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_all_vni_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_all_vni_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_evpn_autort_rfc8365_compatible_cmd);
@@ -7216,7 +7702,24 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_tenant_vrf_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_auto_tenant_vrf_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_flood_control_vni_cmd);
+
+	/* New-style EVI node (`vlan-based-evi NAME` under the tenant VRF) */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vlan_based_evi_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &exit_evi_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_evi_underlay_vrf_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_evi_origination_l2vni_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_vni_rd_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &no_bgp_evpn_vni_rd_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &no_bgp_evpn_vni_rd_without_val_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_vni_rt_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_vni_rt_auto_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &no_bgp_evpn_vni_rt_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &no_bgp_evpn_vni_rt_auto_without_val_cmd);
+	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_flood_control_vni_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rd_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_without_val_cmd);

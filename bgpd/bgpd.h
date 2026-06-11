@@ -1015,12 +1015,24 @@ struct bgp {
 	 */
 	bool advertise_gw_macip;
 
-	/* Master EVPN enable flag
-	 * If this flag is set, EVPN is enabled and this BGP Instance is designated as **Master EVPN instance**!
-	 * Typically, the Master EVPN Instance is also used as the underlay VRF for the VXLAN Local Tunnel IPs
-	 * Can only be set on ONE BGP instance!
+	/* `vxlan-underlay`: this instance's VRF is a VXLAN underlay (hosts
+	 * VTEPs); EVPN processing is enabled for it in zebra.
+	 *
+	 * Replaces the enable-half of the legacy `advertise-all-vni` (which is
+	 * now an alias for vxlan-underlay + auto-discover-vnis). Until full
+	 * multi-underlay support lands, only ONE instance may set this and it
+	 * is designated the EVPN master instance (bm->bgp_evpn_mi).
 	 */
-	bool advertise_all_vni;
+	bool evpn_vxlan_underlay_cfgd;
+
+	/* `auto-discover-vnis`: VNIs discovered in this underlay's dataplane
+	 * (reported by zebra) automatically create EVIs
+	 * (BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED). Without it, only explicitly
+	 * configured EVIs/VNIs are served. This is the auto-discovery-half of
+	 * the legacy `advertise-all-vni` behavior. Only meaningful together
+	 * with evpn_vxlan_underlay_cfgd.
+	 */
+	bool evpn_auto_discover_vnis;
 
 	/* draft-ietf-idr-deprecate-as-set-confed-set
 	 * Reject aspaths with AS_SET and/or AS_CONFED_SET.
@@ -1059,10 +1071,27 @@ struct bgp {
 	/* Effective Fully-Qualified Export Route Targets (Export RT cannot be wildcard!) */
 	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
 
-	/* EVPN Underlay VRF to which this VRF is linked */
+	/* EVPN Underlay VRF to which this VRF is linked.
+	 * NOTE: currently still derived from the zebra L3VNI report; will be
+	 * driven purely by the configured intent below once the VNI intent
+	 * direction reversal (bgpd -> zebra) lands.
+	 */
 	struct bgp *evpn_underlay_vrf;
 
-	/* L3-VNI corresponding to this vrf */
+	/* Configured intent: `underlay-vrf NAME` under this (tenant) VRF's
+	 * l2vpn evpn address-family. Stored by name and resolved lazily, so
+	 * config ordering and underlay instance lifecycle don't matter.
+	 */
+	char *evpn_cfgd_underlay_vrf_name;
+
+	/* Configured intent: `origination-l3vni X [prefix-routes-only]`.
+	 * 0 = no L3VNI configured (VRF is import-only: it can import EVPN
+	 * routes via its RTs but cannot originate any).
+	 */
+	vni_t evpn_cfgd_l3vni;
+	bool evpn_cfgd_l3vni_prefix_routes_only;
+
+	/* L3-VNI corresponding to this vrf (dataplane state, from zebra) */
 	vni_t l3vni;
 
 	/* router-mac to be used in mac-ip routes for this vrf */

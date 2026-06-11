@@ -165,7 +165,8 @@ enum node_type {
 	VTY_NODE,		 /* Vty node. */
 	FPM_NODE,		 /* Dataplane FPM node. */
 	LINK_PARAMS_NODE,	/* Link-parameters node */
-	BGP_EVPN_VNI_NODE,       /* BGP EVPN VNI */
+	BGP_EVPN_VNI_NODE,       /* BGP EVPN VNI (legacy `vni X` config) */
+	BGP_EVPN_EVI_NODE,       /* BGP EVPN EVI (`vlan-based-evi NAME`) */
 	RPKI_NODE,     /* RPKI node for configuration of RPKI cache server
 			  connections.*/
 	BGP_FLOWSPECV4_NODE,	/* BGP IPv4 FLOWSPEC Address-Family */

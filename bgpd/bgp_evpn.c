@@ -637,6 +637,13 @@ static bool _bgp_evpn_evi_should_generate_autort(const struct bgp_evpn_evi *evi,
 	if(!bgp_evpn_evi_is_user_configured(evi))
 		return false;
 
+	/* Auto RTs are derived from the VNI - an EVI without an (origination)
+	 * VNI has nothing to derive them from (import-only EVIs need manual
+	 * RTs)
+	 */
+	if (!evi->vni)
+		return false;
+
 	return _bgp_evpn_should_generate_autort_common(
 		rt_config->autort_cfgd_both,
 		direction_autort_cfg,
@@ -8361,6 +8368,11 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 	evi->type = BGP_EVPN_EVI_TYPE_VLAN_BASED;
 	evi->origin = origin;
 	evi->name = bgp_evpn_evi_generate_name(origin, vni);
+	/* Legacy and auto-discovered EVIs derive their tenant VRF from the
+	 * dataplane by default (deprecated); new-style configured EVIs get it
+	 * from their config location.
+	 */
+	evi->auto_tenant_vrf = (origin != BGP_EVPN_EVI_ORIGIN_CFG);
 	evi->originator_ip = *originator_ip;
 	evi->tenant_vrf_id = tenant_vrf_id;
 	evi->mcast_grp = mcast_grp;
@@ -8407,6 +8419,139 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 
 	QOBJ_REG(evi, bgp_evpn_evi);
 	return evi;
+}
+
+/* Create a new-style configured EVI (`vlan-based-evi NAME` under a tenant
+ * VRF's l2vpn evpn address-family). The EVI starts without any VNI
+ * (import-only: it can import routes via its - then necessarily manual - RTs,
+ * but cannot originate routes) and without an underlay binding. Its tenant
+ * VRF is fixed by the config location and never derived from the dataplane.
+ */
+struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *name)
+{
+	struct bgp_evpn_evi *evi;
+
+	evi = XCALLOC(MTYPE_BGP_EVPN_EVI, sizeof(struct bgp_evpn_evi));
+
+	evi->vni = 0;
+	evi->type = BGP_EVPN_EVI_TYPE_VLAN_BASED;
+	evi->origin = BGP_EVPN_EVI_ORIGIN_CFG;
+	evi->name = XSTRDUP(MTYPE_BGP_NAME, name);
+	evi->auto_tenant_vrf = false;
+	evi->tenant_vrf_id = tenant_bgp->vrf_id;
+	SET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
+	evi->vxlan_flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
+
+	/* Placeholder; actual origination requires an underlay + VNI */
+	SET_IPADDR_V4(&evi->originator_ip);
+	evi->originator_ip.ipaddr_v4 = tenant_bgp->router_id;
+
+	evi->evi_rt_config = bgp_evpn_rt_config_new();
+	bgp_evpn_effective_wildcard_rt_slu_init(&evi->effective_wildcard_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&evi->effective_fq_import_rts);
+	bgp_evpn_effective_fq_rt_slu_init(&evi->effective_fq_export_rts);
+
+	bgp_evpn_evi_regenerate_effective_import_rts(evi);
+	bgp_evpn_evi_map_to_evi_irt_nodes(evi);
+	bgp_evpn_evi_regenerate_effective_export_rts(evi);
+
+	bf_assign_index(bm->rd_idspace, evi->rd_id);
+	bgp_evpn_evi_derive_auto_rd(tenant_bgp, evi);
+
+	/* Initialize EVPN route tables. */
+	evi->ip_table = bgp_table_init(tenant_bgp, AFI_L2VPN, SAFI_EVPN);
+	evi->mac_table = bgp_table_init(tenant_bgp, AFI_L2VPN, SAFI_EVPN);
+
+	/* No VNI yet -> not in the VNI index (evihash) */
+
+	/* Configured EVIs register in their tenant VRF's name registry */
+	evi_name_hash_add(&tenant_bgp->evis_by_name, evi);
+
+	bgp_evpn_remote_ip_hash_init(evi);
+
+	/* The tenant binding is fixed by the config location - link directly.
+	 * (bgp_evpn_evi_link_to_vrf() requires the VRF to have an L3VNI,
+	 * which must NOT be a precondition for configured EVIs.)
+	 */
+	if (bgp_evis_slu_add(&tenant_bgp->evis, evi) == NULL)
+		evi->bgp_vrf = bgp_lock(tenant_bgp);
+
+	bgp_evpn_vni_es_init(evi);
+
+	QOBJ_REG(evi, bgp_evpn_evi);
+	return evi;
+}
+
+/* Delete a new-style configured EVI (`no vlan-based-evi NAME`): withdraw its
+ * originated routes, uninstall its imported routes, drop it from the pending
+ * zebra processing queues and free it.
+ */
+void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
+{
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+
+	/* Withdraw originated routes (only possible when live, which implies
+	 * a master instance exists)
+	 */
+	if (bgp_evpn_mi)
+		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+
+	/* Uninstall imported routes + unmap from the irt nodes */
+	bgp_evpn_evi_teardown_import(evi);
+
+	bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
+	if (CHECK_FLAG(evi->flags, EVI_FLAG_ADD)) {
+		zebra_l2_vni_del(&bm->zebra_l2_vni_head, evi);
+		UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
+	}
+
+	bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
+}
+
+/* Set or clear (vni == 0) the origination L2VNI of a configured EVI.
+ * The VNI is the dataplane binding: with it set, zebra dataplane reports for
+ * that VNI attach to this EVI (making it live, enabling route origination);
+ * without it the EVI is import-only. Auto-RTs are derived from the VNI, so
+ * the effective RTs and the import state must be refreshed around the change.
+ */
+int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
+{
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+
+	if (evi->vni == vni)
+		return 0;
+
+	/* If the EVI is currently live, its routes are tied to the old VNI -
+	 * withdraw them; the dataplane report for the new VNI will bring it
+	 * back up.
+	 */
+	if (bgp_evpn_evi_is_live(evi)) {
+		if (bgp_evpn_mi)
+			bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+		UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
+	}
+
+	if (evi->vni)
+		evihash_del(&bgp_evpn_gbl()->evihash, evi);
+
+	evi->vni = vni;
+
+	if (evi->vni)
+		evihash_add(&bgp_evpn_gbl()->evihash, evi);
+
+	/* Auto-RTs derive from the VNI: refresh effective RTs and re-evaluate
+	 * import/export (handles unmap-before-change internally)
+	 */
+	bgp_evpn_evi_handle_import_rt_change(evi);
+	bgp_evpn_evi_handle_export_rt_change(evi);
+
+	/* The dataplane may already contain the new VNI - re-trigger the zebra
+	 * scan so the report arrives without waiting for a dataplane event
+	 */
+	if (vni && bgp_evpn_mi && bgp_evpn_mi->evpn_vxlan_underlay_cfgd)
+		bgp_zebra_advertise_all_vni(bgp_evpn_mi, true);
+
+	return 0;
 }
 
 /* Transition an EVI between the legacy-configured (`vni X`, name "vni-X") and
@@ -8495,14 +8640,14 @@ void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *
 
 	bf_release_index(bm->rd_idspace, evi->rd_id);
 
-	/* Shouldn't happen, but let's rather be safe than sorry for now... */
-	if (bgp_evpn_mi) {
-		evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
-		if (evi->vni)
-			evihash_del(&bgp_evpn_gbl()->evihash, evi);
-	}
+	/* The hashes are global and always exist - no instance required */
+	evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
+	if (evi->vni)
+		evihash_del(&bgp_evpn_gbl()->evihash, evi);
 
 	XFREE(MTYPE_BGP_NAME, evi->name);
+	XFREE(MTYPE_BGP_NAME, evi->cfgd_tenant_vrf_name);
+	XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
 
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -8901,6 +9046,64 @@ int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni, struct ethaddr *mac,
 	return 0;
 }
 
+/* Re-bind an EVI to a (possibly different) tenant VRF, keeping the
+ * gateway-IP overlay-index nexthop resolution state consistent: remote
+ * MAC/IP-derived nexthops are resolved in the tenant VRF, so they must be
+ * unlinked in the old and re-linked in the new one.
+ */
+void bgp_evpn_evi_apply_tenant_vrf_id(struct bgp_evpn_evi *evi, vrf_id_t tenant_vrf_id)
+{
+	if (evi->tenant_vrf_id == tenant_vrf_id)
+		return;
+
+	/* Unresolve all the gateway IP nexthops for this VNI in the old
+	 * tenant vrf
+	 */
+	bgp_evpn_remote_ip_hash_iterate(evi,
+					(void (*)(struct hash_bucket *, void *))
+						bgp_evpn_remote_ip_hash_unlink_nexthop,
+					evi);
+	bgp_evpn_evi_unlink_from_vrf(evi);
+	evi->tenant_vrf_id = tenant_vrf_id;
+	bgp_evpn_evi_link_to_vrf(evi);
+
+	/* Resolve all the gateway IP nexthops for this VNI in the new
+	 * tenant vrf
+	 */
+	bgp_evpn_remote_ip_hash_iterate(evi,
+					(void (*)(struct hash_bucket *, void *))
+						bgp_evpn_remote_ip_hash_link_nexthop,
+					evi);
+}
+
+/* Set or clear the explicit tenant VRF of a legacy `vni X` EVI.
+ * vrfname == NULL means auto-tenant-vrf: tenancy is (re-)derived from the
+ * dataplane reports (deprecated default).
+ */
+void bgp_evpn_evi_set_cfgd_tenant_vrf(struct bgp_evpn_evi *evi, const char *vrfname)
+{
+	XFREE(MTYPE_BGP_NAME, evi->cfgd_tenant_vrf_name);
+
+	if (!vrfname) {
+		evi->auto_tenant_vrf = true;
+		/* The current (explicitly set) binding stays until the next
+		 * dataplane report re-derives it.
+		 */
+		return;
+	}
+
+	evi->cfgd_tenant_vrf_name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
+	evi->auto_tenant_vrf = false;
+
+	/* Resolve immediately if the VRF exists; otherwise the binding
+	 * resolves when the VRF appears (re-evaluated on dataplane reports
+	 * for now)
+	 */
+	struct vrf *vrf = vrf_lookup_by_name(vrfname);
+
+	bgp_evpn_evi_apply_tenant_vrf_id(evi, vrf ? vrf->vrf_id : VRF_UNKNOWN);
+}
+
 void bgp_evpn_evi_link_to_vrf(struct bgp_evpn_evi *evi)
 {
 	struct bgp *bgp_vrf = NULL;
@@ -8996,8 +9199,8 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 			   prefix_routes_only ? "yes" : "no",
 			   is_anycast_mac ? "yes" : "no");
 
-	if(!underlay_vrf->advertise_all_vni) {
-		zlog_err("Cannot add local L3VNI %u - underlay VRF %s does not have advertise_all_vni enabled", l3vni, underlay_vrf->name);
+	if(!underlay_vrf->evpn_vxlan_underlay_cfgd) {
+		zlog_err("Cannot add local L3VNI %u - underlay VRF %s is not configured as vxlan-underlay", l3vni, underlay_vrf->name);
 		return -1;
 	}
 	/* Limitation for now until we have proper multi-underlay-VRF support */
@@ -9234,8 +9437,8 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 			   vrf_id_to_name(vrf_id), underlay_vrf->name);
 
 
-	if(!underlay_vrf->advertise_all_vni) {
-		zlog_err("Cannot del local L3VNI %u - underlay VRF %s does not have advertise_all_vni enabled", l3vni, underlay_vrf->name);
+	if(!underlay_vrf->evpn_vxlan_underlay_cfgd) {
+		zlog_err("Cannot del local L3VNI %u - underlay VRF %s is not configured as vxlan-underlay", l3vni, underlay_vrf->name);
 		return -1;
 	}
 	/* Limitation for now until we have proper multi-underlay-VRF support */
@@ -9414,8 +9617,8 @@ int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 	if (BGP_DEBUG(zebra, ZEBRA))
 		zlog_debug("EVPN del local L2VNI %u, Underlay VRF %s", vni, underlay_vrf->name);
 
-	if(!underlay_vrf->advertise_all_vni) {zlog_debug("EVPN del local L2VNI %u, Underlay VRF %s", vni, underlay_vrf->name);
-		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
+	if(!underlay_vrf->evpn_vxlan_underlay_cfgd) {zlog_debug("EVPN del local L2VNI %u, Underlay VRF %s", vni, underlay_vrf->name);
+		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s is not configured as vxlan-underlay", vni, underlay_vrf->name);
 		return -1;
 	}
 	/* Limitation for now until we have proper multi-underlay-VRF support */
@@ -9480,8 +9683,8 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 		zlog_debug("EVPN add local L2VNI %u, Underlay VRF %s, originator IP %pIA, tenant VRF %s(ID %u), mcast group %pI4, svi ifindex %u",
 			   vni, underlay_vrf->name, originator_ip, vrf_id_to_name(tenant_vrf_id), tenant_vrf_id, &mcast_grp, svi_ifindex);
 
-	if(!underlay_vrf->advertise_all_vni) {
-		zlog_err("Cannot add local L2VNI %u - underlay VRF %s does not have advertise_all_vni enabled", vni, underlay_vrf->name);
+	if(!underlay_vrf->evpn_vxlan_underlay_cfgd) {
+		zlog_err("Cannot add local L2VNI %u - underlay VRF %s is not configured as vxlan-underlay", vni, underlay_vrf->name);
 		return -1;
 	}
 	/* Limitation for now until we have proper multi-underlay-VRF support */
@@ -9532,31 +9735,19 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				evi);
 		}
 
-		/* Update tenant_vrf_id if it has changed. */
-		if (evi->tenant_vrf_id != tenant_vrf_id) {
+		/* Update the tenant VRF binding if it has changed. EVIs with an
+		 * explicitly configured tenant (`tenant-vrf NAME` or new-style
+		 * config) never derive their tenancy from the dataplane; for
+		 * those with an explicit name, re-attempt resolution (the VRF
+		 * may have appeared in the meantime).
+		 */
+		if (evi->auto_tenant_vrf) {
+			bgp_evpn_evi_apply_tenant_vrf_id(evi, tenant_vrf_id);
+		} else if (evi->cfgd_tenant_vrf_name) {
+			struct vrf *cfgd_vrf = vrf_lookup_by_name(evi->cfgd_tenant_vrf_name);
 
-			/*
-			 * Unresolve all the gateway IP nexthops for this VNI
-			 * in old tenant vrf
-			 */
-			bgp_evpn_remote_ip_hash_iterate(
-				evi,
-				(void (*)(struct hash_bucket *, void *))
-					bgp_evpn_remote_ip_hash_unlink_nexthop,
-				evi);
-			bgp_evpn_evi_unlink_from_vrf(evi);
-			evi->tenant_vrf_id = tenant_vrf_id;
-			bgp_evpn_evi_link_to_vrf(evi);
-
-			/*
-			 * Resolve all the gateway IP nexthops for this VNI
-			 * in new tenant vrf
-			 */
-			bgp_evpn_remote_ip_hash_iterate(
-				evi,
-				(void (*)(struct hash_bucket *, void *))
-					bgp_evpn_remote_ip_hash_link_nexthop,
-				evi);
+			bgp_evpn_evi_apply_tenant_vrf_id(evi, cfgd_vrf ? cfgd_vrf->vrf_id
+								       : VRF_UNKNOWN);
 		}
 
 		/* If tunnel endpoint IP has changed, update (and delete prior
@@ -9570,7 +9761,17 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 		if (bgp_evpn_evi_is_live(evi))
 			bgp_evpn_evi_update_type_1_2_3_routes(underlay_vrf, evi);
 	} else {
-		/* Create or update as appropriate. */
+		/* Unknown VNI: only create an EVI for it if auto-discovery is
+		 * opted in (legacy advertise-all-vni implies it). Otherwise
+		 * the dataplane VNI is simply not served by BGP.
+		 */
+		if (!underlay_vrf->evpn_auto_discover_vnis) {
+			if (bgp_debug_zebra(NULL))
+				zlog_debug("Ignoring local L2VNI %u report from zebra - no matching EVI and auto-discover-vnis not configured in underlay VRF %s",
+					   vni, underlay_vrf->name);
+			return 0;
+		}
+
 		evi = bgp_evpn_evi_new(underlay_vrf, vni, originator_ip, tenant_vrf_id,
 				   mcast_grp, svi_ifindex,
 				   BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED);
@@ -9687,6 +9888,44 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 	evihash_swap_all(&bgp_evpn_gbl()->evihash, &evihash_temp);
 	evihash_fini(&evihash_temp);
 
+}
+
+/* Delete all auto-discovered EVIs (origin AUTO_DISCOVERED), withdrawing
+ * their routes. Called when `auto-discover-vnis` is unconfigured while the
+ * underlay stays active; configured EVIs (legacy `vni` or new-style) are
+ * untouched.
+ */
+void bgp_evpn_delete_auto_discovered_evis(struct bgp *bgp_evpn_mi)
+{
+	struct bgp_evpn_evi *evi;
+	struct evihash_head evihash_temp;
+	uint32_t idx = 0;
+
+	/* Cannot delete from the hash while iterating - pop everything and
+	 * keep what stays (same pattern as bgp_evpn_cleanup_on_disable)
+	 */
+	evihash_init(&evihash_temp);
+
+	while ((evi = evihash_pop_all(&bgp_evpn_gbl()->evihash, &idx))) {
+		if (evi->origin != BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED) {
+			evihash_add(&evihash_temp, evi);
+			continue;
+		}
+
+		/* Remove EVPN routes and schedule for processing. */
+		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+		UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
+		/* Drop from the pending zebra L2VNI processing FIFO */
+		if (CHECK_FLAG(evi->flags, EVI_FLAG_ADD)) {
+			zebra_l2_vni_del(&bm->zebra_l2_vni_head, evi);
+			UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
+		}
+		bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
+		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
+	}
+
+	evihash_swap_all(&bgp_evpn_gbl()->evihash, &evihash_temp);
+	evihash_fini(&evihash_temp);
 }
 
 /* Clean and free all EVIs of an EVPN Master Instance
@@ -9817,6 +10056,8 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 
 	if (bgp->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp->vrf_prd_pretty);
+
+	XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
 }
 
 /*

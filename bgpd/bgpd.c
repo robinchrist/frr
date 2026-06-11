@@ -4033,7 +4033,7 @@ struct bgp *bgp_get_evpn_master_instance(void)
 	if(!bm->bgp_evpn_mi)
 		return NULL;
 
-	if(!bm->bgp_evpn_mi->advertise_all_vni) {
+	if(!bm->bgp_evpn_mi->evpn_vxlan_underlay_cfgd) {
 		zlog_err("%s: EVPN Master Instance %s does not have `advertise-all-vni` configured",
 			 __func__, bm->bgp_evpn_mi->name);
 		return NULL;

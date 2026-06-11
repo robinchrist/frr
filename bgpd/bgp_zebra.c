@@ -2552,7 +2552,7 @@ void bgp_zebra_instance_register(struct bgp *bgp)
 	zclient_send_reg_requests(bgp_zclient, bgp->vrf_id);
 
 	/* For EVPN instance, register to learn about VNIs, if appropriate. */
-	if (bgp->advertise_all_vni)
+	if (bgp->evpn_vxlan_underlay_cfgd)
 		bgp_zebra_advertise_all_vni(bgp, 1);
 
 	bgp_nht_register_nexthops(bgp);
@@ -2578,7 +2578,7 @@ void bgp_zebra_instance_deregister(struct bgp *bgp)
 		zlog_debug("Deregistering %s", bgp->name_pretty);
 
 	/* For EVPN instance, unregister learning about VNIs, if appropriate. */
-	if (bgp->advertise_all_vni)
+	if (bgp->evpn_vxlan_underlay_cfgd)
 		bgp_zebra_advertise_all_vni(bgp, 0);
 
 	/* Deregister for router-id, interfaces, redistributed routes. */

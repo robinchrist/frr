@@ -254,6 +254,7 @@ ctx_keywords = {
     "router bgp ": {
         "address-family ": {
             "vni ": {},
+            "vlan-based-evi ": {},
         },
         "vnc defaults": {},
         "vnc nve-group ": {},

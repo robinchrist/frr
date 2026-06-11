@@ -249,6 +249,23 @@ struct bgp_evpn_evi {
 	 */
 	struct evi_name_hash_item evi_name_item;
 
+	/* Legacy `vni X` EVIs only: explicit tenant VRF binding
+	 * (`tenant-vrf NAME`, resolved by name) - or dataplane-derived tenancy
+	 * (`auto-tenant-vrf`, the default; DEPRECATED, will be removed).
+	 * New-style configured EVIs get their tenant from their config
+	 * location instead.
+	 */
+	char *cfgd_tenant_vrf_name;
+	bool auto_tenant_vrf;
+
+	/* Configured underlay VRF binding (`underlay-vrf NAME`, stored by
+	 * name): the underlay this EVI originates its routes into. NULL =
+	 * unbound (the EVI cannot originate routes). While the
+	 * single-underlay limitation is in place, the master instance is what
+	 * is used operatively.
+	 */
+	char *cfgd_underlay_vrf_name;
+
 	vni_t vni;
 	vrf_id_t tenant_vrf_id;
 	ifindex_t svi_ifindex;
@@ -1168,7 +1185,12 @@ extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		struct in_addr mcast_grp,
 		ifindex_t svi_ifindex,
 		enum bgp_evpn_evi_origin origin);
+extern struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *name);
+extern void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi);
+extern int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni);
 extern void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool configured);
+extern void bgp_evpn_evi_apply_tenant_vrf_id(struct bgp_evpn_evi *evi, vrf_id_t tenant_vrf_id);
+extern void bgp_evpn_evi_set_cfgd_tenant_vrf(struct bgp_evpn_evi *evi, const char *vrfname);
 extern void bgp_evpn_evi_delete_and_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni);
 extern int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
