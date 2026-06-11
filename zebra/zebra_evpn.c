@@ -1140,9 +1140,12 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	stream_putl(s, zevpn->vxlan_if ? zevpn->vxlan_if->ifindex : 0);
 	stream_putw(s, zevpn->vid);
 	stream_putl(s, shape_flags);
-	/* The ADD is (currently) only sent when the VNI is being served */
-	stream_putc(s, ZEBRA_EVPN_DP_UP);
-	stream_putc(s, ZEBRA_EVPN_DP_REASON_NONE);
+
+	/* Compute and cache the dataplane state. */
+	zevpn_compute_dp_state(zevpn, shape_flags,
+			       &zevpn->dp_state, &zevpn->dp_reason);
+	stream_putc(s, zevpn->dp_state);
+	stream_putc(s, zevpn->dp_reason);
 
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));

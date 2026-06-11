@@ -229,6 +229,18 @@ extern struct interface *zl3vni_map_to_mac_vlan_if(struct zebra_l3vni *zl3vni);
 extern struct zebra_l3vni *zl3vni_lookup(vni_t vni);
 extern vni_t vni_id_from_svi(struct interface *ifp, struct interface *br_if);
 
+/* Report the computed dataplane state of an L3VNI to bgpd. */
+extern void zl3vni_report_dp_state(struct zebra_l3vni *zl3vni);
+
+/* L2VNI intent store accessors (intent added by bgpd ROLE_L2 INTENT_ADD) */
+struct zebra_l2vni_intent; /* forward decl; full definition in zebra_vxlan.c */
+extern struct zebra_l2vni_intent *zl2vni_intent_lookup(vni_t vni);
+/* Compute dataplane state for an L2 VNI given its current shape and intent. */
+struct zebra_evpn; /* forward decl; full definition in zebra_evpn_base.h */
+extern void zevpn_compute_dp_state(struct zebra_evpn *zevpn, uint32_t shape_flags,
+				   enum zebra_evpn_dp_state *state,
+				   enum zebra_evpn_dp_reason *reason);
+
 DECLARE_HOOK(zebra_rmac_update,
 	     (struct zebra_mac * rmac, struct zebra_l3vni *zl3vni, bool delete,
 	      const char *reason),

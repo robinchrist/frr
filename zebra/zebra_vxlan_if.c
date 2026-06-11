@@ -404,8 +404,8 @@ static int zebra_vxlan_if_update_vni(struct interface *ifp,
 static int zebra_vxlan_if_add_vni(struct interface *ifp,
 				  struct zebra_vxlan_vni *vnip)
 {
-	vni_t vni;
-	struct zebra_if *zif;
+	vni_t vni = vnip->vni;
+	struct zebra_if *zif = ifp->info;
 	struct zebra_l2info_vxlan *vxl;
 	struct zebra_evpn *zevpn;
 	struct zebra_l3vni *zl3vni;
@@ -417,19 +417,38 @@ static int zebra_vxlan_if_add_vni(struct interface *ifp,
 
 	/* Only VNIs whose derived underlay VRF is an enabled underlay are
 	 * served; others remain plain interface inventory.
+	 * Exception: for user-configured L2VNIs (L2 intent exists), create a
+	 * tier-2 diagnostic object so zebra can report MISCONFIGURED state.
 	 */
 	if (!zebra_vxlan_if_underlay_enabled(ifp)) {
-		if (IS_ZEBRA_DEBUG_VXLAN)
-			zlog_debug("Intf %s(%u) VNI %u: underlay VRF %s not enabled as EVPN underlay - not serving",
-				   ifp->name, ifp->ifindex, vnip->vni,
-				   vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(ifp)));
+		if (zl2vni_intent_lookup(vni)) {
+			/* Create or update the tier-2 diagnostic object. */
+			assert(zif);
+			br_if = zif->brslave_info.br_if;
+
+			zevpn = zebra_evpn_lookup(vni);
+			if (!zevpn)
+				zevpn = zebra_evpn_add(vni);
+
+			zevpn_vxlan_if_set(zevpn, ifp, true /* set */);
+			if (br_if)
+				zevpn_bridge_if_set(zevpn, br_if, true /* set */);
+
+			/* Emit MISCONFIGURED/UNDERLAY_NOT_ENABLED — no
+			 * MAC/neigh population (tier-3 data stays out).
+			 */
+			zebra_evpn_send_add_to_client(zevpn);
+		} else {
+			if (IS_ZEBRA_DEBUG_VXLAN)
+				zlog_debug("Intf %s(%u) VNI %u: underlay VRF %s not enabled as EVPN underlay - not serving",
+					   ifp->name, ifp->ifindex, vni,
+					   vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(ifp)));
+		}
 		return 0;
 	}
 
-	zif = ifp->info;
 	assert(zif);
 	vxl = &zif->l2info.vxl;
-	vni = vnip->vni;
 
 	zl3vni = zl3vni_lookup(vni);
 	if (zl3vni) {
@@ -458,6 +477,8 @@ static int zebra_vxlan_if_add_vni(struct interface *ifp,
 
 		if (is_l3vni_oper_up(zl3vni))
 			zebra_vxlan_process_l3vni_oper_up(zl3vni);
+		else
+			zl3vni_report_dp_state(zl3vni);
 	} else {
 
 		/* process if-add for l2-vni */

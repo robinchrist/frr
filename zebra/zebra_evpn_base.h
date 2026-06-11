@@ -12,10 +12,11 @@
 
 #include "lib/typesafe.h"
 
-#include "lib/zebra.h" /* vrf_id_t */
-#include "lib/vlan.h"  /* vlanid_t */
-#include "lib/vxlan.h" /* vni_t */
+#include "lib/zebra.h"   /* vrf_id_t */
+#include "lib/vlan.h"    /* vlanid_t */
+#include "lib/vxlan.h"   /* vni_t */
 #include "lib/ipaddr.h"
+#include "lib/zclient.h" /* zebra_evpn_dp_state/reason enums */
 
 PREDECL_HASH(zebra_neigh_db);
 
@@ -81,6 +82,13 @@ struct zebra_evpn {
 
 	/* List of local ESs */
 	struct list *local_es_evi_list;
+
+	/* Cached dataplane state reported to bgpd.  UP for auto-discovered
+	 * L2VNIs (no L2 intent); computed for user-configured L2VNIs via
+	 * zevpn_compute_dp_state().
+	 */
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
 };
 
 #endif /* _ZEBRA_EVPN_BASE_H */

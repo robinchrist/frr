@@ -2130,6 +2130,74 @@ static void zl2vni_intent_del(vni_t vni)
 	XFREE(MTYPE_ZL2VNI_INTENT, zi);
 }
 
+struct zebra_l2vni_intent *zl2vni_intent_lookup(vni_t vni)
+{
+	struct zebra_l2vni_intent tmp = { .vni = vni };
+
+	return hash_lookup(zrouter.l2vni_intent_table, &tmp);
+}
+
+/* Compute the dataplane state for an L2VNI.
+ *
+ * For auto-discovered L2VNIs (no entry in l2vni_intent_table) the state is
+ * always UP — preserving today's behavior exactly.  For user-configured L2VNIs
+ * (bgpd sent ROLE_L2 INTENT_ADD) the state is evaluated against the intent.
+ *
+ * Precedence: DUP_VNI > UNDERLAY_NOT_ENABLED > WRONG_UNDERLAY_VRF
+ *             > TENANT_MISMATCH > UP.
+ */
+void zevpn_compute_dp_state(struct zebra_evpn *zevpn,
+			    uint32_t shape_flags,
+			    enum zebra_evpn_dp_state *state,
+			    enum zebra_evpn_dp_reason *reason)
+{
+	struct zebra_l2vni_intent *intent;
+
+	*state = ZEBRA_EVPN_DP_UP;
+	*reason = ZEBRA_EVPN_DP_REASON_NONE;
+
+	intent = zl2vni_intent_lookup(zevpn->vni);
+	if (!intent)
+		/* Auto-discovered: no intent, always UP. */
+		return;
+
+	/* DUP_VNI: same VNI is also configured as an L3VNI. */
+	if (zl3vni_lookup(zevpn->vni)) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_DUP_VNI;
+		return;
+	}
+
+	/* Underlay checks (only meaningful when a VXLAN interface is bound). */
+	if (zevpn->vxlan_if &&
+	    !zebra_vxlan_if_underlay_enabled(zevpn->vxlan_if)) {
+		vrf_id_t derived_id =
+			zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if);
+		vrf_id_t master_id =
+			zebra_evpn_get_master_underlay_vrf_id();
+
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = (zrouter.evpn_underlay_count > 0
+			   && derived_id != master_id)
+				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
+				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
+		return;
+	}
+
+	/* TENANT_MISMATCH: intent specifies a tenant VRF but the dataplane VNI
+	 * is bound to a different (or no) VRF.
+	 */
+	if (intent->tenant_vrf_id != VRF_UNKNOWN
+	    && intent->tenant_vrf_id != VRF_DEFAULT
+	    && zevpn->vrf_id != intent->tenant_vrf_id) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_TENANT_MISMATCH;
+		return;
+	}
+
+	/* Intent checks passed: operational. */
+}
+
 /* =========================================================
  * Hash function for L3 VNI.
  */
@@ -2630,7 +2698,7 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 /* Report the current computed dataplane state of an L3VNI to bgpd.
  * Safe to call on down/placeholder L3VNIs (encoder is hardened).
  */
-static void zl3vni_report_dp_state(struct zebra_l3vni *zl3vni)
+void zl3vni_report_dp_state(struct zebra_l3vni *zl3vni)
 {
 	zl3vni_send_add_to_client(zl3vni);
 }
@@ -6405,7 +6473,26 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 			}
 		} else {
 			/* May be an L2 intent DEL */
+			struct zebra_evpn *zevpn = zebra_evpn_lookup(vni);
+
 			zl2vni_intent_del(vni);
+
+			if (zevpn) {
+				if (zevpn->vxlan_if &&
+				    !zebra_vxlan_if_underlay_enabled(zevpn->vxlan_if)) {
+					/* Tier-2 diagnostic object: the underlay is
+					 * still disabled so remove it now that the
+					 * intent is gone.
+					 */
+					zebra_evpn_send_del_to_client(zevpn);
+					zebra_evpn_del(zevpn);
+				} else {
+					/* Fully served: re-compute state (no longer
+					 * intent-aware = back to auto-discovered UP).
+					 */
+					zebra_evpn_send_add_to_client(zevpn);
+				}
+			}
 		}
 		return;
 
@@ -6453,9 +6540,17 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 		/* Store the L2 intent so zebra can compute and report
 		 * MISCONFIGURED state for user-configured L2VNIs.
 		 * Auto-discovered L2VNIs are NOT stored here (bgpd never sends
-		 * ROLE_L2 intent for them).  No serving change in this stage.
+		 * ROLE_L2 intent for them).
 		 */
 		zl2vni_intent_add(vni, tenant_vrf_id, flags);
+		/* Re-emit for any dataplane VNI that already exists so bgpd
+		 * sees the updated (intent-aware) state immediately.
+		 */
+		{
+			struct zebra_evpn *zevpn = zebra_evpn_lookup(vni);
+			if (zevpn)
+				zebra_evpn_send_add_to_client(zevpn);
+		}
 		break;
 	default:
 		zlog_err("EVPN VNI intent: unknown role %u for VNI %u", role, vni);
