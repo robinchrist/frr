@@ -1636,16 +1636,13 @@ void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool
  */
 void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
 {
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_effective_wildcard_rt *eff_w;
 	struct bgp_evpn_effective_fq_rt *eff_fq;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "vrf map to irt nodes - evpn instance not created yet");
-		return;
-	}
+	/* NOTE: no EVPN-instance guard - the irt tables are process-global and
+	 * configured RTs must be mapped regardless of any underlay existing
+	 * (import-only operation).
+	 */
 
 	frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp_vrf->effective_wildcard_import_rts, eff_w) {
 
@@ -1706,16 +1703,13 @@ void bgp_evpn_vrf_map_to_vrf_irt_nodes(struct bgp *bgp_vrf)
  */
 void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
 {
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_effective_wildcard_rt *eff_w;
 	struct bgp_evpn_effective_fq_rt *eff_fq;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "vrf unmap from irt nodes - evpn instance not created yet");
-		return;
-	}
+	/* NOTE: no EVPN-instance guard - the irt tables are process-global and
+	 * configured RTs must be mapped regardless of any underlay existing
+	 * (import-only operation).
+	 */
 
 	frr_each (bgp_evpn_effective_wildcard_rt_slu,&bgp_vrf->effective_wildcard_import_rts, eff_w) {
 		struct vrf_wildcard_irt_node tmp_lookup_node;
@@ -1780,16 +1774,13 @@ void bgp_evpn_vrf_unmap_from_vrf_irt_nodes(struct bgp *bgp_vrf)
  */
 void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_effective_wildcard_rt *eff_w;
 	struct bgp_evpn_effective_fq_rt *eff_fq;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "evi map to irt nodes - evpn instance not created yet");
-		return;
-	}
+	/* NOTE: no EVPN-instance guard - the irt tables are process-global and
+	 * configured RTs must be mapped regardless of any underlay existing
+	 * (import-only operation).
+	 */
 
 	frr_each (bgp_evpn_effective_wildcard_rt_slu, &evi->effective_wildcard_import_rts, eff_w) {
 
@@ -1850,16 +1841,13 @@ void bgp_evpn_evi_map_to_evi_irt_nodes(struct bgp_evpn_evi *evi)
  */
 void bgp_evpn_evi_unmap_from_evi_irt_nodes(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_effective_wildcard_rt *eff_w;
 	struct bgp_evpn_effective_fq_rt *eff_fq;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi) {
-		flog_err(EC_BGP_NO_DFLT,
-			 "evi unmap from irt nodes - evpn instance not created yet");
-		return;
-	}
+	/* NOTE: no EVPN-instance guard - the irt tables are process-global and
+	 * configured RTs must be mapped regardless of any underlay existing
+	 * (import-only operation).
+	 */
 
 	frr_each (bgp_evpn_effective_wildcard_rt_slu,&evi->effective_wildcard_import_rts, eff_w) {
 		struct evi_wildcard_irt_node tmp_lookup_node;
