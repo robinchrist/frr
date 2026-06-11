@@ -27,7 +27,7 @@
 
 static inline bool is_evpn_master_instance(const struct bgp *bgp)
 {
-	return bgp == bgp_get_evpn_master_instance();
+	return bgp && bgp->evpn_vxlan_underlay_cfgd;
 }
 
 /* Global helper function to check whether EVPN as a protocol is generally enabled

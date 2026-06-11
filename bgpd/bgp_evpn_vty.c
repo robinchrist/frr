@@ -3528,7 +3528,7 @@ DEFPY (bgp_evpn_advertise_default_gw_vni,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3550,7 +3550,7 @@ DEFPY (no_bgp_evpn_advertise_default_vni_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3571,7 +3571,7 @@ DEFPY (bgp_evpn_advertise_default_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3592,7 +3592,7 @@ DEFPY (no_bgp_evpn_advertise_default_gw,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3903,7 +3903,7 @@ DEFPY (dup_addr_detection,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3934,7 +3934,7 @@ DEFPY (dup_addr_detection_auto_recovery,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -3968,7 +3968,7 @@ DEFPY (no_dup_addr_detection,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4042,7 +4042,7 @@ DEFPY(bgp_evpn_advertise_svi_ip,
 	else {
 		if (!is_evpn_master_instance(bgp_evpn_mi)) {
 			vty_out(vty,
-				"This command is only supported under the EVPN master VRF\n");
+				"Command requires vxlan-underlay on this VRF\n");
 			return CMD_WARNING;
 		}
 		evpn_set_advertise_svi_macip(bgp_evpn_mi, NULL, 1);
@@ -4064,7 +4064,7 @@ DEFPY(bgp_evpn_advertise_svi_ip_vni,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4090,7 +4090,7 @@ DEFPY(macvrf_soo_global, macvrf_soo_global_cmd,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4119,7 +4119,7 @@ DEFPY(no_macvrf_soo_global, no_macvrf_soo_global_cmd,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4142,7 +4142,7 @@ DEFUN_HIDDEN (bgp_evpn_advertise_vni_subnet,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4167,7 +4167,7 @@ DEFUN_HIDDEN (no_bgp_evpn_advertise_vni_subnet,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4442,8 +4442,8 @@ DEFPY (bgp_evpn_enable_resolve_overlay_index,
 	if (!bgp)
 		return CMD_WARNING;
 
-	if (bgp != bgp_get_evpn_master_instance()) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+	if (!bgp->evpn_vxlan_underlay_cfgd) {
+		vty_out(vty, "This command is only supported under an EVPN underlay VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -4467,11 +4467,11 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 	if(!bgp_vrf)
 		return CMD_WARNING;
 
-	if (is_evpn_master_instance(bgp_vrf)) {
-		vty_out(vty, "This command is only supported under a EVPN NON-master VRF\n");
+	if (bgp_vrf->evpn_vxlan_underlay_cfgd) {
+		vty_out(vty, "This command is only supported under a non-underlay VRF\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
 
 	if (!no) {
 		/* pip is already enabled */
@@ -4868,21 +4868,14 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_vni_remote_ip_hash,
 	     "Show VNI\n"
 	     "Remote IP hash\n")
 {
-	struct bgp *bgp_evpn_mi;
 	int idx = 0;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return CMD_WARNING;
+	struct bgp_evpn_evi *evi;
 
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
 
-	{
-		struct bgp_evpn_evi *evi;
-		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
-			bgp_evpn_show_remote_ip_hash(evi, vty);
-	}
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
+		bgp_evpn_show_remote_ip_hash(evi, vty);
 
 	return CMD_SUCCESS;
 }
@@ -4896,17 +4889,11 @@ DEFUN_HIDDEN(show_bgp_l2vpn_evpn_evi_svi_hash,
 	     EVPN_HELP_STR
 	     "Show vni-svi-hash\n")
 {
-	struct bgp *bgp_evpn_mi;
 	int idx = 0;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return CMD_WARNING;
+	struct bgp_evpn_evi *evi;
 
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
-
-	struct bgp_evpn_evi *evi;
 
 	frr_each (evi_svi_hash, &bgp_evpn_gbl()->evi_svi_hash, evi)
 		vty_out(vty, "SVI: %u VNI: %u\n", evi->svi_ifindex, evi->vni);
@@ -6352,7 +6339,7 @@ DEFPY(bgp_evpn_flood_control_vni,
 			return CMD_WARNING;
 
 		if (!is_evpn_master_instance(bgp_evpn_mi)) {
-			vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+			vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 			return CMD_WARNING;
 		}
 	}
@@ -6393,7 +6380,7 @@ DEFPY_NOSH (bgp_evpn_vni,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6431,7 +6418,7 @@ DEFPY (no_bgp_evpn_vni,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -6788,7 +6775,7 @@ static bool evi_node_get_evpn_instance(struct vty *vty, struct bgp **bgp_evpn_mi
 		return false;
 
 	if (!is_evpn_master_instance(ctx)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return false;
 	}
 
@@ -7288,7 +7275,7 @@ DEFUN(bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cmd,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
@@ -7323,7 +7310,7 @@ DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
 		return CMD_WARNING;
 
 	if (!is_evpn_master_instance(bgp_evpn_mi)) {
-		vty_out(vty, "This command is only supported under the EVPN master VRF\n");
+		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
 
