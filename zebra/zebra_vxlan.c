@@ -2567,6 +2567,14 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	return zserv_send_message(client, s);
 }
 
+/* Report the current computed dataplane state of an L3VNI to bgpd.
+ * Safe to call on down/placeholder L3VNIs (encoder is hardened).
+ */
+static void zl3vni_report_dp_state(struct zebra_l3vni *zl3vni)
+{
+	zl3vni_send_add_to_client(zl3vni);
+}
+
 /*
  * Inform BGP about local l3-VNI deletion.
  */
@@ -5457,6 +5465,8 @@ int zebra_vxlan_svi_up(struct interface *ifp, struct interface *link_if)
 		/* process oper-up */
 		if (is_l3vni_oper_up(zl3vni))
 			zebra_vxlan_process_l3vni_oper_up(zl3vni);
+		else
+			zl3vni_report_dp_state(zl3vni);
 	} else {
 		/* process SVI up for l2-vni */
 		struct zebra_neigh *n;
@@ -5541,6 +5551,8 @@ void zebra_vxlan_macvlan_down(struct interface *ifp)
 		zl3vni->mac_vlan_if = NULL;
 		if (is_l3vni_oper_up(zl3vni))
 			zebra_vxlan_process_l3vni_oper_up(zl3vni);
+		else
+			zl3vni_report_dp_state(zl3vni);
 	}
 }
 
@@ -5587,6 +5599,8 @@ void zebra_vxlan_macvlan_up(struct interface *ifp)
 		/* process oper-up */
 		if (is_l3vni_oper_up(zl3vni))
 			zebra_vxlan_process_l3vni_oper_up(zl3vni);
+		else
+			zl3vni_report_dp_state(zl3vni);
 	}
 }
 
@@ -5673,6 +5687,11 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 
 		if (is_l3vni_oper_up(zl3vni))
 			zebra_vxlan_process_l3vni_oper_up(zl3vni);
+		else
+			/* Not yet operational: report DOWN/MISCONFIGURED so bgpd
+			 * knows the VNI exists but cannot be activated.
+			 */
+			zl3vni_report_dp_state(zl3vni);
 
 	} else {
 		zl3vni = zl3vni_lookup(vni);
@@ -5702,9 +5721,40 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 	}
 }
 
+/* hash_iterate callback: re-resolve a placeholder L3VNI whose intended tenant
+ * VRF just became available.  Sets vrf_id + zvrf->l3vni so the existing
+ * vrf_enable logic finds the entry and drives the oper-up or report path.
+ */
+static void zl3vni_resolve_placeholder_cb(struct hash_bucket *bucket, void *arg)
+{
+	struct zebra_l3vni *zl3vni = bucket->data;
+	struct zebra_vrf *zvrf = arg;
+
+	if (zl3vni->vrf_id != VRF_UNKNOWN ||
+	    zl3vni->intended_tenant_vrf_id != zvrf_id(zvrf))
+		return;
+
+	/* Bind to the now-available tenant VRF. */
+	zl3vni->vrf_id = zvrf_id(zvrf);
+	zvrf->l3vni = zl3vni->vni;
+
+	/* Re-attempt interface mappings (may still be NULL if dataplane
+	 * isn't ready, which is fine — the oper-up check below handles it).
+	 */
+	zl3vni->vxlan_if = zl3vni_map_to_vxlan_if(zl3vni);
+	zl3vni->svi_if = zl3vni_map_to_svi_if(zl3vni);
+	zl3vni->mac_vlan_if = zl3vni_map_to_mac_vlan_if(zl3vni);
+}
+
 int zebra_vxlan_vrf_enable(struct zebra_vrf *zvrf)
 {
 	struct zebra_l3vni *zl3vni = NULL;
+
+	/* Resolve any placeholder L3VNIs that were waiting for this VRF.
+	 * After the scan, zvrf->l3vni is set if a placeholder was found,
+	 * and the lookup below picks it up normally.
+	 */
+	hash_iterate(zrouter.l3vni_table, zl3vni_resolve_placeholder_cb, zvrf);
 
 	if (zvrf->l3vni)
 		zl3vni = zl3vni_lookup(zvrf->l3vni);
@@ -5714,6 +5764,8 @@ int zebra_vxlan_vrf_enable(struct zebra_vrf *zvrf)
 	zl3vni->vrf_id = zvrf_id(zvrf);
 	if (is_l3vni_oper_up(zl3vni))
 		zebra_vxlan_process_l3vni_oper_up(zl3vni);
+	else
+		zl3vni_report_dp_state(zl3vni);
 	return 0;
 }
 
@@ -5740,7 +5792,12 @@ int zebra_vxlan_vrf_disable(struct zebra_vrf *zvrf)
 	frr_each_safe (zebra_neigh_db, zl3vni->nh_table, n)
 		zl3vni_del_nh_hash_entry(&wctx, n);
 
+	/* Revert to placeholder state: VRF is gone but the intent remains.
+	 * Report MISCONFIGURED/TENANT_MISMATCH so bgpd knows the VNI is
+	 * still intended but the tenant VRF is no longer available.
+	 */
 	zl3vni->vrf_id = VRF_UNKNOWN;
+	zl3vni_report_dp_state(zl3vni);
 
 	return 0;
 }
@@ -6273,11 +6330,19 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 	if (!add) {
 		struct zebra_l3vni *zl3vni = zl3vni_lookup(vni);
 
-		/* Only the L3 role has operative state to tear down so far */
 		if (zl3vni) {
 			tenant_zvrf = zebra_vrf_lookup_by_id(zl3vni_vrf_id(zl3vni));
-			if (tenant_zvrf)
-				zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni, 0, 0);
+			if (tenant_zvrf) {
+				zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni,
+								0, 0);
+			} else if (zl3vni->vrf_id == VRF_UNKNOWN) {
+				/* Placeholder with no tenant VRF: send DEL so
+				 * bgpd clears its MISCONFIGURED state, then
+				 * free the placeholder entry.
+				 */
+				zebra_vxlan_process_l3vni_oper_down(zl3vni);
+				zl3vni_del(zl3vni);
+			}
 		}
 		return;
 
@@ -6286,15 +6351,40 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 	switch (role) {
 	case ZEBRA_EVPN_VNI_INTENT_ROLE_L3:
 		tenant_zvrf = zebra_vrf_lookup_by_id(tenant_vrf_id);
-		if (!tenant_zvrf) {
-			zlog_err("EVPN VNI intent: tenant VRF %u for L3VNI %u does not exist (yet) - intent dropped",
-				 tenant_vrf_id, vni);
-			return;
+		if (tenant_zvrf) {
+			zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni,
+							CHECK_FLAG(flags,
+								   ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY),
+							1);
+			/* Cache the intent tenant VRF id for re-resolution
+			 * if the VRF is later disabled and re-enabled.
+			 */
+			struct zebra_l3vni *zl3vni = zl3vni_lookup(vni);
+			if (zl3vni)
+				zl3vni->intended_tenant_vrf_id = tenant_vrf_id;
+		} else {
+			/* Tenant VRF not yet created: park as a placeholder
+			 * that reports MISCONFIGURED/TENANT_MISMATCH.  It will
+			 * be re-resolved when the VRF appears in vrf_enable.
+			 */
+			if (IS_ZEBRA_DEBUG_VXLAN)
+				zlog_debug("EVPN VNI intent: tenant VRF %u for L3VNI %u not yet present - parking as placeholder",
+					   tenant_vrf_id, vni);
+
+			/* Remove any stale L2VNI for this VNI first. */
+			zebra_vxlan_handle_vni_transition(NULL, vni, 1);
+
+			struct zebra_l3vni *zl3vni = zl3vni_add(vni, VRF_UNKNOWN);
+
+			zl3vni->intended_tenant_vrf_id = tenant_vrf_id;
+			if (CHECK_FLAG(flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY))
+				SET_FLAG(zl3vni->filter_flags,
+					 ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY);
+			zl3vni->vxlan_if = zl3vni_map_to_vxlan_if(zl3vni);
+			zl3vni->svi_if = zl3vni_map_to_svi_if(zl3vni);
+			zl3vni->mac_vlan_if = zl3vni_map_to_mac_vlan_if(zl3vni);
+			zl3vni_report_dp_state(zl3vni);
 		}
-		zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni,
-						CHECK_FLAG(flags,
-							   ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY),
-						1);
 		break;
 	case ZEBRA_EVPN_VNI_INTENT_ROLE_L2:
 		/* No operative effect yet: L2VNIs are still classified by
