@@ -4559,6 +4559,131 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 /*
  * Display VNI information - for all or a specific VNI
  */
+static const char *evi_origin_str(enum bgp_evpn_evi_origin origin)
+{
+	switch (origin) {
+	case BGP_EVPN_EVI_ORIGIN_CFG:
+		return "configured";
+	case BGP_EVPN_EVI_ORIGIN_LEGACY_VNI:
+		return "legacy-vni";
+	case BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED:
+		return "auto-discovered";
+	}
+	return "unknown";
+}
+
+static const char *evpn_dp_state_str(uint8_t state)
+{
+	switch (state) {
+	case ZEBRA_EVPN_DP_NONE:
+		return "none";
+	case ZEBRA_EVPN_DP_DISCOVERED:
+		return "discovered";
+	case ZEBRA_EVPN_DP_DOWN:
+		return "down";
+	case ZEBRA_EVPN_DP_UP:
+		return "up";
+	case ZEBRA_EVPN_DP_MISCONFIGURED:
+		return "misconfigured";
+	}
+	return "unknown";
+}
+
+static void show_evi_identity(struct vty *vty, struct bgp_evpn_evi *evi,
+			      json_object *json_evis)
+{
+	const char *tenant;
+	struct bgp *underlay = bgp_evpn_evi_get_underlay(evi);
+
+	if (evi->bgp_vrf)
+		tenant = evi->bgp_vrf->name_pretty;
+	else if (evi->origin == BGP_EVPN_EVI_ORIGIN_CFG)
+		tenant = "-";
+	else
+		tenant = vrf_id_to_name(evi->tenant_vrf_id);
+
+	if (json_evis) {
+		json_object *json_evi = json_object_new_object();
+
+		json_object_string_add(json_evi, "name", evi->name);
+		json_object_string_add(json_evi, "type", "vlan-based");
+		json_object_string_add(json_evi, "origin", evi_origin_str(evi->origin));
+		json_object_int_add(json_evi, "originationL2vni", evi->vni);
+		json_object_string_add(json_evi, "tenantVrf", tenant);
+		if (evi->cfgd_underlay_vrf_name)
+			json_object_string_add(json_evi, "cfgdUnderlayVrf",
+					       evi->cfgd_underlay_vrf_name);
+		if (underlay)
+			json_object_string_add(json_evi, "underlayVrf", underlay->name_pretty);
+		json_object_string_add(json_evi, "dataplaneState",
+				       evpn_dp_state_str(evi->dp.state));
+		json_object_boolean_add(json_evi, "live", !!bgp_evpn_evi_is_live(evi));
+		json_object_array_add(json_evis, json_evi);
+	} else {
+		vty_out(vty, "%-20s %-12s %-15s %10u %-16s %-16s %-13s %s\n", evi->name,
+			"vlan-based", evi_origin_str(evi->origin), evi->vni, tenant,
+			underlay ? underlay->name_pretty : "-",
+			evpn_dp_state_str(evi->dp.state),
+			bgp_evpn_evi_is_live(evi) ? "live" : "");
+	}
+}
+
+DEFPY(show_bgp_l2vpn_evpn_evi,
+      show_bgp_l2vpn_evpn_evi_cmd,
+      "show bgp l2vpn evpn evi [EVINAME$eviname] [json$json]",
+      SHOW_STR
+      BGP_STR
+      L2VPN_HELP_STR
+      EVPN_HELP_STR
+      "EVPN Instances\n"
+      "Name of the EVI\n"
+      JSON_STR)
+{
+	struct bgp_evpn_evi *evi;
+	struct bgp *bgp;
+	struct listnode *node;
+	json_object *json_root = NULL;
+	json_object *json_evis = NULL;
+	int count = 0;
+
+	if (json) {
+		json_root = json_object_new_object();
+		json_evis = json_object_new_array();
+	} else {
+		vty_out(vty, "%-20s %-12s %-15s %10s %-16s %-16s %-13s %s\n", "Name", "Type",
+			"Origin", "L2VNI", "Tenant-VRF", "Underlay-VRF", "DP-State", "");
+	}
+
+	/* Tenant-scoped (configured) EVIs */
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
+		frr_each (evi_name_hash, &bgp->evis_by_name, evi) {
+			if (eviname && strcmp(evi->name, eviname) != 0)
+				continue;
+			show_evi_identity(vty, evi, json_evis);
+			count++;
+		}
+	}
+
+	/* Global registry: tenant-less configured + legacy + auto-discovered */
+	frr_each (evi_name_hash, &bgp_evpn_gbl()->global_evis, evi) {
+		if (eviname && strcmp(evi->name, eviname) != 0)
+			continue;
+		show_evi_identity(vty, evi, json_evis);
+		count++;
+	}
+
+	if (json) {
+		json_object_object_add(json_root, "evis", json_evis);
+		json_object_int_add(json_root, "numEvis", count);
+		vty_json(vty, json_root);
+	} else if (!count) {
+		vty_out(vty, "%% No EVIs%s%s\n", eviname ? " matching " : "",
+			eviname ? eviname : "");
+	}
+
+	return CMD_SUCCESS;
+}
+
 DEFPY(show_bgp_l2vpn_evpn_vni,
       show_bgp_l2vpn_evpn_vni_cmd,
       "show bgp l2vpn evpn vni [" CMD_VNI_RANGE "] [json$uj]",
@@ -7720,6 +7845,7 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_es_vrf_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_nh_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_cmd);
+	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_evi_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_remote_ip_hash_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_evi_svi_hash_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_summary_cmd);

@@ -171,10 +171,45 @@ def test_origination_scoped_to_bound_underlay():
         assert result is None, result
 
 
-# TODO (diagnostics stage): once `show bgp l2vpn evpn evi NAME` exists, assert
-# that r2's VNI-less "import-both" EVI imported the IMET/MAC-IP routes from
-# BOTH underlays (cross-underlay shared-table import). Until then this is only
-# covered indirectly via the irt machinery.
+def test_evi_identities():
+    """
+    `show bgp l2vpn evpn evi` must list all three configured EVIs on r2 with
+    the correct bindings; red-evi/blue-evi must be live (their VNIs exist in
+    their underlays), the VNI-less "import-both" EVI must exist with no
+    dataplane state (import-only).
+    """
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip("routers have failure: {}".format(tgen.errors))
+
+    r2 = tgen.gears["r2"]
+
+    def _check_evis():
+        output = r2.vtysh_cmd("show bgp l2vpn evpn evi json", isjson=True)
+        evis = {e.get("name"): e for e in output.get("evis", [])}
+        for name, vni, underlay, live in (
+            ("red-evi", 100, "underlay-red", True),
+            ("blue-evi", 200, "underlay-blue", True),
+            ("import-both", 0, None, False),
+        ):
+            evi = evis.get(name)
+            if evi is None:
+                return "EVI {} missing (have {})".format(name, list(evis))
+            if evi.get("originationL2vni") != vni:
+                return "EVI {}: wrong VNI {}".format(name, evi.get("originationL2vni"))
+            if underlay and evi.get("cfgdUnderlayVrf") != underlay:
+                return "EVI {}: wrong underlay {}".format(
+                    name, evi.get("cfgdUnderlayVrf")
+                )
+            if evi.get("live") != live:
+                return "EVI {}: live={} expected {}".format(
+                    name, evi.get("live"), live
+                )
+        return None
+
+    test_func = functools.partial(_check_evis)
+    _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
+    assert result is None, result
 
 
 if __name__ == "__main__":
