@@ -1155,19 +1155,6 @@ struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi)
 	return underlay;
 }
 
-/* Instance whose EVPN RIB is walked for (re)import evaluation.
- * Until multi-underlay lands this is the master instance; without any
- * underlay configured, fall back to the default instance: EVPN routes
- * received from peers there must remain importable (import-only operation,
- * not involving any dataplane or underlay at all).
- */
-static struct bgp *bgp_evpn_get_rib_walk_instance(void)
-{
-	if (bm->bgp_evpn_mi && bm->bgp_evpn_mi->evpn_vxlan_underlay_cfgd)
-		return bm->bgp_evpn_mi;
-	return bgp_get_default();
-}
-
 /*
  * Function to lookup a fully qualified Import RT node - used to map a RT to set of
  * VRFs importing routes with that RT.
@@ -6279,7 +6266,9 @@ int bgp_evpn_vrf_install_uninstall_route_entry_if_match(struct bgp *bgp_vrf,
  * RTs, make sure to call this with uninstall BEFORE you change the effective RTs
  * to ensure proper removal of old routes that no longer match the new RTs!
  */
-static int bgp_evpn_vrf_install_uninstall_global_routes(struct bgp *bgp_vrf, bool install)
+/* Walk one instance's EVPN RIB and (un)install matching routes into the VRF */
+static int bgp_evpn_vrf_install_uninstall_rib_routes(struct bgp *rib_bgp, struct bgp *bgp_vrf,
+						     bool install)
 {
 	afi_t afi;
 	safi_t safi;
@@ -6287,19 +6276,15 @@ static int bgp_evpn_vrf_install_uninstall_global_routes(struct bgp *bgp_vrf, boo
 	struct bgp_table *table;
 	struct bgp_path_info *pi;
 	int ret;
-	struct bgp *bgp_evpn_mi = NULL;
 
 	afi = AFI_L2VPN;
 	safi = SAFI_EVPN;
-	bgp_evpn_mi = bgp_evpn_get_rib_walk_instance();
-	if (!bgp_evpn_mi)
-		return -1;
 
 	/* Walk entire global routing table and evaluate routes which could be
 	 * imported into this VRF. Note that we need to loop through all global
 	 * routes to determine which route matches the import rt on vrf
 	 */
-	for (rd_dest = bgp_table_top(bgp_evpn_mi->rib[afi][safi]); rd_dest;
+	for (rd_dest = bgp_table_top(rib_bgp->rib[afi][safi]); rd_dest;
 	     rd_dest = bgp_route_next(rd_dest)) {
 		table = bgp_dest_get_bgp_table_info(rd_dest);
 		if (!table)
@@ -6336,6 +6321,35 @@ static int bgp_evpn_vrf_install_uninstall_global_routes(struct bgp *bgp_vrf, boo
 				}
 			}
 		}
+	}
+
+	return 0;
+}
+
+/* (Un)install all matching routes into the VRF from every relevant EVPN RIB:
+ * the route table is logically shared across all underlays - overlay objects
+ * import from ALL underlay instances' received routes. Without any underlay,
+ * the default instance serves as the fallback source (import-only operation
+ * with peers on it).
+ */
+static int bgp_evpn_vrf_install_uninstall_global_routes(struct bgp *bgp_vrf, bool install)
+{
+	struct bgp *rib_bgp;
+	bool walked = false;
+	int ret;
+
+	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, rib_bgp) {
+		walked = true;
+		ret = bgp_evpn_vrf_install_uninstall_rib_routes(rib_bgp, bgp_vrf, install);
+		if (ret)
+			return ret;
+	}
+
+	if (!walked) {
+		rib_bgp = bgp_get_default();
+		if (!rib_bgp)
+			return -1;
+		return bgp_evpn_vrf_install_uninstall_rib_routes(rib_bgp, bgp_vrf, install);
 	}
 
 	return 0;
@@ -6413,26 +6427,20 @@ static int install_evpn_remote_route_per_l2vni(struct bgp *bgp, struct bgp_path_
  *
  * walk_fifo is special and magic, TODO: document this....
  */
-static int _bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo)
+/* Walk one instance's EVPN RIB; see _bgp_evpn_evi_install_uninstall_global_routes */
+static int _bgp_evpn_evi_install_uninstall_rib_routes(struct bgp *bgp_evpn_mi,
+						      struct bgp_evpn_evi *evi, bool install,
+						      bool walk_fifo)
 {
 	afi_t afi;
 	safi_t safi;
-	struct bgp* bgp_evpn_mi = NULL;
 	struct bgp_dest *rd_dest, *dest;
 	struct bgp_table *table;
 	struct bgp_path_info *pi;
 	int ret = 0;
-	uint8_t count = 0;
 
 	afi = AFI_L2VPN;
 	safi = SAFI_EVPN;
-
-	if(!walk_fifo)
-		assert(evi);
-
-	bgp_evpn_mi = bgp_evpn_get_rib_walk_instance();
-	if (!bgp_evpn_mi)
-		return -1;
 
 
 	if (BGP_DEBUG(zebra, ZEBRA))
@@ -6513,6 +6521,41 @@ static int _bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *ev
 				}
 			}
 		}
+	}
+
+	return 0;
+}
+
+/* (Un)install all type 1/2/3 routes applicable for the EVI (or, with
+ * walk_fifo, for all EVIs pending in the L2VNI processing FIFO) from every
+ * relevant EVPN RIB: the route table is logically shared across all
+ * underlays. Without any underlay the default instance serves as the
+ * fallback source (import-only operation with peers on it).
+ */
+static int _bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *evi, bool install, bool walk_fifo)
+{
+	struct bgp *rib_bgp;
+	bool walked = false;
+	int ret = 0;
+	uint8_t count = 0;
+
+	if(!walk_fifo)
+		assert(evi);
+
+	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, rib_bgp) {
+		walked = true;
+		ret = _bgp_evpn_evi_install_uninstall_rib_routes(rib_bgp, evi, install, walk_fifo);
+		if (ret)
+			return ret;
+	}
+
+	if (!walked) {
+		rib_bgp = bgp_get_default();
+		if (!rib_bgp)
+			return -1;
+		ret = _bgp_evpn_evi_install_uninstall_rib_routes(rib_bgp, evi, install, walk_fifo);
+		if (ret)
+			return ret;
 	}
 
 	if (walk_fifo) {
