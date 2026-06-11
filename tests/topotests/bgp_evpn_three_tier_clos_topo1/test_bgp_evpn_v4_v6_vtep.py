@@ -2960,12 +2960,15 @@ def test_l3vni_l2vni_transition_restore(tgen_and_ip_version):
     )
 
     # Step 2: Remove L3VNI binding from VRF1 (L3VNI -> L2VNI transition).
-    logger.info("Removing L3VNI binding (no vni %s under vrf vrf1)", l3vni)
+    logger.info("Removing L3VNI binding (no origination-l3vni %s for vrf1)", l3vni)
+    # bordertor-11 uses ASN 660000 in both the ipv4 and ipv6 variants
     router.vtysh_multicmd(
         f"""
         configure terminal
-         vrf vrf1
-          no vni {l3vni}
+         router bgp 660000 vrf vrf1
+          address-family l2vpn evpn
+           no origination-l3vni {l3vni}
+          exit-address-family
          exit
         exit
         """
@@ -3019,12 +3022,14 @@ def test_l3vni_l2vni_transition_restore(tgen_and_ip_version):
     ), f"L3VNI -> L2VNI transition validation failed for VNI {l3vni}: {result}"
 
     # Step 3: Re‑add L3VNI binding and ensure full restoration.
-    logger.info("Re‑adding L3VNI binding (vni %s under vrf vrf1)", l3vni)
+    logger.info("Re‑adding L3VNI binding (origination-l3vni %s for vrf1)", l3vni)
     router.vtysh_multicmd(
         f"""
         configure terminal
-         vrf vrf1
-          vni {l3vni}
+         router bgp 660000 vrf vrf1
+          address-family l2vpn evpn
+           origination-l3vni {l3vni}
+          exit-address-family
          exit
         exit
         """

@@ -1184,19 +1184,6 @@ const struct frr_yang_module_info frr_zebra_info = {
 			}
 		},
 		{
-			.xpath = "/frr-vrf:lib/vrf/frr-zebra:zebra/l3vni-id",
-			.cbs = {
-				.modify = lib_vrf_zebra_l3vni_id_modify,
-				.destroy = lib_vrf_zebra_l3vni_id_destroy,
-			}
-		},
-		{
-			.xpath = "/frr-vrf:lib/vrf/frr-zebra:zebra/prefix-only",
-			.cbs = {
-				.modify = lib_vrf_zebra_prefix_only_modify,
-			}
-		},
-		{
 			.xpath = NULL,
 		},
 	}

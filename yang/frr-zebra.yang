@@ -687,22 +687,6 @@ module frr-zebra {
     }
   }
 
-  grouping vrf-vni-mapping {
-    description
-      "EVPN L3-VNI mapping corresponding to a VRF.";
-    leaf l3vni-id {
-      type vni-id-type;
-      description
-        "EVPN L3-VNI id to map to the VRF.";
-    }
-
-    leaf prefix-only {
-      type boolean;
-      default "false";
-      description
-        "EVPN asymmetric mode advertise prefix routes only.";
-    }
-  }
 
   // End of zebra container
   /*
@@ -3080,7 +3064,6 @@ module frr-zebra {
 
       uses ribs;
 
-      uses vrf-vni-mapping;
     }
   }
 

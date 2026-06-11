@@ -1493,15 +1493,50 @@ def create_vrf_cfg(tgen, topo, input_dict=None, build=False):
                                     )
                                     rnode.run(cmd)
 
+                    # The L3VNI binding moved from zebra (`vrf X / vni Y`) to
+                    # bgpd (`origination-l3vni Y` under the tenant VRF's
+                    # l2vpn evpn address-family). The tenant BGP instance is
+                    # created implicitly if the bgp config wasn't applied yet.
+                    bgp_data = c_data.get("bgp")
+                    if isinstance(bgp_data, list):
+                        bgp_data = bgp_data[0] if bgp_data else None
+                    local_as = (
+                        bgp_data.get("local_as")
+                        if isinstance(bgp_data, dict)
+                        else None
+                    )
+
                     if vni:
-                        config_data.append("vrf {}".format(vrf["name"]))
-                        cmd = "vni {}".format(vni)
-                        config_data.append(cmd)
+                        if local_as is None:
+                            logger.error(
+                                "[DUT: %s]: vrf %s has a vni but no bgp local_as - cannot configure origination-l3vni",
+                                c_router,
+                                vrf["name"],
+                            )
+                        else:
+                            config_data.append(
+                                "router bgp {} vrf {}".format(local_as, vrf["name"])
+                            )
+                            config_data.append("address-family l2vpn evpn")
+                            config_data.append("origination-l3vni {}".format(vni))
+                            config_data.append("exit-address-family")
 
                     if del_vni:
-                        config_data.append("vrf {}".format(vrf["name"]))
-                        cmd = "no vni {}".format(del_vni)
-                        config_data.append(cmd)
+                        if local_as is None:
+                            logger.error(
+                                "[DUT: %s]: vrf %s has a no_vni but no bgp local_as - cannot unconfigure origination-l3vni",
+                                c_router,
+                                vrf["name"],
+                            )
+                        else:
+                            config_data.append(
+                                "router bgp {} vrf {}".format(local_as, vrf["name"])
+                            )
+                            config_data.append("address-family l2vpn evpn")
+                            config_data.append(
+                                "no origination-l3vni {}".format(del_vni)
+                            )
+                            config_data.append("exit-address-family")
 
             if config_data:
                 config_data_dict[c_router] = config_data

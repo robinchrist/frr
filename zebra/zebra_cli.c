@@ -2668,73 +2668,7 @@ static void lib_vrf_zebra_netns_table_range_cli_write(
 	vty_out(vty, "ip table range %u %u\n", start, end);
 }
 
-DEFPY_YANG (vni_mapping,
-       vni_mapping_cmd,
-       "[no] vni ![" CMD_VNI_RANGE "[prefix-routes-only$filter]]",
-       NO_STR
-       "VNI corresponding to tenant VRF\n"
-       "VNI-ID\n"
-       "prefix-routes-only\n")
-{
-	const struct lyd_node *dnode;
-	const char *vrf;
 
-	if (!no) {
-		nb_cli_enqueue_change(vty, "./frr-zebra:zebra/l3vni-id", NB_OP_MODIFY,
-			      vni_str);
-	} else {
-		if (vty->node == CONFIG_NODE) {
-			if (yang_dnode_existsf(vty->candidate_config->dnode,
-					       "/frr-vrf:lib/vrf[name='%s']/frr-zebra:zebra[l3vni-id='%" PRIu64
-					       "']",
-					       VRF_DEFAULT_NAME, vni))
-				nb_cli_enqueue_change(vty, "./frr-zebra:zebra/l3vni-id",
-						      NB_OP_DESTROY, NULL);
-		} else {
-			dnode = yang_dnode_get(vty->candidate_config->dnode, VTY_CURR_XPATH);
-			if (dnode) {
-				vrf = yang_dnode_get_string(dnode, "name");
-
-				if (yang_dnode_existsf(vty->candidate_config->dnode,
-						       "/frr-vrf:lib/vrf[name='%s']/frr-zebra:zebra[l3vni-id='%" PRIu64
-						       "']",
-						       vrf, vni))
-					nb_cli_enqueue_change(vty, "./frr-zebra:zebra/l3vni-id",
-							      NB_OP_DESTROY, NULL);
-			}
-		}
-	}
-
-	if (filter)
-		nb_cli_enqueue_change(vty, "./frr-zebra:zebra/prefix-only",
-				      NB_OP_MODIFY, "true");
-	else
-		nb_cli_enqueue_change(vty, "./frr-zebra:zebra/prefix-only",
-				      NB_OP_DESTROY, NULL);
-
-	if (vty->node == CONFIG_NODE)
-		return nb_cli_apply_changes(vty, "/frr-vrf:lib/vrf[name='%s']",
-					    VRF_DEFAULT_NAME);
-
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-static void lib_vrf_zebra_l3vni_id_cli_write(struct vty *vty,
-					     const struct lyd_node *dnode,
-					     bool show_defaults)
-{
-	vni_t vni = yang_dnode_get_uint32(dnode, NULL);
-	bool prefix_only = yang_dnode_get_bool(dnode, "../prefix-only");
-
-	zebra_vrf_indent_cli_write(vty, dnode);
-
-	vty_out(vty, "vni %u", vni);
-
-	if (prefix_only)
-		vty_out(vty, " prefix-routes-only");
-
-	vty_out(vty, "\n");
-}
 
 DEFPY_YANG(
 	match_ip_address_prefix_len, match_ip_address_prefix_len_cmd,
@@ -3265,10 +3199,6 @@ const struct frr_yang_module_info frr_zebra_cli_info = {
 			.cbs.cli_show = lib_vrf_mpls_fec_nexthop_resolution_cli_write,
 		},
 		{
-			.xpath = "/frr-vrf:lib/vrf/frr-zebra:zebra/l3vni-id",
-			.cbs.cli_show = lib_vrf_zebra_l3vni_id_cli_write,
-		},
-		{
 			.xpath = NULL,
 		},
 	}
@@ -3382,8 +3312,6 @@ void zebra_cli_init(void)
 	install_element(CONFIG_NODE, &mpls_fec_nexthop_resolution_cmd);
 	install_element(VRF_NODE, &mpls_fec_nexthop_resolution_cmd);
 
-	install_element(CONFIG_NODE, &vni_mapping_cmd);
-	install_element(VRF_NODE, &vni_mapping_cmd);
 
 	install_element(CONFIG_NODE, &ip_table_range_cmd);
 	install_element(VRF_NODE, &ip_table_range_cmd);
