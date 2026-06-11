@@ -1192,6 +1192,9 @@ extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);
 extern struct bgp_evpn_evi *bgp_evpn_lookup_evi_by_vni(struct bgp *bgp, vni_t vni);
 extern struct bgp_evpn_evi *bgp_evpn_evi_lookup_by_name(struct bgp *tenant_scope,
 							const char *name);
+extern struct bgp *bgp_evpn_underlay_lookup_by_name(const char *vrfname);
+extern struct bgp *bgp_evpn_vrf_get_underlay(struct bgp *bgp_vrf);
+extern struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_evi_name_is_valid(const char *name);
 extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		struct ipaddr *originator_ip,

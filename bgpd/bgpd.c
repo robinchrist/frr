@@ -4676,6 +4676,14 @@ int bgp_delete(struct bgp *bgp)
 		bgp_set_evpn_master_instance(NULL);
 	}
 
+	/* Drop from the underlay registry if the instance goes away while
+	 * still designated as underlay
+	 */
+	if (bgp->evpn_vxlan_underlay_cfgd) {
+		bgp->evpn_vxlan_underlay_cfgd = false;
+		bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
+	}
+
 	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating) {
 		if (bgp->process_queue)
 			work_queue_free_and_null(&bgp->process_queue);

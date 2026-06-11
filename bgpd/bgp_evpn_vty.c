@@ -3292,6 +3292,7 @@ static void evpn_set_vxlan_underlay(struct bgp *bgp)
 		return;
 
 	bgp->evpn_vxlan_underlay_cfgd = true;
+	bgp_evpn_underlays_add_tail(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_set_evpn_master_instance(bgp);
 	bgp_zebra_advertise_all_vni(bgp, true);
 }
@@ -3306,6 +3307,7 @@ static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 		return;
 
 	bgp->evpn_vxlan_underlay_cfgd = false;
+	bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_set_evpn_master_instance(bgp_get_default());
 	bgp_zebra_advertise_all_vni(bgp, false);
 	bgp_evpn_cleanup_on_disable(bgp);

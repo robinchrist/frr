@@ -1097,6 +1097,62 @@ int vrf_fq_irt_node_hash_cmp(const struct vrf_fq_irt_node *a, const struct vrf_f
 	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
 }
 
+/* Look up an underlay instance by VRF name (as referenced by `underlay-vrf`
+ * statements). "default" matches the default instance. Only instances
+ * actually designated as vxlan-underlay are returned - resolution is
+ * performed on demand against the underlay registry, so there are no stale
+ * pointers to manage across instance lifecycles.
+ */
+struct bgp *bgp_evpn_underlay_lookup_by_name(const char *vrfname)
+{
+	struct bgp *bgp;
+
+	if (!vrfname)
+		return NULL;
+
+	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp) {
+		const char *iname = bgp->name ? bgp->name : VRF_DEFAULT_NAME;
+
+		if (strcmp(iname, vrfname) == 0)
+			return bgp;
+	}
+	return NULL;
+}
+
+/* The underlay instance a tenant VRF originates its EVPN routes into:
+ * the configured `underlay-vrf` binding wins; the ZAPI-derived binding
+ * (legacy configs without underlay-vrf, set with the L3VNI report) is the
+ * fallback; the master instance is the last resort while the
+ * single-underlay limitation is in place.
+ */
+struct bgp *bgp_evpn_vrf_get_underlay(struct bgp *bgp_vrf)
+{
+	struct bgp *underlay = NULL;
+
+	if (bgp_vrf->evpn_cfgd_underlay_vrf_name)
+		underlay = bgp_evpn_underlay_lookup_by_name(
+			bgp_vrf->evpn_cfgd_underlay_vrf_name);
+	if (!underlay)
+		underlay = bgp_vrf->evpn_underlay_vrf;
+	if (!underlay)
+		underlay = bgp_get_evpn_master_instance();
+	return underlay;
+}
+
+/* Same for an EVI (no ZAPI-derived fallback: EVIs only have the configured
+ * binding or the master instance)
+ */
+struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi)
+{
+	struct bgp *underlay = NULL;
+
+	if (evi->cfgd_underlay_vrf_name)
+		underlay = bgp_evpn_underlay_lookup_by_name(evi->cfgd_underlay_vrf_name);
+	if (!underlay)
+		underlay = bgp_get_evpn_master_instance();
+	return underlay;
+}
+
 /* Instance whose EVPN RIB is walked for (re)import evaluation.
  * Until multi-underlay lands this is the master instance; without any
  * underlay configured, fall back to the default instance: EVPN routes
@@ -10085,6 +10141,8 @@ void bgp_evpn_global_init(void)
 
 	evi_name_hash_init(&bgp_evpn_gbl()->global_evis);
 
+	bgp_evpn_underlays_init(&bgp_evpn_gbl()->underlays);
+
 	vrf_wildcard_irt_nodes_init(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes);
 	vrf_fq_irt_nodes_init(&bgp_evpn_gbl()->vrf_fq_irt_nodes);
 	evi_wildcard_irt_nodes_init(&bgp_evpn_gbl()->evi_wildcard_irt_nodes);
@@ -10102,9 +10160,11 @@ void bgp_evpn_global_fini(void)
 	assert(evihash_count(&bgp_evpn_gbl()->evihash) == 0);
 	assert(evi_svi_hash_count(&bgp_evpn_gbl()->evi_svi_hash) == 0);
 	assert(evi_name_hash_count(&bgp_evpn_gbl()->global_evis) == 0);
+	assert(bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) == 0);
 	evihash_fini(&bgp_evpn_gbl()->evihash);
 	evi_svi_hash_fini(&bgp_evpn_gbl()->evi_svi_hash);
 	evi_name_hash_fini(&bgp_evpn_gbl()->global_evis);
+	bgp_evpn_underlays_fini(&bgp_evpn_gbl()->underlays);
 
 	uint32_t idx = 0;
 

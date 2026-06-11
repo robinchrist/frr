@@ -136,6 +136,9 @@ extern struct frr_pthread *bgp_pth_ka;
 /* FIFO list for peer connections */
 PREDECL_LIST(peer_connection_fifo);
 
+/* List of BGP instances designated as VXLAN underlay (vxlan-underlay) */
+PREDECL_DLIST(bgp_evpn_underlays);
+
 /* Last dataplane report for a VNI from zebra. Pure diagnostics/state: the
  * control plane (config, RTs, import) never depends on it; `state` gates
  * origination and zebra programming only.
@@ -179,6 +182,12 @@ struct bgp_evpn_global {
 	struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
 	/* Hash table of Fully Qualified EVI import RTs to EVIs */
 	struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
+
+	/* All instances currently designated as VXLAN underlay
+	 * (evpn_vxlan_underlay_cfgd set). With the single-underlay limitation
+	 * this holds at most one entry; the data model is ready for more.
+	 */
+	struct bgp_evpn_underlays_head underlays;
 
 	/* Name registry for EVIs that are NOT scoped to a tenant VRF:
 	 * tenant-less EVIs (future top-level `evpn` node) as well as
@@ -1037,6 +1046,11 @@ struct bgp {
 	 */
 	bool evpn_vxlan_underlay_cfgd;
 
+	/* Membership in bm->evpn_global.underlays (linked iff
+	 * evpn_vxlan_underlay_cfgd is set)
+	 */
+	struct bgp_evpn_underlays_item evpn_underlays_item;
+
 	/* `auto-discover-vnis`: VNIs discovered in this underlay's dataplane
 	 * (reported by zebra) automatically create EVIs
 	 * (BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED). Without it, only explicitly
@@ -1271,6 +1285,8 @@ struct bgp {
 	QOBJ_FIELDS;
 };
 DECLARE_QOBJ_TYPE(bgp);
+
+DECLARE_DLIST(bgp_evpn_underlays, struct bgp, evpn_underlays_item);
 
 struct bgp_interface {
 #define BGP_INTERFACE_MPLS_BGP_FORWARDING (1 << 0)
