@@ -3555,6 +3555,17 @@ static int _bgp_zebra_process_local_l3vni(int cmd, struct zclient *zclient, uint
 		stream_get(&vrr_rmac, s, sizeof(struct ethaddr));
 		is_anycast_mac = stream_getl(s);
 
+		/* Dataplane shape/state report (diagnostics) */
+		struct bgp_evpn_vni_dp_info dp = { .state = ZEBRA_EVPN_DP_UP };
+
+		if (STREAM_READABLE(s) >= 12) {
+			dp.vxlan_ifindex = stream_getl(s);
+			dp.vid = stream_getw(s);
+			dp.shape_flags = stream_getl(s);
+			dp.state = stream_getc(s);
+			dp.reason = stream_getc(s);
+		}
+
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("Rx L3VNI_ADD VNI %u VRF %s Underlay VRF %sOriginator-IP %pIA RMAC svi-mac %pEA vrr-mac %pEA filter %s svi-if %u",
 				   l3vni, vrf_id_to_name(vrf_id), vrf_id_to_name(underlay_vrf_id),
@@ -3573,7 +3584,7 @@ static int _bgp_zebra_process_local_l3vni(int cmd, struct zclient *zclient, uint
 
 		return bgp_evpn_add_local_l3vni(underlay_vrf, l3vni, vrf_id, &svi_rmac, &vrr_rmac,
 						&originator_ip, l3vni_prefix_routes_only,
-						svi_ifindex, is_anycast_mac);
+						svi_ifindex, is_anycast_mac, &dp);
 	} else { /* cmd == ZEBRA_L3VNI_DEL */
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("Rx L3VNI_DEL VNI %u VRF %s Underlay VRF %s", l3vni,
@@ -3609,6 +3620,8 @@ static int _bgp_zebra_process_local_l2vni(int cmd, struct zclient *zclient, uint
 	struct in_addr mcast_grp = { INADDR_ANY };
 	ifindex_t svi_ifindex = 0;
 
+	struct bgp_evpn_vni_dp_info dp = { .state = ZEBRA_EVPN_DP_UP };
+
 	s = zclient->ibuf;
 	vni = stream_getl(s);
 	if (cmd == ZEBRA_L2VNI_ADD) {
@@ -3620,6 +3633,15 @@ static int _bgp_zebra_process_local_l2vni(int cmd, struct zclient *zclient, uint
 		stream_get(&tenant_vrf_id, s, sizeof(vrf_id_t));
 		mcast_grp.s_addr = stream_get_ipv4(s);
 		stream_get(&svi_ifindex, s, sizeof(ifindex_t));
+
+		/* Dataplane shape/state report (diagnostics) */
+		if (STREAM_READABLE(s) >= 12) {
+			dp.vxlan_ifindex = stream_getl(s);
+			dp.vid = stream_getw(s);
+			dp.shape_flags = stream_getl(s);
+			dp.state = stream_getc(s);
+			dp.reason = stream_getc(s);
+		}
 	}
 
 	if (BGP_DEBUG(zebra, ZEBRA))
@@ -3645,7 +3667,7 @@ static int _bgp_zebra_process_local_l2vni(int cmd, struct zclient *zclient, uint
 			 mcast_grp);
 
 		return bgp_evpn_add_local_l2vni(underlay_vrf, vni, &vtep_ip, tenant_vrf_id,
-						mcast_grp, svi_ifindex);
+						mcast_grp, svi_ifindex, &dp);
 	} else {
 		frrtrace(1, frr_bgp, evpn_local_vni_del_zrecv, vni);
 

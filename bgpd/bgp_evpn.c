@@ -9221,7 +9221,8 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 				  */
 				 bool prefix_routes_only,
 			     ifindex_t svi_ifindex,
-			     bool is_anycast_mac)
+			     bool is_anycast_mac,
+			     const struct bgp_evpn_vni_dp_info *dp)
 {
 	struct bgp *bgp_vrf = NULL; /* bgp VRF instance */
 	struct bgp_evpn_evi *evi = NULL;
@@ -9259,6 +9260,23 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	if (!bgp_vrf) {
 		zlog_err("Cannot add local L3VNI %u - VRF with ID %u does not exist", l3vni, vrf_id);
 		return -1;
+	}
+
+	/* Record the dataplane report (diagnostics; state gates origination) */
+	if (dp) {
+		bgp_vrf->l3vni_dp = *dp;
+	} else {
+		memset(&bgp_vrf->l3vni_dp, 0, sizeof(bgp_vrf->l3vni_dp));
+		bgp_vrf->l3vni_dp.state = ZEBRA_EVPN_DP_UP;
+	}
+
+	/* A misconfigured L3VNI (intent vs dataplane mismatch) is reported for
+	 * diagnostics but must not be treated as operational
+	 */
+	if (bgp_vrf->l3vni_dp.state == ZEBRA_EVPN_DP_MISCONFIGURED) {
+		zlog_warn("Local L3VNI %u report for VRF %s is MISCONFIGURED (reason %u) - not activating",
+			  l3vni, bgp_vrf->name_pretty, bgp_vrf->l3vni_dp.reason);
+		return 0;
 	}
 
 	bool import_auto_rt_active_before = bgp_evpn_vrf_should_generate_import_autort(bgp_vrf);
@@ -9534,6 +9552,7 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 
 	/* remove the l3vni from vrf instance */
 	bgp_vrf->l3vni = 0;
+	memset(&bgp_vrf->l3vni_dp, 0, sizeof(bgp_vrf->l3vni_dp));
 
 	/* remove the Rmac from the BGP vrf */
 	memset(&bgp_vrf->rmac, 0, sizeof(struct ethaddr));
@@ -9738,6 +9757,7 @@ int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 
 	/* Clear "live" flag and see if hash needs to be freed. */
 	UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
+	memset(&evi->dp, 0, sizeof(evi->dp));
 	/* Pop items from bgp_zebra_announce FIFO for any VPN routes pending*/
 	bgp_zebra_evpn_pop_items_from_announce_fifo(evi);
 	if (!bgp_evpn_evi_is_user_configured(evi))
@@ -9757,7 +9777,8 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 			   struct ipaddr *originator_ip,
 			   vrf_id_t tenant_vrf_id,
 			   struct in_addr mcast_grp,
-			   ifindex_t svi_ifindex)
+			   ifindex_t svi_ifindex,
+			   const struct bgp_evpn_vni_dp_info *dp)
 {
 	struct bgp_evpn_evi *evi;
 	struct prefix_evpn p;
@@ -9862,6 +9883,23 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 		evi = bgp_evpn_evi_new(underlay_vrf, vni, originator_ip, tenant_vrf_id,
 				   mcast_grp, svi_ifindex,
 				   BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED);
+	}
+
+	/* Record the dataplane report (diagnostics; state gates origination) */
+	if (dp) {
+		evi->dp = *dp;
+	} else {
+		memset(&evi->dp, 0, sizeof(evi->dp));
+		evi->dp.state = ZEBRA_EVPN_DP_UP;
+	}
+
+	/* A misconfigured VNI (intent vs dataplane mismatch) is reported for
+	 * diagnostics but must not be treated as operational
+	 */
+	if (evi->dp.state == ZEBRA_EVPN_DP_MISCONFIGURED) {
+		zlog_warn("Local L2VNI %u report for EVI %s is MISCONFIGURED (reason %u) - not activating",
+			  vni, evi->name, evi->dp.reason);
+		return 0;
 	}
 
 	/* if the EVI is live already, there is nothing more to do */

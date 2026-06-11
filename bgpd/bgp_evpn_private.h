@@ -269,6 +269,9 @@ struct bgp_evpn_evi {
 	vni_t vni;
 	vrf_id_t tenant_vrf_id;
 	ifindex_t svi_ifindex;
+
+	/* Last dataplane report for the VNI (diagnostics) */
+	struct bgp_evpn_vni_dp_info dp;
 	uint32_t flags;
 #define EVI_FLAG_USER_CFGD              0x1  /* EVI is user configured */
 #define EVI_FLAG_LIVE              0x2  /* EVI is "live" */

@@ -1116,6 +1116,28 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	stream_put_in_addr(s, &zevpn->mcast_grp);
 	stream_put(s, &svi_index, sizeof(ifindex_t));
 
+	/* Dataplane shape/state report (diagnostics) */
+	uint32_t shape_flags = 0;
+
+	if (zevpn->vxlan_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
+		if (if_is_operative(zevpn->vxlan_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
+	}
+	if (zevpn->bridge_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
+	if (zevpn->svi_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
+		if (if_is_operative(zevpn->svi_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
+	}
+	stream_putl(s, zevpn->vxlan_if ? zevpn->vxlan_if->ifindex : 0);
+	stream_putw(s, zevpn->vid);
+	stream_putl(s, shape_flags);
+	/* The ADD is (currently) only sent when the VNI is being served */
+	stream_putc(s, ZEBRA_EVPN_DP_UP);
+	stream_putc(s, ZEBRA_EVPN_DP_REASON_NONE);
+
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 

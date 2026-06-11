@@ -881,6 +881,40 @@ enum zebra_evpn_vni_intent_role {
 	ZEBRA_EVPN_VNI_INTENT_ROLE_L3 = 2, /* L3VNI of a (tenant) VRF */
 };
 
+/* Dataplane state of an EVPN object (VNI / EVI / VRF-L3VNI binding), shared
+ * between zebra (computes it from intent + dataplane shape) and bgpd
+ * (consumes it; origination requires UP, import works regardless).
+ */
+enum zebra_evpn_dp_state {
+	ZEBRA_EVPN_DP_NONE = 0,	     /* configured/intent only, no dataplane */
+	ZEBRA_EVPN_DP_DISCOVERED,    /* dataplane only, no intent */
+	ZEBRA_EVPN_DP_DOWN,	     /* intent + dataplane object, oper down */
+	ZEBRA_EVPN_DP_UP,	     /* bound and operational */
+	ZEBRA_EVPN_DP_MISCONFIGURED, /* intent vs dataplane mismatch */
+};
+
+/* Why an object is MISCONFIGURED (or DOWN) */
+enum zebra_evpn_dp_reason {
+	ZEBRA_EVPN_DP_REASON_NONE = 0,
+	ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF,
+	ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED,
+	ZEBRA_EVPN_DP_REASON_ROLE_MISMATCH,
+	ZEBRA_EVPN_DP_REASON_NO_SVI,
+	ZEBRA_EVPN_DP_REASON_TENANT_MISMATCH,
+	ZEBRA_EVPN_DP_REASON_DUP_VNI,
+};
+
+/* Dataplane "shape" of a VNI as discovered by zebra - which constructs
+ * exist/are up. Carried in the L2VNI/L3VNI dataplane reports for
+ * diagnostics.
+ */
+#define ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF	 (1 << 0)
+#define ZEBRA_EVPN_SHAPE_VXLAN_IF_UP	 (1 << 1)
+#define ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED (1 << 2)
+#define ZEBRA_EVPN_SHAPE_HAS_SVI	 (1 << 3)
+#define ZEBRA_EVPN_SHAPE_SVI_UP		 (1 << 4)
+#define ZEBRA_EVPN_SHAPE_HAS_MACVLAN	 (1 << 5)
+
 
 /* Zebra MAC types */
 #define ZEBRA_MACIP_TYPE_STICKY                0x01 /* Sticky MAC*/

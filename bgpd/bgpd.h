@@ -136,6 +136,18 @@ extern struct frr_pthread *bgp_pth_ka;
 /* FIFO list for peer connections */
 PREDECL_LIST(peer_connection_fifo);
 
+/* Last dataplane report for a VNI from zebra. Pure diagnostics/state: the
+ * control plane (config, RTs, import) never depends on it; `state` gates
+ * origination and zebra programming only.
+ */
+struct bgp_evpn_vni_dp_info {
+	ifindex_t vxlan_ifindex;
+	uint16_t vid;
+	uint32_t shape_flags; /* ZEBRA_EVPN_SHAPE_* */
+	uint8_t state;	      /* enum zebra_evpn_dp_state */
+	uint8_t reason;	      /* enum zebra_evpn_dp_reason */
+};
+
 /* Global (process-wide) EVPN state.
  *
  * The EVPN route table is logically shared across all underlay VRFs: overlay
@@ -1093,6 +1105,9 @@ struct bgp {
 
 	/* L3-VNI corresponding to this vrf (dataplane state, from zebra) */
 	vni_t l3vni;
+
+	/* Last dataplane report for the L3VNI (diagnostics) */
+	struct bgp_evpn_vni_dp_info l3vni_dp;
 
 	/* router-mac to be used in mac-ip routes for this vrf */
 	struct ethaddr rmac;

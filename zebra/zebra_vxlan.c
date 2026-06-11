@@ -2409,6 +2409,30 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_put(s, &vrr_rmac, sizeof(struct ethaddr));
 	stream_putl(s, is_anycast_mac);
 
+	/* Dataplane shape/state report (diagnostics) */
+	uint32_t shape_flags = 0;
+
+	if (zl3vni->vxlan_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
+		if (if_is_operative(zl3vni->vxlan_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
+	}
+	if (zl3vni->bridge_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
+	if (zl3vni->svi_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
+		if (if_is_operative(zl3vni->svi_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
+	}
+	if (zl3vni->mac_vlan_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_MACVLAN;
+	stream_putl(s, zl3vni->vxlan_if ? zl3vni->vxlan_if->ifindex : 0);
+	stream_putw(s, zl3vni->vid);
+	stream_putl(s, shape_flags);
+	/* The ADD is (currently) only sent on the oper-up transition */
+	stream_putc(s, ZEBRA_EVPN_DP_UP);
+	stream_putc(s, ZEBRA_EVPN_DP_REASON_NONE);
+
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 

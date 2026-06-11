@@ -204,13 +204,15 @@ extern int bgp_evpn_local_macip_add(struct bgp *bgp, vni_t vni,
 extern int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t vni, vrf_id_t vrf_id,
 				    struct ethaddr *rmac, struct ethaddr *vrr_rmac,
 				    struct ipaddr *originator_ip, bool prefix_routes_only,
-				    ifindex_t svi_ifindex, bool is_anycast_mac);
+				    ifindex_t svi_ifindex, bool is_anycast_mac,
+				    const struct bgp_evpn_vni_dp_info *dp);
 extern int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf_id);
 extern void bgp_evpn_instance_down(struct bgp *bgp);
 extern int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni);
 extern int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				    struct ipaddr *originator_ip, vrf_id_t tenant_vrf_id,
-				    struct in_addr mcast_grp, ifindex_t svi_ifindex);
+				    struct in_addr mcast_grp, ifindex_t svi_ifindex,
+				    const struct bgp_evpn_vni_dp_info *dp);
 extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
 extern void bgp_evpn_delete_auto_discovered_evis(struct bgp *bgp_evpn_mi);
