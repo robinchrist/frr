@@ -3694,11 +3694,16 @@ DEFPY (bgp_evpn_origination_l3vni,
 				bgp->evpn_cfgd_l3vni, (vni_t)vni);
 			return CMD_WARNING_CONFIG_FAILED;
 		}
+		vni_t old_vni = bgp->evpn_cfgd_l3vni;
+
 		bgp->evpn_cfgd_l3vni = 0;
 		bgp->evpn_cfgd_l3vni_prefix_routes_only = false;
 		/* Auto-RTs derive from the intended L3VNI - re-evaluate */
 		bgp_evpn_vrf_handle_import_rt_change(bgp);
 		bgp_evpn_vrf_handle_export_rt_change(bgp);
+		/* Withdraw the intent from zebra */
+		bgp_zebra_send_evpn_vni_intent(bgp, old_vni, ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
+					       false, false);
 		return CMD_SUCCESS;
 	}
 
@@ -3718,6 +3723,8 @@ DEFPY (bgp_evpn_origination_l3vni,
 		}
 	}
 
+	vni_t old_vni = bgp->evpn_cfgd_l3vni;
+
 	bgp->evpn_cfgd_l3vni = vni;
 	bgp->evpn_cfgd_l3vni_prefix_routes_only = !!pro;
 
@@ -3727,10 +3734,14 @@ DEFPY (bgp_evpn_origination_l3vni,
 	bgp_evpn_vrf_handle_import_rt_change(bgp);
 	bgp_evpn_vrf_handle_export_rt_change(bgp);
 
-	/* NOTE: until the VNI intent direction reversal lands, this must
-	 * match the `vni X` configured for the VRF in zebra; zebra remains
-	 * the source for the operative L3VNI binding.
+	/* Push the intent to zebra: it drives the L3VNI binding there
+	 * (replacing zebra's own `vrf X vni Y` configuration)
 	 */
+	if (old_vni && old_vni != (vni_t)vni)
+		bgp_zebra_send_evpn_vni_intent(bgp, old_vni, ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
+					       false, false);
+	bgp_zebra_send_evpn_vni_intent(bgp, vni, ZEBRA_EVPN_VNI_INTENT_ROLE_L3, !!pro, true);
+
 	return CMD_SUCCESS;
 }
 

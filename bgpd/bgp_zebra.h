@@ -106,6 +106,9 @@ extern int bgp_zebra_advertise_gw_macip(struct bgp *bgp, int advertise,
 extern int bgp_zebra_advertise_svi_macip(struct bgp *bgp, int advertise,
 					 vni_t vni);
 extern int bgp_zebra_advertise_all_vni(struct bgp *bgp, int advertise);
+extern int bgp_zebra_send_evpn_vni_intent(struct bgp *tenant_bgp, vni_t vni,
+					  enum zebra_evpn_vni_intent_role role,
+					  bool prefix_routes_only, bool add);
 extern int bgp_zebra_dup_addr_detection(struct bgp *bgp);
 extern int bgp_zebra_vxlan_flood_control(struct bgp *bgp, struct bgp_evpn_evi *evpn);
 

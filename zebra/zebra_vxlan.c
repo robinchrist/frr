@@ -6107,6 +6107,76 @@ void zebra_vxlan_close_tables(struct zebra_vrf *zvrf)
 	}
 }
 
+/* Handle a VNI intent from the control plane (bgpd): declares which role a
+ * VNI has (L3VNI of a tenant VRF / L2VNI of an EVI). Replaces zebra's own
+ * `vrf X vni Y` configuration - the intent direction is reversed, bgpd is the
+ * source of control-plane truth.
+ */
+void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
+{
+	struct stream *s = msg;
+	vni_t vni;
+	uint8_t role = 0;
+	vrf_id_t tenant_vrf_id = VRF_UNKNOWN;
+	uint8_t flags = 0;
+	bool add = (hdr->command == ZEBRA_EVPN_VNI_INTENT_ADD);
+	struct zebra_vrf *tenant_zvrf;
+
+	STREAM_GETL(s, vni);
+	if (add) {
+		STREAM_GETC(s, role);
+		STREAM_GETL(s, tenant_vrf_id);
+		STREAM_GETC(s, flags);
+	}
+
+	if (IS_ZEBRA_DEBUG_VXLAN)
+		zlog_debug("EVPN VNI intent %s VNI %u role %u tenant vrf %s(%u) flags 0x%x",
+			   add ? "ADD" : "DEL", vni, role,
+			   vrf_id_to_name(tenant_vrf_id), tenant_vrf_id, flags);
+
+	if (!add) {
+		struct zebra_l3vni *zl3vni = zl3vni_lookup(vni);
+
+		/* Only the L3 role has operative state to tear down so far */
+		if (zl3vni) {
+			tenant_zvrf = zebra_vrf_lookup_by_id(zl3vni_vrf_id(zl3vni));
+			if (tenant_zvrf)
+				zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni, 0, 0);
+		}
+		return;
+
+	}
+
+	switch (role) {
+	case ZEBRA_EVPN_VNI_INTENT_ROLE_L3:
+		tenant_zvrf = zebra_vrf_lookup_by_id(tenant_vrf_id);
+		if (!tenant_zvrf) {
+			zlog_err("EVPN VNI intent: tenant VRF %u for L3VNI %u does not exist (yet) - intent dropped",
+				 tenant_vrf_id, vni);
+			return;
+		}
+		zebra_vxlan_process_vrf_vni_cmd(tenant_zvrf, vni,
+						CHECK_FLAG(flags,
+							   ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY),
+						1);
+		break;
+	case ZEBRA_EVPN_VNI_INTENT_ROLE_L2:
+		/* No operative effect yet: L2VNIs are still classified by
+		 * exclusion (not an L3VNI). Used for diagnostics/validation
+		 * once dataplane-state reporting carries intent matching.
+		 */
+		break;
+	default:
+		zlog_err("EVPN VNI intent: unknown role %u for VNI %u", role, vni);
+		break;
+	}
+
+	return;
+
+stream_failure:
+	zlog_err("%s: stream failure", __func__);
+}
+
 /* Derive the underlay VRF of a VXLAN interface: the VRF of its link
  * (underlying) interface, falling back to the VXLAN interface's own VRF.
  * Without any interface (configured-only state), fall back to the master

@@ -2596,6 +2596,12 @@ void bgp_zebra_instance_register(struct bgp *bgp)
 	if (bgp->evpn_vxlan_underlay_cfgd)
 		bgp_zebra_advertise_all_vni(bgp, 1);
 
+	/* Replay the VNI intent for this (tenant) instance, if configured */
+	if (bgp->evpn_cfgd_l3vni)
+		bgp_zebra_send_evpn_vni_intent(bgp, bgp->evpn_cfgd_l3vni,
+					       ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
+					       bgp->evpn_cfgd_l3vni_prefix_routes_only, true);
+
 	bgp_nht_register_nexthops(bgp);
 
 	/*
@@ -2788,6 +2794,45 @@ int bgp_zebra_vxlan_flood_control(struct bgp *bgp, struct bgp_evpn_evi *evpn)
 	stream_putc(s, flood_control);
 	stream_putl(s, vni);
 	stream_putw_at(s, 0, stream_get_endp(s));
+
+	return zclient_send_message(bgp_zclient);
+}
+
+/* Send a VNI intent to zebra: declares which role a VNI has (L3VNI of a
+ * tenant VRF / L2VNI of an EVI). Replaces zebra's own `vrf X vni Y` config -
+ * the control plane (bgpd) is the source of intent. The tenant instance is
+ * passed in; the message itself rides on its vrf_id so zebra can dispatch.
+ */
+int bgp_zebra_send_evpn_vni_intent(struct bgp *tenant_bgp, vni_t vni,
+				   enum zebra_evpn_vni_intent_role role,
+				   bool prefix_routes_only, bool add)
+{
+	struct stream *s;
+
+	/* Check socket. */
+	if (!bgp_zclient || bgp_zclient->sock < 0)
+		return 0;
+
+	/* Don't try to register if Zebra doesn't know of this instance. */
+	if (!IS_BGP_INST_KNOWN_TO_ZEBRA(tenant_bgp))
+		return 0;
+
+	s = bgp_zclient->obuf;
+	stream_reset(s);
+
+	zclient_create_header(s, add ? ZEBRA_EVPN_VNI_INTENT_ADD : ZEBRA_EVPN_VNI_INTENT_DEL,
+			      tenant_bgp->vrf_id);
+	stream_putl(s, vni);
+	if (add) {
+		stream_putc(s, role);
+		stream_putl(s, tenant_bgp->vrf_id);
+		stream_putc(s, prefix_routes_only ? ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY : 0);
+	}
+	stream_putw_at(s, 0, stream_get_endp(s));
+
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("Tx EVPN VNI intent %s VNI %u role %u tenant %s",
+			   add ? "ADD" : "DEL", vni, role, tenant_bgp->name_pretty);
 
 	return zclient_send_message(bgp_zclient);
 }

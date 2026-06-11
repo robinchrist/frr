@@ -161,6 +161,8 @@ typedef enum {
 	ZEBRA_L2VNI_DEL,
 	ZEBRA_L3VNI_ADD,
 	ZEBRA_L3VNI_DEL,
+	ZEBRA_EVPN_VNI_INTENT_ADD,
+	ZEBRA_EVPN_VNI_INTENT_DEL,
 	ZEBRA_REMOTE_VTEP_ADD,
 	ZEBRA_REMOTE_VTEP_DEL,
 	ZEBRA_MACIP_ADD,
@@ -865,6 +867,19 @@ static inline const char *zapi_srv6_sid_notify2str(enum zapi_srv6_sid_notify not
  * - VRF Export Route Targets are not appended e.g. to advertised Type 2 routes!
  */
 #define ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY	(1 << 0)
+
+/* EVPN VNI intent (bgpd -> zebra, ZEBRA_EVPN_VNI_INTENT_ADD/DEL): the control
+ * plane declares which role a VNI has. Replaces zebra's own `vrf X vni Y`
+ * configuration; zebra classifies dataplane VNIs based on these intents.
+ *
+ * Payload: u32 vni, u8 role, u32 tenant_vrf_id, u8 flags
+ * (flags: ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY for the L3 role).
+ * DEL carries only the u32 vni.
+ */
+enum zebra_evpn_vni_intent_role {
+	ZEBRA_EVPN_VNI_INTENT_ROLE_L2 = 1, /* L2VNI of an EVI */
+	ZEBRA_EVPN_VNI_INTENT_ROLE_L3 = 2, /* L3VNI of a (tenant) VRF */
+};
 
 
 /* Zebra MAC types */
