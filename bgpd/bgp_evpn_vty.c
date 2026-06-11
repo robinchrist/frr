@@ -3748,6 +3748,7 @@ DEFPY (bgp_evpn_advertise_all_vni,
 	if (!bgp)
 		return CMD_WARNING;
 
+	zlog_warn("advertise-all-vni is deprecated; it is an alias for vxlan-underlay + auto-discover-vnis and is written as such");
 	evpn_set_vxlan_underlay(bgp);
 	evpn_set_auto_discover_vnis(bgp);
 	return CMD_SUCCESS;
@@ -6415,6 +6416,8 @@ DEFPY_NOSH (bgp_evpn_vni,
 		return CMD_WARNING;
 	}
 	validated_vni = vni;
+
+	zlog_warn("The `vni X` config is deprecated; use `vlan-based-evi NAME` (with origination-l2vni / tenant-vrf) instead");
 
 	/* Create VNI, or mark as configured. */
 	evi = evpn_create_update_vni(bgp_evpn_mi, validated_vni);
