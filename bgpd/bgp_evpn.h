@@ -25,7 +25,7 @@
  */
 #define BGP_EVPN_RT_RFC8365_A_BIT 0x80000000
 
-static inline bool is_evpn_master_instance(const struct bgp *bgp)
+static inline bool is_evpn_underlay(const struct bgp *bgp)
 {
 	return bgp && bgp->evpn_vxlan_underlay_cfgd;
 }

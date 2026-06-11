@@ -866,7 +866,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf) {
 
 static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *evi) {
 
-	struct bgp* bgp_evpn_mi;
+	struct bgp* underlay_bgp;
 	struct bgp_evpn_effective_wildcard_rt* eff_w_item;
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
@@ -875,7 +875,7 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 	 * manual RTs must become effective regardless of any underlay state.
 	 * The ASN comes from the EVI's bound underlay instance.
 	 */
-	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
+	underlay_bgp = bgp_evpn_evi_get_underlay(evi);
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -889,10 +889,10 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 		bgp_evpn_effective_fq_rt_free(eff_fq_item);
 
 	/* Start with the auto RT */
-	bool should_generate_auto_rt = bgp_evpn_mi && bgp_evpn_evi_should_generate_import_autort(evi);
+	bool should_generate_auto_rt = underlay_bgp && bgp_evpn_evi_should_generate_import_autort(evi);
 	if(should_generate_auto_rt) {
 
-		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(bgp_evpn_mi, evi);
+		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(underlay_bgp, evi);
 
 		if(eff_w_item) /* eff_w_item should never be NULL... */
 			/* Insert should always succeed, list is empty */
@@ -924,7 +924,7 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 
 static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *evi) {
 
-	struct bgp* bgp_evpn_mi;
+	struct bgp* underlay_bgp;
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
@@ -932,7 +932,7 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *ev
 	 * manual RTs must become effective regardless of any underlay state.
 	 * The ASN comes from the EVI's bound underlay instance.
 	 */
-	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
+	underlay_bgp = bgp_evpn_evi_get_underlay(evi);
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -943,10 +943,10 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *ev
 		bgp_evpn_effective_fq_rt_free(eff_fq_item);
 
 	/* Start with the auto RT */
-	bool should_generate_auto_rt = bgp_evpn_mi && bgp_evpn_evi_should_generate_export_autort(evi);
+	bool should_generate_auto_rt = underlay_bgp && bgp_evpn_evi_should_generate_export_autort(evi);
 	if(should_generate_auto_rt) {
 
-		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(bgp_evpn_mi, evi);
+		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(underlay_bgp, evi);
 
 		if(eff_fq_item) /* eff_fq_item should never be NULL... */
 			/* Insert should always succeed, list is empty */
@@ -1500,7 +1500,7 @@ void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
  */
 void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 {
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp *underlay_bgp = NULL;
 	struct bgp_evpn_evi *evi = NULL;
 
 	/* Update the effective Export RTs in any case - configured RTs must be
@@ -1510,8 +1510,8 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	 */
 	bgp_evpn_vrf_regenerate_effective_export_rts(bgp_vrf);
 
-	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
-	if (!bgp_evpn_mi)
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	if (!underlay_bgp)
 		return; /* no underlay -> nothing can be advertised */
 
 	/* If the L3VNI is not yet active, do not advertise routes
@@ -1538,7 +1538,7 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	 * EVI's tenant VRF route targets
 	 */
 	frr_each(bgp_evis_slu, &bgp_vrf->evis, evi) {
-		bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+		bgp_evpn_evi_update_type_1_2_3_routes(underlay_bgp, evi);
 	}
 }
 
@@ -1570,7 +1570,7 @@ void bgp_evpn_evi_handle_import_rt_change(struct bgp_evpn_evi *evi)
  */
 void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp *underlay_bgp = NULL;
 
 	/* Update the effective Export RTs in any case - configured RTs must be
 	 * effective regardless of any underlay/dataplane state. Route
@@ -1579,8 +1579,8 @@ void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 	 */
 	bgp_evpn_evi_regenerate_effective_export_rts(evi);
 
-	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
-	if (!bgp_evpn_mi)
+	underlay_bgp = bgp_evpn_evi_get_underlay(evi);
+	if (!underlay_bgp)
 		return; /* no underlay -> nothing can be advertised */
 
 	/* If the L2VNI / EVI is not yet active, do not advertise routes
@@ -1590,7 +1590,7 @@ void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 		return;
 
 
-	bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi);
+	bgp_evpn_evi_update_type_1_2_3_routes(underlay_bgp, evi);
 }
 
 /*
@@ -3788,13 +3788,13 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	safi_t safi = SAFI_EVPN;
 	struct attr attr;
 	struct bgp_dest *dest = NULL;
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp *underlay_bgp = NULL;
 	int route_changed = 0;
 	struct bgp_path_info *pi = NULL;
 	struct ipaddr vtep_ip;
 
-	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
-	if (!bgp_evpn_mi)
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	if (!underlay_bgp)
 		return 0;
 
 	/* Build path attribute for this route - use the source attr, if
@@ -3857,17 +3857,17 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	bgp_evpn_build_route_type_5_extcomm(bgp_vrf, &attr);
 
 	/* get the route node in global table */
-	dest = bgp_evpn_global_node_get(bgp_evpn_mi->rib[AFI_L2VPN][SAFI_EVPN], evp,
+	dest = bgp_evpn_global_node_get(underlay_bgp->rib[AFI_L2VPN][SAFI_EVPN], evp,
 					&bgp_vrf->vrf_prd, NULL);
 	assert(dest);
 
 	/* create or update the route entry within the route node */
-	_bgp_evpn_vrf_upsert_type5_route_entry(bgp_evpn_mi, bgp_vrf, afi, safi, dest, originator, &attr,
+	_bgp_evpn_vrf_upsert_type5_route_entry(underlay_bgp, bgp_vrf, afi, safi, dest, originator, &attr,
 				      &route_changed, &pi, addpath_id);
 
 	/* schedule for processing and unlock node */
 	if (route_changed) {
-		bgp_process(bgp_evpn_mi, dest, pi, afi, safi);
+		bgp_process(underlay_bgp, dest, pi, afi, safi);
 		bgp_dest_unlock_node(dest);
 	}
 
@@ -3888,25 +3888,25 @@ static int bgp_evpn_vrf_delete_type5_route(struct bgp *bgp_vrf, const struct bgp
 	safi_t safi = SAFI_EVPN;
 	struct bgp_dest *dest = NULL;
 	struct bgp_path_info *pi = NULL;
-	struct bgp *bgp_evpn_mi = NULL; /* evpn bgp instance */
+	struct bgp *underlay_bgp = NULL; /* evpn bgp instance */
 
-	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
-	if (!bgp_evpn_mi)
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	if (!underlay_bgp)
 		return 0;
 
 	/* locate the global route entry for this type-5 prefix */
-	dest = bgp_evpn_global_node_lookup(bgp_evpn_mi->rib[afi][safi], safi, evp,
+	dest = bgp_evpn_global_node_lookup(underlay_bgp->rib[afi][safi], safi, evp,
 					   &bgp_vrf->vrf_prd, NULL);
 	if (!dest)
 		return 0;
 
 	frrtrace(2, frr_bgp, evpn_withdraw_type5, bgp_vrf->vrf_id, evp);
 
-	pi = bgp_evpn_delete_route_entry(bgp_evpn_mi, afi, safi, dest, originator, addpath_id);
+	pi = bgp_evpn_delete_route_entry(underlay_bgp, afi, safi, dest, originator, addpath_id);
 
 	/* schedule for processing and unlock node */
 	if (pi)
-		bgp_process(bgp_evpn_mi, dest, pi, afi, safi);
+		bgp_process(underlay_bgp, dest, pi, afi, safi);
 	bgp_dest_unlock_node(dest);
 	return 0;
 }
@@ -6888,10 +6888,10 @@ static void bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(struct bgp *bg
  */
 void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf)
 {
-	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
+	struct bgp *underlay_bgp = NULL; /* EVPN bgp instance */
 
-	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
-	if (!bgp_evpn_mi)
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	if (!underlay_bgp)
 		return;
 
 	if (!bgp_evpn_vrf_is_l3vni_live(bgp_vrf))
@@ -8624,13 +8624,13 @@ struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *n
  */
 void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
+	struct bgp *underlay_bgp = bgp_evpn_evi_get_underlay(evi);
 
 	/* Withdraw originated routes (only possible when live, which implies
 	 * a master instance exists)
 	 */
-	if (bgp_evpn_mi)
-		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+	if (underlay_bgp)
+		bgp_evpn_evi_delete_routes(underlay_bgp, evi);
 
 	/* Uninstall imported routes + unmap from the irt nodes */
 	bgp_evpn_evi_teardown_import(evi);
@@ -8641,7 +8641,7 @@ void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
 		UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
 	}
 
-	bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi);
+	bgp_evpn_evi_delete_and_free(underlay_bgp, evi);
 }
 
 /* Set or clear (vni == 0) the origination L2VNI of a configured EVI.
@@ -8652,7 +8652,7 @@ void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
  */
 int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
 {
-	struct bgp *bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
+	struct bgp *underlay_bgp = bgp_evpn_evi_get_underlay(evi);
 
 	if (evi->vni == vni)
 		return 0;
@@ -8662,8 +8662,8 @@ int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
 	 * back up.
 	 */
 	if (bgp_evpn_evi_is_live(evi)) {
-		if (bgp_evpn_mi)
-			bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
+		if (underlay_bgp)
+			bgp_evpn_evi_delete_routes(underlay_bgp, evi);
 		UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
 	}
 
@@ -8684,8 +8684,8 @@ int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
 	/* The dataplane may already contain the new VNI - re-trigger the zebra
 	 * scan so the report arrives without waiting for a dataplane event
 	 */
-	if (vni && bgp_evpn_mi && bgp_evpn_mi->evpn_vxlan_underlay_cfgd)
-		bgp_zebra_advertise_all_vni(bgp_evpn_mi, true);
+	if (vni && underlay_bgp && underlay_bgp->evpn_vxlan_underlay_cfgd)
+		bgp_zebra_advertise_all_vni(underlay_bgp, true);
 
 	return 0;
 }

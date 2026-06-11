@@ -3527,7 +3527,7 @@ DEFPY (bgp_evpn_advertise_default_gw_vni,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3549,7 +3549,7 @@ DEFPY (no_bgp_evpn_advertise_default_vni_gw,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3570,7 +3570,7 @@ DEFPY (bgp_evpn_advertise_default_gw,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3591,7 +3591,7 @@ DEFPY (no_bgp_evpn_advertise_default_gw,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3902,7 +3902,7 @@ DEFPY (dup_addr_detection,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3933,7 +3933,7 @@ DEFPY (dup_addr_detection_auto_recovery,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -3967,7 +3967,7 @@ DEFPY (no_dup_addr_detection,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4040,7 +4040,7 @@ DEFPY(bgp_evpn_advertise_svi_ip,
 	if (no)
 		evpn_set_advertise_svi_macip(bgp_evpn_mi, NULL, 0);
 	else {
-		if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		if (!is_evpn_underlay(bgp_evpn_mi)) {
 			vty_out(vty,
 				"Command requires vxlan-underlay on this VRF\n");
 			return CMD_WARNING;
@@ -4063,7 +4063,7 @@ DEFPY(bgp_evpn_advertise_svi_ip_vni,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4089,7 +4089,7 @@ DEFPY(macvrf_soo_global, macvrf_soo_global_cmd,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4118,7 +4118,7 @@ DEFPY(no_macvrf_soo_global, no_macvrf_soo_global_cmd,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4141,7 +4141,7 @@ DEFUN_HIDDEN (bgp_evpn_advertise_vni_subnet,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4166,7 +4166,7 @@ DEFUN_HIDDEN (no_bgp_evpn_advertise_vni_subnet,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -4461,7 +4461,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
        MAC_STR MAC_STR MAC_STR)
 {
 	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp *underlay_bgp = NULL;
 	struct bgp_evpn_evi *evi_item = NULL;
 
 	if(!bgp_vrf)
@@ -4471,7 +4471,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		vty_out(vty, "This command is only supported under a non-underlay VRF\n");
 		return CMD_WARNING_CONFIG_FAILED;
 	}
-	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
 
 	if (!no) {
 		/* pip is already enabled */
@@ -4489,8 +4489,8 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		} else {
 			bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr = INADDR_ANY;
 			/* default instance router-id assignemt */
-			if (bgp_evpn_mi)
-				bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn_mi->router_id;
+			if (underlay_bgp)
+				bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = underlay_bgp->router_id;
 		}
 		/* parse sys mac */
 		if (!is_zero_mac(&mac->eth_addr)) {
@@ -4560,8 +4560,8 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		/* reset user configured sys IP */
 		bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr = INADDR_ANY;
 		/* Assign default PIP IP (bgp instance router-id) */
-		if (bgp_evpn_mi)
-			bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn_mi->router_id;
+		if (underlay_bgp)
+			bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = underlay_bgp->router_id;
 		else
 			bgp_vrf->evpn_info->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
 	}
@@ -4572,7 +4572,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		 * At this point if bgp_evpn is NULL and evpn is enabled
 		 * something stupid has gone wrong
 		 */
-		assert(bgp_evpn_mi);
+		assert(underlay_bgp);
 
 		bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
 
@@ -4580,7 +4580,7 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 		frr_each(bgp_evis_slu, &bgp_vrf->evis, evi_item) {
 			if (!bgp_evpn_is_svi_macip_enabled(evi_item))
 				continue;
-			bgp_evpn_evi_update_type_1_2_3_routes(bgp_evpn_mi, evi_item);
+			bgp_evpn_evi_update_type_1_2_3_routes(underlay_bgp, evi_item);
 		}
 	}
 
@@ -6338,7 +6338,7 @@ DEFPY(bgp_evpn_flood_control_vni,
 		if (!bgp_evpn_mi)
 			return CMD_WARNING;
 
-		if (!is_evpn_master_instance(bgp_evpn_mi)) {
+		if (!is_evpn_underlay(bgp_evpn_mi)) {
 			vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 			return CMD_WARNING;
 		}
@@ -6379,7 +6379,7 @@ DEFPY_NOSH (bgp_evpn_vni,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -6417,7 +6417,7 @@ DEFPY (no_bgp_evpn_vni,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -6774,7 +6774,7 @@ static bool evi_node_get_evpn_instance(struct vty *vty, struct bgp **bgp_evpn_mi
 	if (!ctx)
 		return false;
 
-	if (!is_evpn_master_instance(ctx)) {
+	if (!is_evpn_underlay(ctx)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return false;
 	}
@@ -7274,7 +7274,7 @@ DEFUN(bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cmd,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -7309,7 +7309,7 @@ DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
 	if (!bgp_evpn_mi)
 		return CMD_WARNING;
 
-	if (!is_evpn_master_instance(bgp_evpn_mi)) {
+	if (!is_evpn_underlay(bgp_evpn_mi)) {
 		vty_out(vty, "Command requires vxlan-underlay on this VRF\n");
 		return CMD_WARNING;
 	}
@@ -7570,7 +7570,7 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	/* Legacy `vni X` blocks: only allowed in (and written for) the master
 	 * instance - the VNI index is global, so don't dump it elsewhere
 	 */
-	if (is_evpn_master_instance(bgp_vrf) && evihash_count(&bgp_evpn_gbl()->evihash)) {
+	if (is_evpn_underlay(bgp_vrf) && evihash_count(&bgp_evpn_gbl()->evihash)) {
 		struct list *vnilist = list_new();
 		struct bgp_evpn_evi *evi_entry;
 		struct listnode *ln;
