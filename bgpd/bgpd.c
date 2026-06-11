@@ -4379,7 +4379,7 @@ int bgp_delete(struct bgp *bgp)
 	 * Pop all VPNs yet to be processed for remote routes install if the
 	 * bgp-evpn instance is getting deleted
 	 */
-	if (bgp == bgp_get_evpn_master_instance()) {
+	if (bgp->evpn_vxlan_underlay_cfgd) {
 		b_l2_cnt = zebra_l2_vni_count(&bm->zebra_l2_vni_head);
 		vni_count = b_l2_cnt;
 		while (vni_count) {

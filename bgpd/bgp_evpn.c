@@ -1598,10 +1598,7 @@ void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
  */
 void bgp_evpn_configure_evpn_autort_rfc8365_compatible(struct bgp *bgp_vrf, bool evpn_autort_rfc8365_compatible)
 {
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
 	struct bgp_evpn_evi *evi;
-
-	assert(bgp_evpn_mi); /* This function should only be called after EVPN instance is created */
 
 	if(bgp_vrf->evpn_autort_rfc8365_compatible == evpn_autort_rfc8365_compatible)
 		return; /* No change */
@@ -7713,10 +7710,6 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 	struct bgp *bgp_vrf_temp;
 	struct bgp_evpn_evi *evi;
 
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
-	assert(bgp_evpn_mi);
-
-
 	if (withdraw) {
 
 		/* delete and withdraw all the type-5 routes
@@ -7731,12 +7724,13 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 			withdraw_router_id_vni(evi, bgp_vrf);
 		}
 
-		if (bgp_vrf == bgp_evpn_mi) {
+		/* When an underlay's router-id changes, clear the derived PIP IP
+		 * for all tenant VRFs bound to that underlay.
+		 */
+		if (bgp_vrf->evpn_vxlan_underlay_cfgd) {
 			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf_temp)) {
-				/* advertise pip is enabled,
-				 * bgp instance L3VNI VTEP-IP is IPv4
-				 * advertise pip IP is not user configured.
-				 */
+				if (bgp_evpn_vrf_get_underlay(bgp_vrf_temp) != bgp_vrf)
+					continue;
 				if (bgp_vrf_temp->evpn_info->advertise_pip &&
 				    IS_IPADDR_V4(&bgp_vrf_temp->originator_ip) &&
 				    (bgp_vrf_temp->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
@@ -7747,24 +7741,19 @@ void bgp_evpn_handle_router_id_update(struct bgp *bgp_vrf, int withdraw)
 		}
 	} else {
 
-		/* Assign new default instance router-id */
-		if (bgp_vrf == bgp_evpn_mi) {
+		/* Assign new underlay router-id as default PIP IP for tenant VRFs
+		 * that are bound to this underlay and have no static PIP configured.
+		 */
+		if (bgp_vrf->evpn_vxlan_underlay_cfgd) {
 			for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf_temp)) {
-				/* advertise pip is enabled,
-				 * bgp instance L3VNI VTEP-IP is IPv4
-				 * advertise pip IP is not user configured.
-				 * assign the EVPN master instance router-id as pip IP.
-				 */
+				if (bgp_evpn_vrf_get_underlay(bgp_vrf_temp) != bgp_vrf)
+					continue;
 				if (bgp_vrf_temp->evpn_info->advertise_pip &&
 				    IS_IPADDR_V4(&bgp_vrf_temp->originator_ip) &&
 				    (bgp_vrf_temp->evpn_info->pip_ip_static.ipaddr_v4.s_addr ==
 				     INADDR_ANY)) {
-					
 					SET_IPADDR_V4(&bgp_vrf_temp->evpn_info->pip_ip);
-					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn_mi->router_id;
-					/* advertise type-5 routes with
-					 * new nexthop
-					 */
+					bgp_vrf_temp->evpn_info->pip_ip.ipaddr_v4 = bgp_vrf->router_id;
 					bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf_temp);
 				}
 			}
@@ -9998,9 +9987,7 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 	/* Mark as "live" */
 	SET_FLAG(evi->flags, EVI_FLAG_LIVE);
 
-	/* Tunnel is newly active.
-	 * Add TIP to tip_hash of the EVPN underlay instance (bgp_get_evpn_master_instance()).
-	 */
+	/* Tunnel is newly active — add TIP to the per-underlay tip_hash. */
 	if (bgp_tip_add(underlay_vrf, originator_ip))
 		/* The originator_ip was not already present in the
 		 * bgp martian next-hop table as a tunnel-ip, so we
@@ -10343,15 +10330,15 @@ void bgp_evpn_init(struct bgp *bgp)
  */
 void bgp_evpn_vrf_delete(struct bgp *bgp_vrf)
 {
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
-
 	/* Clean up the EVIs of which we are the Tenant VRF */
 	struct bgp_evpn_evi *evi_item = NULL;
 	while ((evi_item = bgp_evis_slu_pop(&bgp_vrf->evis)) != NULL) {
-		if (bgp_evpn_mi)
-			bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi_item);
+		struct bgp *underlay = bgp_evpn_evi_get_underlay(evi_item);
 
-		bgp_evpn_evi_delete_and_free(bgp_evpn_mi, evi_item);
+		if (underlay)
+			bgp_evpn_evi_delete_routes(underlay, evi_item);
+
+		bgp_evpn_evi_delete_and_free(underlay, evi_item);
 	}
 
 	bgp_evpn_vrf_unmap_from_vrf_irt_nodes(bgp_vrf);
@@ -10621,7 +10608,6 @@ static void bgp_evpn_link_to_evi_svi_hash(struct bgp *bgp_evpn_mi, struct bgp_ev
  */
 bool bgp_evpn_is_gateway_ip_resolved(struct bgp_nexthop_cache *bnc)
 {
-	struct bgp *bgp_evpn_mi = NULL;
 	struct bgp_evpn_evi *evi = NULL;
 	struct evpn_remote_ip tmp;
 	struct prefix *p;
@@ -10632,15 +10618,12 @@ bool bgp_evpn_is_gateway_ip_resolved(struct bgp_nexthop_cache *bnc)
 	if (!bnc->nexthop || bnc->nexthop->ifindex == 0)
 		return false;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return false;
-
 	/*
 	 * Gateway IP is resolved by nht over SVI interface.
-	 * Use this SVI to find corresponding EVI(L2 context)
+	 * Use this SVI to find corresponding EVI(L2 context).
+	 * The lookup is global (bgp param ignored).
 	 */
-	evi = bgp_evpn_evi_svi_hash_lookup(bgp_evpn_mi, bnc->nexthop->ifindex);
+	evi = bgp_evpn_evi_svi_hash_lookup(NULL, bnc->nexthop->ifindex);
 	if (!evi)
 		return false;
 
@@ -10897,8 +10880,9 @@ void bgp_aggr_supp_withdraw_from_evpn(struct bgp *bgp, afi_t afi, safi_t safi)
 	struct bgp_path_info *pi;
 	uint32_t addpath_id;
 
-	if (!bgp_get_evpn_master_instance() || !(bgp_evpn_should_originate_type5_routes_bestpath(bgp, afi) ||
-				 bgp_evpn_should_originate_type5_routes_multipath(bgp, afi)))
+	if (!bgp_evpn_vrf_get_underlay(bgp) ||
+	    !(bgp_evpn_should_originate_type5_routes_bestpath(bgp, afi) ||
+	      bgp_evpn_should_originate_type5_routes_multipath(bgp, afi)))
 		return;
 
 	/* Aggregate-address table walk. */
