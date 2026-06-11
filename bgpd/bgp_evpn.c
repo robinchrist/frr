@@ -2671,16 +2671,13 @@ static void evpn_convert_nexthop_to_ipv6(struct attr *attr)
 /*
  * Wrapper for node get in global table.
  */
-struct bgp_dest *bgp_evpn_global_node_get(
+struct bgp_dest *bgp_evpn_global_node_get(struct bgp_table *table,
 					  const struct prefix_evpn *evp,
 					  struct prefix_rd *prd,
 					  const struct bgp_path_info *local_pi)
 {
 	afi_t afi = AFI_L2VPN;
 	safi_t safi = SAFI_EVPN;
-
-	struct bgp* bgp_evpn_mi = bgp_get_evpn_master_instance();
-	assert(bgp_evpn_mi);
 
 	struct prefix_evpn global_p = {};
 
@@ -2711,7 +2708,7 @@ struct bgp_dest *bgp_evpn_global_node_get(
 
 		evp = &global_p;
 	}
-	return bgp_afi_node_get(bgp_evpn_mi->rib[afi][safi], afi, safi, (struct prefix *)evp, prd);
+	return bgp_afi_node_get(table, afi, safi, (struct prefix *)evp, prd);
 }
 
 /*
@@ -3863,7 +3860,8 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	bgp_evpn_build_route_type_5_extcomm(bgp_vrf, &attr);
 
 	/* get the route node in global table */
-	dest = bgp_evpn_global_node_get(evp, &bgp_vrf->vrf_prd, NULL);
+	dest = bgp_evpn_global_node_get(bgp_evpn_mi->rib[AFI_L2VPN][SAFI_EVPN], evp,
+					&bgp_vrf->vrf_prd, NULL);
 	assert(dest);
 
 	/* create or update the route entry within the route node */
@@ -4649,7 +4647,8 @@ static int bgp_evpn_evi_update_route(struct bgp *bgp_evpn_mi, struct bgp_evpn_ev
 	if (route_change) {
 		struct bgp_path_info *global_pi;
 
-		dest = bgp_evpn_global_node_get(p, &evi->prd, NULL);
+		dest = bgp_evpn_global_node_get(bgp_evpn_mi->rib[AFI_L2VPN][SAFI_EVPN], p,
+						&evi->prd, NULL);
 		bgp_evpn_evi_update_route_entry(
 			bgp_evpn_mi, evi, afi, safi, dest, attr_new, NULL /* mac */,
 			NULL /* ip */, 1, &global_pi, flags, seq,
@@ -4870,7 +4869,8 @@ void bgp_evpn_evi_update_type2_route_entry(struct bgp *bgp_evpn_mi, struct bgp_e
 
 	if (route_change) {
 		/* Update route in global routing table. */
-		global_dest = bgp_evpn_global_node_get(&evp, &evi->prd, NULL);
+		global_dest = bgp_evpn_global_node_get(bgp_evpn_mi->rib[AFI_L2VPN][SAFI_EVPN], &evp,
+						       &evi->prd, NULL);
 		assert(global_dest);
 		bgp_evpn_evi_update_route_entry(
 			bgp_evpn_mi, evi, afi, safi, global_dest, attr_new,
@@ -7003,7 +7003,8 @@ static void bgp_evpn_evi_update_advertise_type_1_2_route(struct bgp *bgp, struct
 	 * attribute.
 	 */
 	attr = pi->attr;
-	global_dest = bgp_evpn_global_node_get(&tmp_evp, &evi->prd, NULL);
+	global_dest = bgp_evpn_global_node_get(bgp->rib[AFI_L2VPN][SAFI_EVPN], &tmp_evp,
+					       &evi->prd, NULL);
 	assert(global_dest);
 
 	if (evp->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE) {
@@ -7062,7 +7063,8 @@ static void bgp_evpn_evi_update_advertise_routes(struct bgp *bgp, struct bgp_evp
 
 		attr = pi->attr;
 
-		global_dest = bgp_evpn_global_node_get(&p, &evi->prd, NULL);
+		global_dest = bgp_evpn_global_node_get(bgp->rib[AFI_L2VPN][SAFI_EVPN], &p,
+						       &evi->prd, NULL);
 		bgp_evpn_evi_update_route_entry(
 			bgp, evi, afi, safi, global_dest, attr, NULL /* mac */,
 			NULL /* ip */, 1, &pi, 0, mac_mobility_seqnum(attr),
@@ -9331,11 +9333,6 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 		zlog_err("Cannot add local L3VNI %u - underlay VRF %s is not configured as vxlan-underlay", l3vni, underlay_vrf->name);
 		return -1;
 	}
-	/* Limitation for now until we have proper multi-underlay-VRF support */
-	if(bm->bgp_evpn_mi != underlay_vrf) {
-		zlog_err("Cannot add local L3VNI %u - underlay VRF %s is not the EVPN master instance", l3vni, underlay_vrf->name);
-		return -1;
-	}
 
 	if (CHECK_FLAG(underlay_vrf->flags, BGP_FLAG_DELETE_IN_PROGRESS)) {
 		flog_err(EC_BGP_NO_DFLT,
@@ -9594,11 +9591,6 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 		zlog_err("Cannot del local L3VNI %u - underlay VRF %s is not configured as vxlan-underlay", l3vni, underlay_vrf->name);
 		return -1;
 	}
-	/* Limitation for now until we have proper multi-underlay-VRF support */
-	if(bm->bgp_evpn_mi != underlay_vrf) {
-		zlog_err("Cannot del local L3VNI %u - underlay VRF %s is not the EVPN master instance", l3vni, underlay_vrf->name);
-		return -1;
-	}
 
 	bgp_vrf = bgp_lookup_by_vrf_id(vrf_id);
 	if (!bgp_vrf) {
@@ -9816,11 +9808,6 @@ int bgp_evpn_del_local_l2vni(struct bgp *underlay_vrf, vni_t vni)
 		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s is not configured as vxlan-underlay", vni, underlay_vrf->name);
 		return -1;
 	}
-	/* Limitation for now until we have proper multi-underlay-VRF support */
-	if(bm->bgp_evpn_mi != underlay_vrf) {
-		zlog_err("Cannot delete local L2VNI %u - underlay VRF %s is not the EVPN master instance", vni, underlay_vrf->name);
-		return -1;
-	}
 
 	/* Lookup EVI by VNI within the underlay VRF */
 	evi = bgp_evpn_lookup_evi_by_vni(underlay_vrf, vni);
@@ -9882,11 +9869,6 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 
 	if(!underlay_vrf->evpn_vxlan_underlay_cfgd) {
 		zlog_err("Cannot add local L2VNI %u - underlay VRF %s is not configured as vxlan-underlay", vni, underlay_vrf->name);
-		return -1;
-	}
-	/* Limitation for now until we have proper multi-underlay-VRF support */
-	if(bm->bgp_evpn_mi != underlay_vrf) {
-		zlog_err("Cannot add local L2VNI %u - underlay VRF %s is not the EVPN master instance", vni, underlay_vrf->name);
 		return -1;
 	}
 

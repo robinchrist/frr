@@ -1136,6 +1136,18 @@ static int zevpn_build_hash_table_zns(struct interface *ifp, void *arg)
 		goto done;
 	}
 
+	/* Only VNIs whose derived underlay VRF is an enabled underlay are
+	 * served; others remain plain interface inventory (visible for
+	 * diagnostics, not processed).
+	 */
+	if (!zebra_vxlan_if_underlay_enabled(ifp)) {
+		if (IS_ZEBRA_DEBUG_VXLAN)
+			zlog_debug("Intf %s(%u) underlay VRF %s not enabled as EVPN underlay - not serving",
+				   ifp->name, ifp->ifindex,
+				   vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(ifp)));
+		goto done;
+	}
+
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug("Building vni table for %s-if %s",
 			   IS_ZEBRA_VXLAN_IF_VNI(zif) ? "vni" : "svd", ifp->name);
@@ -1191,6 +1203,32 @@ static void zl3vni_cleanup_all(struct hash_bucket *bucket, void *args)
 	zl3vni = (struct zebra_l3vni *)bucket->data;
 
 	zebra_vxlan_process_l3vni_oper_down(zl3vni);
+}
+
+/* Underlay-scoped variants: only clean up objects whose derived underlay VRF
+ * is the one being disabled (arg) - objects served by other (still enabled)
+ * underlays are untouched.
+ */
+static void zebra_evpn_vxlan_cleanup_underlay(struct hash_bucket *bucket, void *arg)
+{
+	struct zebra_vrf *zvrf = arg;
+	struct zebra_evpn *zevpn = (struct zebra_evpn *)bucket->data;
+
+	if (zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if) != zvrf_id(zvrf))
+		return;
+
+	zebra_evpn_vxlan_cleanup_all(bucket, arg);
+}
+
+static void zl3vni_cleanup_underlay(struct hash_bucket *bucket, void *args)
+{
+	struct zebra_vrf *zvrf = args;
+	struct zebra_l3vni *zl3vni = (struct zebra_l3vni *)bucket->data;
+
+	if (zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if) != zvrf_id(zvrf))
+		return;
+
+	zl3vni_cleanup_all(bucket, args);
 }
 
 static void rb_find_or_add_host(struct host_rb_tree_entry *hrbe,
@@ -6016,11 +6054,6 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 	int advertise = 0;
 	enum vxlan_flood_control flood_ctrl;
 
-	/* Mismatch between EVPN VRF and current VRF (should be prevented by
-	 * bgpd's cli) */
-	if (is_evpn_enabled() && !EVPN_ENABLED(zvrf))
-		return;
-
 	s = msg;
 	STREAM_GETC(s, advertise);
 	STREAM_GETC(s, flood_ctrl);
@@ -6059,23 +6092,24 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 		/* Read neighbors */
 		ns_walk_func(neigh_read_ns, NULL, NULL);
 	} else {
-		/* Cleanup VTEPs for all EVPNs - uninstall from
-		 * kernel and free entries.
+		/* Cleanup VTEPs for this underlay's EVPNs - uninstall from
+		 * kernel and free entries. Objects served by other (still
+		 * enabled) underlays are untouched.
 		 */
-		hash_iterate(zrouter.evpn_table, zebra_evpn_vxlan_cleanup_all,
-			     zvrf);
+		hash_iterate(zrouter.evpn_table, zebra_evpn_vxlan_cleanup_underlay, zvrf);
 
 		/* Delete all ESs in BGP */
 		zebra_evpn_es_send_all_to_client(false /* add */);
 
-		/* cleanup all l3vnis */
-		hash_iterate(zrouter.l3vni_table, zl3vni_cleanup_all, NULL);
+		/* cleanup this underlay's l3vnis */
+		hash_iterate(zrouter.l3vni_table, zl3vni_cleanup_underlay, zvrf);
 
 		assert(zrouter.evpn_underlay_count > 0);
 		zrouter.evpn_underlay_count--;
 
-		/* Mark as "no EVPN VRF" */
-		zrouter.evpn_vrf = NULL;
+		/* Drop the master mirror if it pointed at this VRF */
+		if (zrouter.evpn_vrf == zvrf)
+			zrouter.evpn_vrf = NULL;
 	}
 
 stream_failure:
@@ -6218,6 +6252,18 @@ vrf_id_t zebra_vxlan_if_underlay_vrf_id(const struct interface *vxlan_if)
 		return zif->link->vrf->vrf_id;
 
 	return vxlan_if->vrf->vrf_id;
+}
+
+/* Is the derived underlay VRF of this VXLAN interface enabled as an EVPN
+ * underlay? Only such VNIs are served (EVPN objects, MAC/neigh processing,
+ * reports to the control plane); others remain plain interface inventory.
+ */
+bool zebra_vxlan_if_underlay_enabled(const struct interface *vxlan_if)
+{
+	struct zebra_vrf *uvrf =
+		zebra_vrf_lookup_by_id(zebra_vxlan_if_underlay_vrf_id(vxlan_if));
+
+	return uvrf && EVPN_ENABLED(uvrf);
 }
 
 /* init the l3vni table */

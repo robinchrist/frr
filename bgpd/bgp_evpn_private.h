@@ -1220,7 +1220,8 @@ extern int evpn_route_select_install(struct bgp *bgp, struct bgp_evpn_evi *evi,
 				     struct bgp_dest *dest,
 				     struct bgp_path_info *pi);
 extern struct bgp_dest *
-bgp_evpn_global_node_get(const struct prefix_evpn *evp, struct prefix_rd *prd,
+bgp_evpn_global_node_get(struct bgp_table *table, const struct prefix_evpn *evp,
+			 struct prefix_rd *prd,
 			 const struct bgp_path_info *local_pi);
 extern struct bgp_dest *bgp_evpn_global_node_lookup(
 	struct bgp_table *table, safi_t safi, const struct prefix_evpn *evp,

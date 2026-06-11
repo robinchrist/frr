@@ -5802,21 +5802,16 @@ void bgp_update(struct peer *peer, const struct prefix *p, uint32_t addpath_id,
 
 	pi = bgp_pi_hash_find(&rib_table->pi_hash, &pi_lookup);
 
-	/* Safeguard for EVPN: 
-	 * The EVPN logic is extremely inconsistent and broken. For EVPN, all route *must* go into the
-	 * global table. The global table is located in the EVPN master VRF!
-	 * Currently, if you configure peers receiving EVPN routes in VRFs other than the EVPN master VRF
-	 * (which is also used as underlay VRF), bad things will happen.
+	/* Safeguard for EVPN:
+	 * EVPN routes are accepted on underlay instances (their RIBs form the
+	 * logically shared EVPN route table) and on the default instance
+	 * (import-only operation without any underlay/dataplane). Other
+	 * instances are not covered by the import evaluation walks, so routes
+	 * received there would be invisible to RT reconfiguration - reject.
 	 */
-	if(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bm->bgp_evpn_mi) { 
-		/* TODO: This is probably not a good idea though
-		 * If the route is rejected and the master VRF changes, we won't have that route
-		 * because it was rejected. Rejection works for stuff like ASPATH, because once the condition
-		 * that caused the rejection changes, the route would be re-advertised by the peer.
-		 * Should that just be downgraded to a warning?
-		 */
-		
-		reason = "EVPN route received EVPN NON-master VRF";
+	if (afi == AFI_L2VPN && safi == SAFI_EVPN && !bgp->evpn_vxlan_underlay_cfgd &&
+	    bgp != bgp_get_default()) {
+		reason = "EVPN route received on non-underlay, non-default instance";
 		goto filtered;
 	}
 

@@ -415,6 +415,17 @@ static int zebra_vxlan_if_add_vni(struct interface *ifp,
 	if (!is_evpn_enabled())
 		return 0;
 
+	/* Only VNIs whose derived underlay VRF is an enabled underlay are
+	 * served; others remain plain interface inventory.
+	 */
+	if (!zebra_vxlan_if_underlay_enabled(ifp)) {
+		if (IS_ZEBRA_DEBUG_VXLAN)
+			zlog_debug("Intf %s(%u) VNI %u: underlay VRF %s not enabled as EVPN underlay - not serving",
+				   ifp->name, ifp->ifindex, vnip->vni,
+				   vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(ifp)));
+		return 0;
+	}
+
 	zif = ifp->info;
 	assert(zif);
 	vxl = &zif->l2info.vxl;

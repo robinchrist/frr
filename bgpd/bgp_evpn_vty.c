@@ -3563,23 +3563,6 @@ DEFPY (no_bgp_evpn_advertise_default_gw,
 	return CMD_SUCCESS;
 }
 
-/* Check that no OTHER instance is already designated as underlay.
- * Temporary limitation until full multi-underlay support: only one underlay
- * may exist, and it is the EVPN master instance.
- */
-static bool evpn_vxlan_underlay_allowed(struct vty *vty, struct bgp *bgp)
-{
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
-
-	if (bgp_evpn_mi && bgp_evpn_mi != bgp && bgp_evpn_mi->evpn_vxlan_underlay_cfgd) {
-		vty_out(vty,
-			"%% Only one VXLAN underlay VRF is supported for now! Please unconfigure in VRF %s first\n",
-			bgp_evpn_mi->name_pretty);
-		return false;
-	}
-	return true;
-}
-
 DEFPY (bgp_evpn_vxlan_underlay,
        bgp_evpn_vxlan_underlay_cmd,
        "[no$no] vxlan-underlay",
@@ -3599,9 +3582,6 @@ DEFPY (bgp_evpn_vxlan_underlay,
 		evpn_unset_vxlan_underlay(bgp);
 		return CMD_SUCCESS;
 	}
-
-	if (!evpn_vxlan_underlay_allowed(vty, bgp))
-		return CMD_WARNING_CONFIG_FAILED;
 
 	evpn_set_vxlan_underlay(bgp);
 	return CMD_SUCCESS;
@@ -3759,9 +3739,6 @@ DEFPY (bgp_evpn_advertise_all_vni,
 
 	if (!bgp)
 		return CMD_WARNING;
-
-	if (!evpn_vxlan_underlay_allowed(vty, bgp))
-		return CMD_WARNING_CONFIG_FAILED;
 
 	evpn_set_vxlan_underlay(bgp);
 	evpn_set_auto_discover_vnis(bgp);
