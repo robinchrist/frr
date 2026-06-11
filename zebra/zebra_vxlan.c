@@ -4461,6 +4461,143 @@ void zebra_vxlan_print_evpn(struct vty *vty, bool uj)
 		vty_json(vty, json);
 }
 
+/* Context for the DISCOVERED/unserved VNI walk (tier-1 inventory listing). */
+struct zebra_discovered_vni_ctx {
+	struct vty *vty;
+	bool use_json;
+	bool detail;
+	/* Summary: a "discoveredVnis" object keyed by VNI string.
+	 * Detail: the shared per-VNI json array (entries appended directly).
+	 */
+	json_object *json;
+	bool header_printed;
+	uint32_t count;
+};
+
+/*
+ * Per-VNI callback: a VNI present in the dataplane interface inventory
+ * (zif->l2info.vxl) but with no EVPN object - neither an L2 zebra_evpn nor an
+ * L3 zl3vni - is dataplane-only. This happens when the VNI's derived underlay
+ * VRF is not an enabled EVPN underlay (or no underlay is enabled at all) and
+ * bgpd holds no intent for the VNI, so it is never classified or served. Report
+ * it as DISCOVERED/unserved purely for diagnostics. Because there is no intent,
+ * the L2/L3 role is genuinely unknown.
+ */
+static int zebra_vxlan_print_discovered_vni(struct zebra_if *zif,
+					    struct zebra_vxlan_vni *vnip,
+					    void *arg)
+{
+	struct zebra_discovered_vni_ctx *ctx = arg;
+	struct vty *vty = ctx->vty;
+	const char *underlay_vrf;
+	const char *bridge;
+	vni_t vni;
+
+	if (!vnip)
+		return 0;
+	vni = vnip->vni;
+	if (!vni)
+		return 0;
+
+	/* Served (or tier-2 diagnostic) objects are printed by the main walk. */
+	if (zebra_evpn_lookup(vni) || zl3vni_lookup(vni))
+		return 0;
+
+	underlay_vrf = vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(zif->ifp));
+	bridge = zif->brslave_info.br_if ? zif->brslave_info.br_if->name : "-";
+
+	ctx->count++;
+
+	if (ctx->use_json) {
+		json_object *json_vni = json_object_new_object();
+
+		json_object_int_add(json_vni, "vni", vni);
+		json_object_string_add(json_vni, "state", "discovered");
+		json_object_string_add(json_vni, "vxlanIf", zif->ifp->name);
+		json_object_string_add(json_vni, "underlayVrf", underlay_vrf);
+		json_object_boolean_add(json_vni, "underlayEnabled",
+					zebra_vxlan_if_underlay_enabled(zif->ifp));
+		json_object_int_add(json_vni, "vlan", vnip->access_vlan);
+		json_object_string_add(json_vni, "bridge", bridge);
+
+		if (ctx->detail)
+			json_object_array_add(ctx->json, json_vni);
+		else {
+			char vni_str[VNI_STR_LEN];
+
+			snprintf(vni_str, sizeof(vni_str), "%u", vni);
+			json_object_object_add(ctx->json, vni_str, json_vni);
+		}
+		return 0;
+	}
+
+	if (ctx->detail) {
+		vty_out(vty, "VNI: %u (discovered, unserved)\n", vni);
+		vty_out(vty, " Type: unknown (no EVPN intent)\n");
+		vty_out(vty, " VxLAN interface: %s\n", zif->ifp->name);
+		vty_out(vty, " Derived underlay VRF: %s (not an enabled EVPN underlay)\n",
+			underlay_vrf);
+		vty_out(vty, " Access VLAN: %u\n", vnip->access_vlan);
+		vty_out(vty, " Bridge: %s\n\n", bridge);
+		return 0;
+	}
+
+	if (!ctx->header_printed) {
+		vty_out(vty, "\nDiscovered (unserved) VNIs [underlay VRF not enabled]:\n");
+		vty_out(vty, "%-10s %-21s %-15s %-10s %-37s\n", "VNI",
+			"VxLAN IF", "Underlay VRF", "VLAN", "BRIDGE");
+		ctx->header_printed = true;
+	}
+	vty_out(vty, "%-10u %-21s %-15s %-10u %-37s\n", vni, zif->ifp->name,
+		underlay_vrf, vnip->access_vlan, bridge);
+	return 0;
+}
+
+static int zebra_vxlan_print_discovered_vnis_zns(struct interface *ifp,
+						 void *arg)
+{
+	struct zebra_if *zif = ifp->info;
+
+	if (!zif || zif->zif_type != ZEBRA_IF_VXLAN)
+		return NS_WALK_CONTINUE;
+
+	zebra_vxlan_if_vni_iterate(zif, zebra_vxlan_print_discovered_vni, arg);
+	return NS_WALK_CONTINUE;
+}
+
+/*
+ * List VNIs that exist only in the dataplane interface inventory (tier 1),
+ * with no served or diagnostic EVPN object. Runs unconditionally - the
+ * headline case is zero underlays enabled, where every inventory VNI is
+ * DISCOVERED. Only meaningful for the "all VNIs" view: a discovered VNI has
+ * no intent and therefore no L2/L3 classification.
+ */
+static void zebra_vxlan_print_discovered_vnis(struct vty *vty,
+					      json_object *json, bool use_json,
+					      bool detail)
+{
+	struct zebra_discovered_vni_ctx ctx = {};
+
+	ctx.vty = vty;
+	ctx.use_json = use_json;
+	ctx.detail = detail;
+
+	if (use_json)
+		/* Detail shares the caller's per-VNI array; summary collects
+		 * discovered VNIs into a dedicated object attached below.
+		 */
+		ctx.json = detail ? json : json_object_new_object();
+
+	zebra_ns_ifp_walk_all(zebra_vxlan_print_discovered_vnis_zns, &ctx);
+
+	if (use_json && !detail) {
+		if (ctx.count)
+			json_object_object_add(json, "discoveredVnis", ctx.json);
+		else
+			json_object_free(ctx.json);
+	}
+}
+
 /*
  * Display VNI hash table (VTY command handler).
  */
@@ -4473,31 +4610,35 @@ void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
 	if (use_json)
 		json = json_object_new_object();
 
-	if (!is_evpn_enabled()) {
-		if (use_json)
-			vty_json_empty(vty, json);
-		return;
+	if (is_evpn_enabled()) {
+		if (!use_json)
+			vty_out(vty,
+				"%-10s %-4s %-21s %-8s %-8s %-15s %-15s %-10s %-37s\n",
+				"VNI", "Type", "VxLAN IF", "# MACs", "# ARPs",
+				"# Remote VTEPs", "Tenant VRF", "VLAN", "BRIDGE");
+
+		args[0] = vty;
+		args[1] = json;
+
+		if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
+			hash_iterate(zrouter.evpn_table,
+				     (void (*)(struct hash_bucket *,
+					       void *))zebra_evpn_print_hash,
+				     args);
+
+		if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
+			hash_iterate(zrouter.l3vni_table,
+				     (void (*)(struct hash_bucket *,
+					       void *))zl3vni_print_hash,
+				     args);
 	}
 
-	if (!use_json)
-		vty_out(vty, "%-10s %-4s %-21s %-8s %-8s %-15s %-15s %-10s %-37s\n", "VNI", "Type",
-			"VxLAN IF", "# MACs", "# ARPs", "# Remote VTEPs", "Tenant VRF", "VLAN",
-			"BRIDGE");
-
-	args[0] = vty;
-	args[1] = json;
-
-	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
-		hash_iterate(zrouter.evpn_table,
-			     (void (*)(struct hash_bucket *,
-				       void *))zebra_evpn_print_hash,
-			     args);
-
-	if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
-		hash_iterate(zrouter.l3vni_table,
-			     (void (*)(struct hash_bucket *,
-				       void *))zl3vni_print_hash,
-			     args);
+	/* Tier-1 inventory: VNIs in the dataplane with no EVPN object. Run even
+	 * when EVPN is disabled (every inventory VNI is then DISCOVERED). The
+	 * role is unknown without intent, so only list these for the "all" view.
+	 */
+	if (filter == ZEBRA_PRINT_VNI_FILTER_ALL)
+		zebra_vxlan_print_discovered_vnis(vty, json, use_json, false);
 
 	if (use_json)
 		vty_json(vty, json);
@@ -4555,38 +4696,36 @@ void zebra_vxlan_print_vnis_detail(struct vty *vty, struct zebra_vrf *zvrf,
 				   bool use_json, enum zebra_print_vni_filter filter)
 {
 	json_object *json_array = NULL;
-	struct zebra_ns *zns = NULL;
 	struct zebra_evpn_show zes;
-
-	if (!is_evpn_enabled()) {
-		if (use_json)
-			vty_json_empty(vty, NULL);
-		return;
-	}
-
-	zns = zebra_ns_lookup(NS_DEFAULT);
-	if (!zns)
-		return;
 
 	if (use_json)
 		json_array = json_object_new_array();
 
-	zes.vty = vty;
-	zes.json = json_array;
-	zes.zvrf = zvrf;
-	zes.use_json = use_json;
+	if (is_evpn_enabled()) {
+		zes.vty = vty;
+		zes.json = json_array;
+		zes.zvrf = zvrf;
+		zes.use_json = use_json;
 
-	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
-		hash_iterate(zrouter.evpn_table,
-			     (void (*)(struct hash_bucket *,
-				       void *))zebra_evpn_print_hash_detail,
-			     &zes);
+		if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
+			hash_iterate(zrouter.evpn_table,
+				     (void (*)(struct hash_bucket *,
+					       void *))zebra_evpn_print_hash_detail,
+				     &zes);
 
-	if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
-		hash_iterate(zrouter.l3vni_table,
-			     (void (*)(struct hash_bucket *,
-				       void *))zl3vni_print_hash_detail,
-			     &zes);
+		if (filter != ZEBRA_PRINT_VNI_FILTER_L2)
+			hash_iterate(zrouter.l3vni_table,
+				     (void (*)(struct hash_bucket *,
+					       void *))zl3vni_print_hash_detail,
+				     &zes);
+	}
+
+	/* Tier-1 inventory: dataplane-only VNIs with no EVPN object (see the
+	 * summary variant). Detail entries are appended to the same json array.
+	 */
+	if (filter == ZEBRA_PRINT_VNI_FILTER_ALL)
+		zebra_vxlan_print_discovered_vnis(vty, json_array, use_json,
+						  true);
 
 	/*
 	 * This is an extremely expensive operation at scale
