@@ -99,6 +99,10 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 	vty = ctxt[0];
 	json = ctxt[1];
 
+	vrf_id_t underlay_id = zevpn->vxlan_if
+				       ? zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if)
+				       : VRF_UNKNOWN;
+
 	if (json == NULL) {
 		vty_out(vty, "VNI: %u\n", zevpn->vni);
 		vty_out(vty, " Type: %s\n", "L2");
@@ -106,6 +110,7 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 		vty_out(vty, " Bridge: %s\n",
 			zevpn->bridge_if ? zevpn->bridge_if->name : "-");
 		vty_out(vty, " Tenant VRF: %s\n", vrf_id_to_name(zevpn->vrf_id));
+		vty_out(vty, " Underlay VRF: %s\n", vrf_id_to_name(underlay_id));
 	} else {
 		json_object_int_add(json, "vni", zevpn->vni);
 		json_object_string_add(json, "type", "L2");
@@ -113,6 +118,7 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 		json_object_string_add(json, "bridge",
 				       zevpn->bridge_if ? zevpn->bridge_if->name : "");
 		json_object_string_add(json, "tenantVrf", vrf_id_to_name(zevpn->vrf_id));
+		json_object_string_add(json, "underlayVrf", vrf_id_to_name(underlay_id));
 	}
 
 	if (!zevpn->vxlan_if) { // unexpected
