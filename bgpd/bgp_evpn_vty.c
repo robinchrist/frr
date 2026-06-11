@@ -703,7 +703,7 @@ static void bgp_evpn_show_routes_mac_ip_es(struct vty *vty, esi_t *esi,
 	struct listnode *node;
 	struct bgp_evpn_es *es;
 	struct bgp_path_es_info *es_info;
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	json_object *json_paths = NULL;
 
 	path_cnt = 0;
@@ -3323,16 +3323,15 @@ static void evpn_set_vxlan_underlay(struct bgp *bgp)
 
 	bgp->evpn_vxlan_underlay_cfgd = true;
 	bgp_evpn_underlays_add_tail(&bgp_evpn_gbl()->underlays, bgp);
-	bgp_set_evpn_master_instance(bgp);
 	bgp_zebra_advertise_all_vni(bgp, true);
 
 	/* Multihoming (Ethernet Segments) and a few instance-wide knobs
 	 * (advertise-pip, resolve-overlay-index, ...) are not multi-underlay
-	 * aware yet: they follow the most recently enabled underlay.
+	 * aware yet: they follow the default underlay
+	 * (see bgp_get_evpn_default_underlay()).
 	 */
 	if (bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1)
-		zlog_warn("Multiple VXLAN underlays configured: EVPN multihoming (ES) and instance-wide EVPN knobs follow the most recently enabled underlay (%s)",
-			  bgp->name_pretty);
+		zlog_warn("Multiple VXLAN underlays configured: EVPN multihoming (ES) and instance-wide EVPN knobs follow the default underlay");
 }
 
 /*
@@ -3346,7 +3345,6 @@ static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 
 	bgp->evpn_vxlan_underlay_cfgd = false;
 	bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
-	bgp_set_evpn_master_instance(bgp_get_default());
 	bgp_zebra_advertise_all_vni(bgp, false);
 	bgp_evpn_cleanup_on_disable(bgp);
 }
@@ -4566,14 +4564,12 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 			bgp_vrf->evpn_info->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
 	}
 
-	if (is_evpn_enabled()) {
-
-		/*
-		 * At this point if bgp_evpn is NULL and evpn is enabled
-		 * something stupid has gone wrong
-		 */
-		assert(underlay_bgp);
-
+	/* Re-originate only when this VRF's underlay resolves. With strict
+	 * default-underlay semantics an unbound VRF (no underlay-vrf, no default
+	 * underlay) has nowhere to originate; the PIP config above is still
+	 * stored and takes effect once an underlay binds.
+	 */
+	if (underlay_bgp) {
 		bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
 
 		/* Update (svi) type-2 routes */
@@ -4790,7 +4786,7 @@ DEFPY(show_bgp_l2vpn_evpn_vni,
 	struct listnode *node = NULL;
 	struct bgp *bgp_temp = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay();
 
 	if (!argv_find(argv, argc, "evpn", &idx))
 		return CMD_WARNING;
@@ -5358,7 +5354,7 @@ DEFUN(show_bgp_l2vpn_evpn_route_esi,
 	if (uj)
 		json = json_object_new_object();
 
-	evpn_show_routes_esi(vty, bgp_get_evpn_master_instance(), &esi, json);
+	evpn_show_routes_esi(vty, bgp_get_evpn_default_underlay(), &esi, json);
 
 	if (uj)
 		vty_json(vty, json);
@@ -6123,7 +6119,7 @@ DEFPY_HIDDEN(test_es_add,
 	struct ipaddr vtep_ip = {};
 	bool oper_up;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	if (!bgp_evpn_mi) {
 		vty_out(vty, "%% EVPN BGP instance not yet created\n");
 		return CMD_WARNING;
@@ -6173,7 +6169,7 @@ DEFPY_HIDDEN(test_es_vni_add,
 	esi_t esi;
 	struct bgp *bgp_evpn_mi;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	if (!bgp_evpn_mi) {
 		vty_out(vty, "%% EVPN BGP instance not yet created\n");
 		return CMD_WARNING;
@@ -6333,7 +6329,7 @@ DEFPY(bgp_evpn_flood_control_vni,
 		 * needs the master instance (may be NULL without an underlay -
 		 * nothing to re-advertise then)
 		 */
-		bgp_evpn_mi = bgp_get_evpn_master_instance();
+		bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	} else {
 		if (!bgp_evpn_mi)
 			return CMD_WARNING;
@@ -6519,6 +6515,41 @@ DEFPY (no_bgp_evpn_vlan_based_evi,
 	}
 
 	bgp_evpn_cfgd_evi_delete(evi);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_default_underlay,
+       bgp_evpn_default_underlay_cmd,
+       "[no$no] default-underlay ![VRFNAME$vrfname]",
+       NO_STR
+       "Underlay VRF that overlay objects bind to when they do not name their own underlay-vrf\n"
+       "Name of the underlay VRF\n")
+{
+	char **name = &bgp_evpn_gbl()->default_underlay_name;
+
+	if (no) {
+		if (!*name) {
+			vty_out(vty, "%% default-underlay is not configured\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (vrfname && strcmp(vrfname, *name) != 0) {
+			vty_out(vty, "%% Configured default-underlay is %s, not %s\n",
+				*name, vrfname);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		XFREE(MTYPE_BGP_NAME, *name);
+		return CMD_SUCCESS;
+	}
+
+	if (*name && strcmp(*name, vrfname) == 0)
+		return CMD_SUCCESS;
+
+	/* Resolution is lazy (by name): the underlay instance does not need to
+	 * exist (yet); bgp_get_evpn_default_underlay() resolves on demand.
+	 */
+	XFREE(MTYPE_BGP_NAME, *name);
+	*name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
+
 	return CMD_SUCCESS;
 }
 
@@ -6767,7 +6798,7 @@ static bool evi_node_get_evpn_instance(struct vty *vty, struct bgp **bgp_evpn_mi
 	struct bgp *ctx = VTY_GET_CONTEXT(bgp);
 
 	if (vty->node == BGP_EVPN_EVI_NODE || vty->node == EVPN_EVI_NODE) {
-		*bgp_evpn_mi = bgp_get_evpn_master_instance();
+		*bgp_evpn_mi = bgp_get_evpn_default_underlay();
 		return true;
 	}
 
@@ -7515,18 +7546,21 @@ int bgp_evpn_config_write_evpn_node(struct vty *vty)
 	struct bgp_evpn_evi *evi_entry;
 	struct listnode *ln;
 	struct bgp_evpn_evi *data;
+	const char *default_underlay = bgp_evpn_gbl()->default_underlay_name;
 
 	frr_each (evi_name_hash, &bgp_evpn_gbl()->global_evis, evi_entry) {
 		if (evi_entry->origin == BGP_EVPN_EVI_ORIGIN_CFG && !evi_entry->bgp_vrf)
 			listnode_add(evilist, evi_entry);
 	}
 
-	if (list_isempty(evilist)) {
+	if (!default_underlay && list_isempty(evilist)) {
 		list_delete(&evilist);
 		return 0;
 	}
 
 	vty_out(vty, "evpn\n");
+	if (default_underlay)
+		vty_out(vty, " default-underlay %s\n", default_underlay);
 	list_sort(evilist, evi_name_cmp);
 	for (ALL_LIST_ELEMENTS_RO(evilist, ln, data))
 		bgp_evpn_config_write_cfgd_evi(vty, data, " ");
@@ -7888,6 +7922,7 @@ void bgp_ethernetvpn_init(void)
 	install_element(CONFIG_NODE, &evpn_enter_cmd);
 	install_element(EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);
 	install_element(EVPN_NODE, &no_bgp_evpn_vlan_based_evi_cmd);
+	install_element(EVPN_NODE, &bgp_evpn_default_underlay_cmd);
 	install_element(EVPN_EVI_NODE, &exit_evi_cmd);
 	install_element(EVPN_EVI_NODE, &bgp_evpn_evi_underlay_vrf_cmd);
 	install_element(EVPN_EVI_NODE, &bgp_evpn_evi_origination_l2vni_cmd);

@@ -1137,7 +1137,7 @@ struct bgp *bgp_evpn_vrf_get_underlay(struct bgp *bgp_vrf)
 	if (!underlay)
 		underlay = bgp_vrf->evpn_underlay_vrf;
 	if (!underlay)
-		underlay = bgp_get_evpn_master_instance();
+		underlay = bgp_get_evpn_default_underlay();
 	return underlay;
 }
 
@@ -1151,7 +1151,7 @@ struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi)
 	if (evi->cfgd_underlay_vrf_name)
 		underlay = bgp_evpn_underlay_lookup_by_name(evi->cfgd_underlay_vrf_name);
 	if (!underlay)
-		underlay = bgp_get_evpn_master_instance();
+		underlay = bgp_get_evpn_default_underlay();
 	return underlay;
 }
 
@@ -6080,7 +6080,7 @@ static int bgp_evpn_evi_check_route_matches_import_rts(struct bgp *bgp, struct b
 static bool bgp_evpn_route_matches_macvrf_soo(struct bgp_path_info *pi,
 					      const struct prefix_evpn *evp)
 {
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	struct ecommunity *macvrf_soo;
 	bool ret = false;
 
@@ -6847,7 +6847,7 @@ void bgp_evpn_import_type2_route(struct bgp_path_info *pi, int import)
 {
 	struct bgp *bgp_evpn_mi;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay();
 	if (!bgp_evpn_mi)
 		return;
 
@@ -10185,6 +10185,8 @@ void bgp_evpn_global_fini(void)
 	evi_svi_hash_fini(&bgp_evpn_gbl()->evi_svi_hash);
 	evi_name_hash_fini(&bgp_evpn_gbl()->global_evis);
 	bgp_evpn_underlays_fini(&bgp_evpn_gbl()->underlays);
+
+	XFREE(MTYPE_BGP_NAME, bgp_evpn_gbl()->default_underlay_name);
 
 	uint32_t idx = 0;
 

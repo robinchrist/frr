@@ -4006,40 +4006,33 @@ struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id)
 	return (vrf->info) ? (struct bgp *)vrf->info : NULL;
 }
 
-/* Sets the BGP instance where EVPN is enabled */
-void bgp_set_evpn_master_instance(struct bgp *bgp)
-{
-	if (bm->bgp_evpn_mi == bgp)
-		return;
-
-	/* First, release the reference count we hold on the instance */
-	if (bm->bgp_evpn_mi)
-		bgp_unlock(bm->bgp_evpn_mi);
-
-	bm->bgp_evpn_mi = bgp;
-
-	/* Increase the reference count on this new VRF */
-	if (bm->bgp_evpn_mi)
-		bgp_lock(bm->bgp_evpn_mi);
-}
-
-/* Returns the BGP EVPN master instance if exists
- * The master instance is the one where `advertise-all-vni` is configured
- * and serves a special role (it stores some "global EVPN info" such as
- * import route target hash tables)
+/* Returns the default underlay BGP instance, or NULL if none resolves.
+ *
+ * The default underlay is the instance that overlay objects (tenant VRFs /
+ * EVIs) bind to when they do not name their own `underlay-vrf`. It is the
+ * deterministic replacement for the former "EVPN master instance" singleton:
+ *   - if `default-underlay VRF` is configured (top-level `evpn` node), that
+ *     instance (when it is actually a configured underlay), else
+ *   - the default VRF instance, when it is itself a configured underlay.
+ * Anything else (e.g. the sole underlay living in a non-default VRF with no
+ * `default-underlay` configured) is intentionally unresolved.
  */
-struct bgp *bgp_get_evpn_master_instance(void)
+struct bgp *bgp_get_evpn_default_underlay(void)
 {
-	if(!bm->bgp_evpn_mi)
-		return NULL;
+	struct bgp *underlay = NULL;
+	struct bgp *bgp_default;
 
-	if(!bm->bgp_evpn_mi->evpn_vxlan_underlay_cfgd) {
-		zlog_err("%s: EVPN Master Instance %s does not have `advertise-all-vni` configured",
-			 __func__, bm->bgp_evpn_mi->name);
-		return NULL;
+	if (bgp_evpn_gbl()->default_underlay_name)
+		underlay = bgp_evpn_underlay_lookup_by_name(
+			bgp_evpn_gbl()->default_underlay_name);
+
+	if (!underlay) {
+		bgp_default = bgp_get_default();
+		if (bgp_default && bgp_default->evpn_vxlan_underlay_cfgd)
+			underlay = bgp_default;
 	}
 
-	return bm->bgp_evpn_mi;
+	return underlay;
 }
 
 /* handle socket creation or deletion, if necessary
@@ -4523,13 +4516,21 @@ int bgp_delete(struct bgp *bgp)
 	bgp_evpn_vrf_delete(bgp);
 
 	/*
-	 * If the current instance is the EVPN Master Instance / VRF, clean ES route tables
-	 * while bgp is still alive, then release all EVIs, because these hold a lock reference
-	 * to their tenant VRF / BGP instance
+	 * Clean ES route tables while bgp is still alive, then release all global
+	 * EVIs (these hold a lock reference to their tenant VRF / BGP instance).
+	 *
+	 * The global EVI registry and ES are single-underlay; they ride on the
+	 * default underlay. Run this when deleting the default underlay, or when
+	 * deleting the LAST remaining underlay (no default resolves under strict
+	 * semantics, e.g. several non-default-VRF underlays) so the registry is
+	 * always torn down exactly once. Per-underlay ES / route-table teardown
+	 * remains part of the deferred multi-underlay work.
 	 */
-	if (bm->bgp_evpn_mi == bgp) {
+	if (bgp == bgp_get_evpn_default_underlay() ||
+	    (bgp->evpn_vxlan_underlay_cfgd &&
+	     bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) == 1)) {
 		bgp_evpn_es_cleanup_routes(bgp);
-		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free 
+		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free
 		 * bgp_evpn_clean_and_free is reserved for bgp_free
 		 */
 		bgp_evpn_master_delete_and_free_all_evis(bgp);
@@ -4670,11 +4671,6 @@ int bgp_delete(struct bgp *bgp)
 	bgp_handle_socket(bgp, vrf, VRF_UNKNOWN, false);
 	if (vrf && (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating))
 		bgp_vrf_unlink(bgp, vrf);
-
-	/* Update EVPN Master Instance / VRF pointer */
-	if (bm->bgp_evpn_mi == bgp) {
-		bgp_set_evpn_master_instance(NULL);
-	}
 
 	/* Drop from the underlay registry if the instance goes away while
 	 * still designated as underlay

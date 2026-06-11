@@ -184,10 +184,17 @@ struct bgp_evpn_global {
 	struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
 
 	/* All instances currently designated as VXLAN underlay
-	 * (evpn_vxlan_underlay_cfgd set). With the single-underlay limitation
-	 * this holds at most one entry; the data model is ready for more.
+	 * (evpn_vxlan_underlay_cfgd set).
 	 */
 	struct bgp_evpn_underlays_head underlays;
+
+	/* Configured name of the default underlay (`default-underlay VRF` under
+	 * the top-level `evpn` node). Overlay objects (tenant VRFs / EVIs) that
+	 * do not name their own `underlay-vrf` bind to this. Stored by name and
+	 * resolved lazily via bgp_get_evpn_default_underlay(); when unset, the
+	 * implicit default is the default VRF (if it is itself an underlay).
+	 */
+	char *default_underlay_name;
 
 	/* Name registry for EVIs that are NOT scoped to a tenant VRF:
 	 * tenant-less EVIs (future top-level `evpn` node) as well as
@@ -250,9 +257,6 @@ struct bgp_master {
 
 	/* dynamic mpls label allocation pool */
 	struct labelpool labelpool;
-
-	/* BGP-EVPN Master Instance / VRF. Defaults to default VRF (if any) */
-	struct bgp* bgp_evpn_mi;
 
 	/* Global EVPN state (EVI registries, import-RT mapping tables) */
 	struct bgp_evpn_global evpn_global;
@@ -1040,9 +1044,10 @@ struct bgp {
 	 * VTEPs); EVPN processing is enabled for it in zebra.
 	 *
 	 * Replaces the enable-half of the legacy `advertise-all-vni` (which is
-	 * now an alias for vxlan-underlay + auto-discover-vnis). Until full
-	 * multi-underlay support lands, only ONE instance may set this and it
-	 * is designated the EVPN master instance (bm->bgp_evpn_mi).
+	 * now an alias for vxlan-underlay + auto-discover-vnis). Multiple
+	 * instances may set this; overlay objects that do not name an
+	 * `underlay-vrf` bind to the default underlay
+	 * (see bgp_get_evpn_default_underlay()).
 	 */
 	bool evpn_vxlan_underlay_cfgd;
 
@@ -2811,8 +2816,7 @@ extern struct bgp *bgp_lookup(as_t as, const char *name);
 extern struct bgp *bgp_lookup_by_name(const char *name);
 extern struct bgp *bgp_lookup_by_name_filter(const char *name, bool filter_auto);
 extern struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id);
-extern struct bgp *bgp_get_evpn_master_instance(void);
-extern void bgp_set_evpn_master_instance(struct bgp *bgp);
+extern struct bgp *bgp_get_evpn_default_underlay(void);
 extern struct peer *peer_lookup(struct bgp *bgp, union sockunion *su);
 extern struct peer *peer_lookup_by_conf_if(struct bgp *bgp, const char *ifname);
 extern struct peer *peer_lookup_by_hostname(struct bgp *bgp, const char *hostname);

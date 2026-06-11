@@ -30,16 +30,13 @@ static inline bool is_evpn_underlay(const struct bgp *bgp)
 	return bgp && bgp->evpn_vxlan_underlay_cfgd;
 }
 
-/* Global helper function to check whether EVPN as a protocol is generally enabled
- * EVPN is generally enabled when `advertise-all-vni` is configured in one VRF
-*/
+/* Global helper function to check whether EVPN as a protocol is generally
+ * enabled. EVPN is generally enabled when at least one VRF is designated as a
+ * VXLAN underlay (`vxlan-underlay` / legacy `advertise-all-vni`).
+ */
 static inline bool is_evpn_enabled(void)
 {
-	struct bgp * bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if(!bgp_evpn_mi) /* that shouldn't be null.. */
-		return false;
-
-	return bgp_evpn_mi->evpn_vxlan_underlay_cfgd;
+	return bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 0;
 }
 
 /* Indicates whether type-5 routes should be originated without overlay index,
@@ -136,7 +133,7 @@ static inline int is_route_parent_evpn(struct bgp_path_info *ri)
 	(pi->sub_type == BGP_ROUTE_IMPORTED && is_route_parent_evpn(pi))
 
 #define IS_L2VPN_AFI_IN_NON_DEFAULT_VRF(bgp, afi, safi)                                           \
-	(afi == AFI_L2VPN && safi == SAFI_EVPN && bgp != bgp_get_evpn_master_instance())
+	(afi == AFI_L2VPN && safi == SAFI_EVPN && !is_evpn_underlay(bgp))
 
 /* Flag if the route path's family is EVPN. */
 static inline bool is_pi_family_evpn(struct bgp_path_info *pi)
@@ -146,10 +143,9 @@ static inline bool is_pi_family_evpn(struct bgp_path_info *pi)
 
 static inline bool evpn_resolve_overlay_index(void)
 {
-	struct bgp *bgp_evpn_mi = NULL;
+	struct bgp *underlay = bgp_get_evpn_default_underlay();
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	return bgp_evpn_mi ? bgp_evpn_mi->resolve_overlay_index : false;
+	return underlay ? underlay->resolve_overlay_index : false;
 }
 
 extern void bgp_evpn_vrf_upsert_prefix_as_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,
