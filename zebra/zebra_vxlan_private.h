@@ -59,6 +59,19 @@ struct zebra_l3vni {
 
 	/* list of remote vtep-ip neigh */
 	struct zebra_neigh_db_head nh_table[1];
+
+	/* Cached dataplane state reported to bgpd; updated by
+	 * zl3vni_compute_dp_state() and stored so transitions can be detected
+	 * and re-reported efficiently.
+	 */
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
+
+	/* Tenant VRF as sent by bgpd in the INTENT_ADD message.  Survives
+	 * a VRF disable that temporarily resets vrf_id to VRF_UNKNOWN, which
+	 * is needed to re-resolve placeholder entries in zebra_vxlan_vrf_enable.
+	 */
+	vrf_id_t intended_tenant_vrf_id;
 };
 
 #define IS_ZL3VNI_SVD_BACKED(zl3vni)                                           \

@@ -2399,6 +2399,78 @@ static inline void zl3vni_get_vrr_rmac(struct zebra_l3vni *zl3vni,
 }
 
 /*
+ * Compute the dataplane state and reason for an L3VNI based on the current
+ * interface bindings and the intent recorded in the zl3vni object.
+ *
+ * Precedence (first match wins):
+ *   DUP_VNI > UNDERLAY_NOT_ENABLED > WRONG_UNDERLAY_VRF > ROLE_MISMATCH
+ *   > TENANT_MISMATCH > NO_SVI > DOWN > UP
+ */
+static void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
+				    uint32_t shape_flags,
+				    enum zebra_evpn_dp_state *state,
+				    enum zebra_evpn_dp_reason *reason)
+{
+	*state = ZEBRA_EVPN_DP_DOWN;
+	*reason = ZEBRA_EVPN_DP_REASON_NONE;
+
+	/* DUP_VNI: the same VNI is also active as an L2VNI. */
+	if (zebra_evpn_lookup(zl3vni->vni)) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_DUP_VNI;
+		return;
+	}
+
+	/* Underlay checks: only meaningful when a VXLAN interface is bound. */
+	if (zl3vni->vxlan_if &&
+	    !zebra_vxlan_if_underlay_enabled(zl3vni->vxlan_if)) {
+		vrf_id_t derived_id =
+			zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if);
+		vrf_id_t master_id =
+			zebra_evpn_get_master_underlay_vrf_id();
+
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		/* Distinguish "EVPN not enabled anywhere" from "VNI is in the
+		 * wrong (not-underlay) VRF while another VRF is an underlay."
+		 */
+		*reason = (zrouter.evpn_underlay_count > 0
+			   && derived_id != master_id)
+				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
+				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
+		return;
+	}
+
+	/* ROLE_MISMATCH: bridge-attached but no SVI => dataplane looks L2. */
+	if ((shape_flags & ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED) &&
+	    !(shape_flags & ZEBRA_EVPN_SHAPE_HAS_SVI)) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_ROLE_MISMATCH;
+		return;
+	}
+
+	/* TENANT_MISMATCH: tenant VRF absent (placeholder intent). */
+	if (zl3vni->vrf_id == VRF_UNKNOWN) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_TENANT_MISMATCH;
+		return;
+	}
+
+	/* NO_SVI: VXLAN interface is present but no SVI is mapped yet. */
+	if ((shape_flags & ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF) &&
+	    !(shape_flags & ZEBRA_EVPN_SHAPE_HAS_SVI)) {
+		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+		*reason = ZEBRA_EVPN_DP_REASON_NO_SVI;
+		return;
+	}
+
+	/* All components present and operational. */
+	if (is_l3vni_oper_up(zl3vni))
+		*state = ZEBRA_EVPN_DP_UP;
+
+	/* Otherwise: DOWN/NONE (default set above). */
+}
+
+/*
  * Inform BGP about l3-vni.
  */
 static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
@@ -2406,7 +2478,6 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	struct stream *s = NULL;
 	struct zserv *client = NULL;
 	struct ethaddr svi_rmac, vrr_rmac = {.octet = {0} };
-	struct zebra_vrf *zvrf;
 	bool is_anycast_mac = true;
 
 	client = zserv_find_client(ZEBRA_ROUTE_BGP, 0);
@@ -2414,8 +2485,11 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	if (!client)
 		return 0;
 
-	zvrf = zebra_vrf_lookup_by_id(zl3vni->vrf_id);
-	assert(zvrf);
+	/* zvrf was previously looked up only to assert non-NULL, which aborts
+	 * on placeholder entries (vrf_id==VRF_UNKNOWN).  The actual VRF ID is
+	 * encoded as zl3vni_vrf_id(zl3vni) directly; the zvrf pointer is not
+	 * needed here.
+	 */
 
 	/* get the svi and vrr rmac values */
 	memset(&svi_rmac, 0, sizeof(svi_rmac));
@@ -2443,7 +2517,8 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_put(s, &svi_rmac, sizeof(struct ethaddr));
 	stream_put_ipaddr(s, &zl3vni->local_vtep_ip);
 	stream_put(s, &zl3vni->filter_flags, sizeof(int));
-	stream_putl(s, zl3vni->svi_if->ifindex);
+	/* svi_if may be NULL on placeholder/down L3VNIs; send 0 in that case */
+	stream_putl(s, zl3vni->svi_if ? zl3vni->svi_if->ifindex : 0);
 	stream_put(s, &vrr_rmac, sizeof(struct ethaddr));
 	stream_putl(s, is_anycast_mac);
 
@@ -2467,9 +2542,12 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_putl(s, zl3vni->vxlan_if ? zl3vni->vxlan_if->ifindex : 0);
 	stream_putw(s, zl3vni->vid);
 	stream_putl(s, shape_flags);
-	/* The ADD is (currently) only sent on the oper-up transition */
-	stream_putc(s, ZEBRA_EVPN_DP_UP);
-	stream_putc(s, ZEBRA_EVPN_DP_REASON_NONE);
+
+	/* Compute and cache the dataplane state, then encode it. */
+	zl3vni_compute_dp_state(zl3vni, shape_flags,
+				&zl3vni->dp_state, &zl3vni->dp_reason);
+	stream_putc(s, zl3vni->dp_state);
+	stream_putc(s, zl3vni->dp_reason);
 
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
