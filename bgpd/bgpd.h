@@ -26,6 +26,7 @@ PREDECL_LIST(zebra_l2_vni);
  */
 PREDECL_HASH(evihash);
 PREDECL_HASH(evi_svi_hash);
+PREDECL_HASH(evi_name_hash);
 PREDECL_HASH(vrf_fq_irt_nodes);
 PREDECL_HASH(vrf_wildcard_irt_nodes);
 PREDECL_HASH(evi_fq_irt_nodes);
@@ -166,6 +167,15 @@ struct bgp_evpn_global {
 	struct evi_wildcard_irt_nodes_head evi_wildcard_irt_nodes;
 	/* Hash table of Fully Qualified EVI import RTs to EVIs */
 	struct evi_fq_irt_nodes_head evi_fq_irt_nodes;
+
+	/* Name registry for EVIs that are NOT scoped to a tenant VRF:
+	 * tenant-less EVIs (future top-level `evpn` node) as well as
+	 * legacy-`vni`-configured and auto-discovered EVIs (whose tenant VRF is
+	 * derived from the dataplane and may change at runtime - keeping them
+	 * here means a tenant change never re-scopes the registry key).
+	 * Keyed by EVI name.
+	 */
+	struct evi_name_hash_head global_evis;
 };
 
 /* BGP master for system wide configurations and variables.  */
@@ -1110,6 +1120,14 @@ struct bgp {
 	 * (EVIs whose Tenant VRF is this VRF)
 	 */
 	struct bgp_evis_slu_head evis;
+
+	/* Name registry for EVIs *configured* under this (tenant) VRF.
+	 * EVI names are scoped per tenant VRF. Legacy-`vni` and
+	 * auto-discovered EVIs live in bgp_evpn_global.global_evis instead
+	 * (their tenant binding is dataplane-derived and may change).
+	 * Keyed by EVI name.
+	 */
+	struct evi_name_hash_head evis_by_name;
 
 	/* route map for advertise ipv4/ipv6 unicast (type-5 routes) */
 	struct bgp_rmap adv_cmd_rmap[AFI_MAX][SAFI_MAX];

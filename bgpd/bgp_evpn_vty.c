@@ -1876,11 +1876,15 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
 		 */
 		SET_IPADDR_V4(&orignator_ip);
 		orignator_ip.ipaddr_v4 = bgp->router_id;
-		evi = bgp_evpn_evi_new(bgp, vni, &orignator_ip, 0, mcast_grp, 0);
+		evi = bgp_evpn_evi_new(bgp, vni, &orignator_ip, 0, mcast_grp, 0,
+				       BGP_EVPN_EVI_ORIGIN_LEGACY_VNI);
 	}
 
-	/* Mark as configured. */
+	/* Mark as configured. If the EVI was auto-discovered before, it
+	 * becomes a legacy-configured one (incl. rename "vni!X" -> "vni-X").
+	 */
 	SET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
+	bgp_evpn_evi_legacy_set_configured(evi, true);
 	return evi;
 }
 
@@ -1906,6 +1910,8 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	 * additional code for an operation that should be pretty rare.
 	 */
 	UNSET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
+	/* The object lives on purely as a dataplane-learnt entity */
+	bgp_evpn_evi_legacy_set_configured(evi, false);
 
 	if(evi->advertise_svi_macip) {
 		/* TODO: re-use evpn_set_advertise_svi_macip? */

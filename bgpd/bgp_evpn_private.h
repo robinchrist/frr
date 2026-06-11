@@ -201,15 +201,54 @@ RB_HEAD(bgp_es_evi_rb_head, bgp_evpn_es_evi);
 RB_PROTOTYPE(bgp_es_evi_rb_head, bgp_evpn_es_evi, rb_node,
 		bgp_es_evi_rb_cmp);
 
+/* EVPN Service Interface type of an EVI (RFC 7432 section 6).
+ * The type is part of the EVI's identity and immutable for its lifetime
+ * (it is encoded in the config keyword, e.g. `vlan-based-evi`).
+ */
+enum bgp_evpn_evi_type {
+	/* VLAN-Based Service Interface: one broadcast domain per EVI */
+	BGP_EVPN_EVI_TYPE_VLAN_BASED = 0,
+	/* Future: VLAN Bundle / VLAN-Aware Bundle Service Interfaces */
+};
+
+/* How an EVI object came into existence */
+enum bgp_evpn_evi_origin {
+	/* Explicitly configured via the new `vlan-based-evi NAME` syntax */
+	BGP_EVPN_EVI_ORIGIN_CFG = 0,
+	/* Created through the legacy `vni X` configuration (default instance
+	 * only); tenant VRF is dataplane-derived unless `tenant-vrf` is set
+	 */
+	BGP_EVPN_EVI_ORIGIN_LEGACY_VNI,
+	/* Auto-discovered from the dataplane via zebra (advertise-all-vni /
+	 * auto-discover-vnis); not part of the configuration
+	 */
+	BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED,
+};
+
 /*
- * Hash table of EVIs. Right now, the only type of EVI supported is with
- * VxLAN encapsulation, hence each EVI corresponds to a L2 VNI.
- * The VNIs are not "created" through BGP but through some other interface
- * on the system. This table stores VNIs that BGP comes to know as present
- * on the system (through interaction with zebra) as well as pre-configured
- * VNIs (which need to be defined in the system to become "live").
+ * An EVI (EVPN Instance) is the instantiation of an EVPN Service Interface.
+ * EVIs are identified by their name (scoped to their registry: the tenant
+ * VRF's `evis_by_name` for configured EVIs, bgp_evpn_global.global_evis for
+ * tenant-less / legacy / auto-discovered ones). A VNI is an *optional*
+ * dataplane binding of an EVI - NOT its identity: an EVI may exist and import
+ * routes without any VNI (it then simply cannot originate routes).
+ * Currently `vni` is still mandatory at creation; this is lifted with the
+ * origination-l2vni decoupling.
  */
 struct bgp_evpn_evi {
+	/* Identity: name, unique within the owning registry. Legacy-`vni X`
+	 * EVIs are named "vni-X"; auto-discovered EVIs "vni!X" ('!' is not
+	 * allowed in user-assigned names, so generated names never collide).
+	 */
+	char *name;
+	enum bgp_evpn_evi_type type;
+	enum bgp_evpn_evi_origin origin;
+
+	/* intrusive hash item for the owning name registry (tenant VRF's
+	 * evis_by_name or bgp_evpn_global.global_evis, see origin)
+	 */
+	struct evi_name_hash_item evi_name_item;
+
 	vni_t vni;
 	vrf_id_t tenant_vrf_id;
 	ifindex_t svi_ifindex;
@@ -313,7 +352,10 @@ DECLARE_LIST(zebra_l2_vni, struct bgp_evpn_evi, zl2vni);
 static inline int bgp_evis_slu_cmp(const struct bgp_evpn_evi *a,
 			       const struct bgp_evpn_evi *b)
 {
-	return a->vni > b->vni ? 1 : (a->vni < b->vni ? -1 : 0);
+	/* Keyed by name (the EVI identity) - NOT by VNI, since the VNI is an
+	 * optional dataplane binding and may be absent (0) on several EVIs
+	 */
+	return strcmp(a->name, b->name);
 }
 
 DECLARE_SORTLIST_UNIQ(bgp_evis_slu, struct bgp_evpn_evi, bgp_evis_item,
@@ -346,6 +388,20 @@ static inline int evi_svi_hash_cmp(const struct bgp_evpn_evi *a,
 }
 
 DECLARE_HASH(evi_svi_hash, struct bgp_evpn_evi, evi_svi_hash_item, evi_svi_hash_cmp, evi_svi_hash_key);
+
+static inline uint32_t evi_name_hash_key(const struct bgp_evpn_evi *evi)
+{
+	return jhash(evi->name, strlen(evi->name), 0x45564921);
+}
+
+static inline int evi_name_hash_cmp(const struct bgp_evpn_evi *a,
+				    const struct bgp_evpn_evi *b)
+{
+	return strcmp(a->name, b->name);
+}
+
+DECLARE_HASH(evi_name_hash, struct bgp_evpn_evi, evi_name_item,
+	     evi_name_hash_cmp, evi_name_hash_key);
 
 PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
 
@@ -1103,11 +1159,16 @@ extern void bgp_evpn_evi_teardown_import(struct bgp_evpn_evi *evi);
 extern void bgp_evpn_evi_derive_auto_rd(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);
 extern struct bgp_evpn_evi *bgp_evpn_lookup_evi_by_vni(struct bgp *bgp, vni_t vni);
+extern struct bgp_evpn_evi *bgp_evpn_evi_lookup_by_name(struct bgp *tenant_scope,
+							const char *name);
+extern bool bgp_evpn_evi_name_is_valid(const char *name);
 extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		struct ipaddr *originator_ip,
 		vrf_id_t tenant_vrf_id,
 		struct in_addr mcast_grp,
-		ifindex_t svi_ifindex);
+		ifindex_t svi_ifindex,
+		enum bgp_evpn_evi_origin origin);
+extern void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool configured);
 extern void bgp_evpn_evi_delete_and_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni);
 extern int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);

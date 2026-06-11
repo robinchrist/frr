@@ -8293,21 +8293,74 @@ struct bgp_evpn_evi *bgp_evpn_lookup_evi_by_vni(struct bgp *bgp_evpn_mi, vni_t v
 	return evi;
 }
 
+/* Generate the reserved name for an EVI created through the legacy `vni X`
+ * config ("vni-X") or auto-discovered from the dataplane ("vni!X" - '!' is
+ * not allowed in user-assigned names, so generated names cannot collide).
+ */
+static char *bgp_evpn_evi_generate_name(enum bgp_evpn_evi_origin origin, vni_t vni)
+{
+	char buf[32];
+
+	snprintf(buf, sizeof(buf), origin == BGP_EVPN_EVI_ORIGIN_LEGACY_VNI ? "vni-%u" : "vni!%u",
+		 vni);
+	return XSTRDUP(MTYPE_BGP_NAME, buf);
+}
+
+/* Validate a user-assigned EVI name. Generated names use characters outside
+ * this set on purpose.
+ */
+bool bgp_evpn_evi_name_is_valid(const char *name)
+{
+	if (!name || !name[0])
+		return false;
+
+	for (const char *p = name; *p; p++) {
+		if (!isalnum((unsigned char)*p) && *p != '-' && *p != '_')
+			return false;
+	}
+	return true;
+}
+
+/* Look up an EVI by name. tenant_scope selects the registry: a tenant VRF's
+ * own registry (configured EVIs), or NULL for the global registry
+ * (tenant-less, legacy-`vni` and auto-discovered EVIs).
+ */
+struct bgp_evpn_evi *bgp_evpn_evi_lookup_by_name(struct bgp *tenant_scope, const char *name)
+{
+	struct bgp_evpn_evi tmp = { .name = (char *)name };
+
+	if (tenant_scope)
+		return evi_name_hash_find(&tenant_scope->evis_by_name, &tmp);
+	return evi_name_hash_find(&bgp_evpn_gbl()->global_evis, &tmp);
+}
+
 /*
  * Create a new EVPN EVI - invoked upon configuration or zebra notification.
+ * Identity (name) is derived from origin + VNI for legacy/auto-discovered
+ * EVIs; explicitly configured EVIs (BGP_EVPN_EVI_ORIGIN_CFG) are created
+ * through their own path (new-style EVI config) and register in their tenant
+ * VRF's name registry instead of the global one.
  */
 struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 		struct ipaddr *originator_ip,
 		vrf_id_t tenant_vrf_id,
 		struct in_addr mcast_grp,
-		ifindex_t svi_ifindex)
+		ifindex_t svi_ifindex,
+		enum bgp_evpn_evi_origin origin)
 {
 	struct bgp_evpn_evi *evi;
+
+	/* Only the legacy/auto creation paths exist so far */
+	assert(origin == BGP_EVPN_EVI_ORIGIN_LEGACY_VNI ||
+	       origin == BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED);
 
 	evi = XCALLOC(MTYPE_BGP_EVPN_EVI, sizeof(struct bgp_evpn_evi));
 
 	/* Set values - RD and RT set to defaults. */
 	evi->vni = vni;
+	evi->type = BGP_EVPN_EVI_TYPE_VLAN_BASED;
+	evi->origin = origin;
+	evi->name = bgp_evpn_evi_generate_name(origin, vni);
 	evi->originator_ip = *originator_ip;
 	evi->tenant_vrf_id = tenant_vrf_id;
 	evi->mcast_grp = mcast_grp;
@@ -8333,9 +8386,16 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 	evi->ip_table = bgp_table_init(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN);
 	evi->mac_table = bgp_table_init(bgp_evpn_mi, AFI_L2VPN, SAFI_EVPN);
 
-	/* Add to hash */
+	/* Add to the VNI index - only EVIs that actually have a VNI live here */
 	/* What to do in case of error?? */
-	evihash_add(&bgp_evpn_gbl()->evihash, evi);
+	if (evi->vni)
+		evihash_add(&bgp_evpn_gbl()->evihash, evi);
+
+	/* Register the name. Legacy and auto-discovered EVIs go into the
+	 * global registry: their tenant binding is dataplane-derived and may
+	 * change at runtime, which must never re-scope the registry key.
+	 */
+	evi_name_hash_add(&bgp_evpn_gbl()->global_evis, evi);
 
 	bgp_evpn_remote_ip_hash_init(evi);
 	bgp_evpn_link_to_evi_svi_hash(bgp_evpn_mi, evi);
@@ -8349,6 +8409,40 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
 	return evi;
 }
 
+/* Transition an EVI between the legacy-configured (`vni X`, name "vni-X") and
+ * auto-discovered (name "vni!X") origins. Called when the user configures
+ * `vni X` for an EVI that was already auto-discovered from the dataplane, and
+ * when that configuration is removed while the EVI stays alive (dataplane
+ * still has the VNI). The name is the registry key (and the key of the tenant
+ * VRF's evis list), so it must be re-registered around the rename.
+ */
+void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool configured)
+{
+	enum bgp_evpn_evi_origin new_origin = configured ? BGP_EVPN_EVI_ORIGIN_LEGACY_VNI
+							 : BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED;
+
+	if (evi->origin == new_origin)
+		return;
+
+	/* Only legacy <-> auto transitions exist; new-style configured EVIs
+	 * (BGP_EVPN_EVI_ORIGIN_CFG) never change origin.
+	 */
+	assert(evi->origin == BGP_EVPN_EVI_ORIGIN_LEGACY_VNI ||
+	       evi->origin == BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED);
+
+	evi_name_hash_del(&bgp_evpn_gbl()->global_evis, evi);
+	if (evi->bgp_vrf)
+		bgp_evis_slu_del(&evi->bgp_vrf->evis, evi);
+
+	XFREE(MTYPE_BGP_NAME, evi->name);
+	evi->origin = new_origin;
+	evi->name = bgp_evpn_evi_generate_name(new_origin, evi->vni);
+
+	evi_name_hash_add(&bgp_evpn_gbl()->global_evis, evi);
+	if (evi->bgp_vrf)
+		bgp_evis_slu_add(&evi->bgp_vrf->evis, evi);
+}
+
 /*
  * Free a given EVI - called in multiple scenarios such as zebra
  * notification, configuration being deleted, advertise-all-vni disabled etc.
@@ -8358,6 +8452,17 @@ struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp_evpn_mi, vni_t vni,
  */
 void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
+	/* Remove from the owning name registry BEFORE unlinking from the VRF:
+	 * configured EVIs are registered in their tenant VRF's registry, which
+	 * is only reachable through the backpointer.
+	 */
+	if (evi->origin == BGP_EVPN_EVI_ORIGIN_CFG) {
+		if (evi->bgp_vrf)
+			evi_name_hash_del(&evi->bgp_vrf->evis_by_name, evi);
+	} else {
+		evi_name_hash_del(&bgp_evpn_gbl()->global_evis, evi);
+	}
+
 	bgp_evpn_remote_ip_hash_destroy(evi);
 	bgp_evpn_vni_es_cleanup(evi);
 	bgp_evpn_evi_unlink_from_vrf(evi);
@@ -8393,8 +8498,11 @@ void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *
 	/* Shouldn't happen, but let's rather be safe than sorry for now... */
 	if (bgp_evpn_mi) {
 		evi_svi_hash_del(&bgp_evpn_gbl()->evi_svi_hash, evi);
-		evihash_del(&bgp_evpn_gbl()->evihash, evi);
+		if (evi->vni)
+			evihash_del(&bgp_evpn_gbl()->evihash, evi);
 	}
+
+	XFREE(MTYPE_BGP_NAME, evi->name);
 
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -9464,7 +9572,8 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 	} else {
 		/* Create or update as appropriate. */
 		evi = bgp_evpn_evi_new(underlay_vrf, vni, originator_ip, tenant_vrf_id,
-				   mcast_grp, svi_ifindex);
+				   mcast_grp, svi_ifindex,
+				   BGP_EVPN_EVI_ORIGIN_AUTO_DISCOVERED);
 	}
 
 	/* if the EVI is live already, there is nothing more to do */
@@ -9604,6 +9713,8 @@ void bgp_evpn_global_init(void)
 
 	evi_svi_hash_init(&bgp_evpn_gbl()->evi_svi_hash);
 
+	evi_name_hash_init(&bgp_evpn_gbl()->global_evis);
+
 	vrf_wildcard_irt_nodes_init(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes);
 	vrf_fq_irt_nodes_init(&bgp_evpn_gbl()->vrf_fq_irt_nodes);
 	evi_wildcard_irt_nodes_init(&bgp_evpn_gbl()->evi_wildcard_irt_nodes);
@@ -9620,8 +9731,10 @@ void bgp_evpn_global_fini(void)
 {
 	assert(evihash_count(&bgp_evpn_gbl()->evihash) == 0);
 	assert(evi_svi_hash_count(&bgp_evpn_gbl()->evi_svi_hash) == 0);
+	assert(evi_name_hash_count(&bgp_evpn_gbl()->global_evis) == 0);
 	evihash_fini(&bgp_evpn_gbl()->evihash);
 	evi_svi_hash_fini(&bgp_evpn_gbl()->evi_svi_hash);
+	evi_name_hash_fini(&bgp_evpn_gbl()->global_evis);
 
 	uint32_t idx = 0;
 
@@ -9674,6 +9787,10 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 	assert(bgp_evis_slu_count(&bgp->evis) == 0);
 	bgp_evis_slu_fini(&bgp->evis);
 
+	/* EVIs configured under this tenant VRF must be gone by now as well */
+	assert(evi_name_hash_count(&bgp->evis_by_name) == 0);
+	evi_name_hash_fini(&bgp->evis_by_name);
+
 	if (bgp->evpn_info) {
 		ecommunity_free(&bgp->evpn_info->soo);
 		XFREE(MTYPE_BGP_EVPN_INFO, bgp->evpn_info);
@@ -9711,6 +9828,7 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 void bgp_evpn_init(struct bgp *bgp)
 {
 	bgp_evis_slu_init(&bgp->evis);
+	evi_name_hash_init(&bgp->evis_by_name);
 
 	bgp->evpn_info = XCALLOC(MTYPE_BGP_EVPN_INFO, sizeof(struct bgp_evpn_info));
 	assert(bgp->evpn_info);
