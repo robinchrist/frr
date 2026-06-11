@@ -1474,6 +1474,20 @@ static struct cmd_node bgp_evpn_evi_node = {
 	.prompt = "%s(config-router-af-evi)# ",
 };
 
+static struct cmd_node evpn_node = {
+	.name = "evpn",
+	.node = EVPN_NODE,
+	.parent_node = CONFIG_NODE,
+	.prompt = "%s(config-evpn)# ",
+};
+
+static struct cmd_node evpn_evi_node = {
+	.name = "evpn evi",
+	.node = EVPN_EVI_NODE,
+	.parent_node = EVPN_NODE,
+	.prompt = "%s(config-evpn-evi)# ",
+};
+
 static struct cmd_node bgp_ipv6l_node = {
 	.name = "bgp ipv6 labeled unicast",
 	.node = BGP_IPV6L_NODE,
@@ -2014,7 +2028,14 @@ DEFUNSH(VTYSH_BGPD, bgp_evpn_vlan_based_evi, bgp_evpn_vlan_based_evi_cmd,
 	"EVPN Instance with VLAN-Based Service Interface (one broadcast domain per EVI)\n"
 	"Name of the EVI (unique within this tenant VRF)\n")
 {
-	vty->node = BGP_EVPN_EVI_NODE;
+	vty->node = (vty->node == EVPN_NODE) ? EVPN_EVI_NODE : BGP_EVPN_EVI_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD, evpn_enter, evpn_enter_cmd, "evpn",
+	"Configure tenant-less EVPN Instances (EVIs)\n")
+{
+	vty->node = EVPN_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -2648,6 +2669,8 @@ DEFUNSH(VTYSH_BGPD, exit_evi, exit_evi_cmd, "exit-evi", "Exit from EVI mode\n")
 {
 	if (vty->node == BGP_EVPN_EVI_NODE)
 		vty->node = BGP_EVPN_NODE;
+	else if (vty->node == EVPN_EVI_NODE)
+		vty->node = EVPN_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -5337,6 +5360,8 @@ void vtysh_init_vty(void)
 	install_node(&bgp_evpn_node);
 	install_node(&bgp_evpn_vni_node);
 	install_node(&bgp_evpn_evi_node);
+	install_node(&evpn_node);
+	install_node(&evpn_evi_node);
 	install_node(&rpki_node);
 	install_node(&bmp_node);
 	install_node(&bgp_srv6_node);
@@ -5512,6 +5537,16 @@ void vtysh_init_vty(void)
 	install_element(BGP_EVPN_EVI_NODE, &vtysh_quit_bgpd_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &vtysh_end_all_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &exit_evi_cmd);
+
+	install_element(CONFIG_NODE, &evpn_enter_cmd);
+	install_element(EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);
+	install_element(EVPN_NODE, &vtysh_exit_bgpd_cmd);
+	install_element(EVPN_NODE, &vtysh_quit_bgpd_cmd);
+	install_element(EVPN_NODE, &vtysh_end_all_cmd);
+	install_element(EVPN_EVI_NODE, &vtysh_exit_bgpd_cmd);
+	install_element(EVPN_EVI_NODE, &vtysh_quit_bgpd_cmd);
+	install_element(EVPN_EVI_NODE, &vtysh_end_all_cmd);
+	install_element(EVPN_EVI_NODE, &exit_evi_cmd);
 
 	install_element(CONFIG_NODE, &rpki_cmd);
 	install_element(RPKI_NODE, &rpki_exit_cmd);

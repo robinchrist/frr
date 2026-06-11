@@ -6225,10 +6225,11 @@ DEFPY(bgp_evpn_flood_control_vni,
 	struct bgp *bgp_evpn_mi = VTY_GET_CONTEXT(bgp);
 	enum vxlan_flood_control flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
-	if (vty->node == BGP_EVPN_VNI_NODE || vty->node == BGP_EVPN_EVI_NODE)
+	if (vty->node == BGP_EVPN_VNI_NODE || vty->node == BGP_EVPN_EVI_NODE ||
+	    vty->node == EVPN_EVI_NODE)
 		evpn = VTY_GET_CONTEXT_SUB(bgp_evpn_evi);
 
-	if (vty->node == BGP_EVPN_EVI_NODE) {
+	if (vty->node == BGP_EVPN_EVI_NODE || vty->node == EVPN_EVI_NODE) {
 		/* Context is the tenant VRF; flood-control change processing
 		 * needs the master instance (may be NULL without an underlay -
 		 * nothing to re-advertise then)
@@ -6358,11 +6359,18 @@ DEFPY_NOSH (bgp_evpn_vlan_based_evi,
             "EVPN Instance with VLAN-Based Service Interface (one broadcast domain per EVI)\n"
             "Name of the EVI (unique within this tenant VRF)\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp = NULL;
 	struct bgp_evpn_evi *evi;
+	bool toplevel = (vty->node == EVPN_NODE);
 
-	if (!bgp)
-		return CMD_WARNING;
+	/* Under a tenant VRF's address-family the instance is the tenant;
+	 * under the top-level `evpn` node the EVI is tenant-less (NULL).
+	 */
+	if (!toplevel) {
+		bgp = VTY_GET_CONTEXT(bgp);
+		if (!bgp)
+			return CMD_WARNING;
+	}
 
 	if (!bgp_evpn_evi_name_is_valid(eviname)) {
 		vty_out(vty, "%% Invalid EVI name (allowed characters: a-z A-Z 0-9 - _)\n");
@@ -6370,10 +6378,17 @@ DEFPY_NOSH (bgp_evpn_vlan_based_evi,
 	}
 
 	evi = bgp_evpn_evi_lookup_by_name(bgp, eviname);
+	if (toplevel && evi && !(evi->origin == BGP_EVPN_EVI_ORIGIN_CFG && !evi->bgp_vrf)) {
+		/* The global registry also holds legacy/auto EVIs - those are
+		 * not configurable through this node
+		 */
+		vty_out(vty, "%% Name %s is in use by a non-configured EVI\n", eviname);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
 	if (!evi)
 		evi = bgp_evpn_evi_new_cfgd(bgp, eviname);
 
-	VTY_PUSH_CONTEXT_SUB(BGP_EVPN_EVI_NODE, evi);
+	VTY_PUSH_CONTEXT_SUB(toplevel ? EVPN_EVI_NODE : BGP_EVPN_EVI_NODE, evi);
 	return CMD_SUCCESS;
 }
 
@@ -6384,15 +6399,21 @@ DEFPY (no_bgp_evpn_vlan_based_evi,
        "EVPN Instance with VLAN-Based Service Interface (one broadcast domain per EVI)\n"
        "Name of the EVI (unique within this tenant VRF)\n")
 {
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	struct bgp *bgp = NULL;
 	struct bgp_evpn_evi *evi;
 
-	if (!bgp)
-		return CMD_WARNING;
+	if (vty->node != EVPN_NODE) {
+		bgp = VTY_GET_CONTEXT(bgp);
+		if (!bgp)
+			return CMD_WARNING;
+	}
 
 	evi = bgp_evpn_evi_lookup_by_name(bgp, eviname);
+	if (vty->node == EVPN_NODE && evi &&
+	    !(evi->origin == BGP_EVPN_EVI_ORIGIN_CFG && !evi->bgp_vrf))
+		evi = NULL;
 	if (!evi) {
-		vty_out(vty, "%% EVI %s does not exist in this VRF\n", eviname);
+		vty_out(vty, "%% EVI %s does not exist here\n", eviname);
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
@@ -6407,6 +6428,17 @@ DEFPY_NOSH (exit_evi,
 {
 	if (vty->node == BGP_EVPN_EVI_NODE)
 		vty->node = BGP_EVPN_NODE;
+	else if (vty->node == EVPN_EVI_NODE)
+		vty->node = EVPN_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFPY_NOSH (evpn_enter,
+            evpn_enter_cmd,
+            "evpn",
+            "Configure tenant-less EVPN Instances (EVIs)\n")
+{
+	vty->node = EVPN_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -6633,7 +6665,7 @@ static bool evi_node_get_evpn_instance(struct vty *vty, struct bgp **bgp_evpn_mi
 {
 	struct bgp *ctx = VTY_GET_CONTEXT(bgp);
 
-	if (vty->node == BGP_EVPN_EVI_NODE) {
+	if (vty->node == BGP_EVPN_EVI_NODE || vty->node == EVPN_EVI_NODE) {
 		*bgp_evpn_mi = bgp_get_evpn_master_instance();
 		return true;
 	}
@@ -7345,30 +7377,62 @@ static int evi_name_cmp(const void **a, const void **b)
 /* Config write for a new-style configured EVI (under its tenant VRF's l2vpn
  * evpn address-family)
  */
-static void bgp_evpn_config_write_cfgd_evi(struct vty *vty, struct bgp_evpn_evi *evi)
+static void bgp_evpn_config_write_cfgd_evi(struct vty *vty, struct bgp_evpn_evi *evi,
+					   const char *indent)
 {
-	vty_out(vty, "  vlan-based-evi %s\n", evi->name);
+	vty_out(vty, "%svlan-based-evi %s\n", indent, evi->name);
 
 	if (evi->cfgd_underlay_vrf_name)
-		vty_out(vty, "   underlay-vrf %s\n", evi->cfgd_underlay_vrf_name);
+		vty_out(vty, "%s underlay-vrf %s\n", indent, evi->cfgd_underlay_vrf_name);
 
 	if (evi->vni)
-		vty_out(vty, "   origination-l2vni %u\n", evi->vni);
+		vty_out(vty, "%s origination-l2vni %u\n", indent, evi->vni);
 
 	if (bgp_evpn_evi_is_rd_configured(evi))
-		vty_out(vty, "   rd %s\n", evi->prd_pretty);
+		vty_out(vty, "%s rd %s\n", indent, evi->prd_pretty);
 
 	if (!evi->bgp_vrf ||
 	    (evi->bgp_vrf && (evi->vxlan_flood_ctrl != evi->bgp_vrf->vxlan_flood_ctrl))) {
 		if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
-			vty_out(vty, "   flooding disable\n");
+			vty_out(vty, "%s flooding disable\n", indent);
 		else if (evi->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL)
-			vty_out(vty, "   flooding head-end-replication\n");
+			vty_out(vty, "%s flooding head-end-replication\n", indent);
 	}
 
-	bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, "   ");
+	char rt_indent[16];
 
-	vty_out(vty, "  exit-evi\n");
+	snprintf(rt_indent, sizeof(rt_indent), "%s ", indent);
+	bgp_evpn_config_write_rts_common(vty, evi->evi_rt_config, rt_indent);
+
+	vty_out(vty, "%sexit-evi\n", indent);
+}
+
+/* Config write for the top-level `evpn` node: tenant-less configured EVIs */
+int bgp_evpn_config_write_evpn_node(struct vty *vty)
+{
+	struct list *evilist = list_new();
+	struct bgp_evpn_evi *evi_entry;
+	struct listnode *ln;
+	struct bgp_evpn_evi *data;
+
+	frr_each (evi_name_hash, &bgp_evpn_gbl()->global_evis, evi_entry) {
+		if (evi_entry->origin == BGP_EVPN_EVI_ORIGIN_CFG && !evi_entry->bgp_vrf)
+			listnode_add(evilist, evi_entry);
+	}
+
+	if (list_isempty(evilist)) {
+		list_delete(&evilist);
+		return 0;
+	}
+
+	vty_out(vty, "evpn\n");
+	list_sort(evilist, evi_name_cmp);
+	for (ALL_LIST_ELEMENTS_RO(evilist, ln, data))
+		bgp_evpn_config_write_cfgd_evi(vty, data, " ");
+	vty_out(vty, "exit\n!\n");
+
+	list_delete(&evilist);
+	return 1;
 }
 
 static int vni_cmp(const void **a, const void **b)
@@ -7433,7 +7497,7 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 
 		list_sort(evilist, evi_name_cmp);
 		for (ALL_LIST_ELEMENTS_RO(evilist, ln, data))
-			bgp_evpn_config_write_cfgd_evi(vty, data);
+			bgp_evpn_config_write_cfgd_evi(vty, data, "  ");
 
 		list_delete(&evilist);
 	}
@@ -7716,6 +7780,22 @@ void bgp_ethernetvpn_init(void)
 	/* New-style EVI node (`vlan-based-evi NAME` under the tenant VRF) */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vlan_based_evi_cmd);
+
+	/* Top-level `evpn` node: tenant-less EVIs */
+	install_element(CONFIG_NODE, &evpn_enter_cmd);
+	install_element(EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);
+	install_element(EVPN_NODE, &no_bgp_evpn_vlan_based_evi_cmd);
+	install_element(EVPN_EVI_NODE, &exit_evi_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_evi_underlay_vrf_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_evi_origination_l2vni_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_vni_rd_cmd);
+	install_element(EVPN_EVI_NODE, &no_bgp_evpn_vni_rd_cmd);
+	install_element(EVPN_EVI_NODE, &no_bgp_evpn_vni_rd_without_val_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_vni_rt_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_vni_rt_auto_cmd);
+	install_element(EVPN_EVI_NODE, &no_bgp_evpn_vni_rt_cmd);
+	install_element(EVPN_EVI_NODE, &no_bgp_evpn_vni_rt_auto_without_val_cmd);
+	install_element(EVPN_EVI_NODE, &bgp_evpn_flood_control_vni_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &exit_evi_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_evi_underlay_vrf_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &bgp_evpn_evi_origination_l2vni_cmd);

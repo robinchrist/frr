@@ -382,6 +382,11 @@ void vtysh_config_parse_line(void *arg, const char *line)
 			config = config_get(LDP_NODE, line);
 		else if (strncmp(line, "l2vpn", strlen("l2vpn")) == 0)
 			config = config_get(LDP_L2VPN_NODE, line);
+		else if (strcmp(line, "evpn") == 0)
+			/* exact match: zebra's single-line `evpn mh ...`
+			 * commands must not land here
+			 */
+			config = config_get(EVPN_NODE, line);
 		else if (strncmp(line, "router bgp", strlen("router bgp")) == 0)
 			config = config_get(BGP_NODE, line);
 		else if (strncmp(line, "router isis", strlen("router isis"))

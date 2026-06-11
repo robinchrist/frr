@@ -22493,6 +22493,21 @@ static struct cmd_node bgp_evpn_evi_node = {
 	.prompt = "%s(config-router-af-evi)# ",
 };
 
+static struct cmd_node evpn_node = {
+	.name = "evpn",
+	.node = EVPN_NODE,
+	.parent_node = CONFIG_NODE,
+	.prompt = "%s(config-evpn)# ",
+	.config_write = bgp_evpn_config_write_evpn_node,
+};
+
+static struct cmd_node evpn_evi_node = {
+	.name = "evpn evi",
+	.node = EVPN_EVI_NODE,
+	.parent_node = EVPN_NODE,
+	.prompt = "%s(config-evpn-evi)# ",
+};
+
 static struct cmd_node bgp_flowspecv4_node = {
 	.name = "bgp ipv4 flowspec",
 	.node = BGP_FLOWSPECV4_NODE,
@@ -22841,6 +22856,8 @@ void bgp_vty_init(void)
 	install_node(&bgp_evpn_node);
 	install_node(&bgp_evpn_vni_node);
 	install_node(&bgp_evpn_evi_node);
+	install_node(&evpn_node);
+	install_node(&evpn_evi_node);
 	install_node(&bgp_flowspecv4_node);
 	install_node(&bgp_flowspecv6_node);
 	install_node(&bgp_srv6_node);
@@ -22861,6 +22878,8 @@ void bgp_vty_init(void)
 	install_default(BGP_EVPN_NODE);
 	install_default(BGP_EVPN_VNI_NODE);
 	install_default(BGP_EVPN_EVI_NODE);
+	install_default(EVPN_NODE);
+	install_default(EVPN_EVI_NODE);
 	install_default(BGP_SRV6_NODE);
 	install_default(BGP_LS_NODE);
 

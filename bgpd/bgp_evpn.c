@@ -8567,13 +8567,15 @@ struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *n
 	evi->origin = BGP_EVPN_EVI_ORIGIN_CFG;
 	evi->name = XSTRDUP(MTYPE_BGP_NAME, name);
 	evi->auto_tenant_vrf = false;
-	evi->tenant_vrf_id = tenant_bgp->vrf_id;
+	/* tenant_bgp == NULL: tenant-less EVI (top-level `evpn` node) */
+	evi->tenant_vrf_id = tenant_bgp ? tenant_bgp->vrf_id : VRF_UNKNOWN;
 	SET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
 	evi->vxlan_flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
 
 	/* Placeholder; actual origination requires an underlay + VNI */
 	SET_IPADDR_V4(&evi->originator_ip);
-	evi->originator_ip.ipaddr_v4 = tenant_bgp->router_id;
+	if (tenant_bgp)
+		evi->originator_ip.ipaddr_v4 = tenant_bgp->router_id;
 
 	evi->evi_rt_config = bgp_evpn_rt_config_new();
 	bgp_evpn_effective_wildcard_rt_slu_init(&evi->effective_wildcard_import_rts);
@@ -8585,16 +8587,32 @@ struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *n
 	bgp_evpn_evi_regenerate_effective_export_rts(evi);
 
 	bf_assign_index(bm->rd_idspace, evi->rd_id);
-	bgp_evpn_evi_derive_auto_rd(tenant_bgp, evi);
+
+	/* RD/table-owner instance: the tenant; for tenant-less EVIs the bound
+	 * underlay or the default instance (manual rd recommended anyway)
+	 */
+	struct bgp *owner = tenant_bgp;
+
+	if (!owner)
+		owner = bgp_evpn_evi_get_underlay(evi);
+	if (!owner)
+		owner = bgp_get_default();
+	if (owner)
+		bgp_evpn_evi_derive_auto_rd(owner, evi);
 
 	/* Initialize EVPN route tables. */
-	evi->ip_table = bgp_table_init(tenant_bgp, AFI_L2VPN, SAFI_EVPN);
-	evi->mac_table = bgp_table_init(tenant_bgp, AFI_L2VPN, SAFI_EVPN);
+	evi->ip_table = bgp_table_init(owner, AFI_L2VPN, SAFI_EVPN);
+	evi->mac_table = bgp_table_init(owner, AFI_L2VPN, SAFI_EVPN);
 
 	/* No VNI yet -> not in the VNI index (evihash) */
 
-	/* Configured EVIs register in their tenant VRF's name registry */
-	evi_name_hash_add(&tenant_bgp->evis_by_name, evi);
+	/* Configured EVIs register in their tenant VRF's name registry;
+	 * tenant-less ones in the global registry
+	 */
+	if (tenant_bgp)
+		evi_name_hash_add(&tenant_bgp->evis_by_name, evi);
+	else
+		evi_name_hash_add(&bgp_evpn_gbl()->global_evis, evi);
 
 	bgp_evpn_remote_ip_hash_init(evi);
 
@@ -8602,7 +8620,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *n
 	 * (bgp_evpn_evi_link_to_vrf() requires the VRF to have an L3VNI,
 	 * which must NOT be a precondition for configured EVIs.)
 	 */
-	if (bgp_evis_slu_add(&tenant_bgp->evis, evi) == NULL)
+	if (tenant_bgp && bgp_evis_slu_add(&tenant_bgp->evis, evi) == NULL)
 		evi->bgp_vrf = bgp_lock(tenant_bgp);
 
 	bgp_evpn_vni_es_init(evi);
@@ -8730,10 +8748,10 @@ void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *
 	 * configured EVIs are registered in their tenant VRF's registry, which
 	 * is only reachable through the backpointer.
 	 */
-	if (evi->origin == BGP_EVPN_EVI_ORIGIN_CFG) {
-		if (evi->bgp_vrf)
-			evi_name_hash_del(&evi->bgp_vrf->evis_by_name, evi);
+	if (evi->origin == BGP_EVPN_EVI_ORIGIN_CFG && evi->bgp_vrf) {
+		evi_name_hash_del(&evi->bgp_vrf->evis_by_name, evi);
 	} else {
+		/* legacy/auto EVIs and tenant-less configured EVIs */
 		evi_name_hash_del(&bgp_evpn_gbl()->global_evis, evi);
 	}
 

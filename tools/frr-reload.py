@@ -251,6 +251,9 @@ def get_normalized_ebgp_multihop_line(line):
 # commands inside a multi-line context or as single-line contexts. This
 # dictionary should be updated whenever a new node is added to FRR.
 ctx_keywords = {
+    "evpn": {
+        "vlan-based-evi ": {},
+    },
     "router bgp ": {
         "address-family ": {
             "vni ": {},
@@ -698,6 +701,12 @@ class Config(object):
                     # but we have what we have.
                     if k == "candidate-path " and "explicit" in line:
                         # this is a single-line command
+                        break
+
+                    if k == "evpn" and line != "evpn":
+                        # zebra's single-line `evpn mh ...` commands also
+                        # start with "evpn"; only the bare keyword opens the
+                        # (bgpd) tenant-less EVI context
                         break
 
                     # save current context

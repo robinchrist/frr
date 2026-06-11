@@ -8,6 +8,7 @@
 
 extern void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp,
 				       afi_t afi, safi_t safi);
+extern int bgp_evpn_config_write_evpn_node(struct vty *vty);
 extern void bgp_ethernetvpn_init(void);
 
 #define L2VPN_HELP_STR        "Layer 2 Virtual Private Network\n"
