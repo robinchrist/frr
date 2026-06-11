@@ -1622,6 +1622,20 @@ enum zclient_send_status bgp_zebra_announce_actual(struct bgp_dest *dest,
 		return ZCLIENT_SEND_SUCCESS;
 	}
 
+	/* Routes imported from the EVPN table can only be programmed into the
+	 * dataplane when the VRF's L3VNI is live: zebra needs the local L3VNI
+	 * construct (SVI, RMAC) to resolve the EVPN nexthop. Without it the
+	 * route stays in the (BGP) RIB - import is a pure control-plane
+	 * operation - but is not announced to zebra. Re-announce/withdraw
+	 * walks are triggered on L3VNI state transitions.
+	 */
+	if (is_route_parent_evpn(info) && !bgp_evpn_vrf_is_l3vni_live(bgp)) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("%s: skip zebra announce of EVPN-imported %pFX in VRF %s - L3VNI not live",
+				   __func__, p, bgp->name_pretty);
+		return ZCLIENT_SEND_SUCCESS;
+	}
+
 	zapi_route_init(&api);
 
 	/* Make Zebra API structure. */
@@ -2141,6 +2155,33 @@ void bgp_zebra_route_install(struct bgp_dest *dest, struct bgp_path_info *info,
 
 	event_add_event(bm->master, bgp_handle_route_announcements_to_zebra,
 			NULL, 0, &bm->t_bgp_zebra_route);
+}
+
+/* Withdraw only the EVPN-derived (imported from the EVPN table) routes of a
+ * table from zebra, keeping them in the BGP RIB. Used when the VRF's L3VNI
+ * goes away: the imports stay (control plane is independent of the
+ * dataplane), but zebra can no longer program them.
+ */
+void bgp_zebra_withdraw_evpn_derived_table(struct bgp *bgp, afi_t afi, safi_t safi)
+{
+	struct bgp_dest *dest;
+	struct bgp_table *table;
+	struct bgp_path_info *pi;
+
+	if (!bgp_install_info_to_zebra(bgp))
+		return;
+
+	table = bgp->rib[afi][safi];
+	if (!table)
+		return;
+
+	for (dest = bgp_table_top(table); dest; dest = bgp_route_next(dest)) {
+		for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
+			if (CHECK_FLAG(pi->flags, BGP_PATH_SELECTED) &&
+			    pi->type == ZEBRA_ROUTE_BGP && is_route_parent_evpn(pi))
+				bgp_zebra_route_install(dest, pi, bgp, false, NULL, false);
+		}
+	}
 }
 
 /* Withdraw all entries in a BGP instances RIB table from Zebra */

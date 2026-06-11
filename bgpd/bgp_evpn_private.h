@@ -660,6 +660,17 @@ static inline bool bgp_evpn_vrf_has_l3vni(const struct bgp *bgp_vrf)
 	return (bgp_vrf->l3vni);
 }
 
+/* L3VNI used for control-plane derivation (auto-RTs): the configured intent
+ * (`origination-l3vni`) wins; the zebra-reported (dataplane) L3VNI is the
+ * fallback for legacy configs where the L3VNI is only configured in zebra
+ * (`vrf X vni Y`). Using the intent means auto-RTs (and hence the import
+ * behavior) do not flap with dataplane events.
+ */
+static inline vni_t bgp_evpn_vrf_get_intent_l3vni(const struct bgp *bgp_vrf)
+{
+	return bgp_vrf->evpn_cfgd_l3vni ? bgp_vrf->evpn_cfgd_l3vni : bgp_vrf->l3vni;
+}
+
 static inline int bgp_evpn_vrf_is_l3vni_live(const struct bgp *bgp_vrf)
 {
 	return (bgp_vrf->l3vni && bgp_vrf->l3vni_svi_ifindex);

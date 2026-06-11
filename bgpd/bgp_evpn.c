@@ -491,7 +491,8 @@ static struct bgp_evpn_effective_fq_rt* _bgp_evpn_derive_export_auto_rt_common(a
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const struct bgp *bgp_vrf) {
-	return _bgp_evpn_derive_export_auto_rt_common(bgp_vrf->as, bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_export_auto_rt_common(bgp_vrf->as, bgp_evpn_vrf_get_intent_l3vni(bgp_vrf),
+						      bgp_vrf->evpn_autort_rfc8365_compatible);
 }
 
 /*
@@ -499,7 +500,8 @@ static struct bgp_evpn_effective_fq_rt* bgp_evpn_vrf_derive_export_auto_rt(const
  * caller needs to check this and only call if auto RTs should actually be generated!
  */
 static struct bgp_evpn_effective_wildcard_rt* bgp_evpn_vrf_derive_import_auto_rt(const struct bgp *bgp_vrf) {
-	return _bgp_evpn_derive_import_auto_rt_common(bgp_vrf->l3vni, bgp_vrf->evpn_autort_rfc8365_compatible);
+	return _bgp_evpn_derive_import_auto_rt_common(bgp_evpn_vrf_get_intent_l3vni(bgp_vrf),
+						      bgp_vrf->evpn_autort_rfc8365_compatible);
 }
 
 
@@ -590,8 +592,11 @@ static bool _bgp_evpn_vrf_should_generate_autort(const struct bgp *bgp_vrf, bool
 		direction_cfgd_rt_list = &rt_config->cfgd_export;
 	}
 
-	/* Auto RT generation only supported when VNI is configured */
-	if (!bgp_evpn_vrf_has_l3vni(bgp_vrf))
+	/* Auto RTs are derived from the L3VNI - configured intent or, as
+	 * legacy fallback, the zebra-reported one. Without either there is
+	 * nothing to derive from (import-only VRFs need manual RTs).
+	 */
+	if (!bgp_evpn_vrf_get_intent_l3vni(bgp_vrf))
 		return false;
 
 	return _bgp_evpn_should_generate_autort_common(
@@ -866,9 +871,10 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
+	/* The EVPN instance is only needed for auto-RT derivation (ASN);
+	 * manual RTs must become effective regardless of any underlay state.
+	 */
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if(!bgp_evpn_mi)
-		return; /* shouldn't happen, but be defensive */
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -882,7 +888,7 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 		bgp_evpn_effective_fq_rt_free(eff_fq_item);
 
 	/* Start with the auto RT */
-	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_import_autort(evi);
+	bool should_generate_auto_rt = bgp_evpn_mi && bgp_evpn_evi_should_generate_import_autort(evi);
 	if(should_generate_auto_rt) {
 
 		eff_w_item = bgp_evpn_evi_derive_import_auto_rt(bgp_evpn_mi, evi);
@@ -921,9 +927,10 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *ev
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
+	/* The EVPN instance is only needed for auto-RT derivation (ASN);
+	 * manual RTs must become effective regardless of any underlay state.
+	 */
 	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if(!bgp_evpn_mi)
-		return; /* shouldn't happen, but be defensive */
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -934,7 +941,7 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *ev
 		bgp_evpn_effective_fq_rt_free(eff_fq_item);
 
 	/* Start with the auto RT */
-	bool should_generate_auto_rt = bgp_evpn_evi_should_generate_export_autort(evi);
+	bool should_generate_auto_rt = bgp_evpn_mi && bgp_evpn_evi_should_generate_export_autort(evi);
 	if(should_generate_auto_rt) {
 
 		eff_fq_item = bgp_evpn_evi_derive_export_auto_rt(bgp_evpn_mi, evi);
@@ -1088,6 +1095,19 @@ uint32_t vrf_fq_irt_node_hash_key(const struct vrf_fq_irt_node *irt)
 int vrf_fq_irt_node_hash_cmp(const struct vrf_fq_irt_node *a, const struct vrf_fq_irt_node *b)
 {
 	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
+}
+
+/* Instance whose EVPN RIB is walked for (re)import evaluation.
+ * Until multi-underlay lands this is the master instance; without any
+ * underlay configured, fall back to the default instance: EVPN routes
+ * received from peers there must remain importable (import-only operation,
+ * not involving any dataplane or underlay at all).
+ */
+static struct bgp *bgp_evpn_get_rib_walk_instance(void)
+{
+	if (bm->bgp_evpn_mi && bm->bgp_evpn_mi->evpn_vxlan_underlay_cfgd)
+		return bm->bgp_evpn_mi;
+	return bgp_get_default();
 }
 
 /*
@@ -1410,8 +1430,10 @@ void bgp_evpn_xxport_delete_ecomm(void *val)
  */
 void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
 {
-	if(bgp_get_evpn_master_instance() == NULL)
-		return; /* EVPN not even activated? Why are we even being called? */
+	/* NOTE: deliberately NOT gated on an EVPN instance existing - the
+	 * import machinery (irt tables) is global and configured RTs must be
+	 * effective regardless of any underlay/dataplane state.
+	 */
 
 	/* Before we can update / regenerate the effective RTs, we need to perform the teardown
 	 * which uses the effective RTs to determine which routes must be deleted
@@ -1436,14 +1458,16 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	struct bgp *bgp_evpn_mi = NULL;
 	struct bgp_evpn_evi *evi = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return; /* EVPN not even activated? Why are we even being called? */
-
-	/* Update the Export RTs in any case - the regenerate function might decide to not generate any new RTs
-	 * depending on the L3VNIs state and only clear the existing ones.
+	/* Update the effective Export RTs in any case - configured RTs must be
+	 * effective regardless of any underlay/dataplane state. Route
+	 * advertisement below additionally requires a live L3VNI (and thus an
+	 * EVPN instance).
 	 */
 	bgp_evpn_vrf_regenerate_effective_export_rts(bgp_vrf);
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi)
+		return; /* no underlay -> nothing can be advertised */
 
 	/* If the L3VNI is not yet active, do not advertise routes
 	 * because we could never process received traffic or might not even have a VNI we could set as
@@ -1476,11 +1500,10 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 
 void bgp_evpn_evi_handle_import_rt_change(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi = NULL;
-
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return; /* EVPN not even activated? Why are we even being called? */
+	/* NOTE: deliberately NOT gated on an EVPN instance existing - the
+	 * import machinery (irt tables) is global and configured RTs must be
+	 * effective regardless of any underlay/dataplane state.
+	 */
 
 	/* Before we can update / regenerate the effective RTs, we need to perform the teardown
 	 * which uses the effective RTs to determine which routes must be deleted
@@ -1504,14 +1527,16 @@ void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 {
 	struct bgp *bgp_evpn_mi = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
-	if (!bgp_evpn_mi)
-		return; /* EVPN not even activated? Why are we even being called? */
-
-	/* Update the Export RTs in any case - the regenerate function might decide to not generate any new RTs
-	 * depending on the L3VNIs state and only clear the existing ones.
+	/* Update the effective Export RTs in any case - configured RTs must be
+	 * effective regardless of any underlay/dataplane state. Route
+	 * advertisement below additionally requires a live EVI (and thus an
+	 * EVPN instance).
 	 */
 	bgp_evpn_evi_regenerate_effective_export_rts(evi);
+
+	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	if (!bgp_evpn_mi)
+		return; /* no underlay -> nothing can be advertised */
 
 	/* If the L2VNI / EVI is not yet active, do not advertise routes
 	 * because we could never process received traffic
@@ -3192,6 +3217,19 @@ enum zclient_send_status evpn_zebra_install(struct bgp *bgp, struct bgp_evpn_evi
 	uint32_t seq;
 	enum zclient_send_status ret = ZCLIENT_SEND_SUCCESS;
 	struct ipaddr vtep_ip = { .ipa_type = IPADDR_V4, .ipaddr_v4 = { INADDR_ANY } };
+
+	/* Imported routes live in the EVI's tables regardless of dataplane
+	 * state (import is a pure control-plane operation), but they can only
+	 * be programmed into zebra when the EVI's VNI is live in the
+	 * dataplane. On the up-transition the install walk replays them.
+	 * (Uninstalls are deliberately NOT gated - flushing is always safe.)
+	 */
+	if (!bgp_evpn_evi_is_live(evi)) {
+		if (bgp_debug_zebra(NULL))
+			zlog_debug("%s: skip zebra install for EVI %s (VNI %u) - not live",
+				   __func__, evi->name, evi->vni);
+		return ZCLIENT_SEND_SUCCESS;
+	}
 
 	if (p->prefix.route_type == BGP_EVPN_MAC_IP_ROUTE) {
 		flags = 0;
@@ -6195,7 +6233,7 @@ static int bgp_evpn_vrf_install_uninstall_global_routes(struct bgp *bgp_vrf, boo
 
 	afi = AFI_L2VPN;
 	safi = SAFI_EVPN;
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_get_rib_walk_instance();
 	if (!bgp_evpn_mi)
 		return -1;
 
@@ -6334,7 +6372,7 @@ static int _bgp_evpn_evi_install_uninstall_global_routes(struct bgp_evpn_evi *ev
 	if(!walk_fifo)
 		assert(evi);
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_get_rib_walk_instance();
 	if (!bgp_evpn_mi)
 		return -1;
 
@@ -9417,6 +9455,14 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	if(effective_import_rts_changed)
 		bgp_evpn_vrf_install_global_routes(bgp_vrf);
 
+	/* L3VNI up-transition: imported routes that were already in the VRF
+	 * RIB (import is independent of the dataplane) could not be announced
+	 * to zebra so far - re-announce the table now that zebra can program
+	 * them (announce of EVPN-derived routes is gated on L3VNI liveness).
+	 */
+	bgp_zebra_announce_table(bgp_vrf, AFI_IP, SAFI_UNICAST);
+	bgp_zebra_announce_table(bgp_vrf, AFI_IP6, SAFI_UNICAST);
+
 	return 0;
 }
 
@@ -9468,6 +9514,15 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 
 	/* always delete/withdraw all type-5 routes - without VNI and with the current dataplane, we cannot advertise routes */
 	bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(bgp_vrf);
+
+	/* L3VNI down-transition: withdraw all EVPN-derived routes from zebra
+	 * (it can no longer program them without the local L3VNI construct)
+	 * while KEEPING them in the BGP RIB - import is independent of the
+	 * dataplane. Must happen before the import re-evaluation below so
+	 * routes that survive unchanged also get withdrawn from zebra.
+	 */
+	bgp_zebra_withdraw_evpn_derived_table(bgp_vrf, AFI_IP, SAFI_UNICAST);
+	bgp_zebra_withdraw_evpn_derived_table(bgp_vrf, AFI_IP6, SAFI_UNICAST);
 
 	/* Tunnel is no longer active.
 	 * Delete VTEP-IP from EVPN underlay's tip_hash.
@@ -9551,6 +9606,38 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	}
 
 	return 0;
+}
+
+/* Replay zebra programming for all imported routes already present in the
+ * EVI's tables. Imported routes are kept there independent of dataplane state
+ * and the zebra dispatch is gated on EVI liveness - so on the up-transition
+ * everything that was imported while the EVI was down must be (re)sent.
+ */
+static void bgp_evpn_evi_replay_zebra_install(struct bgp *bgp, struct bgp_evpn_evi *evi)
+{
+	struct bgp_table *tables[] = { evi->ip_table, evi->mac_table };
+	struct bgp_dest *dest;
+	struct bgp_path_info *pi;
+
+	for (size_t i = 0; i < array_size(tables); i++) {
+		if (!tables[i])
+			continue;
+
+		for (dest = bgp_table_top(tables[i]); dest; dest = bgp_route_next(dest)) {
+			for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
+				if (!CHECK_FLAG(pi->flags, BGP_PATH_SELECTED))
+					continue;
+				if (pi->type != ZEBRA_ROUTE_BGP ||
+				    pi->sub_type != BGP_ROUTE_IMPORTED)
+					continue;
+
+				evpn_zebra_install(bgp, evi,
+						   (const struct prefix_evpn *)
+							   bgp_dest_get_prefix(dest),
+						   pi);
+			}
+		}
+	}
 }
 
 static void bgp_evpn_l2vni_remote_route_processing(struct bgp_evpn_evi *evi)
@@ -9817,6 +9904,12 @@ int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 
 	/* advertise svi mac-ip knob to zebra */
 	bgp_zebra_advertise_svi_macip(underlay_vrf, evi->advertise_svi_macip, evi->vni);
+
+	/* Routes imported while the EVI was not live never reached zebra (the
+	 * zebra dispatch is gated on liveness and the install walk returns
+	 * early for unchanged entries) - replay them now.
+	 */
+	bgp_evpn_evi_replay_zebra_install(underlay_vrf, evi);
 
 	bgp_evpn_l2vni_remote_route_processing(evi);
 

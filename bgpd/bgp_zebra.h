@@ -51,6 +51,12 @@ extern void bgp_zebra_announce_table(struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_zebra_announce_table_all_subtypes(struct bgp *bgp, afi_t afi,
 						  safi_t safi);
 
+/* Withdraw only EVPN-derived (imported) routes of a table from Zebra, keeping
+ * them in the BGP RIB (used on L3VNI down transitions)
+ */
+extern void bgp_zebra_withdraw_evpn_derived_table(struct bgp *bgp, afi_t afi,
+						  safi_t safi);
+
 /* Withdraw all entries of any subtype in a BGP instances RIB table from Zebra */
 extern void bgp_zebra_withdraw_table_all_subtypes(struct bgp *bgp, afi_t afi,
 						  safi_t safi);

@@ -3696,6 +3696,9 @@ DEFPY (bgp_evpn_origination_l3vni,
 		}
 		bgp->evpn_cfgd_l3vni = 0;
 		bgp->evpn_cfgd_l3vni_prefix_routes_only = false;
+		/* Auto-RTs derive from the intended L3VNI - re-evaluate */
+		bgp_evpn_vrf_handle_import_rt_change(bgp);
+		bgp_evpn_vrf_handle_export_rt_change(bgp);
 		return CMD_SUCCESS;
 	}
 
@@ -3717,6 +3720,12 @@ DEFPY (bgp_evpn_origination_l3vni,
 
 	bgp->evpn_cfgd_l3vni = vni;
 	bgp->evpn_cfgd_l3vni_prefix_routes_only = !!pro;
+
+	/* Auto-RTs derive from the intended L3VNI (configured intent wins
+	 * over the zebra-reported one) - re-evaluate import/export
+	 */
+	bgp_evpn_vrf_handle_import_rt_change(bgp);
+	bgp_evpn_vrf_handle_export_rt_change(bgp);
 
 	/* NOTE: until the VNI intent direction reversal lands, this must
 	 * match the `vni X` configured for the VRF in zebra; zebra remains
