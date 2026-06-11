@@ -8772,8 +8772,21 @@ void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool configure
  */
 void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
-	/* Withdraw any outstanding L2 intent before bgp_vrf is unlinked. */
-	evi_update_l2_intent(evi);
+	/* Withdraw any outstanding L2 intent before bgp_vrf is unlinked.
+	 * Do NOT call evi_update_l2_intent() here: the EVI is being freed and
+	 * USER_CFGD may still be set, which would make the helper re-send an
+	 * ADD instead of withdrawing.  Inline the unconditional DEL directly.
+	 */
+	if (evi->l2_intent_sent_vni) {
+		struct bgp *send_bgp = evi->bgp_vrf ? evi->bgp_vrf
+						     : bgp_get_default();
+		if (send_bgp)
+			bgp_zebra_send_evpn_vni_intent(send_bgp,
+						       evi->l2_intent_sent_vni,
+						       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
+						       false, false);
+		evi->l2_intent_sent_vni = 0;
+	}
 
 	/* Remove from the owning name registry BEFORE unlinking from the VRF:
 	 * configured EVIs are registered in their tenant VRF's registry, which
