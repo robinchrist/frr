@@ -45,6 +45,7 @@
 
 DEFINE_MTYPE_STATIC(ZEBRA, HOST_PREFIX, "host prefix");
 DEFINE_MTYPE_STATIC(ZEBRA, ZL3VNI, "L3 VNI hash");
+DEFINE_MTYPE_STATIC(ZEBRA, ZL2VNI_INTENT, "L2 VNI intent");
 DEFINE_MTYPE_STATIC(ZEBRA, L3VNI_MAC, "EVPN L3VNI MAC");
 DEFINE_MTYPE_STATIC(ZEBRA, L3NEIGH, "EVPN Neighbor");
 DEFINE_MTYPE_STATIC(ZEBRA, ZVXLAN_SG, "zebra VxLAN multicast group");
@@ -2070,7 +2071,66 @@ static int zl3vni_local_nh_del(struct zebra_l3vni *zl3vni, struct ipaddr *ip)
 	return 0;
 }
 
-/*
+/* =========================================================
+ * L2 VNI intent store — tracks control-plane intent (bgpd ROLE_L2
+ * INTENT_ADD) for user-configured L2VNIs so zebra can compute and report
+ * MISCONFIGURED state.  Auto-discovered L2VNIs are NOT in this table.
+ * =========================================================
+ */
+struct zebra_l2vni_intent {
+	vni_t vni;
+	vrf_id_t tenant_vrf_id; /* 0/VRF_UNKNOWN = no tenant */
+	uint8_t flags;
+};
+
+static unsigned int l2vni_intent_hash_keymake(const void *p)
+{
+	const struct zebra_l2vni_intent *zi = p;
+
+	return jhash_1word(zi->vni, 0);
+}
+
+static bool l2vni_intent_hash_cmp(const void *p1, const void *p2)
+{
+	const struct zebra_l2vni_intent *zi1 = p1;
+	const struct zebra_l2vni_intent *zi2 = p2;
+
+	return zi1->vni == zi2->vni;
+}
+
+static void *l2vni_intent_alloc(void *p)
+{
+	const struct zebra_l2vni_intent *tmp = p;
+	struct zebra_l2vni_intent *zi;
+
+	zi = XCALLOC(MTYPE_ZL2VNI_INTENT, sizeof(*zi));
+	zi->vni = tmp->vni;
+	return zi;
+}
+
+static struct zebra_l2vni_intent *zl2vni_intent_add(vni_t vni,
+						     vrf_id_t tenant_vrf_id,
+						     uint8_t flags)
+{
+	struct zebra_l2vni_intent tmp = { .vni = vni };
+	struct zebra_l2vni_intent *zi;
+
+	zi = hash_get(zrouter.l2vni_intent_table, &tmp, l2vni_intent_alloc);
+	zi->tenant_vrf_id = tenant_vrf_id;
+	zi->flags = flags;
+	return zi;
+}
+
+static void zl2vni_intent_del(vni_t vni)
+{
+	struct zebra_l2vni_intent tmp = { .vni = vni };
+	struct zebra_l2vni_intent *zi;
+
+	zi = hash_release(zrouter.l2vni_intent_table, &tmp);
+	XFREE(MTYPE_ZL2VNI_INTENT, zi);
+}
+
+/* =========================================================
  * Hash function for L3 VNI.
  */
 static unsigned int l3vni_hash_keymake(const void *p)
@@ -6343,6 +6403,9 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 				zebra_vxlan_process_l3vni_oper_down(zl3vni);
 				zl3vni_del(zl3vni);
 			}
+		} else {
+			/* May be an L2 intent DEL */
+			zl2vni_intent_del(vni);
 		}
 		return;
 
@@ -6387,10 +6450,12 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 		}
 		break;
 	case ZEBRA_EVPN_VNI_INTENT_ROLE_L2:
-		/* No operative effect yet: L2VNIs are still classified by
-		 * exclusion (not an L3VNI). Used for diagnostics/validation
-		 * once dataplane-state reporting carries intent matching.
+		/* Store the L2 intent so zebra can compute and report
+		 * MISCONFIGURED state for user-configured L2VNIs.
+		 * Auto-discovered L2VNIs are NOT stored here (bgpd never sends
+		 * ROLE_L2 intent for them).  No serving change in this stage.
 		 */
+		zl2vni_intent_add(vni, tenant_vrf_id, flags);
 		break;
 	default:
 		zlog_err("EVPN VNI intent: unknown role %u for VNI %u", role, vni);
@@ -6444,6 +6509,10 @@ void zebra_vxlan_init(void)
 					      zebra_evpn_hash_cmp,
 					      "Zebra EVPN (L2VNI) table");
 
+	zrouter.l2vni_intent_table =
+		hash_create(l2vni_intent_hash_keymake, l2vni_intent_hash_cmp,
+			    "Zebra L2VNI intent table");
+
 	zebra_neigh_db_init(svd_nh_table);
 
 	zrouter.evpn_vrf = NULL;
@@ -6466,6 +6535,7 @@ void zebra_vxlan_disable(void)
 {
 	hash_free(zrouter.l3vni_table);
 	hash_free(zrouter.evpn_table);
+	hash_free(zrouter.l2vni_intent_table);
 	zebra_evpn_mh_terminate();
 }
 

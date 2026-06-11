@@ -157,6 +157,13 @@ struct zebra_router {
 	/* L3-VNI hash table (for EVPN). Only in default instance */
 	struct hash *l3vni_table;
 
+	/* L2VNI intent table: stores control-plane intent (from bgpd ROLE_L2
+	 * INTENT_ADD) for user-configured L2VNIs so zebra can compute and
+	 * report MISCONFIGURED state for them.  Auto-discovered L2VNIs are
+	 * NOT stored here; they remain purely dataplane-driven.
+	 */
+	struct hash *l2vni_intent_table;
+
 	/* Tables and other global info maintained for EVPN multihoming */
 	struct zebra_evpn_mh_info *mh_info;
 
