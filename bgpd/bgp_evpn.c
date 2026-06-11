@@ -871,10 +871,11 @@ static void bgp_evpn_evi_regenerate_effective_import_rts(struct bgp_evpn_evi *ev
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
-	/* The EVPN instance is only needed for auto-RT derivation (ASN);
+	/* An EVPN instance is only needed for auto-RT derivation (its ASN);
 	 * manual RTs must become effective regardless of any underlay state.
+	 * The ASN comes from the EVI's bound underlay instance.
 	 */
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -927,10 +928,11 @@ static void bgp_evpn_evi_regenerate_effective_export_rts(struct bgp_evpn_evi *ev
 	struct bgp_evpn_effective_fq_rt* eff_fq_item;
 	struct bgp_evpn_cfgd_rt* cfgd_item;
 
-	/* The EVPN instance is only needed for auto-RT derivation (ASN);
+	/* An EVPN instance is only needed for auto-RT derivation (its ASN);
 	 * manual RTs must become effective regardless of any underlay state.
+	 * The ASN comes from the EVI's bound underlay instance.
 	 */
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
 	if(!evi)
 		return; /* shouldn't happen! */
 	if(!evi->evi_rt_config)
@@ -1521,7 +1523,7 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	 */
 	bgp_evpn_vrf_regenerate_effective_export_rts(bgp_vrf);
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
 	if (!bgp_evpn_mi)
 		return; /* no underlay -> nothing can be advertised */
 
@@ -1590,7 +1592,7 @@ void bgp_evpn_evi_handle_export_rt_change(struct bgp_evpn_evi *evi)
 	 */
 	bgp_evpn_evi_regenerate_effective_export_rts(evi);
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
 	if (!bgp_evpn_mi)
 		return; /* no underlay -> nothing can be advertised */
 
@@ -3822,7 +3824,7 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	struct bgp_path_info *pi = NULL;
 	struct ipaddr vtep_ip;
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
 	if (!bgp_evpn_mi)
 		return 0;
 
@@ -3918,7 +3920,7 @@ static int bgp_evpn_vrf_delete_type5_route(struct bgp *bgp_vrf, const struct bgp
 	struct bgp_path_info *pi = NULL;
 	struct bgp *bgp_evpn_mi = NULL; /* evpn bgp instance */
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
 	if (!bgp_evpn_mi)
 		return 0;
 
@@ -6860,7 +6862,7 @@ void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf)
 {
 	struct bgp *bgp_evpn_mi = NULL; /* EVPN bgp instance */
 
-	bgp_evpn_mi = bgp_get_evpn_master_instance();
+	bgp_evpn_mi = bgp_evpn_vrf_get_underlay(bgp_vrf);
 	if (!bgp_evpn_mi)
 		return;
 
@@ -8582,7 +8584,7 @@ struct bgp_evpn_evi *bgp_evpn_evi_new_cfgd(struct bgp *tenant_bgp, const char *n
  */
 void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
 {
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
 
 	/* Withdraw originated routes (only possible when live, which implies
 	 * a master instance exists)
@@ -8610,7 +8612,7 @@ void bgp_evpn_cfgd_evi_delete(struct bgp_evpn_evi *evi)
  */
 int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
 {
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_master_instance();
+	struct bgp *bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
 
 	if (evi->vni == vni)
 		return 0;
