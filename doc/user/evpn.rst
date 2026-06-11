@@ -805,3 +805,117 @@ Displaying EVPN information
       tor2# show vrf sym_1 vni
       VRF                                   VNI        VxLAN IF             L3-SVI               State Rmac
       sym_1                                 9288       vxlan21              vlan210_l3           Up    44:38:36:ff:ff:20
+
+.. _evpn-multi-underlay:
+
+Multi-Underlay EVPN
+===================
+
+FRR supports multiple VXLAN underlay VRFs within a single router. This enables
+a router to participate in multiple independent VXLAN fabrics while sharing a
+single EVPN control plane.
+
+Architecture
+------------
+
+Under the multi-underlay model:
+
+- Each **underlay VRF** hosts its own VTEP IP addresses and BGP peers. The
+  underlay VRF is designated with ``vxlan-underlay`` in its L2VPN EVPN
+  address-family.
+- The **EVPN route table is logically shared** across all underlays: overlay
+  objects (tenant VRFs and EVIs) can import routes received via any underlay.
+- Each overlay object **originates routes only into its single bound underlay**
+  (configured with ``underlay-vrf``). Traffic can reach any remote VTEP but is
+  only sourced from the bound fabric.
+- VNI assignment is driven from BGP using ``origination-l2vni`` /
+  ``origination-l3vni``; the former ``vrf X / vni Y`` command in FRR's zebra
+  configuration is no longer used.
+- EVIs and tenant VRFs can exist with only manually configured route-targets and
+  no dataplane binding (import-only mode).
+
+Configuration
+-------------
+
+**Underlay VRF** (replace ``advertise-all-vni``):
+
+.. code-block:: frr
+
+   router bgp 65000 vrf underlay-red
+    address-family l2vpn evpn
+     vxlan-underlay
+     auto-discover-vnis
+     flooding head-end-replication
+
+``vxlan-underlay`` designates the BGP instance as an underlay that hosts VTEPs.
+``auto-discover-vnis`` enables automatic EVI creation for VXLAN interfaces whose
+link interface belongs to this VRF. ``flooding head-end-replication`` configures
+the BUM flooding method for VNIs in this underlay.
+
+``advertise-all-vni`` is accepted as a deprecated alias for
+``vxlan-underlay auto-discover-vnis``.
+
+**Tenant VRF** (L3 overlay):
+
+.. code-block:: frr
+
+   router bgp 65000 vrf tenant-blue
+    address-family l2vpn evpn
+     underlay-vrf underlay-red
+     origination-l3vni 4001 [prefix-routes-only]
+
+``underlay-vrf`` binds this tenant VRF to the named underlay. When its
+dataplane L3VNI is up, the router-ID and AS of the underlay are used for
+auto-RT/auto-RD derivation. ``origination-l3vni`` declares the intent VNI;
+zebra is notified and programs the L3 role for that VNI.
+
+**L2 EVI under a tenant VRF**:
+
+.. code-block:: frr
+
+   router bgp 65000 vrf tenant-blue
+    address-family l2vpn evpn
+     vlan-based-evi vni100
+      underlay-vrf underlay-red
+      origination-l2vni 100
+      route-target both 65000:100
+
+An EVI with no ``origination-l2vni`` is an import-only EVI — it holds routes
+received via its configured route-targets but does not originate type-2/3 routes.
+
+**Tenant-less (pure L2) EVIs** at the top-level ``evpn`` node:
+
+.. code-block:: frr
+
+   evpn
+    vlan-based-evi shared-l2
+     underlay-vrf underlay-red
+     origination-l2vni 999
+     route-target import 65000:999
+   exit-evi
+   exit
+
+Tenant-less EVIs are not scoped to any tenant VRF. They import routes matching
+their configured route-targets regardless of which underlay delivers them.
+
+Diagnostics
+-----------
+
+.. clicmd:: show bgp l2vpn evpn evi [EVINAME] [json]
+
+   Display all configured EVIs with their name, type, origin, L2VNI binding,
+   tenant VRF, bound underlay VRF, dataplane state and liveness.
+
+.. clicmd:: show bgp l2vpn evpn vxlan-underlay [json]
+
+   List all registered underlay VRF instances with their router-ID,
+   auto-discover-vnis flag, and flood-control mode.
+
+Interaction with Ethernet Segments (ES/MH)
+------------------------------------------
+
+Ethernet Segments (multi-homing) remain scoped to a single underlay per router.
+When a second underlay is configured, FRR logs a warning that ES/MH state and
+instance-wide knobs (advertise-pip, dup-addr-detection, etc.) will follow the
+most recently configured underlay. Deployments using ES/MH should use a single
+underlay VRF.
