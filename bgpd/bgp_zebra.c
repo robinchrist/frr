@@ -2602,6 +2602,18 @@ void bgp_zebra_instance_register(struct bgp *bgp)
 					       ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
 					       bgp->evpn_cfgd_l3vni_prefix_routes_only, true);
 
+	/* Replay ROLE_L2 intents for user-configured L2 EVIs in this instance */
+	{
+		struct bgp_evpn_evi *evi;
+
+		frr_each (bgp_evis_slu, &bgp->evis, evi) {
+			if (bgp_evpn_evi_is_user_configured(evi) && evi->vni)
+				bgp_zebra_send_evpn_vni_intent(bgp, evi->vni,
+							       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
+							       false, true);
+		}
+	}
+
 	bgp_nht_register_nexthops(bgp);
 
 	/*

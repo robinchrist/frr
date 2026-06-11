@@ -8687,7 +8687,46 @@ int bgp_evpn_evi_set_origination_l2vni(struct bgp_evpn_evi *evi, vni_t vni)
 	if (vni && underlay_bgp && underlay_bgp->evpn_vxlan_underlay_cfgd)
 		bgp_zebra_advertise_all_vni(underlay_bgp, true);
 
+	evi_update_l2_intent(evi);
+
 	return 0;
+}
+
+/* Send or withdraw a ROLE_L2 ZEBRA_EVPN_VNI_INTENT for a user-configured L2
+ * EVI.  Must be called after any change to evi->vni, evi->flags (USER_CFGD),
+ * or the tenant VRF binding so zebra's L2-intent store stays consistent.
+ *
+ * Deliberately NOT called for auto-discovered EVIs (origin AUTO_DISCOVERED):
+ * those are purely dataplane-driven, consistent with the auto-discover-vnis
+ * design.
+ */
+void evi_update_l2_intent(struct bgp_evpn_evi *evi)
+{
+	struct bgp *send_bgp;
+
+	if (bgp_evpn_evi_is_user_configured(evi) && evi->vni) {
+		/* EVI is user-configured and has a VNI: send/refresh intent. */
+		send_bgp = evi->bgp_vrf ? evi->bgp_vrf : bgp_get_default();
+		if (!send_bgp)
+			goto withdraw;
+		bgp_zebra_send_evpn_vni_intent(send_bgp, evi->vni,
+					       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
+					       false, true);
+		evi->l2_intent_sent_vni = evi->vni;
+		return;
+	}
+
+withdraw:
+	if (evi->l2_intent_sent_vni) {
+		/* Was sending intent; withdraw the old VNI. */
+		send_bgp = evi->bgp_vrf ? evi->bgp_vrf : bgp_get_default();
+		if (send_bgp)
+			bgp_zebra_send_evpn_vni_intent(send_bgp,
+						       evi->l2_intent_sent_vni,
+						       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
+						       false, false);
+		evi->l2_intent_sent_vni = 0;
+	}
 }
 
 /* Transition an EVI between the legacy-configured (`vni X`, name "vni-X") and
@@ -8733,6 +8772,9 @@ void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool configure
  */
 void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *evi)
 {
+	/* Withdraw any outstanding L2 intent before bgp_vrf is unlinked. */
+	evi_update_l2_intent(evi);
+
 	/* Remove from the owning name registry BEFORE unlinking from the VRF:
 	 * configured EVIs are registered in their tenant VRF's registry, which
 	 * is only reachable through the backpointer.
@@ -9210,6 +9252,9 @@ void bgp_evpn_evi_apply_tenant_vrf_id(struct bgp_evpn_evi *evi, vrf_id_t tenant_
 					(void (*)(struct hash_bucket *, void *))
 						bgp_evpn_remote_ip_hash_link_nexthop,
 					evi);
+
+	/* Re-send the L2 intent with the updated tenant VRF ID. */
+	evi_update_l2_intent(evi);
 }
 
 /* Set or clear the explicit tenant VRF of a legacy `vni X` EVI.

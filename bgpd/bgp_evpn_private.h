@@ -270,6 +270,12 @@ struct bgp_evpn_evi {
 	vrf_id_t tenant_vrf_id;
 	ifindex_t svi_ifindex;
 
+	/* Last VNI for which a ROLE_L2 INTENT_ADD was sent to zebra.
+	 * Tracked so we can send a matching INTENT_DEL when the EVI is
+	 * unconfigured or its VNI changes.  0 = no intent sent yet.
+	 */
+	vni_t l2_intent_sent_vni;
+
 	/* Last dataplane report for the VNI (diagnostics) */
 	struct bgp_evpn_vni_dp_info dp;
 	uint32_t flags;
@@ -1208,6 +1214,8 @@ extern void bgp_evpn_evi_legacy_set_configured(struct bgp_evpn_evi *evi, bool co
 extern void bgp_evpn_evi_apply_tenant_vrf_id(struct bgp_evpn_evi *evi, vrf_id_t tenant_vrf_id);
 extern void bgp_evpn_evi_set_cfgd_tenant_vrf(struct bgp_evpn_evi *evi, const char *vrfname);
 extern void bgp_evpn_evi_delete_and_free(struct bgp *bgp, struct bgp_evpn_evi *evi);
+/* Send or withdraw ROLE_L2 ZEBRA_EVPN_VNI_INTENT for user-configured EVIs. */
+extern void evi_update_l2_intent(struct bgp_evpn_evi *evi);
 extern bool bgp_evpn_lookup_l3vni_l2vni_table(vni_t vni);
 extern int bgp_evpn_evi_update_type_1_2_3_routes(struct bgp *bgp, struct bgp_evpn_evi *evi);
 extern struct bgp_path_info *bgp_evpn_delete_route_entry(struct bgp *bgp, afi_t afi, safi_t safi,

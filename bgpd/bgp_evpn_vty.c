@@ -1902,6 +1902,7 @@ static struct bgp_evpn_evi *evpn_create_update_vni(struct bgp *bgp, vni_t vni)
 	 */
 	SET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
 	bgp_evpn_evi_legacy_set_configured(evi, true);
+	evi_update_l2_intent(evi);
 	return evi;
 }
 
@@ -1929,6 +1930,7 @@ static void evpn_delete_vni(struct bgp *bgp, struct bgp_evpn_evi *evi)
 	UNSET_FLAG(evi->flags, EVI_FLAG_USER_CFGD);
 	/* The object lives on purely as a dataplane-learnt entity */
 	bgp_evpn_evi_legacy_set_configured(evi, false);
+	evi_update_l2_intent(evi);
 
 	if(evi->advertise_svi_macip) {
 		/* TODO: re-use evpn_set_advertise_svi_macip? */
