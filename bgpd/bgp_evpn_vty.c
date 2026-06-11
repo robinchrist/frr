@@ -3295,6 +3295,14 @@ static void evpn_set_vxlan_underlay(struct bgp *bgp)
 	bgp_evpn_underlays_add_tail(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_set_evpn_master_instance(bgp);
 	bgp_zebra_advertise_all_vni(bgp, true);
+
+	/* Multihoming (Ethernet Segments) and a few instance-wide knobs
+	 * (advertise-pip, resolve-overlay-index, ...) are not multi-underlay
+	 * aware yet: they follow the most recently enabled underlay.
+	 */
+	if (bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1)
+		zlog_warn("Multiple VXLAN underlays configured: EVPN multihoming (ES) and instance-wide EVPN knobs follow the most recently enabled underlay (%s)",
+			  bgp->name_pretty);
 }
 
 /*
