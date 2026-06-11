@@ -27,11 +27,13 @@ typedef struct json_object json_object;
 struct zebra_dplane_ctx;
 struct zebra_vxlan_if_update_ctx;
 
-/* Is EVPN enabled? */
-#define EVPN_ENABLED(zvrf)  (zvrf)->advertise_all_vni
+/* Is this VRF enabled as an EVPN underlay? */
+#define EVPN_ENABLED(zvrf)  (zvrf)->evpn_underlay_enabled
+
+/* Is EVPN processing enabled at all (any underlay VRF enabled)? */
 static inline int is_evpn_enabled(void)
 {
-	return EVPN_ENABLED(zebra_evpn_get_master_underlay_vrf());
+	return zrouter.evpn_underlay_count > 0;
 }
 
 #ifndef INET6_GUA_ADDRSTRLEN
@@ -191,6 +193,7 @@ extern int zebra_vxlan_if_update(struct interface *ifp,
 extern int zebra_vxlan_if_del(struct interface *ifp);
 extern void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 					    int filter, int add);
+extern vrf_id_t zebra_vxlan_if_underlay_vrf_id(const struct interface *vxlan_if);
 extern void zebra_vxlan_init_tables(struct zebra_vrf *zvrf);
 extern void zebra_vxlan_close_tables(struct zebra_vrf *zvrf);
 extern void zebra_vxlan_cleanup_tables(struct zebra_vrf *zvrf);

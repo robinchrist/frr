@@ -125,14 +125,11 @@ struct zebra_vrf {
 #define MPLS_FLAG_SCHEDULE_LSPS    (1 << 0)
 
 	/*
-	 * EVPN hash table. Only in the EVPN instance.
+	 * Whether this VRF is enabled as an EVPN (VXLAN) underlay: it hosts
+	 * VTEPs and zebra performs EVPN processing for it. Driven by bgpd
+	 * (vxlan-underlay / legacy advertise-all-vni).
 	 */
-	struct hash *evpn_table;
-
-	/*
-	 * Whether EVPN is enabled or not. Only in the EVPN instance.
-	 */
-	int advertise_all_vni;
+	int evpn_underlay_enabled;
 
 	/*
 	 * Whether we are advertising g/w macip in EVPN or not.

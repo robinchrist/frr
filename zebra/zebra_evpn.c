@@ -1022,14 +1022,12 @@ void *zebra_evpn_alloc(void *p)
  */
 struct zebra_evpn *zebra_evpn_lookup(vni_t vni)
 {
-	struct zebra_vrf *zvrf;
 	struct zebra_evpn tmp_vni;
 	struct zebra_evpn *zevpn = NULL;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
 	memset(&tmp_vni, 0, sizeof(tmp_vni));
 	tmp_vni.vni = vni;
-	zevpn = hash_lookup(zvrf->evpn_table, &tmp_vni);
+	zevpn = hash_lookup(zrouter.evpn_table, &tmp_vni);
 
 	return zevpn;
 }
@@ -1040,14 +1038,12 @@ struct zebra_evpn *zebra_evpn_lookup(vni_t vni)
 struct zebra_evpn *zebra_evpn_add(vni_t vni)
 {
 	char buffer[80];
-	struct zebra_vrf *zvrf;
 	struct zebra_evpn tmp_zevpn;
 	struct zebra_evpn *zevpn = NULL;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
 	memset(&tmp_zevpn, 0, sizeof(tmp_zevpn));
 	tmp_zevpn.vni = vni;
-	zevpn = hash_get(zvrf->evpn_table, &tmp_zevpn, zebra_evpn_alloc);
+	zevpn = hash_get(zrouter.evpn_table, &tmp_zevpn, zebra_evpn_alloc);
 
 	zebra_evpn_es_evi_init(zevpn);
 
@@ -1067,10 +1063,7 @@ struct zebra_evpn *zebra_evpn_add(vni_t vni)
  */
 int zebra_evpn_del(struct zebra_evpn *zevpn)
 {
-	struct zebra_vrf *zvrf;
 	struct zebra_evpn *tmp_zevpn;
-
-	zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	zevpn->svi_if = NULL;
 
@@ -1087,7 +1080,7 @@ int zebra_evpn_del(struct zebra_evpn *zevpn)
 	zebra_evpn_es_evi_cleanup(zevpn);
 
 	/* Free the EVPN hash entry and allocated memory. */
-	tmp_zevpn = hash_release(zvrf->evpn_table, zevpn);
+	tmp_zevpn = hash_release(zrouter.evpn_table, zevpn);
 	XFREE(MTYPE_ZEVPN, tmp_zevpn);
 
 	return 0;
@@ -1112,8 +1105,11 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	/* TODO: EVPN Multi-Underlay-VRF */
-	zclient_create_header(s, ZEBRA_L2VNI_ADD, zebra_evpn_get_master_underlay_vrf_id());
+	/* Header carries the underlay VRF of the VNI (derived from the VXLAN
+	 * interface's link VRF)
+	 */
+	zclient_create_header(s, ZEBRA_L2VNI_ADD,
+			      zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if));
 	stream_putl(s, zevpn->vni);
 	stream_put_ipaddr(s, &zevpn->local_vtep_ip);
 	stream_put(s, &zevpn->vrf_id, sizeof(vrf_id_t)); /* tenant vrf */
@@ -1164,8 +1160,11 @@ int zebra_evpn_send_del_to_client(struct zebra_evpn *zevpn)
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 	stream_reset(s);
 
-	/* TODO: EVPN Multi-Underlay-VRF */
-	zclient_create_header(s, ZEBRA_L2VNI_DEL, zebra_evpn_get_master_underlay_vrf_id());
+	/* Header carries the underlay VRF of the VNI (derived from the VXLAN
+	 * interface's link VRF)
+	 */
+	zclient_create_header(s, ZEBRA_L2VNI_DEL,
+			      zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if));
 	stream_putl(s, zevpn->vni);
 
 	/* Write packet size. */

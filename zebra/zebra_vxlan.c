@@ -2395,8 +2395,11 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	/* The message is used for both vni add and/or update like
 	 * vrr mac is added for l3vni SVI.
 	 */
-	/* TODO: EVPN Multi-Underlay-VRF */
-	zclient_create_header(s, ZEBRA_L3VNI_ADD, zebra_evpn_get_master_underlay_vrf_id());
+	/* Header carries the underlay VRF of the VNI (derived from the VXLAN
+	 * interface's link VRF)
+	 */
+	zclient_create_header(s, ZEBRA_L3VNI_ADD,
+			      zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if));
 	stream_putl(s, zl3vni_vrf_id(zl3vni)); /* Actual VRF ID */
 	stream_putl(s, zl3vni->vni);
 	stream_put(s, &svi_rmac, sizeof(struct ethaddr));
@@ -2412,7 +2415,8 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug("Send L3VNI_ADD %u VRF %s Underlay VRF %s RMAC %pEA VRR %pEA local-ip %pIA filter %s to %s",
 			   zl3vni->vni, vrf_id_to_name(zl3vni_vrf_id(zl3vni)),
-			   vrf_id_to_name(zebra_evpn_get_master_underlay_vrf_id()), &svi_rmac,
+			   vrf_id_to_name(zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if)),
+			   &svi_rmac,
 			   &vrr_rmac, &zl3vni->local_vtep_ip,
 			   CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
 				   ? "prefix-routes-only"
@@ -2438,8 +2442,11 @@ static int zl3vni_send_del_to_client(struct zebra_l3vni *zl3vni)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	/* TODO: EVPN Multi-Underlay-VRF */
-	zclient_create_header(s, ZEBRA_L3VNI_DEL, zebra_evpn_get_master_underlay_vrf_id());
+	/* Header carries the underlay VRF of the VNI (derived from the VXLAN
+	 * interface's link VRF)
+	 */
+	zclient_create_header(s, ZEBRA_L3VNI_DEL,
+			      zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if));
 	stream_putl(s, zl3vni_vrf_id(zl3vni)); /* Actual VRF ID */
 	stream_putl(s, zl3vni->vni);
 
@@ -3211,7 +3218,7 @@ void zebra_vxlan_print_neigh_all_vni(struct vty *vty, struct zebra_vrf *zvrf,
 	args[1] = json;
 	args[2] = (void *)(ptrdiff_t)print_dup;
 
-	hash_iterate(zvrf->evpn_table,
+	hash_iterate(zrouter.evpn_table,
 		     (void (*)(struct hash_bucket *,
 			       void *))zevpn_print_neigh_hash_all_evpn,
 		     args);
@@ -3242,7 +3249,7 @@ void zebra_vxlan_print_neigh_all_vni_detail(struct vty *vty,
 	args[1] = json;
 	args[2] = (void *)(ptrdiff_t)print_dup;
 
-	hash_iterate(zvrf->evpn_table,
+	hash_iterate(zrouter.evpn_table,
 		     (void (*)(struct hash_bucket *,
 			       void *))zevpn_print_neigh_hash_all_evpn_detail,
 		     args);
@@ -3519,7 +3526,7 @@ void zebra_vxlan_print_macs_all_vni(struct vty *vty, struct zebra_vrf *zvrf,
 	wctx.json = json;
 	wctx.top_json = json;
 	wctx.print_dup = print_dup;
-	hash_iterate(zvrf->evpn_table, zevpn_print_mac_hash_all_evpn, &wctx);
+	hash_iterate(zrouter.evpn_table, zevpn_print_mac_hash_all_evpn, &wctx);
 
 	if (use_json) {
 		frr_json_set_complete(json);
@@ -3555,7 +3562,7 @@ void zebra_vxlan_print_macs_all_vni_detail(struct vty *vty,
 
 	wctx.top_json = json;
 
-	hash_iterate(zvrf->evpn_table, zevpn_print_mac_hash_all_evpn_detail,
+	hash_iterate(zrouter.evpn_table, zevpn_print_mac_hash_all_evpn_detail,
 		     &wctx);
 
 	if (use_json) {
@@ -3587,7 +3594,7 @@ void zebra_vxlan_print_macs_all_vni_vtep(struct vty *vty, struct zebra_vrf *zvrf
 	wctx.flags = SHOW_REMOTE_MAC_FROM_VTEP;
 	wctx.r_vtep_ip = *vtep_ip;
 	wctx.json = json;
-	hash_iterate(zvrf->evpn_table, zevpn_print_mac_hash_all_evpn, &wctx);
+	hash_iterate(zrouter.evpn_table, zevpn_print_mac_hash_all_evpn, &wctx);
 
 	if (use_json)
 		vty_json(vty, json);
@@ -3955,7 +3962,7 @@ int zebra_vxlan_clear_dup_detect_vni_all(struct zebra_vrf *zvrf)
 
 	args[0] = zvrf;
 
-	hash_iterate(zvrf->evpn_table,
+	hash_iterate(zrouter.evpn_table,
 		     (void (*)(struct hash_bucket *, void *))
 		     zevpn_clear_dup_detect_hash_vni_all, args);
 
@@ -4121,7 +4128,7 @@ void zebra_vxlan_print_evpn(struct vty *vty, bool uj)
 	zvrf = zebra_evpn_get_master_underlay_vrf();
 
 	num_l3vnis = hashcount(zrouter.l3vni_table);
-	num_l2vnis = hashcount(zvrf->evpn_table);
+	num_l2vnis = hashcount(zrouter.evpn_table);
 	num_vnis = num_l2vnis + num_l3vnis;
 
 	if (uj) {
@@ -4205,7 +4212,7 @@ void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
 	args[1] = json;
 
 	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
-		hash_iterate(zvrf->evpn_table,
+		hash_iterate(zrouter.evpn_table,
 			     (void (*)(struct hash_bucket *,
 				       void *))zebra_evpn_print_hash,
 			     args);
@@ -4294,7 +4301,7 @@ void zebra_vxlan_print_vnis_detail(struct vty *vty, struct zebra_vrf *zvrf,
 	zes.use_json = use_json;
 
 	if (filter != ZEBRA_PRINT_VNI_FILTER_L3)
-		hash_iterate(zvrf->evpn_table,
+		hash_iterate(zrouter.evpn_table,
 			     (void (*)(struct hash_bucket *,
 				       void *))zebra_evpn_print_hash_detail,
 			     &zes);
@@ -5447,12 +5454,9 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 				     int filter, int add)
 {
 	struct zebra_l3vni *zl3vni = NULL;
-	struct zebra_vrf *zvrf_evpn = NULL;
 	struct zebra_vxlan_vni *vnip = NULL;
 	struct zebra_if *vxlan_if_zif = NULL;
 	struct interface *br_if = NULL;
-
-	zvrf_evpn = zebra_evpn_get_master_underlay_vrf();
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug("vrf %s vni %u %s", zvrf_name(zvrf), vni,
@@ -5524,7 +5528,7 @@ void zebra_vxlan_process_vrf_vni_cmd(struct zebra_vrf *zvrf, vni_t vni,
 						    : "NIL");
 
 		/* formulate l2vni list */
-		hash_iterate(zvrf_evpn->evpn_table, zevpn_add_to_l3vni_list,
+		hash_iterate(zrouter.evpn_table, zevpn_add_to_l3vni_list,
 			     zl3vni);
 
 		if (is_l3vni_oper_up(zl3vni))
@@ -5661,7 +5665,7 @@ void zebra_vxlan_flood_control(ZAPI_HANDLER_ARGS)
 	/* Install or uninstall flood entries corresponding to
 	 * remote VTEPs.
 	 */
-	hash_iterate(zvrf->evpn_table,
+	hash_iterate(zrouter.evpn_table,
 		     (void (*)(struct hash_bucket *, void *))zebra_evpn_handle_flooding_remote_vteps,
 		     args);
 
@@ -5705,11 +5709,11 @@ void zebra_vxlan_advertise_svi_macip(ZAPI_HANDLER_ARGS)
 
 		if (advertise) {
 			zvrf->advertise_svi_macip = advertise;
-			hash_iterate(zvrf->evpn_table,
+			hash_iterate(zrouter.evpn_table,
 				     zebra_evpn_gw_macip_add_for_evpn_hash,
 				     NULL);
 		} else {
-			hash_iterate(zvrf->evpn_table,
+			hash_iterate(zrouter.evpn_table,
 				     zebra_evpn_svi_macip_del_for_evpn_hash,
 				     NULL);
 			zvrf->advertise_svi_macip = advertise;
@@ -5878,11 +5882,11 @@ void zebra_vxlan_advertise_gw_macip(ZAPI_HANDLER_ARGS)
 		zvrf->advertise_gw_macip = advertise;
 
 		if (advertise_gw_macip_enabled(zevpn))
-			hash_iterate(zvrf->evpn_table,
+			hash_iterate(zrouter.evpn_table,
 				     zebra_evpn_gw_macip_add_for_evpn_hash,
 				     NULL);
 		else
-			hash_iterate(zvrf->evpn_table,
+			hash_iterate(zrouter.evpn_table,
 				     zebra_evpn_gw_macip_del_for_evpn_hash,
 				     NULL);
 
@@ -6004,11 +6008,12 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 			   is_evpn_enabled() ? "enabled" : "disabled",
 			   flood_ctrl);
 
-	if (zvrf->advertise_all_vni == advertise)
+	if (zvrf->evpn_underlay_enabled == advertise)
 		return;
 
-	zvrf->advertise_all_vni = advertise;
+	zvrf->evpn_underlay_enabled = advertise;
 	if (EVPN_ENABLED(zvrf)) {
+		zrouter.evpn_underlay_count++;
 		zrouter.evpn_vrf = zvrf;
 
 		/* Note BUM handling */
@@ -6021,7 +6026,7 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 		zevpn_build_hash_table();
 
 		/* Add all SVI (L3 GW) MACs to BGP*/
-		hash_iterate(zvrf->evpn_table,
+		hash_iterate(zrouter.evpn_table,
 			     zebra_evpn_gw_macip_add_for_evpn_hash, NULL);
 
 		/* Read the MAC FDB */
@@ -6033,7 +6038,7 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 		/* Cleanup VTEPs for all EVPNs - uninstall from
 		 * kernel and free entries.
 		 */
-		hash_iterate(zvrf->evpn_table, zebra_evpn_vxlan_cleanup_all,
+		hash_iterate(zrouter.evpn_table, zebra_evpn_vxlan_cleanup_all,
 			     zvrf);
 
 		/* Delete all ESs in BGP */
@@ -6041,6 +6046,9 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 
 		/* cleanup all l3vnis */
 		hash_iterate(zrouter.l3vni_table, zl3vni_cleanup_all, NULL);
+
+		assert(zrouter.evpn_underlay_count > 0);
+		zrouter.evpn_underlay_count--;
 
 		/* Mark as "no EVPN VRF" */
 		zrouter.evpn_vrf = NULL;
@@ -6061,10 +6069,9 @@ void zebra_vxlan_init_tables(struct zebra_vrf *zvrf)
 	if (!zvrf)
 		return;
 
-	snprintf(buffer, sizeof(buffer), "Zebra VRF EVPN Table: %s",
-		 zvrf->vrf->name);
-	zvrf->evpn_table = hash_create_size(8, zebra_evpn_hash_keymake,
-					    zebra_evpn_hash_cmp, buffer);
+	/* The L2VNI/EVPN table is global (zrouter.evpn_table) and created in
+	 * zebra_vxlan_init(); only the per-VRF tables are created here.
+	 */
 
 	snprintf(buffer, sizeof(buffer), "Zebra VxLAN SG Table: %s",
 		 zvrf->vrf->name);
@@ -6075,13 +6082,15 @@ void zebra_vxlan_init_tables(struct zebra_vrf *zvrf)
 /* Cleanup EVPN info, but don't free the table. */
 void zebra_vxlan_cleanup_tables(struct zebra_vrf *zvrf)
 {
-	struct zebra_vrf *evpn_zvrf = zebra_evpn_get_master_underlay_vrf();
-
-	hash_iterate(zvrf->evpn_table, zebra_evpn_vxlan_cleanup_all, zvrf);
-	zebra_vxlan_cleanup_sg_table(zvrf);
-
-	if (zvrf == evpn_zvrf)
+	/* The EVPN table is global: only clean it up when the VRF going away
+	 * is an enabled underlay (otherwise its disappearance does not affect
+	 * the EVPN objects at all)
+	 */
+	if (EVPN_ENABLED(zvrf)) {
+		hash_iterate(zrouter.evpn_table, zebra_evpn_vxlan_cleanup_all, zvrf);
 		zebra_evpn_es_cleanup();
+	}
+	zebra_vxlan_cleanup_sg_table(zvrf);
 }
 
 /* Close all EVPN handling */
@@ -6089,13 +6098,32 @@ void zebra_vxlan_close_tables(struct zebra_vrf *zvrf)
 {
 	if (!zvrf)
 		return;
-	hash_iterate(zvrf->evpn_table, zebra_evpn_vxlan_cleanup_all, zvrf);
-	hash_free(zvrf->evpn_table);
+	if (EVPN_ENABLED(zvrf))
+		hash_iterate(zrouter.evpn_table, zebra_evpn_vxlan_cleanup_all, zvrf);
 	if (zvrf->vxlan_sg_table) {
 		zebra_vxlan_cleanup_sg_table(zvrf);
 		hash_free(zvrf->vxlan_sg_table);
 		zvrf->vxlan_sg_table = NULL;
 	}
+}
+
+/* Derive the underlay VRF of a VXLAN interface: the VRF of its link
+ * (underlying) interface, falling back to the VXLAN interface's own VRF.
+ * Without any interface (configured-only state), fall back to the master
+ * underlay VRF while the single-underlay limitation is in place.
+ */
+vrf_id_t zebra_vxlan_if_underlay_vrf_id(const struct interface *vxlan_if)
+{
+	const struct zebra_if *zif;
+
+	if (!vxlan_if)
+		return zebra_evpn_get_master_underlay_vrf_id();
+
+	zif = vxlan_if->info;
+	if (zif && zif->link)
+		return zif->link->vrf->vrf_id;
+
+	return vxlan_if->vrf->vrf_id;
 }
 
 /* init the l3vni table */
@@ -6104,9 +6132,14 @@ void zebra_vxlan_init(void)
 	zrouter.l3vni_table = hash_create(l3vni_hash_keymake, l3vni_hash_cmp,
 					  "Zebra VRF L3 VNI table");
 
+	zrouter.evpn_table = hash_create_size(8, zebra_evpn_hash_keymake,
+					      zebra_evpn_hash_cmp,
+					      "Zebra EVPN (L2VNI) table");
+
 	zebra_neigh_db_init(svd_nh_table);
 
 	zrouter.evpn_vrf = NULL;
+	zrouter.evpn_underlay_count = 0;
 	zebra_evpn_mh_init();
 }
 
@@ -6124,6 +6157,7 @@ void zebra_vxlan_terminate(void)
 void zebra_vxlan_disable(void)
 {
 	hash_free(zrouter.l3vni_table);
+	hash_free(zrouter.evpn_table);
 	zebra_evpn_mh_terminate();
 }
 
@@ -6479,7 +6513,11 @@ static void zebra_evpn_vrf_cfg_cleanup(struct zebra_vrf *zvrf, bool stale_cleanu
 	struct l2vni_walk_ctx wctx;
 
 	if (!stale_cleanup) {
-		zvrf->advertise_all_vni = 0;
+		if (zvrf->evpn_underlay_enabled) {
+			assert(zrouter.evpn_underlay_count > 0);
+			zrouter.evpn_underlay_count--;
+		}
+		zvrf->evpn_underlay_enabled = 0;
 		zvrf->advertise_gw_macip = 0;
 		zvrf->advertise_svi_macip = 0;
 		zvrf->vxlan_flood_ctrl = VXLAN_FLOOD_HEAD_END_REPL;
@@ -6487,7 +6525,7 @@ static void zebra_evpn_vrf_cfg_cleanup(struct zebra_vrf *zvrf, bool stale_cleanu
 
 	wctx.gr_stale_cleanup = stale_cleanup;
 	wctx.gr_cleanup_time = gr_cleanup_time;
-	hash_iterate(zvrf->evpn_table, zebra_evpn_cfg_cleanup, &wctx);
+	hash_iterate(zrouter.evpn_table, zebra_evpn_cfg_cleanup, &wctx);
 
 	if (zvrf->l3vni)
 		zl3vni = zl3vni_lookup(zvrf->l3vni);

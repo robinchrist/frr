@@ -387,10 +387,8 @@ static void zebra_evpn_es_evi_show_one_evpn_hash_cb(struct hash_bucket *bucket,
 void zebra_evpn_es_evi_show(struct vty *vty, bool uj, int detail)
 {
 	json_object *json_array = NULL;
-	struct zebra_vrf *zvrf;
 	struct evpn_mh_show_ctx wctx;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
 	if (uj)
 		json_array = json_object_new_array();
 
@@ -404,7 +402,7 @@ void zebra_evpn_es_evi_show(struct vty *vty, bool uj, int detail)
 		vty_out(vty, "%-8s %-30s %-4s\n", "VNI", "ESI", "Type");
 	}
 	/* Display all L2-VNIs */
-	hash_iterate(zvrf->evpn_table, zebra_evpn_es_evi_show_one_evpn_hash_cb,
+	hash_iterate(zrouter.evpn_table, zebra_evpn_es_evi_show_one_evpn_hash_cb,
 			&wctx);
 
 	if (uj)
@@ -3676,10 +3674,7 @@ static int zebra_evpn_es_get_one_base_evpn_cb(struct hash_bucket *b, void *data)
  */
 static void zebra_evpn_es_get_one_base_evpn(void)
 {
-	struct zebra_vrf *zvrf;
-
-	zvrf = zebra_evpn_get_master_underlay_vrf();
-	hash_walk(zvrf->evpn_table, zebra_evpn_es_get_one_base_evpn_cb, NULL);
+	hash_walk(zrouter.evpn_table, zebra_evpn_es_get_one_base_evpn_cb, NULL);
 }
 
 /*****************************************************************************

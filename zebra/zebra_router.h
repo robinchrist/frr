@@ -202,6 +202,15 @@ struct zebra_router {
 	 */
 	struct zebra_vrf *evpn_vrf;
 
+	/* Global L2VNI/EVPN table (VNIs are unique per namespace; entries
+	 * know their derived underlay VRF). Moved here from the per-VRF
+	 * zebra_vrf so multiple underlay VRFs can share it.
+	 */
+	struct hash *evpn_table;
+
+	/* Number of VRFs currently enabled as EVPN underlay */
+	uint32_t evpn_underlay_count;
+
 	struct zebra_architectural_values zav;
 	bool gr_stale_cleanup_time_recorded;
 	bool gr_update_pending_time_recorded;
