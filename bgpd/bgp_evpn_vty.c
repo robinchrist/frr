@@ -5234,6 +5234,13 @@ DEFUN(show_bgp_l2vpn_evpn_route_rd,
 		if (uj)
 			vty_out(vty, "{\n");
 
+		/* NOTE: evpn_show_all_routes uses incremental JSON printing
+		 * (vty_out() directly for RD keys), not json_object_object_add().
+		 * With ≥2 underlays this still produces duplicate "rd":{} keys in
+		 * the output stream when the same RD appears in multiple underlays.
+		 * Fixing the incremental path requires converting evpn_show_all_routes
+		 * to pure json_object tree building — deferred.
+		 */
 		evpn_show_all_routes_all_underlays(vty, type, json, 1, false, false);
 
 		if (uj) {
