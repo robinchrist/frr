@@ -2171,14 +2171,13 @@ void zevpn_compute_dp_state(struct zebra_evpn *zevpn,
 	/* Underlay checks (only meaningful when a VXLAN interface is bound). */
 	if (zevpn->vxlan_if &&
 	    !zebra_vxlan_if_underlay_enabled(zevpn->vxlan_if)) {
-		vrf_id_t derived_id =
-			zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if);
-		vrf_id_t master_id =
-			zebra_evpn_get_master_underlay_vrf_id();
-
 		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
-		*reason = (zrouter.evpn_underlay_count > 0
-			   && derived_id != master_id)
+		/* Distinguish "no underlay enabled anywhere" from "a different
+		 * underlay VRF is enabled but not this VNI's."  The old code
+		 * compared against a single last-write-wins master VRF ID which
+		 * is nondeterministic with ≥2 underlays; use the count instead.
+		 */
+		*reason = (zrouter.evpn_underlay_count > 0)
 				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
 				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
 		return;
@@ -2552,17 +2551,13 @@ static void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
 	/* Underlay checks: only meaningful when a VXLAN interface is bound. */
 	if (zl3vni->vxlan_if &&
 	    !zebra_vxlan_if_underlay_enabled(zl3vni->vxlan_if)) {
-		vrf_id_t derived_id =
-			zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if);
-		vrf_id_t master_id =
-			zebra_evpn_get_master_underlay_vrf_id();
-
 		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
-		/* Distinguish "EVPN not enabled anywhere" from "VNI is in the
-		 * wrong (not-underlay) VRF while another VRF is an underlay."
+		/* Distinguish "no underlay enabled anywhere" from "a different
+		 * underlay VRF is enabled but not this VNI's."  Use the count
+		 * directly; the old master-VRF comparison was nondeterministic
+		 * with ≥2 underlays (last-write-wins).
 		 */
-		*reason = (zrouter.evpn_underlay_count > 0
-			   && derived_id != master_id)
+		*reason = (zrouter.evpn_underlay_count > 0)
 				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
 				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
 		return;
