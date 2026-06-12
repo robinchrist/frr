@@ -4011,20 +4011,20 @@ struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id)
  * The default underlay is the instance that overlay objects (tenant VRFs /
  * EVIs) bind to when they do not name their own `underlay-vrf`. It is the
  * deterministic replacement for the former "EVPN master instance" singleton:
- *   - if `default-underlay VRF` is configured (top-level `evpn` node), that
+ *   - if `default-underlay-vrf VRF` is configured (top-level `evpn` node), that
  *     instance (when it is actually a configured underlay), else
  *   - the default VRF instance, when it is itself a configured underlay.
  * Anything else (e.g. the sole underlay living in a non-default VRF with no
- * `default-underlay` configured) is intentionally unresolved.
+ * `default-underlay-vrf` configured) is intentionally unresolved.
  */
-struct bgp *bgp_get_evpn_default_underlay(void)
+struct bgp *bgp_get_evpn_default_underlay_vrf(void)
 {
 	struct bgp *underlay = NULL;
 	struct bgp *bgp_default;
 
-	if (bgp_evpn_gbl()->default_underlay_name)
+	if (bgp_evpn_gbl()->default_underlay_vrf_name)
 		underlay = bgp_evpn_underlay_lookup_by_name(
-			bgp_evpn_gbl()->default_underlay_name);
+			bgp_evpn_gbl()->default_underlay_vrf_name);
 
 	if (!underlay) {
 		bgp_default = bgp_get_default();
@@ -4526,7 +4526,7 @@ int bgp_delete(struct bgp *bgp)
 	 * always torn down exactly once. Per-underlay ES / route-table teardown
 	 * remains part of the deferred multi-underlay work.
 	 */
-	if (bgp == bgp_get_evpn_default_underlay() ||
+	if (bgp == bgp_get_evpn_default_underlay_vrf() ||
 	    (bgp->evpn_vxlan_underlay_cfgd &&
 	     bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) == 1)) {
 		bgp_evpn_es_cleanup_routes(bgp);

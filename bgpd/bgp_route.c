@@ -591,7 +591,7 @@ int bgp_dest_set_defer_flag(struct bgp_dest *dest, bool delete)
 	if (!set_flag)
 		return -1;
 
-	struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 	/* Set the flag BGP_NODE_SELECT_DEFER on prefix/dest if route selection
 	 * deferral timer is active. RFC4724 says that restarting BGP node must
@@ -4708,7 +4708,7 @@ void bgp_do_deferred_path_selection(struct bgp *bgp, afi_t afi, safi_t safi)
 		 */
 		bgp_evpn_handle_deferred_bestpath_for_vrfs();
 	} else if (safi == SAFI_UNICAST && (afi == AFI_IP || afi == AFI_IP6)) {
-		struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay();
+		struct bgp *bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 		if (bgp->vrf_id == VRF_DEFAULT) {
 			/*

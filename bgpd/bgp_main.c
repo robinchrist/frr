@@ -167,7 +167,7 @@ void sigusr1(void)
 */
 static FRR_NORETURN void bgp_exit(int status)
 {
-	struct bgp *bgp, *bgp_default, *bgp_default_underlay;
+	struct bgp *bgp, *bgp_default, *bgp_default_underlay_vrf;
 	struct listnode *node, *nnode;
 
 	/* it only makes sense for this to be called on a clean exit */
@@ -181,16 +181,16 @@ static FRR_NORETURN void bgp_exit(int status)
 	/* Snapshot the default underlay once: it owns the global EVI/ES cleanup
 	 * (see bgp_delete) and must be torn down after its dependent overlays.
 	 */
-	bgp_default_underlay = bgp_get_evpn_default_underlay();
+	bgp_default_underlay_vrf = bgp_get_evpn_default_underlay_vrf();
 
 	/* reverse bgp_master_init */
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (bgp_default == bgp || bgp_default_underlay == bgp)
+		if (bgp_default == bgp || bgp_default_underlay_vrf == bgp)
 			continue;
 		bgp_delete(bgp);
 	}
-	if (bgp_default_underlay && bgp_default_underlay != bgp_default)
-		bgp_delete(bgp_default_underlay);
+	if (bgp_default_underlay_vrf && bgp_default_underlay_vrf != bgp_default)
+		bgp_delete(bgp_default_underlay_vrf);
 	if (bgp_default)
 		bgp_delete(bgp_default);
 

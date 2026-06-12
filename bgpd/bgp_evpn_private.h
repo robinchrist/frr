@@ -1072,7 +1072,7 @@ static inline void es_get_system_mac(esi_t *esi,
 
 static inline bool bgp_evpn_is_svi_macip_enabled(struct bgp_evpn_evi *evi)
 {
-	struct bgp *underlay = bgp_get_evpn_default_underlay();
+	struct bgp *underlay = bgp_get_evpn_default_underlay_vrf();
 
 	return ((underlay && underlay->evpn_info &&
 		 underlay->evpn_info->advertise_svi_macip) ||

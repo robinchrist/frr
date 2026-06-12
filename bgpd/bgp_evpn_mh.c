@@ -1752,7 +1752,7 @@ void bgp_evpn_path_es_link(struct bgp_path_info *pi, vni_t vni, esi_t *esi)
 		return;
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (!bgp_evpn_mi)
 		return;
 
@@ -1884,7 +1884,7 @@ static struct bgp_evpn_es_frag *bgp_evpn_es_frag_new(struct bgp_evpn_es *es)
 	bf_assign_index(bm->rd_idspace, es_frag->rd_id);
 	es_frag->prd.family = AF_UNSPEC;
 	es_frag->prd.prefixlen = 64;
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (bgp_evpn_mi) {
 		snprintfrr(buf, sizeof(buf), "%pI4:%hu",
 			   &bgp_evpn_mi->router_id, es_frag->rd_id);
@@ -1967,7 +1967,7 @@ static void bgp_evpn_es_frag_evi_del(struct bgp_evpn_es_evi *es_evi,
 	 * the fragment
 	 */
 	if (send_ead_del_if_empty && !listcount(es_frag->es_evi_frag_list)) {
-		bgp_evpn_mi = bgp_get_evpn_default_underlay();
+		bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("es %s frag %u ead-es route delete",
@@ -2228,7 +2228,7 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 		zlog_debug("update paths linked to es %s on oper chg",
 			   es->esi_str);
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (!bgp_evpn_mi)
 		return;
 
@@ -3881,7 +3881,7 @@ bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 				es_evi->es->esi_str,
 				es_evi->evi->vni);
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 	/* remove the es_evi from the es_frag before sending the update */
 	bgp_evpn_es_frag_evi_del(es_evi, true);
@@ -4115,7 +4115,7 @@ static void bgp_evpn_remote_es_evi_flush(struct bgp_evpn_es_evi *es_evi)
 	struct bgp_evpn_es_evi_vtep *evi_vtep;
 	struct bgp *bgp_evpn_mi;
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (!bgp_evpn_mi)
 		return;
 
@@ -4355,7 +4355,7 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 		json_array = json_object_new_array();
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 	if (!json_array && !detail) {
 		vty_out(vty, "Flags: L local, R remote, I inconsistent\n");
@@ -4385,7 +4385,7 @@ void bgp_evpn_es_evi_show_vni(struct vty *vty, vni_t vni,
 		json_array = json_object_new_array();
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (bgp_evpn_mi)
 		evi =  bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
 
@@ -5244,7 +5244,7 @@ void bgp_evpn_switch_ead_evi_tx(void)
 	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_es *es = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (!bgp_evpn_mi)
 		return;
 
@@ -5268,7 +5268,7 @@ void bgp_evpn_switch_ead_evi_rx(void)
 	struct listnode *vtep_node = NULL;
 	struct listnode *vtep_next = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay();
+	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 	if (!bgp_evpn_mi)
 		return;
 

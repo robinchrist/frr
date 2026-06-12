@@ -253,7 +253,7 @@ def get_normalized_ebgp_multihop_line(line):
 ctx_keywords = {
     "evpn": {
         "vlan-based-evi ": {},
-        "default-underlay ": {},
+        "default-underlay-vrf ": {},
     },
     "router bgp ": {
         "address-family ": {

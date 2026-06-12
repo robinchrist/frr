@@ -188,13 +188,13 @@ struct bgp_evpn_global {
 	 */
 	struct bgp_evpn_underlays_head underlays;
 
-	/* Configured name of the default underlay (`default-underlay VRF` under
+	/* Configured name of the default underlay (`default-underlay-vrf VRF` under
 	 * the top-level `evpn` node). Overlay objects (tenant VRFs / EVIs) that
 	 * do not name their own `underlay-vrf` bind to this. Stored by name and
-	 * resolved lazily via bgp_get_evpn_default_underlay(); when unset, the
+	 * resolved lazily via bgp_get_evpn_default_underlay_vrf(); when unset, the
 	 * implicit default is the default VRF (if it is itself an underlay).
 	 */
-	char *default_underlay_name;
+	char *default_underlay_vrf_name;
 
 	/* Name registry for EVIs that are NOT scoped to a tenant VRF:
 	 * tenant-less EVIs (future top-level `evpn` node) as well as
@@ -1047,7 +1047,7 @@ struct bgp {
 	 * now an alias for vxlan-underlay + auto-discover-vnis). Multiple
 	 * instances may set this; overlay objects that do not name an
 	 * `underlay-vrf` bind to the default underlay
-	 * (see bgp_get_evpn_default_underlay()).
+	 * (see bgp_get_evpn_default_underlay_vrf()).
 	 */
 	bool evpn_vxlan_underlay_cfgd;
 
@@ -2816,7 +2816,7 @@ extern struct bgp *bgp_lookup(as_t as, const char *name);
 extern struct bgp *bgp_lookup_by_name(const char *name);
 extern struct bgp *bgp_lookup_by_name_filter(const char *name, bool filter_auto);
 extern struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id);
-extern struct bgp *bgp_get_evpn_default_underlay(void);
+extern struct bgp *bgp_get_evpn_default_underlay_vrf(void);
 extern struct peer *peer_lookup(struct bgp *bgp, union sockunion *su);
 extern struct peer *peer_lookup_by_conf_if(struct bgp *bgp, const char *ifname);
 extern struct peer *peer_lookup_by_hostname(struct bgp *bgp, const char *hostname);

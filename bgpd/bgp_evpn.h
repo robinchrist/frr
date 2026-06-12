@@ -143,7 +143,7 @@ static inline bool is_pi_family_evpn(struct bgp_path_info *pi)
 
 static inline bool evpn_resolve_overlay_index(void)
 {
-	struct bgp *underlay = bgp_get_evpn_default_underlay();
+	struct bgp *underlay = bgp_get_evpn_default_underlay_vrf();
 
 	return underlay ? underlay->resolve_overlay_index : false;
 }
