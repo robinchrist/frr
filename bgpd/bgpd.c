@@ -4369,16 +4369,23 @@ int bgp_delete(struct bgp *bgp)
 	bgp_delete_zebra_announce_queue(&bm->zebra_announce_head, bgp);
 
 	/*
-	 * Pop all VPNs yet to be processed for remote routes install if the
-	 * bgp-evpn instance is getting deleted
+	 * Drain VNIs waiting for remote-route install that belong to this
+	 * underlay.  Entries belonging to other underlays must be preserved:
+	 * pop the whole queue and push non-matching entries back onto the tail.
+	 * NULL-underlay entries (unresolved/import-only) are kept conservatively
+	 * — they are not this underlay's work and will be handled when their own
+	 * underlay is deleted or the resolver settles.
 	 */
 	if (bgp->evpn_vxlan_underlay_cfgd) {
 		b_l2_cnt = zebra_l2_vni_count(&bm->zebra_l2_vni_head);
 		vni_count = b_l2_cnt;
-		while (vni_count) {
+		while (vni_count--) {
 			evi = zebra_l2_vni_pop(&bm->zebra_l2_vni_head);
-			UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
-			vni_count--;
+			if (bgp_evpn_evi_get_underlay(evi) == bgp)
+				UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
+			else
+				zebra_l2_vni_add_tail(&bm->zebra_l2_vni_head,
+						      evi);
 		}
 	}
 
