@@ -422,22 +422,10 @@ static int zebra_vxlan_if_add_vni(struct interface *ifp,
 	 */
 	if (!zebra_vxlan_if_underlay_enabled(ifp)) {
 		if (zl2vni_intent_lookup(vni)) {
-			/* Create or update the tier-2 diagnostic object. */
-			assert(zif);
-			br_if = zif->brslave_info.br_if;
-
-			zevpn = zebra_evpn_lookup(vni);
-			if (!zevpn)
-				zevpn = zebra_evpn_add(vni);
-
-			zevpn_vxlan_if_set(zevpn, ifp, true /* set */);
-			if (br_if)
-				zevpn_bridge_if_set(zevpn, br_if, true /* set */);
-
-			/* Emit MISCONFIGURED/UNDERLAY_NOT_ENABLED — no
-			 * MAC/neigh population (tier-3 data stays out).
+			/* Create or update the tier-2 diagnostic object so bgpd
+			 * sees MISCONFIGURED/UNDERLAY_NOT_ENABLED immediately.
 			 */
-			zebra_evpn_send_add_to_client(zevpn);
+			zebra_evpn_tier2_create_or_update(ifp, vni);
 		} else {
 			if (IS_ZEBRA_DEBUG_VXLAN)
 				zlog_debug("Intf %s(%u) VNI %u: underlay VRF %s not enabled as EVPN underlay - not serving",

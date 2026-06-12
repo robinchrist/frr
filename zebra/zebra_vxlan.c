@@ -6562,6 +6562,64 @@ void zebra_vxlan_close_tables(struct zebra_vrf *zvrf)
 	}
 }
 
+/* Create or update a tier-2 diagnostic zebra_evpn for an L2VNI whose derived
+ * underlay VRF is not yet enabled as an EVPN underlay.  Called from
+ * zebra_vxlan_if_add_vni() (interface arrives before intent) and from the
+ * ROLE_L2 ADD intent handler (intent arrives after interface).
+ */
+void zebra_evpn_tier2_create_or_update(struct interface *ifp, vni_t vni)
+{
+	struct zebra_if *zif = ifp->info;
+	struct interface *br_if;
+	struct zebra_evpn *zevpn;
+
+	assert(zif);
+	br_if = zif->brslave_info.br_if;
+
+	zevpn = zebra_evpn_lookup(vni);
+	if (!zevpn)
+		zevpn = zebra_evpn_add(vni);
+
+	zevpn_vxlan_if_set(zevpn, ifp, true /* set */);
+	if (br_if)
+		zevpn_bridge_if_set(zevpn, br_if, true /* set */);
+
+	/* Emit MISCONFIGURED/UNDERLAY_NOT_ENABLED. */
+	zebra_evpn_send_add_to_client(zevpn);
+}
+
+/* Callback context for the intent-after-interface tier-2 search. */
+struct zevpn_tier2_intent_ctx {
+	vni_t vni;
+	bool done;
+};
+
+static int zevpn_tier2_intent_vni_cb(struct zebra_if *zif,
+				     struct zebra_vxlan_vni *vnip, void *arg)
+{
+	struct zevpn_tier2_intent_ctx *ctx = arg;
+
+	if (!vnip || vnip->vni != ctx->vni)
+		return 0;
+	if (!zebra_vxlan_if_underlay_enabled(zif->ifp)) {
+		zebra_evpn_tier2_create_or_update(zif->ifp, ctx->vni);
+		ctx->done = true;
+	}
+	return 0;
+}
+
+static int zevpn_tier2_intent_ns_cb(struct interface *ifp, void *arg)
+{
+	struct zevpn_tier2_intent_ctx *ctx = arg;
+	struct zebra_if *zif = ifp->info;
+
+	if (!zif || zif->zif_type != ZEBRA_IF_VXLAN || ctx->done)
+		return NS_WALK_CONTINUE;
+
+	zebra_vxlan_if_vni_iterate(zif, zevpn_tier2_intent_vni_cb, arg);
+	return NS_WALK_CONTINUE;
+}
+
 /* Handle a VNI intent from the control plane (bgpd): declares which role a
  * VNI has (L3VNI of a tenant VRF / L2VNI of an EVI). Replaces zebra's own
  * `vrf X vni Y` configuration - the intent direction is reversed, bgpd is the
@@ -6679,11 +6737,22 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 		zl2vni_intent_add(vni, tenant_vrf_id, flags);
 		/* Re-emit for any dataplane VNI that already exists so bgpd
 		 * sees the updated (intent-aware) state immediately.
+		 * If no zebra_evpn exists yet, search the VXLAN interface
+		 * inventory: the interface may have arrived before the intent
+		 * and was left unserved because the underlay was not yet
+		 * enabled.  Create a tier-2 diagnostic object in that case.
 		 */
 		{
 			struct zebra_evpn *zevpn = zebra_evpn_lookup(vni);
-			if (zevpn)
+			if (zevpn) {
 				zebra_evpn_send_add_to_client(zevpn);
+			} else if (is_evpn_enabled()) {
+				struct zevpn_tier2_intent_ctx ctx = {
+					.vni = vni
+				};
+				zebra_ns_ifp_walk_all(zevpn_tier2_intent_ns_cb,
+						      &ctx);
+			}
 		}
 		break;
 	default:
