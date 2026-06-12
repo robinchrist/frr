@@ -7209,9 +7209,37 @@ static int zebra_evpn_pim_cfg_clean_up(struct zserv *client)
 	return 0;
 }
 
+static void l2vni_intent_free_cb(void *data)
+{
+	XFREE(MTYPE_ZL2VNI_INTENT, data);
+}
+
+/* Free a placeholder L3VNI (vrf_id==VRF_UNKNOWN) created by a bgpd intent
+ * for a tenant VRF that never appeared.  Client is gone; no message to send.
+ */
+static void zl3vni_placeholder_free_cb(struct hash_bucket *bucket, void *arg)
+{
+	struct zebra_l3vni *zl3vni = bucket->data;
+
+	if (zl3vni->vrf_id != VRF_UNKNOWN)
+		return;
+
+	zl3vni_del(zl3vni);
+}
+
 static int zebra_evpn_cfg_clean_up(struct zserv *client)
 {
 	if (client->proto == ZEBRA_ROUTE_BGP) {
+		/* L2 intents and placeholder L3VNIs are pure control-plane
+		 * state sent by bgpd.  Flush them unconditionally on disconnect
+		 * — they will be replayed on reconnect.  This applies to both
+		 * GR and non-GR paths: GR retains kernel (MAC/neigh/FDB) state
+		 * but not bgpd-driven intent metadata.
+		 */
+		hash_clean(zrouter.l2vni_intent_table, l2vni_intent_free_cb);
+		hash_iterate(zrouter.l3vni_table, zl3vni_placeholder_free_cb,
+			     NULL);
+
 		if (DYNAMIC_CLIENT_GR_DISABLED(client)) {
 			if (IS_ZEBRA_DEBUG_EVENT)
 				zlog_debug(
