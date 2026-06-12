@@ -42,15 +42,6 @@ enum bgp_evpn_rt_direction {
 	BGP_EVPN_RT_DIRECTION_BOTH   = 3
 };
 
-enum bgp_evpn_rt_origin {
-	/* implicitly generated auto route target (when no other route target is configured) */
-    BGP_EVPN_RT_ORIGIN_AUTO_IMPLICIT   = 0,
-	/* explicitly generated auto route target, e.g. `route-target import auto` in config */
-    BGP_EVPN_RT_ORIGIN_AUTO_EXPLICIT   = 1,
-	/* manually specified, e.g. regular `route-target import 123:456` in config */
-    BGP_EVPN_RT_ORIGIN_MANUAL          = 2,
-};
-
 /* type discriminator for non-autoderived user configured route targets */
 enum bgp_evpn_cfgd_rt_type {
 	/* Wildcard Route Target, *:<uint32> e.g. *:98765432 */
