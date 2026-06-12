@@ -4871,7 +4871,7 @@ DEFPY(show_bgp_l2vpn_evpn_vni,
 		}
 		num_vnis = num_evis + num_l3vnis;
 
-		/* Per-underlay knobs follow the most recently enabled underlay */
+		/* Per-underlay knobs follow the default-underlay-vrf */
 		const char *advertiseGatewayMacipStatus =
 			(bgp_evpn_mi && bgp_evpn_mi->advertise_gw_macip) ? "Enabled" : "Disabled";
 		const char *advertiseSviMacIpStatus =

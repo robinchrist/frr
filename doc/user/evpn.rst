@@ -917,5 +917,32 @@ Interaction with Ethernet Segments (ES/MH)
 Ethernet Segments (multi-homing) remain scoped to a single underlay per router.
 When a second underlay is configured, FRR logs a warning that ES/MH state and
 instance-wide knobs (advertise-pip, dup-addr-detection, etc.) will follow the
-most recently configured underlay. Deployments using ES/MH should use a single
-underlay VRF.
+**default-underlay-vrf** (see below). Deployments using ES/MH should use a
+single underlay VRF.
+
+Default Underlay VRF
+--------------------
+
+When an overlay object (tenant VRF or EVI) has no explicit ``underlay-vrf``
+statement, its underlay is resolved as follows:
+
+1. The VRF named by ``default-underlay-vrf`` in the top-level ``evpn`` block.
+2. If no ``default-underlay-vrf`` is configured: the default (global) BGP
+   instance, if that instance is itself a ``vxlan-underlay``.
+3. Otherwise: unresolved (NULL underlay) — the overlay exists in import-only
+   mode.
+
+Example with a non-default underlay VRF:
+
+.. code-block:: frr
+
+   evpn
+    default-underlay-vrf underlay-red
+
+This is required when all underlays are in non-default VRFs.  A sole underlay
+in the default VRF (the common single-fabric case) is automatically the default
+and does not need an explicit statement.
+
+ES/MH knobs and per-underlay instance-wide settings (advertise-pip,
+dup-addr-detection, mac-vrf soo) are applied against the resolved
+default-underlay-vrf instance.
