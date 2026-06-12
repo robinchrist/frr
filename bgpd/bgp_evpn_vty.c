@@ -1004,6 +1004,7 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 	unsigned long output_count = 0;
 	unsigned long total_count = 0;
 	json_object *json = NULL;
+	json_object *json_underlays = NULL;
 	json_object *json_array = NULL;
 	json_object *json_prefix_info = NULL;
 
@@ -1022,7 +1023,27 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 
 	multi_underlay = bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1;
 
+	/* For multi-underlay JSON: nest each underlay's output under its name
+	 * to prevent key collisions (bgpTableVersion, localAS, and same-RD
+	 * routes from different underlays).  Single-underlay keeps today's flat
+	 * schema unchanged for topotest compatibility.
+	 */
+	if (multi_underlay && use_json)
+		json_underlays = json_object_new_object();
+
 	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_evpn_mi) {
+		json_object *json_u = NULL;
+		json_object *json_cur;
+		unsigned long u_output = 0;
+		unsigned long u_total = 0;
+
+		if (multi_underlay && use_json) {
+			json_u = json_object_new_object();
+			json_cur = json_u;
+		} else {
+			json_cur = json;
+		}
+
 		header = 1;
 
 		if (multi_underlay && !use_json)
@@ -1056,6 +1077,7 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 					picomm = bgp_attr_get_community(pi->attr);
 
 					total_count++;
+					u_total++;
 					if (type == bgp_show_type_neighbor) {
 					        struct peer *peer = output_arg;
 
@@ -1117,18 +1139,18 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 					if (header) {
 						if (use_json) {
 							json_object_int_add(
-								json, "bgpTableVersion",
+								json_cur, "bgpTableVersion",
 								tbl_ver);
 							json_object_string_addf(
-								json,
+								json_cur,
 								"bgpLocalRouterId",
 								"%pI4",
 								&bgp_evpn_mi->router_id);
 							json_object_int_add(
-								json,
+								json_cur,
 								"defaultLocPrf",
 								bgp_evpn_mi->default_local_pref);
-							asn_asn2json(json, "localAS",
+							asn_asn2json(json_cur, "localAS",
 								     bgp_evpn_mi->as,
 								     bgp_evpn_mi->asnotation);
 						} else {
@@ -1171,8 +1193,10 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 					no_display = 1;
 				}
 
-				if (no_display)
+				if (no_display) {
 					output_count++;
+					u_output++;
+				}
 
 				if (use_json && json_array) {
 					const struct prefix *pfx =
@@ -1196,13 +1220,26 @@ static int bgp_show_ethernet_vpn(struct vty *vty, struct prefix_rd *prd,
 			}
 
 			if (use_json && json_nroute)
-				json_object_object_add(json, rd_str, json_nroute);
+				json_object_object_add(json_cur, rd_str, json_nroute);
+		}
+
+		if (multi_underlay && use_json) {
+			json_object_int_add(json_cur, "numPrefix", u_output);
+			json_object_int_add(json_cur, "totalPrefix", u_total);
+			json_object_object_add(json_underlays,
+					       bgp_evpn_mi->name_pretty, json_u);
 		}
 	}
 
+	if (multi_underlay && use_json)
+		json_object_object_add(json, "underlays", json_underlays);
+
 	if (use_json) {
-		json_object_int_add(json, "numPrefix", output_count);
-		json_object_int_add(json, "totalPrefix", total_count);
+		/* For single-underlay keep the flat schema (topotest compat). */
+		if (!multi_underlay) {
+			json_object_int_add(json, "numPrefix", output_count);
+			json_object_int_add(json, "totalPrefix", total_count);
+		}
 		vty_json(vty, json);
 	} else {
 		if (output_count == 0)
@@ -5205,8 +5242,21 @@ DEFUN(show_bgp_l2vpn_evpn_route_rd,
 			return CMD_SUCCESS;
 		}
 	} else {
-		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u)
-			evpn_show_route_rd(vty, bgp_u, &prd, type, json);
+		bool multi = uj &&
+			bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1;
+		json_object *json_u_list = multi ? json_object_new_object() : NULL;
+
+		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u) {
+			json_object *json_u = multi ? json_object_new_object() : json;
+
+			evpn_show_route_rd(vty, bgp_u, &prd, type, json_u);
+			if (multi)
+				json_object_object_add(json_u_list,
+						       bgp_u->name_pretty,
+						       json_u);
+		}
+		if (multi)
+			json_object_object_add(json, "underlays", json_u_list);
 	}
 
 	if (uj)
@@ -5285,12 +5335,27 @@ DEFUN(show_bgp_l2vpn_evpn_route_rd_macip,
 	if (uj)
 		json = json_object_new_object();
 
-	if (rd_all) {
-		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u)
-			evpn_show_route_rd_all_macip(vty, bgp_u, &mac, &ip, json);
-	} else {
-		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u)
-			evpn_show_route_rd_macip(vty, bgp_u, &prd, &mac, &ip, json);
+	{
+		bool multi = uj &&
+			bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1;
+		json_object *json_u_list = multi ? json_object_new_object() : NULL;
+
+		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u) {
+			json_object *json_u = multi ? json_object_new_object() : json;
+
+			if (rd_all)
+				evpn_show_route_rd_all_macip(vty, bgp_u, &mac,
+							     &ip, json_u);
+			else
+				evpn_show_route_rd_macip(vty, bgp_u, &prd, &mac,
+							 &ip, json_u);
+			if (multi)
+				json_object_object_add(json_u_list,
+						       bgp_u->name_pretty,
+						       json_u);
+		}
+		if (multi)
+			json_object_object_add(json, "underlays", json_u_list);
 	}
 
 	if (uj)
@@ -5340,12 +5405,27 @@ DEFPY(show_bgp_l2vpn_evpn_route_rd_prefix,
 		}
 	}
 
-	if (rd_all) {
-		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u)
-			evpn_show_route_rd_all_prefix(vty, bgp_u, &ip_prefix, json);
-	} else {
-		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u)
-			evpn_show_route_rd_prefix(vty, bgp_u, &prd, &ip_prefix, json);
+	{
+		bool multi = uj &&
+			bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1;
+		json_object *json_u_list = multi ? json_object_new_object() : NULL;
+
+		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp_u) {
+			json_object *json_u = multi ? json_object_new_object() : json;
+
+			if (rd_all)
+				evpn_show_route_rd_all_prefix(vty, bgp_u,
+							      &ip_prefix, json_u);
+			else
+				evpn_show_route_rd_prefix(vty, bgp_u, &prd,
+							  &ip_prefix, json_u);
+			if (multi)
+				json_object_object_add(json_u_list,
+						       bgp_u->name_pretty,
+						       json_u);
+		}
+		if (multi)
+			json_object_object_add(json, "underlays", json_u_list);
 	}
 
 	if (uj)
