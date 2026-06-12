@@ -353,6 +353,7 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 	char flags_buf[10];
 	char vni_buf[VNI_STR_LEN];
 	struct bgp_evpn_evi *evi_item;
+	struct bgp *underlay_bgp;
 
 	snprintf(flags_buf, sizeof(flags_buf), "%c", bgp_evpn_vrf_is_l3vni_live(bgp_vrf) ? '*' : ' ');
 
@@ -362,8 +363,12 @@ static void display_vrf_common(struct vty *vty, struct bgp *bgp_vrf, json_object
 	else
 		snprintf(vni_buf, sizeof(vni_buf), "N/A");
 
-	mac_soo_str = ecommunity_ecom2str(bgp_vrf->evpn_info->soo,
-				       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+	/* mac-vrf soo is configured on the underlay; read it from there. */
+	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
+	mac_soo_str = (underlay_bgp && underlay_bgp->evpn_info)
+			      ? ecommunity_ecom2str(underlay_bgp->evpn_info->soo,
+						    ECOMMUNITY_FORMAT_ROUTE_MAP, 0)
+			      : NULL;
 
 
 	/* We follow the VNI convention for now:
