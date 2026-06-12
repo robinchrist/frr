@@ -184,9 +184,17 @@ static void bgp_evpn_show_route_header(struct vty *vty, struct bgp *bgp,
 	if (json)
 		return;
 
-	vty_out(vty,
-		"BGP table version is %" PRIu64 ", local router ID is %pI4\n",
-		tbl_ver, &bgp->router_id);
+	if (bgp)
+		vty_out(vty,
+			"BGP table version is %" PRIu64
+			", local router ID is %pI4\n",
+			tbl_ver, &bgp->router_id);
+	else
+		vty_out(vty,
+			"BGP table version is %" PRIu64
+			", local router ID is unknown"
+			" (EVI has no resolved underlay)\n",
+			tbl_ver);
 	vty_out(vty, BGP_SHOW_SCODE_HEADER);
 	vty_out(vty, BGP_SHOW_OCODE_HEADER);
 	vty_out(vty,
@@ -742,7 +750,7 @@ static void bgp_evpn_show_routes_mac_ip_es(struct vty *vty, esi_t *esi,
 			if (json)
 				json_path = json_object_new_array();
 
-			if (detail)
+			if (detail && bgp_evpn_mi)
 				route_vty_out_detail(vty, bgp_evpn_mi, bd, bgp_dest_get_prefix(bd), pi,
 						     AFI_L2VPN, SAFI_EVPN, RPKI_NOT_BEING_USED,
 						     json_path, NULL, 0);
@@ -872,11 +880,10 @@ static void show_vni_routes(struct bgp *bgp, struct bgp_evpn_evi *evi,
 			if (json)
 				json_path = json_object_new_array();
 
-			if (detail)
+			if (detail && bgp)
 				route_vty_out_detail(vty, bgp, dest, &tmp_p, pi, AFI_L2VPN,
 						     SAFI_EVPN, RPKI_NOT_BEING_USED, json_path,
 						     NULL, 0);
-
 			else
 				route_vty_out(vty, &tmp_p, pi, 0, NULL, SAFI_EVPN, json_path,
 					      false, NULL);
@@ -2107,6 +2114,14 @@ static void evpn_show_route_vni_multicast(struct vty *vty, vni_t vni,
 		return;
 	}
 
+	if (!bgp) {
+		if (!json)
+			vty_out(vty,
+				"Path detail unavailable (EVI has no resolved underlay)\n");
+		bgp_dest_unlock_node(dest);
+		return;
+	}
+
 	if (json)
 		json_paths = json_object_new_array();
 
@@ -2210,6 +2225,14 @@ static void evpn_show_route_vni_macip(struct vty *vty,
 				vty_out(vty, "%% Network not in table\n");
 			return;
 		}
+	}
+
+	if (!bgp) {
+		if (!json)
+			vty_out(vty,
+				"Path detail unavailable (EVI has no resolved underlay)\n");
+		bgp_dest_unlock_node(dest);
+		return;
 	}
 
 	if (json)
