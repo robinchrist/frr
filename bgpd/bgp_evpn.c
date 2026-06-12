@@ -8709,6 +8709,18 @@ void evi_update_l2_intent(struct bgp_evpn_evi *evi)
 		send_bgp = evi->bgp_vrf ? evi->bgp_vrf : bgp_get_default();
 		if (!send_bgp)
 			goto withdraw;
+		/* Direct rebind (origination-l2vni X → Y without 'no' first):
+		 * withdraw the old VNI before advertising the new one, otherwise
+		 * zebra's intent table permanently retains the stale entry.
+		 */
+		if (evi->l2_intent_sent_vni &&
+		    evi->l2_intent_sent_vni != evi->vni) {
+			bgp_zebra_send_evpn_vni_intent(send_bgp,
+						       evi->l2_intent_sent_vni,
+						       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
+						       false, false);
+			evi->l2_intent_sent_vni = 0;
+		}
 		bgp_zebra_send_evpn_vni_intent(send_bgp, evi->vni,
 					       ZEBRA_EVPN_VNI_INTENT_ROLE_L2,
 					       false, true);
