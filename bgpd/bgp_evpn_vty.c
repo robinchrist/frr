@@ -3138,19 +3138,41 @@ int bgp_evpn_show_all_routes(struct vty *vty, struct bgp *bgp, int type,
 	return CMD_SUCCESS;
 }
 
-/* Iterate all underlay instances and show routes from each. */
+/* Iterate all underlay instances and show routes from each.
+ *
+ * Multi-underlay JSON: each underlay's (incrementally streamed) output is
+ * nested under its name inside an "underlays" object, so the same RD
+ * appearing in several underlays cannot produce duplicate keys - and the
+ * per-underlay numPrefix/numPaths totals stay unambiguous. Single-underlay
+ * output keeps the flat schema (same schema rule as
+ * bgp_show_ethernet_vpn()).
+ */
 static void evpn_show_all_routes_all_underlays(struct vty *vty, int type,
 					       json_object *json, int detail,
 					       bool self_orig, bool brief)
 {
 	struct bgp *u;
 	bool multi = bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) > 1;
+	bool first = true;
+
+	if (multi && json)
+		vty_out(vty, "\"underlays\":{");
 
 	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, u) {
 		if (multi && !json)
 			vty_out(vty, "\nUnderlay VRF: %s\n", u->name_pretty);
+		if (multi && json) {
+			vty_out(vty, "%s\"%s\":{", first ? "" : ",",
+				u->name_pretty);
+			first = false;
+		}
 		evpn_show_all_routes(vty, u, type, json, detail, self_orig, brief);
+		if (multi && json)
+			vty_out(vty, "}");
 	}
+
+	if (multi && json)
+		vty_out(vty, "}");
 }
 
 /*
@@ -5308,13 +5330,6 @@ DEFUN(show_bgp_l2vpn_evpn_route_rd,
 		if (uj)
 			vty_out(vty, "{\n");
 
-		/* NOTE: evpn_show_all_routes uses incremental JSON printing
-		 * (vty_out() directly for RD keys), not json_object_object_add().
-		 * With ≥2 underlays this still produces duplicate "rd":{} keys in
-		 * the output stream when the same RD appears in multiple underlays.
-		 * Fixing the incremental path requires converting evpn_show_all_routes
-		 * to pure json_object tree building — deferred.
-		 */
 		evpn_show_all_routes_all_underlays(vty, type, json, 1, false, false);
 
 		if (uj) {
