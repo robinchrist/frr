@@ -4642,25 +4642,19 @@ int bgp_delete(struct bgp *bgp)
 	 */
 	bgp_evpn_vrf_delete(bgp);
 
-	/*
-	 * Clean ES route tables while bgp is still alive, then release all global
-	 * EVIs (these hold a lock reference to their tenant VRF / BGP instance).
-	 *
-	 * The global EVI registry and ES are single-underlay; they ride on the
-	 * default underlay. Run this when deleting the default underlay, or when
-	 * deleting the LAST remaining underlay (no default resolves under strict
-	 * semantics, e.g. several non-default-VRF underlays) so the registry is
-	 * always torn down exactly once. Per-underlay ES / route-table teardown
-	 * remains part of the deferred multi-underlay work.
+	/* Per-underlay teardown while the instance is still alive and still
+	 * registered as an underlay (resolution below depends on that):
+	 * withdraw/clean the ES routes and EVI routes riding THIS underlay
+	 * and free the auto-discovered EVIs that exist only because of its
+	 * dataplane. Configured EVIs survive - they are config-owned, hold
+	 * claims on their bindings and simply fail closed until their
+	 * underlay comes back. ESs and EVIs bound to other underlays are
+	 * untouched.
 	 */
-	if (bgp == bgp_get_evpn_default_underlay_vrf() ||
-	    (bgp->evpn_vxlan_underlay_cfgd &&
-	     bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) == 1)) {
+	if (bgp->evpn_vxlan_underlay_cfgd ||
+	    bgp == bgp_get_evpn_default_underlay_vrf()) {
 		bgp_evpn_es_cleanup_routes(bgp);
-		/* Don't call bgp_evpn_clean_and_free, as this would lead to double free
-		 * bgp_evpn_clean_and_free is reserved for bgp_free
-		 */
-		bgp_evpn_master_delete_and_free_all_evis(bgp);
+		bgp_evpn_cleanup_on_disable(bgp);
 	}
 
 	/* unmap bgp vrf label */

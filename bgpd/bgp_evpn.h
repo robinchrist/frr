@@ -213,7 +213,6 @@ extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
 extern void bgp_evpn_delete_auto_discovered_evis(struct bgp *bgp_evpn_mi);
 extern void bgp_evpn_clean_and_free(struct bgp *bgp);
-extern void bgp_evpn_master_delete_and_free_all_evis(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);
 extern void bgp_evpn_global_init(void);
 extern void bgp_evpn_global_fini(void);

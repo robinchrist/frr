@@ -901,7 +901,11 @@ static bool bgp_evpn_type4_prefix_match(struct prefix_evpn *p,
 		!memcmp(&p->prefix.es_addr.esi, &es->esi, sizeof(esi_t));
 }
 
-/* Import remote ESRs on local ethernet segment add  */
+/* Import remote ESRs on local ethernet segment add.
+ * Remote ESRs can have been received in ANY underlay instance, so walk one
+ * given instance's global table here and let the caller iterate all
+ * underlays.
+ */
 static int bgp_evpn_type4_remote_routes_import(struct bgp *bgp,
 		struct bgp_evpn_es *es, bool install)
 {
@@ -1196,11 +1200,11 @@ void update_type1_routes_for_evi(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *e
 		if (es_evi->evi != evi)
 			continue;
 
-		/* Update EAD-ES */
+		/* Update EAD-ES (rides the ES's underlay) */
 		if (bgp_evpn_local_es_is_active(es))
-			bgp_evpn_ead_es_route_update(bgp_evpn_mi, es);
+			bgp_evpn_ead_es_route_update(es->underlay, es);
 
-		/* Update EAD-EVI */
+		/* Update EAD-EVI (rides the EVI's underlay = bgp_evpn_mi) */
 		if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
 			build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
 						&es->esi, es->originator_ip);
@@ -1254,9 +1258,15 @@ static void bgp_evpn_local_type1_evi_route_add(struct bgp *bgp,
 			&es->esi, es->originator_ip);
 
 	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, evi_node, es_evi)) {
+		struct bgp *evi_underlay;
+
 		if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 			continue;
-		bgp_evpn_ead_evi_route_update(bgp, es, es_evi->evi, &p);
+		/* EAD-EVI rides the EVI's underlay (fail closed) */
+		evi_underlay = bgp_evpn_evi_get_underlay(es_evi->evi);
+		if (!evi_underlay)
+			continue;
+		bgp_evpn_ead_evi_route_update(evi_underlay, es, es_evi->evi, &p);
 	}
 }
 
@@ -1279,12 +1289,18 @@ static void bgp_evpn_local_type1_evi_route_del(struct bgp *bgp,
 	build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
 			&es->esi, es->originator_ip);
 	for (ALL_LIST_ELEMENTS_RO(es->es_evi_list, evi_node, es_evi)) {
+		struct bgp *evi_underlay;
+
 		if (!CHECK_FLAG(es_evi->flags, BGP_EVPNES_EVI_LOCAL))
 			continue;
-		if (bgp_evpn_mh_route_delete(bgp, es, es_evi->evi, NULL, &p))
+		/* EAD-EVI rides the EVI's underlay (fail closed) */
+		evi_underlay = bgp_evpn_evi_get_underlay(es_evi->evi);
+		if (!evi_underlay)
+			continue;
+		if (bgp_evpn_mh_route_delete(evi_underlay, es, es_evi->evi, NULL, &p))
 			flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 					"%u: Type4 route creation failure for ESI %s",
-					bgp->vrf_id, es->esi_str);
+					evi_underlay->vrf_id, es->esi_str);
 	}
 }
 
@@ -1752,18 +1768,20 @@ void bgp_evpn_path_es_link(struct bgp_path_info *pi, vni_t vni, esi_t *esi)
 		return;
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (!bgp_evpn_mi)
-		return;
-
 	/* setup es_info against the path if it doesn't already exist */
 	if (!es_info)
 		es_info = bgp_evpn_path_es_info_new(pi, vni);
 
-	/* find-create ES */
+	/* find-create ES; a new (remote-only) ES binds to the default
+	 * underlay until a local ES add rebinds it
+	 */
 	es = bgp_evpn_es_find(esi);
-	if (!es)
+	if (!es) {
+		bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
+		if (!bgp_evpn_mi)
+			return;
 		es = bgp_evpn_es_new(bgp_evpn_mi, esi);
+	}
 
 	/* dup check */
 	if (es_info->es == es)
@@ -1878,18 +1896,14 @@ static struct bgp_evpn_es_frag *bgp_evpn_es_frag_new(struct bgp_evpn_es *es)
 {
 	struct bgp_evpn_es_frag *es_frag;
 	char buf[BGP_EVPN_PREFIX_RD_LEN];
-	struct bgp *bgp_evpn_mi;
 
 	es_frag = XCALLOC(MTYPE_BGP_EVPN_ES_FRAG, sizeof(*es_frag));
 	bf_assign_index(bm->rd_idspace, es_frag->rd_id);
 	es_frag->prd.family = AF_UNSPEC;
 	es_frag->prd.prefixlen = 64;
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (bgp_evpn_mi) {
-		snprintfrr(buf, sizeof(buf), "%pI4:%hu",
-			   &bgp_evpn_mi->router_id, es_frag->rd_id);
-		(void)str2prefix_rd(buf, &es_frag->prd);
-	}
+	snprintfrr(buf, sizeof(buf), "%pI4:%hu", &es->underlay->router_id,
+		   es_frag->rd_id);
+	(void)str2prefix_rd(buf, &es_frag->prd);
 
 	/* EVIs that are advertised using the info in this fragment */
 	es_frag->es_evi_frag_list = list_new();
@@ -1949,7 +1963,6 @@ static void bgp_evpn_es_frag_evi_del(struct bgp_evpn_es_evi *es_evi,
 	struct bgp_evpn_es_frag *es_frag = es_evi->es_frag;
 	struct prefix_evpn p;
 	struct bgp_evpn_es *es;
-	struct bgp *bgp_evpn_mi;
 
 	if (!es_frag)
 		return;
@@ -1967,16 +1980,13 @@ static void bgp_evpn_es_frag_evi_del(struct bgp_evpn_es_evi *es_evi,
 	 * the fragment
 	 */
 	if (send_ead_del_if_empty && !listcount(es_frag->es_evi_frag_list)) {
-		bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("es %s frag %u ead-es route delete",
 				   es->esi_str, es_frag->rd_id);
 		build_evpn_type1_prefix(&p, BGP_EVPN_AD_ES_ETH_TAG, &es->esi,
 					es->originator_ip);
 		p.prefix.ead_addr.frag_id = es_frag->rd_id;
-		if (bgp_evpn_mi)
-			bgp_evpn_mh_route_delete(bgp_evpn_mi, es, NULL, es_frag, &p);
+		bgp_evpn_mh_route_delete(es->underlay, es, NULL, es_frag, &p);
 	}
 
 	/* We don't attempt to coalesce frags that may not be full. Instead we
@@ -2023,6 +2033,14 @@ static struct bgp_evpn_es *bgp_evpn_es_new(struct bgp *bgp, const esi_t *esi)
 
 	/* set the ESI */
 	memcpy(&es->esi, esi, sizeof(esi_t));
+
+	/* Bind the ES to its underlay instance (claimed: the instance cannot
+	 * be freed - only demoted - while the ES references it). ESR and
+	 * EAD-per-ES routes originate into this instance; EAD-per-EVI routes
+	 * follow the EVI's own underlay binding.
+	 */
+	es->underlay = bgp_instance_claim_existing(bgp,
+						   BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	/* Initialise the VTEP list */
 	es->es_vtep_list = list_new();
@@ -2108,6 +2126,8 @@ static void bgp_evpn_es_free(struct bgp_evpn_es *es, const char *caller)
 	/* remove the entry from various databases */
 	RB_REMOVE(bgp_es_rb_head, &bgp_mh_info->es_rb_tree, es);
 	bgp_evpn_es_cons_checks_pend_del(es);
+
+	bgp_instance_unclaim(&es->underlay, BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	QOBJ_UNREG(es);
 	XFREE(MTYPE_BGP_EVPN_ES, es);
@@ -2228,10 +2248,6 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 		zlog_debug("update paths linked to es %s on oper chg",
 			   es->esi_str);
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (!bgp_evpn_mi)
-		return;
-
 	for (ALL_LIST_ELEMENTS_RO(es->macip_evi_path_list, node, es_info)) {
 		pi = es_info->pi;
 
@@ -2241,8 +2257,13 @@ static void bgp_evpn_mac_update_on_es_oper_chg(struct bgp_evpn_es *es)
 		if (!bgp_evpn_is_macip_path(pi))
 			continue;
 
-		evi = bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, es_info->vni);
+		evi = bgp_evpn_lookup_evi_by_vni(es->underlay, es_info->vni);
 		if (!evi)
+			continue;
+
+		/* type-2 routes ride the EVI's underlay (fail closed) */
+		bgp_evpn_mi = bgp_evpn_evi_get_underlay(evi);
+		if (!bgp_evpn_mi)
 			continue;
 
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_RT))
@@ -2513,6 +2534,23 @@ int bgp_evpn_local_es_add(struct bgp *bgp, esi_t *esi, struct ipaddr originator_
 	if (es) {
 		if (CHECK_FLAG(es->flags, BGP_EVPNES_LOCAL))
 			new_es = false;
+
+		/* zebra sends local ES state to the default underlay; a
+		 * pre-existing (e.g. remote-created) ES bound elsewhere is
+		 * rebound after withdrawing whatever it originated there.
+		 */
+		if (es->underlay != bgp) {
+			if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
+				zlog_debug("es %s rebind underlay %s -> %s",
+					   es->esi_str,
+					   es->underlay->name_pretty,
+					   bgp->name_pretty);
+			bgp_evpn_local_es_down(es->underlay, es);
+			bgp_instance_unclaim(&es->underlay,
+					     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+			es->underlay = bgp_instance_claim_existing(
+				bgp, BGP_INSTANCE_USE_EVPN_UNDERLAY);
+		}
 	} else
 		es = bgp_evpn_es_new(bgp, esi);
 
@@ -2527,10 +2565,17 @@ int bgp_evpn_local_es_add(struct bgp *bgp, esi_t *esi, struct ipaddr originator_
 	}
 	bgp_evpn_es_local_info_set(bgp, es);
 
-	/* import all remote Type-4 routes in the ES table */
-	if (new_es)
-		bgp_evpn_type4_remote_routes_import(bgp, es,
-				true /* install */);
+	/* import all remote Type-4 routes in the ES table; remote ESRs can
+	 * have arrived in any underlay instance
+	 */
+	if (new_es) {
+		struct bgp *underlay_iter;
+
+		frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays,
+			  underlay_iter)
+			bgp_evpn_type4_remote_routes_import(underlay_iter, es,
+					true /* install */);
+	}
 
 	/* create and advertise EAD-EVI routes for the ES -
 	 * XXX - till an ES-EVI reference is created there is really nothing to
@@ -3881,26 +3926,24 @@ bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 				es_evi->es->esi_str,
 				es_evi->evi->vni);
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-
 	/* remove the es_evi from the es_frag before sending the update */
 	bgp_evpn_es_frag_evi_del(es_evi, true);
-	if (bgp_evpn_mi) {
-		/* update EAD-ES with new list of VNIs */
-		if (bgp_evpn_local_es_is_active(es))
-			bgp_evpn_ead_es_route_update(bgp_evpn_mi, es);
 
-		/* withdraw and delete EAD-EVI */
-		if (CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
-			build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
-					&es->esi, es->originator_ip);
-			if (bgp_evpn_ead_evi_route_delete(bgp_evpn_mi, es, es_evi->evi,
-							  &p))
-				flog_err(EC_BGP_EVPN_ROUTE_DELETE,
-					"%u: EAD-EVI route deletion failure for ESI %s VNI %u",
-					bgp_evpn_mi->vrf_id, es->esi_str,
-					es_evi->evi->vni);
-		}
+	/* update EAD-ES with new list of VNIs (rides the ES's underlay) */
+	if (bgp_evpn_local_es_is_active(es))
+		bgp_evpn_ead_es_route_update(es->underlay, es);
+
+	/* withdraw and delete EAD-EVI (rides the EVI's underlay) */
+	bgp_evpn_mi = bgp_evpn_evi_get_underlay(es_evi->evi);
+	if (bgp_evpn_mi && CHECK_FLAG(es->flags, BGP_EVPNES_ADV_EVI)) {
+		build_evpn_type1_prefix(&p, BGP_EVPN_AD_EVI_ETH_TAG,
+				&es->esi, es->originator_ip);
+		if (bgp_evpn_ead_evi_route_delete(bgp_evpn_mi, es, es_evi->evi,
+						  &p))
+			flog_err(EC_BGP_EVPN_ROUTE_DELETE,
+				"%u: EAD-EVI route deletion failure for ESI %s VNI %u",
+				bgp_evpn_mi->vrf_id, es->esi_str,
+				es_evi->evi->vni);
 	}
 
 	return bgp_evpn_es_evi_local_info_clear(es_evi);
@@ -4113,11 +4156,7 @@ static void bgp_evpn_remote_es_evi_flush(struct bgp_evpn_es_evi *es_evi)
 	struct listnode *node = NULL;
 	struct listnode *nnode = NULL;
 	struct bgp_evpn_es_evi_vtep *evi_vtep;
-	struct bgp *bgp_evpn_mi;
-
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (!bgp_evpn_mi)
-		return;
+	struct bgp *bgp_evpn_mi = es_evi->es->underlay;
 
 	/* delete all VTEPs */
 	for (ALL_LIST_ELEMENTS(es_evi->es_evi_vtep_list, node, nnode,
@@ -4347,15 +4386,12 @@ static void bgp_evpn_es_evi_show_one_vni(struct bgp_evpn_evi *evi, struct vty *v
 void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 {
 	json_object *json_array = NULL;
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_evi *evi;
 
 	if (uj) {
 		/* create an array of ES-EVIs */
 		json_array = json_object_new_array();
 	}
-
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
 
 	if (!json_array && !detail) {
 		vty_out(vty, "Flags: L local, R remote, I inconsistent\n");
@@ -4364,10 +4400,9 @@ void bgp_evpn_es_evi_show(struct vty *vty, bool uj, bool detail)
 				"VNI", "ESI", "Flags", "VTEPs");
 	}
 
-	if (bgp_evpn_mi) {
-		frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
-			bgp_evpn_es_evi_show_one_vni(evi, vty, json_array, detail);
-	}
+	frr_each(evihash, &bgp_evpn_gbl()->evihash, evi)
+		bgp_evpn_es_evi_show_one_vni(evi, vty, json_array, detail);
+
 	if (uj)
 		vty_json(vty, json_array);
 }
@@ -4378,16 +4413,13 @@ void bgp_evpn_es_evi_show_vni(struct vty *vty, vni_t vni,
 {
 	struct bgp_evpn_evi *evi = NULL;
 	json_object *json_array = NULL;
-	struct bgp *bgp_evpn_mi;
 
 	if (uj) {
 		/* create an array of ES-EVIs */
 		json_array = json_object_new_array();
 	}
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (bgp_evpn_mi)
-		evi =  bgp_evpn_lookup_evi_by_vni(bgp_evpn_mi, vni);
+	evi = bgp_evpn_lookup_evi_by_vni(NULL, vni);
 
 	if (evi) {
 		if (!json_array && !detail) {
@@ -5185,8 +5217,14 @@ void bgp_evpn_es_cleanup_routes(struct bgp *bgp)
 	if (!bgp_mh_info)
 		return;
 
-	RB_FOREACH (es, bgp_es_rb_head, &bgp_mh_info->es_rb_tree)
+	/* Only tear down the ESs bound to the instance being deleted;
+	 * ESs riding other underlays are untouched.
+	 */
+	RB_FOREACH (es, bgp_es_rb_head, &bgp_mh_info->es_rb_tree) {
+		if (es->underlay != bgp)
+			continue;
 		bgp_evpn_es_route_del_all(bgp, es);
+	}
 }
 
 void bgp_evpn_mh_finish(void)
@@ -5241,18 +5279,13 @@ void bgp_evpn_mh_finish(void)
 /* This function is called when disable-ead-evi-tx knob flaps */
 void bgp_evpn_switch_ead_evi_tx(void)
 {
-	struct bgp *bgp_evpn_mi;
 	struct bgp_evpn_es *es = NULL;
-
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (!bgp_evpn_mi)
-		return;
 
 	RB_FOREACH (es, bgp_es_rb_head, &bgp_mh_info->es_rb_tree) {
 		if (bgp_mh_info->enable_ead_evi_tx)
-			bgp_evpn_local_type1_evi_route_add(bgp_evpn_mi, es);
+			bgp_evpn_local_type1_evi_route_add(es->underlay, es);
 		else
-			bgp_evpn_local_type1_evi_route_del(bgp_evpn_mi, es);
+			bgp_evpn_local_type1_evi_route_del(es->underlay, es);
 	}
 }
 
@@ -5268,10 +5301,6 @@ void bgp_evpn_switch_ead_evi_rx(void)
 	struct listnode *vtep_node = NULL;
 	struct listnode *vtep_next = NULL;
 
-	bgp_evpn_mi = bgp_get_evpn_default_underlay_vrf();
-	if (!bgp_evpn_mi)
-		return;
-
 	/*
 	 * Process all the remote es_evi_vteps and reevaluate if the es_evi_vtep
 	 * is active.
@@ -5279,6 +5308,8 @@ void bgp_evpn_switch_ead_evi_rx(void)
 	RB_FOREACH (es, bgp_es_rb_head, &bgp_mh_info->es_rb_tree) {
 		if (!CHECK_FLAG(es->flags, BGP_EVPNES_REMOTE))
 			continue;
+
+		bgp_evpn_mi = es->underlay;
 
 		for (ALL_LIST_ELEMENTS(es->es_evi_list, evi_node, evi_next,
 				       es_evi)) {

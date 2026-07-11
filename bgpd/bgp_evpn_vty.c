@@ -3452,8 +3452,10 @@ static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 	if (!bgp->evpn_vxlan_underlay_cfgd)
 		return;
 
-	/* Withdraw tenant-originated routes while the binding still
-	 * resolves to this instance (they fail closed afterwards).
+	/* Withdraw everything riding this underlay while the bindings still
+	 * resolve to it (they fail closed afterwards): tenant-originated
+	 * type-5 routes, ES routes bound to it, and its EVIs' routes
+	 * (auto-discovered EVIs are freed, configured ones survive).
 	 */
 	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
 		if (bgp_vrf->inst_type == BGP_INSTANCE_TYPE_VIEW)
@@ -3462,11 +3464,12 @@ static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 			bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(
 				bgp_vrf);
 	}
+	bgp_evpn_es_cleanup_routes(bgp);
+	bgp_evpn_cleanup_on_disable(bgp);
 
 	bgp->evpn_vxlan_underlay_cfgd = false;
 	bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_zebra_advertise_all_vni(bgp, false);
-	bgp_evpn_cleanup_on_disable(bgp);
 	bgp_zebra_evpn_default_underlay_sync(false);
 }
 

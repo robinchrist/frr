@@ -10236,16 +10236,26 @@ void bgp_evpn_flood_control_change(struct bgp *bgp_evpn_mi)
  *
  * TODO: Does this even make sense?
  */
+/* Underlay-scoped disable cleanup: withdraw the routes of - and drop the
+ * pending zebra work for - every EVI riding the given underlay; free the
+ * auto-discovered ones (they exist only because of this underlay's
+ * dataplane), keep configured EVIs (config-owned; they fail closed until
+ * their underlay comes back). Must run while bgp_evpn_mi still resolves as
+ * these EVIs' underlay (i.e. before it is dropped from the registry).
+ * EVIs riding other underlays are untouched.
+ */
 void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 {
 	struct bgp_evpn_evi *evi = NULL;
 	uint32_t vni_count = zebra_l2_vni_count(&bm->zebra_l2_vni_head);
 
-	/* Cleanup VNI FIFO list from this bgp instance */
-	while (vni_count) {
+	/* Drop this underlay's EVIs from the pending L2VNI FIFO */
+	while (vni_count--) {
 		evi = zebra_l2_vni_pop(&bm->zebra_l2_vni_head);
-		UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
-		vni_count--;
+		if (bgp_evpn_evi_get_underlay(evi) == bgp_evpn_mi)
+			UNSET_FLAG(evi->flags, EVI_FLAG_ADD);
+		else
+			zebra_l2_vni_add_tail(&bm->zebra_l2_vni_head, evi);
 	}
 
 	/* You cannot iterate through a hash table while removing nodes - only possible when
@@ -10257,8 +10267,12 @@ void bgp_evpn_cleanup_on_disable(struct bgp *bgp_evpn_mi)
 	evihash_init(&evihash_temp);
 
 	uint32_t idx = 0;
-	/* Delete all autoconfigured EVIs, but keep the user configured ones */
 	while ((evi = evihash_pop_all(&bgp_evpn_gbl()->evihash, &idx))) {
+		if (bgp_evpn_evi_get_underlay(evi) != bgp_evpn_mi) {
+			/* rides another underlay - keep untouched */
+			evihash_add(&evihash_temp, evi);
+			continue;
+		}
 		/* Remove EVPN routes and schedule for processing. */
 		bgp_evpn_evi_delete_routes(bgp_evpn_mi, evi);
 		/* Clear "live" flag and see if hash needs to be freed. */
@@ -10316,21 +10330,6 @@ void bgp_evpn_delete_auto_discovered_evis(struct bgp *bgp_evpn_mi)
 	evihash_fini(&evihash_temp);
 }
 
-/* Clean and free all EVIs of an EVPN Master Instance
- * Will also work for non-master instance, but should just be
- * no-op as those should not have anything in evihash anyway.
- */
-void bgp_evpn_master_delete_and_free_all_evis(struct bgp *underlay_vrf)
-{
-	struct bgp_evpn_evi *item;
-	uint32_t idx = 0;
-
-	while ((item = evihash_pop_all(&bgp_evpn_gbl()->evihash, &idx))) {
-		bgp_evpn_evi_delete_all_routes(underlay_vrf, item);
-		bgp_evpn_evi_delete_and_free(underlay_vrf, item);
-	}
-}
-
 /* Initialize the global (process-wide) EVPN state.
  * Called once from bgp_master_init(); independent of any BGP instance.
  */
@@ -10351,14 +10350,25 @@ void bgp_evpn_global_init(void)
 }
 
 /* Tear down the global (process-wide) EVPN state.
- * Called once from bgp_exit() AFTER all BGP instances have been deleted:
- * instance deletion deletes all EVIs (master instance) and unmaps VRFs/EVIs
- * from the irt-node tables, so the EVI hashes must be empty here. Remaining
- * irt nodes are freed defensively.
+ * Called once from bgp_exit() AFTER all BGP instances have been deleted.
+ * Tenant-scoped EVIs were freed with their tenant instance; underlay
+ * deletion freed that underlay's auto-discovered EVIs. What can remain here
+ * are tenant-less configured EVIs - they are config-owned and freed only at
+ * process end (their routes died with the instances). Remaining irt nodes
+ * are freed defensively.
  */
 void bgp_evpn_global_fini(void)
 {
-	assert(evihash_count(&bgp_evpn_gbl()->evihash) == 0);
+	struct bgp_evpn_evi *evi;
+	uint32_t evi_idx = 0;
+
+	while ((evi = evihash_pop_all(&bgp_evpn_gbl()->evihash, &evi_idx)))
+		bgp_evpn_evi_delete_and_free(NULL, evi);
+	evi_idx = 0;
+	while ((evi = evi_name_hash_pop_all(&bgp_evpn_gbl()->global_evis,
+					    &evi_idx)))
+		bgp_evpn_evi_delete_and_free(NULL, evi);
+
 	assert(evi_svi_hash_count(&bgp_evpn_gbl()->evi_svi_hash) == 0);
 	assert(evi_name_hash_count(&bgp_evpn_gbl()->global_evis) == 0);
 	assert(bgp_evpn_underlays_count(&bgp_evpn_gbl()->underlays) == 0);
@@ -10409,9 +10419,9 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 {
 	/* The global EVPN tables (EVI registries, irt nodes) are process-wide
 	 * (see bgp_evpn_global_init/fini) and are NOT touched on instance
-	 * deletion. If this is the master instance, all EVIs must have been
-	 * deleted via bgp_evpn_master_delete_and_free_all_evis() in
-	 * bgp_delete() beforehand.
+	 * deletion. If this instance was an underlay, its ES routes and EVIs
+	 * were cleaned per-underlay (bgp_evpn_es_cleanup_routes() /
+	 * bgp_evpn_cleanup_on_disable()) in bgp_delete() beforehand.
 	 */
 
 	/* Our tenant VRF EVIs should be cleaned up by now

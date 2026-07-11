@@ -105,6 +105,17 @@ struct bgp_evpn_es {
 	 */
 	struct bgp_table *route_table;
 
+	/* Underlay instance this ES is bound to. Claimed reference
+	 * (BGP_INSTANCE_USE_EVPN_UNDERLAY): stays valid until the ES is
+	 * freed, even across the instance being unconfigured. ESR and
+	 * EAD-per-ES routes originate into this instance; EAD-per-EVI
+	 * routes follow the EVI's own underlay binding. Local ESs bind to
+	 * the default underlay (zebra routes ES messages there); a change
+	 * of the default underlay rebinds via zebra's withdraw/re-announce
+	 * of all ES state.
+	 */
+	struct bgp *underlay;
+
 	/* list of PEs (bgp_evpn_es_vtep) attached to the ES */
 	struct list *es_vtep_list;
 
