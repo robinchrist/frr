@@ -10564,21 +10564,60 @@ void bgp_evpn_init(struct bgp *bgp)
 }
 
 /* Call this always when you delete a VRF
- * This cleans up and frees the EVIs of which the VRF is the tenant VRF
+ * Handles the EVIs of which the VRF is the tenant VRF:
+ *  - configured EVIs owned by this instance (`vlan-based-evi` under its
+ *    l2vpn evpn address-family) die with the instance's config: withdraw
+ *    their routes and free them.
+ *  - everything else (auto-discovered EVIs owned by the dataplane, legacy
+ *    `vni X` EVIs owned by the underlay's config) survives the tenant: it is
+ *    only unlinked, keeping L2 operation intact - the tenant's routes are
+ *    re-originated without the L3VNI label. This mirrors what the zebra
+ *    L3VNI-DEL handling (bgp_evpn_del_local_l3vni()) does when the tenant
+ *    loses its L3 role while the L2VNIs live on.
  * It also unmaps the VRF from any IRT nodes (this also removes any routes imported into the VRF)
  * and then cleans up some nexthop tracking state related to the VRF
  */
 void bgp_evpn_vrf_delete(struct bgp *bgp_vrf)
 {
-	/* Clean up the EVIs of which we are the Tenant VRF */
-	struct bgp_evpn_evi *evi_item = NULL;
-	while ((evi_item = bgp_evis_slu_pop(&bgp_vrf->evis)) != NULL) {
-		struct bgp *underlay = bgp_evpn_evi_get_underlay(evi_item);
+	struct bgp_evpn_evi *evi_item;
 
-		if (underlay)
-			bgp_evpn_evi_delete_routes(underlay, evi_item);
+	/* Both branches below remove the EVI from the list (via
+	 * bgp_evpn_evi_unlink_from_vrf())
+	 */
+	while ((evi_item = bgp_evis_slu_first(&bgp_vrf->evis)) != NULL) {
+		if (evi_item->origin == BGP_EVPN_EVI_ORIGIN_CFG) {
+			/* Config-owned by this instance: withdraw + free
+			 * (also drops it from the pending zebra FIFOs)
+			 */
+			bgp_evpn_cfgd_evi_delete(evi_item);
+			continue;
+		}
 
-		bgp_evpn_evi_delete_and_free(underlay, evi_item);
+		/* Gateway IP nexthops resolve in the tenant VRF - unresolve
+		 * them before the backpointer goes away
+		 */
+		bgp_evpn_remote_ip_hash_iterate(evi_item,
+						(void (*)(struct hash_bucket *, void *))
+							bgp_evpn_remote_ip_hash_unlink_nexthop,
+						evi_item);
+
+		/* Routes advertised with the tenant's L3VNI as second label
+		 * must be re-originated without it
+		 */
+		if (CHECK_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS)) {
+			struct bgp *underlay =
+				bgp_evpn_evi_get_underlay(evi_item);
+
+			UNSET_FLAG(evi_item->flags, EVI_FLAG_USE_TWO_LABELS);
+			if (underlay)
+				bgp_evpn_evi_update_type_1_2_3_routes(underlay,
+								      evi_item);
+		}
+
+		bgp_evpn_evi_unlink_from_vrf(evi_item);
+
+		/* the L2 intent carries the tenant VRF - refresh it */
+		evi_update_l2_intent(evi_item);
 	}
 
 	bgp_evpn_vrf_unmap_from_vrf_irt_nodes(bgp_vrf);
