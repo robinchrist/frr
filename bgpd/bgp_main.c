@@ -302,6 +302,9 @@ static int bgp_vrf_enable(struct vrf *vrf)
 		hook_call(bgp_hook_vrf_update, vrf, true);
 		/* the default underlay's vrf_id may just have become known */
 		bgp_zebra_evpn_default_underlay_sync(false);
+		if (bgp->evpn_vxlan_underlay_cfgd)
+			/* intents carry the underlay's vrf_id - refresh */
+			bgp_evpn_vni_intent_resync();
 		vpn_leak_zebra_vrf_label_update(bgp, AFI_IP);
 		vpn_leak_zebra_vrf_label_update(bgp, AFI_IP6);
 		vpn_leak_zebra_vrf_sid_update(bgp, AFI_IP);
@@ -351,6 +354,9 @@ static int bgp_vrf_disable(struct vrf *vrf)
 		hook_call(bgp_hook_vrf_update, vrf, false);
 		/* the default underlay's vrf_id may just have gone away */
 		bgp_zebra_evpn_default_underlay_sync(false);
+		if (bgp->evpn_vxlan_underlay_cfgd)
+			/* intents carry the underlay's vrf_id - refresh */
+			bgp_evpn_vni_intent_resync();
 	}
 
 	/* Note: This is a callback, the VRF will be deleted by the caller. */

@@ -2137,6 +2137,10 @@ struct zebra_l2vni_intent {
 	vni_t vni;
 	vrf_id_t tenant_vrf_id; /* 0/VRF_UNKNOWN = no tenant */
 	uint8_t flags;
+	/* underlay the EVI's binding resolved to in bgpd; VRF_UNKNOWN =
+	 * unresolved (heuristic classification instead of strict)
+	 */
+	vrf_id_t underlay_vrf_id;
 };
 
 static unsigned int l2vni_intent_hash_keymake(const void *p)
@@ -2166,7 +2170,8 @@ static void *l2vni_intent_alloc(void *p)
 
 static struct zebra_l2vni_intent *zl2vni_intent_add(vni_t vni,
 						     vrf_id_t tenant_vrf_id,
-						     uint8_t flags)
+						     uint8_t flags,
+						     vrf_id_t underlay_vrf_id)
 {
 	struct zebra_l2vni_intent tmp = { .vni = vni };
 	struct zebra_l2vni_intent *zi;
@@ -2174,6 +2179,7 @@ static struct zebra_l2vni_intent *zl2vni_intent_add(vni_t vni,
 	zi = hash_get(zrouter.l2vni_intent_table, &tmp, l2vni_intent_alloc);
 	zi->tenant_vrf_id = tenant_vrf_id;
 	zi->flags = flags;
+	zi->underlay_vrf_id = underlay_vrf_id;
 	return zi;
 }
 
@@ -2222,6 +2228,8 @@ static void zl2vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
 		json_object_string_add(json_vni, "role", "L2");
 		json_object_string_add(json_vni, "tenantVrf",
 				       vrf_id_to_name(zi->tenant_vrf_id));
+		json_object_string_add(json_vni, "intendedUnderlayVrf",
+				       vrf_id_to_name(zi->underlay_vrf_id));
 		json_object_boolean_add(json_vni, "served", !!zevpn);
 		json_object_string_add(json_vni, "dataplaneState",
 				       zebra_evpn_dp_state2str(dp_state));
@@ -2231,8 +2239,9 @@ static void zl2vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
 		snprintf(vni_str, sizeof(vni_str), "%u", zi->vni);
 		json_object_object_add(ctx->json, vni_str, json_vni);
 	} else {
-		vty_out(ctx->vty, "%-10u %-6s %-20s %-8s %-14s %s\n", zi->vni,
-			"L2", vrf_id_to_name(zi->tenant_vrf_id),
+		vty_out(ctx->vty, "%-10u %-6s %-20s %-15s %-8s %-14s %s\n",
+			zi->vni, "L2", vrf_id_to_name(zi->tenant_vrf_id),
+			vrf_id_to_name(zi->underlay_vrf_id),
 			zevpn ? "yes" : "no",
 			zebra_evpn_dp_state2str(dp_state),
 			dp_reason != ZEBRA_EVPN_DP_REASON_NONE
@@ -2261,6 +2270,9 @@ static void zl3vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
 		json_object_string_add(json_vni, "role", "L3");
 		json_object_string_add(json_vni, "tenantVrf",
 				       vrf_id_to_name(tenant_vrf_id));
+		json_object_string_add(json_vni, "intendedUnderlayVrf",
+				       vrf_id_to_name(
+					       zl3vni->intended_underlay_vrf_id));
 		json_object_boolean_add(json_vni, "served", served);
 		json_object_string_add(json_vni, "dataplaneState",
 				       zebra_evpn_dp_state2str(dp_state));
@@ -2270,8 +2282,9 @@ static void zl3vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
 		snprintf(vni_str, sizeof(vni_str), "%u", zl3vni->vni);
 		json_object_object_add(ctx->json, vni_str, json_vni);
 	} else {
-		vty_out(ctx->vty, "%-10u %-6s %-20s %-8s %-14s %s\n",
+		vty_out(ctx->vty, "%-10u %-6s %-20s %-15s %-8s %-14s %s\n",
 			zl3vni->vni, "L3", vrf_id_to_name(tenant_vrf_id),
+			vrf_id_to_name(zl3vni->intended_underlay_vrf_id),
 			served ? "yes" : "no",
 			zebra_evpn_dp_state2str(dp_state),
 			dp_reason != ZEBRA_EVPN_DP_REASON_NONE
@@ -2288,8 +2301,9 @@ void zebra_vxlan_print_vni_intents(struct vty *vty, bool use_json)
 	if (use_json)
 		ctx.json = json_object_new_object();
 	else
-		vty_out(vty, "%-10s %-6s %-20s %-8s %-14s %s\n", "VNI", "Role",
-			"Tenant VRF", "Served", "DP-State", "Reason");
+		vty_out(vty, "%-10s %-6s %-20s %-15s %-8s %-14s %s\n", "VNI",
+			"Role", "Tenant VRF", "Underlay VRF", "Served",
+			"DP-State", "Reason");
 
 	hash_iterate(zrouter.l2vni_intent_table, zl2vni_intent_show_cb, &ctx);
 	hash_iterate(zrouter.l3vni_table, zl3vni_intent_show_cb, &ctx);
@@ -2389,19 +2403,30 @@ void zevpn_compute_dp_state(struct zebra_evpn *zevpn,
 		return;
 	}
 
-	/* Underlay checks (only meaningful when a VXLAN interface is bound). */
-	if (zevpn->vxlan_if &&
-	    !zebra_vxlan_if_underlay_enabled(zevpn->vxlan_if)) {
-		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
-		/* Distinguish "no underlay enabled anywhere" from "a different
-		 * underlay VRF is enabled but not this VNI's."  The old code
-		 * compared against a single last-write-wins master VRF ID which
-		 * is nondeterministic with ≥2 underlays; use the count instead.
-		 */
-		*reason = (zrouter.evpn_underlay_count > 0)
-				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
-				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
-		return;
+	/* Underlay checks (only meaningful when a VXLAN interface is bound).
+	 * When the intent names the underlay bgpd resolved (carried in the
+	 * INTENT_ADD payload), compare strictly against the VNI's derived
+	 * underlay; without it fall back to the enabled-underlay-count
+	 * heuristic.
+	 */
+	if (zevpn->vxlan_if) {
+		vrf_id_t derived =
+			zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if);
+
+		if (intent->underlay_vrf_id != VRF_UNKNOWN &&
+		    derived != intent->underlay_vrf_id) {
+			*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+			*reason = ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF;
+			return;
+		}
+		if (!zebra_vxlan_if_underlay_enabled(zevpn->vxlan_if)) {
+			*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+			*reason = (intent->underlay_vrf_id == VRF_UNKNOWN &&
+				   zrouter.evpn_underlay_count > 0)
+					  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
+					  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
+			return;
+		}
 	}
 
 	/* TENANT_MISMATCH: intent specifies a tenant VRF but the dataplane VNI
@@ -2481,6 +2506,7 @@ static struct zebra_l3vni *zl3vni_add(vni_t vni, vrf_id_t vrf_id)
 	zl3vni = hash_get(zrouter.l3vni_table, &tmp_zl3vni, zl3vni_alloc);
 
 	zl3vni->vrf_id = vrf_id;
+	zl3vni->intended_underlay_vrf_id = VRF_UNKNOWN;
 	zl3vni->svi_if = NULL;
 	zl3vni->vxlan_if = NULL;
 	zl3vni->l2vnis = list_new();
@@ -2792,19 +2818,31 @@ void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
 		return;
 	}
 
-	/* Underlay checks: only meaningful when a VXLAN interface is bound. */
-	if (zl3vni->vxlan_if &&
-	    !zebra_vxlan_if_underlay_enabled(zl3vni->vxlan_if)) {
-		*state = ZEBRA_EVPN_DP_MISCONFIGURED;
-		/* Distinguish "no underlay enabled anywhere" from "a different
-		 * underlay VRF is enabled but not this VNI's."  Use the count
-		 * directly; the old master-VRF comparison was nondeterministic
-		 * with ≥2 underlays (last-write-wins).
-		 */
-		*reason = (zrouter.evpn_underlay_count > 0)
-				  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
-				  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
-		return;
+	/* Underlay checks: only meaningful when a VXLAN interface is bound.
+	 * When the intent names the underlay bgpd resolved (carried in the
+	 * INTENT_ADD payload), compare strictly against the VNI's derived
+	 * underlay; without it fall back to the enabled-underlay-count
+	 * heuristic.
+	 */
+	if (zl3vni->vxlan_if) {
+		vrf_id_t derived =
+			zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if);
+
+		if (zl3vni->intended_underlay_vrf_id != VRF_UNKNOWN &&
+		    derived != zl3vni->intended_underlay_vrf_id) {
+			*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+			*reason = ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF;
+			return;
+		}
+		if (!zebra_vxlan_if_underlay_enabled(zl3vni->vxlan_if)) {
+			*state = ZEBRA_EVPN_DP_MISCONFIGURED;
+			*reason = (zl3vni->intended_underlay_vrf_id ==
+					   VRF_UNKNOWN &&
+				   zrouter.evpn_underlay_count > 0)
+					  ? ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF
+					  : ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED;
+			return;
+		}
 	}
 
 	/* ROLE_MISMATCH: bridge-attached but no SVI => dataplane looks L2. */
@@ -6895,6 +6933,7 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 	vni_t vni;
 	uint8_t role = 0;
 	vrf_id_t tenant_vrf_id = VRF_UNKNOWN;
+	vrf_id_t underlay_vrf_id = VRF_UNKNOWN;
 	uint8_t flags = 0;
 	bool add = (hdr->command == ZEBRA_EVPN_VNI_INTENT_ADD);
 	struct zebra_vrf *tenant_zvrf;
@@ -6904,12 +6943,15 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 		STREAM_GETC(s, role);
 		STREAM_GETL(s, tenant_vrf_id);
 		STREAM_GETC(s, flags);
+		STREAM_GETL(s, underlay_vrf_id);
 	}
 
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("EVPN VNI intent %s VNI %u role %u tenant vrf %s(%u) flags 0x%x",
+		zlog_debug("EVPN VNI intent %s VNI %u role %u tenant vrf %s(%u) underlay vrf %s(%u) flags 0x%x",
 			   add ? "ADD" : "DEL", vni, role,
-			   vrf_id_to_name(tenant_vrf_id), tenant_vrf_id, flags);
+			   vrf_id_to_name(tenant_vrf_id), tenant_vrf_id,
+			   vrf_id_to_name(underlay_vrf_id), underlay_vrf_id,
+			   flags);
 
 	if (!add) {
 		struct zebra_l3vni *zl3vni = zl3vni_lookup(vni);
@@ -6962,12 +7004,25 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 							CHECK_FLAG(flags,
 								   ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY),
 							1);
-			/* Cache the intent tenant VRF id for re-resolution
-			 * if the VRF is later disabled and re-enabled.
+			/* Cache the intent tenant/underlay VRF ids: the tenant
+			 * id for re-resolution if the VRF is later disabled
+			 * and re-enabled, the underlay id for the strict
+			 * WRONG_UNDERLAY_VRF classification. Re-report if the
+			 * intended underlay changed - the state computation
+			 * depends on it.
 			 */
 			struct zebra_l3vni *zl3vni = zl3vni_lookup(vni);
-			if (zl3vni)
+			if (zl3vni) {
+				bool underlay_changed =
+					zl3vni->intended_underlay_vrf_id !=
+					underlay_vrf_id;
+
 				zl3vni->intended_tenant_vrf_id = tenant_vrf_id;
+				zl3vni->intended_underlay_vrf_id =
+					underlay_vrf_id;
+				if (underlay_changed)
+					zl3vni_report_dp_state(zl3vni);
+			}
 		} else {
 			/* Tenant VRF not yet created: park as a placeholder
 			 * that reports MISCONFIGURED/TENANT_MISMATCH.  It will
@@ -6983,6 +7038,7 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 			struct zebra_l3vni *zl3vni = zl3vni_add(vni, VRF_UNKNOWN);
 
 			zl3vni->intended_tenant_vrf_id = tenant_vrf_id;
+			zl3vni->intended_underlay_vrf_id = underlay_vrf_id;
 			if (CHECK_FLAG(flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY))
 				SET_FLAG(zl3vni->filter_flags,
 					 ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY);
@@ -6998,7 +7054,7 @@ void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS)
 		 * Auto-discovered L2VNIs are NOT stored here (bgpd never sends
 		 * ROLE_L2 intent for them).
 		 */
-		zl2vni_intent_add(vni, tenant_vrf_id, flags);
+		zl2vni_intent_add(vni, tenant_vrf_id, flags, underlay_vrf_id);
 		/* Re-emit for any dataplane VNI that already exists so bgpd
 		 * sees the updated (intent-aware) state immediately.
 		 * If no zebra_evpn exists yet, search the VXLAN interface

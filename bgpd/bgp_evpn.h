@@ -211,6 +211,8 @@ extern int bgp_evpn_add_local_l2vni(struct bgp *underlay_vrf, vni_t vni,
 				    const struct bgp_evpn_vni_dp_info *dp);
 extern void bgp_evpn_flood_control_change(struct bgp *bgp);
 extern void bgp_evpn_cleanup_on_disable(struct bgp *bgp);
+/* Re-send all VNI intents (their payload carries the resolved underlay) */
+extern void bgp_evpn_vni_intent_resync(void);
 extern void bgp_evpn_delete_auto_discovered_evis(struct bgp *bgp_evpn_mi);
 extern void bgp_evpn_clean_and_free(struct bgp *bgp);
 extern void bgp_evpn_init(struct bgp *bgp);

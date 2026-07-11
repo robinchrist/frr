@@ -930,9 +930,13 @@ Diagnostics
 .. clicmd:: show zebra evpn vni-intent [json]
 
    Dump zebra's view of the VNI intent received from bgpd: per VNI the role
-   (L2/L3), the tenant VRF, whether the intent is served by the dataplane,
-   and the computed dataplane state/reason (``up``, ``misconfigured`` with
-   e.g. ``wrong-underlay-vrf``, ...).
+   (L2/L3), the tenant VRF, the intended underlay VRF (the binding as
+   resolved by bgpd and carried in the intent message), whether the intent
+   is served by the dataplane, and the computed dataplane state/reason
+   (``up``, ``misconfigured`` with e.g. ``wrong-underlay-vrf``, ...). When
+   the intended underlay is known, a VNI whose dataplane derives a
+   different underlay VRF is strictly classified ``wrong-underlay-vrf``
+   even if that other underlay is enabled.
 
 .. clicmd:: show zebra evpn <vni|l2vni|l3vni> [detail] [json]
 

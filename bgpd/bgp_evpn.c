@@ -6929,6 +6929,13 @@ bool bgp_evpn_vrf_set_cfgd_underlay(struct bgp *bgp_vrf,
 
 	bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
 
+	/* the L3 intent carries the resolved underlay - refresh it */
+	if (bgp_vrf->evpn_cfgd_l3vni)
+		bgp_zebra_send_evpn_vni_intent(bgp_vrf, bgp_vrf->evpn_cfgd_l3vni,
+					       ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
+					       bgp_vrf->evpn_cfgd_l3vni_prefix_routes_only,
+					       true);
+
 	return true;
 }
 
@@ -6966,6 +6973,9 @@ bool bgp_evpn_evi_set_cfgd_underlay(struct bgp_evpn_evi *evi,
 	}
 	if (new_underlay)
 		bgp_zebra_advertise_all_vni(new_underlay, true);
+
+	/* the L2 intent carries the resolved underlay - refresh it */
+	evi_update_l2_intent(evi);
 
 	return true;
 }
@@ -7032,6 +7042,9 @@ bool bgp_evpn_set_cfgd_default_underlay(const char *underlay_vrf_name)
 		/* EVI liveness re-establishes via the zebra re-scan */
 		bgp_zebra_advertise_all_vni(new_def, true);
 	}
+
+	/* objects riding the default resolution carry it in their intent */
+	bgp_evpn_vni_intent_resync();
 
 	return true;
 }
@@ -8858,6 +8871,33 @@ withdraw:
 						       false, false);
 		evi->l2_intent_sent_vni = 0;
 	}
+}
+
+/* Re-send the VNI intent of every overlay object with configured
+ * origination. The intent ADD payload carries the object's resolved
+ * underlay VRF, so this must run after any event that can change underlay
+ * resolution: vxlan-underlay set/unset, a default-underlay change, or an
+ * underlay instance's kernel VRF coming up/down. Single-object binding
+ * changes re-send their own intent instead.
+ */
+void bgp_evpn_vni_intent_resync(void)
+{
+	struct bgp *bgp_vrf;
+	struct listnode *node;
+	struct bgp_evpn_evi *evi;
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+		if (!bgp_vrf->evpn_cfgd_l3vni)
+			continue;
+		bgp_zebra_send_evpn_vni_intent(bgp_vrf, bgp_vrf->evpn_cfgd_l3vni,
+					       ZEBRA_EVPN_VNI_INTENT_ROLE_L3,
+					       bgp_vrf->evpn_cfgd_l3vni_prefix_routes_only,
+					       true);
+	}
+
+	/* skips EVIs that are not user-configured / have no VNI */
+	frr_each (evihash, &bgp_evpn_gbl()->evihash, evi)
+		evi_update_l2_intent(evi);
 }
 
 /* Transition an EVI between the legacy-configured (`vni X`, name "vni-X") and

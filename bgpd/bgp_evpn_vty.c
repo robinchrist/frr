@@ -3438,6 +3438,8 @@ static void evpn_set_vxlan_underlay(struct bgp *bgp)
 		zlog_warn("Multiple VXLAN underlays configured: EVPN multihoming (ES) and instance-wide EVPN knobs follow the default underlay");
 
 	bgp_zebra_evpn_default_underlay_sync(false);
+	/* underlay resolution changed for objects bound to this instance */
+	bgp_evpn_vni_intent_resync();
 }
 
 /*
@@ -3471,6 +3473,8 @@ static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 	bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_zebra_advertise_all_vni(bgp, false);
 	bgp_zebra_evpn_default_underlay_sync(false);
+	/* underlay resolution changed for objects bound to this instance */
+	bgp_evpn_vni_intent_resync();
 }
 
 /*

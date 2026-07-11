@@ -873,8 +873,13 @@ static inline const char *zapi_srv6_sid_notify2str(enum zapi_srv6_sid_notify not
  * plane declares which role a VNI has. Replaces zebra's own `vrf X vni Y`
  * configuration; zebra classifies dataplane VNIs based on these intents.
  *
- * Payload: u32 vni, u8 role, u32 tenant_vrf_id, u8 flags
- * (flags: ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY for the L3 role).
+ * Payload: u32 vni, u8 role, u32 tenant_vrf_id, u8 flags,
+ * u32 underlay_vrf_id
+ * (flags: ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY for the L3 role;
+ * underlay_vrf_id: the underlay VRF the object's binding resolved to in
+ * bgpd, VRF_UNKNOWN when unresolved - used for the strict
+ * WRONG_UNDERLAY_VRF classification; bgpd re-sends the intent whenever the
+ * resolution changes).
  * DEL carries only the u32 vni.
  */
 enum zebra_evpn_vni_intent_role {

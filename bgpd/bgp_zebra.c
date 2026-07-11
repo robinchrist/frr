@@ -2814,6 +2814,14 @@ int bgp_zebra_vxlan_flood_control(struct bgp *bgp, struct bgp_evpn_evi *evpn)
  * tenant VRF / L2VNI of an EVI). Replaces zebra's own `vrf X vni Y` config -
  * the control plane (bgpd) is the source of intent. The tenant instance is
  * passed in; the message itself rides on its vrf_id so zebra can dispatch.
+ *
+ * The ADD payload carries the intended underlay VRF (the object's resolved
+ * underlay binding, resolved here) so zebra can classify a VNI whose
+ * dataplane lives in a different underlay VRF as
+ * MISCONFIGURED/WRONG_UNDERLAY_VRF. VRF_UNKNOWN = binding unresolved (fail
+ * closed / auto-created instance without a kernel VRF yet); zebra then
+ * falls back to its heuristic. Callers must re-send the intent whenever
+ * the resolution changes (see bgp_evpn_vni_intent_resync()).
  */
 int bgp_zebra_send_evpn_vni_intent(struct bgp *tenant_bgp, vni_t vni,
 				   enum zebra_evpn_vni_intent_role role,
@@ -2836,9 +2844,22 @@ int bgp_zebra_send_evpn_vni_intent(struct bgp *tenant_bgp, vni_t vni,
 			      tenant_bgp->vrf_id);
 	stream_putl(s, vni);
 	if (add) {
+		struct bgp *underlay = NULL;
+
+		if (role == ZEBRA_EVPN_VNI_INTENT_ROLE_L3) {
+			underlay = bgp_evpn_vrf_get_underlay(tenant_bgp);
+		} else {
+			struct bgp_evpn_evi *evi =
+				bgp_evpn_lookup_evi_by_vni(NULL, vni);
+
+			if (evi)
+				underlay = bgp_evpn_evi_get_underlay(evi);
+		}
+
 		stream_putc(s, role);
 		stream_putl(s, tenant_bgp->vrf_id);
 		stream_putc(s, prefix_routes_only ? ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY : 0);
+		stream_putl(s, underlay ? underlay->vrf_id : VRF_UNKNOWN);
 	}
 	stream_putw_at(s, 0, stream_get_endp(s));
 

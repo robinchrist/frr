@@ -72,6 +72,13 @@ struct zebra_l3vni {
 	 * is needed to re-resolve placeholder entries in zebra_vxlan_vrf_enable.
 	 */
 	vrf_id_t intended_tenant_vrf_id;
+
+	/* Underlay VRF the object's binding resolved to in bgpd, as sent in
+	 * the INTENT_ADD message. VRF_UNKNOWN = unresolved in bgpd; the
+	 * WRONG_UNDERLAY_VRF classification then falls back to a heuristic
+	 * instead of a strict comparison against the derived underlay.
+	 */
+	vrf_id_t intended_underlay_vrf_id;
 };
 
 #define IS_ZL3VNI_SVD_BACKED(zl3vni)                                           \
