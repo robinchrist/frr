@@ -903,6 +903,14 @@ struct bgp {
 #define BGP_FLAG_INSTANCE_AUTO_CREATED	 (1ULL << 39)
 /* Prohibit BGP from enabling IPv6 RA on interfaces */
 #define BGP_FLAG_IPV6_NO_AUTO_RA	    (1ULL << 40)
+/* Set for the duration of bgp_delete() on this instance. Releasing a claim
+ * on an instance that is inside its own bgp_delete() (e.g. a claim the
+ * instance held on itself) must not re-enter bgp_delete() - the deferred
+ * teardown in bgp_instance_unclaim() is skipped while this is set.
+ * Unlike BGP_FLAG_DELETE_IN_PROGRESS this is cleared again when bgp_delete()
+ * returns (a demoted instance keeps DELETE_IN_PROGRESS until promotion).
+ */
+#define BGP_FLAG_INSTANCE_IN_DELETE	 (1ULL << 41)
 #define BGP_FLAG_LINK_LOCAL_CAPABILITY	    (1ULL << 43)
 #define BGP_FLAG_VRF_MAY_LISTEN		    (1ULL << 44)
 #define BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW (1ULL << 45)

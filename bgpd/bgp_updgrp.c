@@ -1956,10 +1956,16 @@ void update_bgp_group_init(struct bgp *bgp)
 {
 	int afid;
 
+	/* Idempotent: on an in-place promotion of an auto-created instance
+	 * (bgp_create() with promote_auto) the hashes may still exist - only
+	 * a demotion (bgp_delete()) frees them.
+	 */
 	AF_FOREACH (afid)
-		bgp->update_groups[afid] =
-			hash_create(updgrp_hash_key_make, updgrp_hash_cmp,
-				    "BGP Update Group Hash");
+		if (!bgp->update_groups[afid])
+			bgp->update_groups[afid] =
+				hash_create(updgrp_hash_key_make,
+					    updgrp_hash_cmp,
+					    "BGP Update Group Hash");
 }
 
 void update_bgp_group_free(struct bgp *bgp)

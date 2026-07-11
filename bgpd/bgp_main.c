@@ -297,7 +297,11 @@ static int bgp_vrf_enable(struct vrf *vrf)
 
 		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer, ret);
 
-		bgp_handle_socket(bgp, vrf, old_vrf_id, true);
+		/* auto-created instances have no config and must not listen;
+		 * promotion opens their socket
+		 */
+		if (!IS_BGP_INSTANCE_AUTO(bgp))
+			bgp_handle_socket(bgp, vrf, old_vrf_id, true);
 		bgp_instance_up(bgp);
 		hook_call(bgp_hook_vrf_update, vrf, true);
 		/* the default underlay's vrf_id may just have become known */

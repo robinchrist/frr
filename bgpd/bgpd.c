@@ -97,7 +97,6 @@ DECLARE_DLIST(bgp_peer_conn_errlist, struct peer_connection, conn_err_link);
 /* List of info about peers that are being cleared from BGP RIBs in a batch */
 DECLARE_DLIST(bgp_clearing_info, struct bgp_clearing_info, link);
 
-
 /* Hash of peers in clearing info object */
 static int peer_clearing_hash_cmp(const struct peer *p1, const struct peer *p2);
 static uint32_t peer_clearing_hashfn(const struct peer *p1);
@@ -3797,9 +3796,13 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 
 peer_init:
 	bgp->peer->cmp = (int (*)(void *, void *))peer_cmp;
-	bgp->connectionhash = hash_create(connection_hash_key_make, connection_hash_same,
-					  "BGP Peer Hash");
-	bgp->connectionhash->max_size = BGP_PEER_MAX_HASH_SIZE;
+	/* survives a promotion (it is only freed in bgp_free()) */
+	if (!bgp->connectionhash) {
+		bgp->connectionhash = hash_create(connection_hash_key_make,
+						  connection_hash_same,
+						  "BGP Peer Hash");
+		bgp->connectionhash->max_size = BGP_PEER_MAX_HASH_SIZE;
+	}
 
 	if (!promote_auto)
 		bgp->group = list_new();
@@ -3876,11 +3879,13 @@ peer_init:
 			 BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
 	}
 
-	for (afi = AFI_IP; afi < AFI_MAX; afi++)
-		bgp_label_per_nexthop_cache_init(
-			&bgp->mpls_labels_per_nexthop[afi]);
+	if (!promote_auto) {
+		for (afi = AFI_IP; afi < AFI_MAX; afi++)
+			bgp_label_per_nexthop_cache_init(
+				&bgp->mpls_labels_per_nexthop[afi]);
 
-	bgp_mplsvpn_nh_label_bind_cache_init(&bgp->mplsvpn_nh_label_bind);
+		bgp_mplsvpn_nh_label_bind_cache_init(&bgp->mplsvpn_nh_label_bind);
+	}
 
 	if (name && !bgp->name)
 		bgp->name = XSTRDUP(MTYPE_BGP_NAME, name);
@@ -3942,10 +3947,15 @@ peer_init:
 	memset(&bgp->ebgprequirespolicywarning, 0,
 	       sizeof(bgp->ebgprequirespolicywarning));
 
-	/* Init peer connection error info */
-	pthread_mutex_init(&bgp->peer_errs_mtx, NULL);
-	bgp_peer_conn_errlist_init(&bgp->peer_conn_errlist);
-	bgp_clearing_info_init(&bgp->clearing_list);
+	/* Init peer connection error info. Never re-run on a promotion:
+	 * re-initializing a live mutex is undefined behavior and the lists
+	 * survive (drained by bgp_delete() on demotion).
+	 */
+	if (!promote_auto) {
+		pthread_mutex_init(&bgp->peer_errs_mtx, NULL);
+		bgp_peer_conn_errlist_init(&bgp->peer_conn_errlist);
+		bgp_clearing_info_init(&bgp->clearing_list);
+	}
 
 	if (bgp && bgp->ls_info && bgp->ls_info->enable_distribution)
 		bgp_ls_originate_bgp_node(bgp);
@@ -4072,6 +4082,13 @@ struct bgp *bgp_instance_claim(const char *vrf_name, enum bgp_instance_use use)
 
 		SET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
 
+		/* No user config, no sessions: close the listen socket
+		 * bgp_get_vty() just opened. It is reopened on promotion
+		 * (bgp_instance_promote_auto()).
+		 */
+		bgp_handle_socket(bgp, bgp_vrf_lookup_by_instance_type(bgp),
+				  VRF_UNKNOWN, false);
+
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("auto-created BGP instance %s (claimed for %s)",
 				   bgp->name_pretty, bgp_instance_use2str(use));
@@ -4105,9 +4122,12 @@ void bgp_instance_unclaim(struct bgp **bgpp, enum bgp_instance_use use)
 	 * its own if the VPN RIB still has routes to drain). During
 	 * termination the shutdown loop deletes every instance itself; a
 	 * nested delete here would free list nodes that loop still holds.
+	 * An instance inside its own bgp_delete() (a claim it held on itself
+	 * is being released) must not be re-entered either.
 	 */
-	if (!bm->terminating && IS_BGP_INSTANCE_AUTO(bgp) &&
-	    !bgp_instance_has_claims(bgp)) {
+	if (!bm->terminating &&
+	    !CHECK_FLAG(bgp->flags, BGP_FLAG_INSTANCE_IN_DELETE) &&
+	    IS_BGP_INSTANCE_AUTO(bgp) && !bgp_instance_has_claims(bgp)) {
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("deleting auto-created BGP instance %s (last claim %s released)",
 				   bgp->name_pretty, bgp_instance_use2str(use));
@@ -4200,13 +4220,50 @@ int bgp_handle_socket(struct bgp *bgp, struct vrf *vrf, vrf_id_t old_vrf_id,
 		return bgp_check_main_socket(create, bgp);
 }
 
+/* Promote an auto-created instance in place: user config (`router bgp`) has
+ * arrived for it. bgp_create() re-initializes the existing struct, so
+ * pointers held by claimants stay valid; the rest re-establishes what
+ * creation (for a fresh instance) or demotion (bgp_delete() on a still-
+ * claimed instance) left in a config-less state.
+ */
+static void bgp_instance_promote_auto(struct bgp *bgp, as_t *as,
+				      const char *name,
+				      enum bgp_instance_type inst_type,
+				      const char *as_pretty,
+				      enum asnotation_mode asnotation)
+{
+	struct peer *peer;
+	struct listnode *node, *nnode;
+
+	bgp_create(as, name, inst_type, as_pretty, asnotation, bgp, true);
+	UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
+	UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
+
+	/* Set all peer's local AS with this ASN, including the static
+	 * announcement self peer, which is not on the peer list.
+	 */
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+		peer->local_as = *as;
+	if (bgp->peer_self)
+		bgp->peer_self->local_as = *as;
+
+	/* A demotion (bgp_delete()) tore down the EVPN nexthop table */
+	if (!bgp->evpn_nh_table)
+		bgp_evpn_nh_init(bgp);
+
+	/* Auto-created instances do not listen (and a demotion closed the
+	 * listen socket) - open it now. No-op if the VRF is not known yet;
+	 * bgp_vrf_enable() handles that case.
+	 */
+	bgp_handle_socket(bgp, bgp_vrf_lookup_by_instance_type(bgp),
+			  VRF_UNKNOWN, true);
+}
+
 int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char *as_pretty,
 			       enum asnotation_mode asnotation, const char *name,
 			       enum bgp_instance_type inst_type, bool force_config)
 {
 	struct bgp *bgp;
-	struct peer *peer = NULL;
-	struct listnode *node, *nnode;
 	bool promote_auto = false;
 
 	/* Multiple instance check. */
@@ -4217,37 +4274,30 @@ int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char *as_pr
 
 	if (bgp) {
 		/* A real AS arriving for an auto-created instance promotes it
-		 * in place: bgp_create() re-initializes the existing struct,
-		 * so pointers held by claimants stay valid.
+		 * in place (see bgp_instance_promote_auto()).
 		 */
 		if (IS_BGP_INSTANCE_AUTO(bgp) && *as != AS_UNSPECIFIED)
 			promote_auto = true;
+
+		/* The instance type must match even for a promotion: an
+		 * auto-created VRF instance must not be silently taken over
+		 * by e.g. a `router bgp ... view` of the same name.
+		 */
+		if (bgp->inst_type != inst_type) {
+			*bgp_val = bgp;
+			return BGP_ERR_INSTANCE_MISMATCH;
+		}
+
 		/* Handle AS number change */
-		if (bgp->as != *as) {
-			if (promote_auto) {
-				bgp_create(as, name, inst_type, as_pretty,
-					   asnotation, bgp, promote_auto);
-				UNSET_FLAG(bgp->flags,
-					   BGP_FLAG_INSTANCE_AUTO_CREATED);
-				UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
-
-				/* Set all peer's local AS with this ASN */
-				for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode,
-						       peer))
-					peer->local_as = *as;
-				*bgp_val = bgp;
-				return BGP_INSTANCE_EXISTS;
-			}
-
+		if (bgp->as != *as && !promote_auto) {
 			*as = bgp->as;
 			*bgp_val = bgp;
 			return BGP_ERR_INSTANCE_MISMATCH;
 		}
-		if (bgp->inst_type != inst_type)
-			return BGP_ERR_INSTANCE_MISMATCH;
+
 		if (promote_auto)
-			bgp_create(as, name, inst_type, as_pretty, asnotation,
-				   bgp, promote_auto);
+			bgp_instance_promote_auto(bgp, as, name, inst_type,
+						  as_pretty, asnotation);
 		*bgp_val = bgp;
 		return BGP_INSTANCE_EXISTS;
 	}
@@ -4470,6 +4520,12 @@ int bgp_delete(struct bgp *bgp)
 
 	assert(bgp);
 
+	/* Guards bgp_instance_unclaim() against re-entering bgp_delete() on
+	 * this instance while it is already being torn down; cleared before
+	 * return.
+	 */
+	SET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_IN_DELETE);
+
 	/*
 	 * Iterate the pending dest list and remove all the dest pertaining to
 	 * the bgp under delete.
@@ -4607,6 +4663,26 @@ int bgp_delete(struct bgp *bgp)
 		bgp_damp_disable(bgp, afi, safi);
 	}
 
+	/* unmap from RT list, delete the EVIs of which this instance is the Tenant VRF
+	 * EVIs hold a reference to their Tenant VRF / BGP instance, which is released when
+	 * the EVIs are deleted / freed.
+	 * Done before the demotion decision below so that underlay claims
+	 * those EVIs held - possibly on this very instance - are gone when
+	 * the remaining claims are counted.
+	 */
+	bgp_evpn_vrf_delete(bgp);
+
+	/* Claims this instance holds on itself (a tenant bound to its own
+	 * VRF as underlay) can never justify keeping the instance alive -
+	 * release them before deciding on demotion.
+	 */
+	if (bgp->evpn_cfgd_underlay == bgp)
+		bgp_instance_unclaim(&bgp->evpn_cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	if (bgp->evpn_dp_underlay == bgp)
+		bgp_instance_unclaim(&bgp->evpn_dp_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+
 	/* An instance that other subsystems still claim, and a default
 	 * instance whose VPN RIB still holds routes, must not be freed:
 	 * demote it to an auto-created instance instead. The teardown steps
@@ -4636,12 +4712,6 @@ int bgp_delete(struct bgp *bgp)
 				   bgp->name);
 	}
 
-	/* unmap from RT list, delete the EVIs of which this instance is the Tenant VRF
-	 * EVIs hold a reference to their Tenant VRF / BGP instance, which is released when
-	 * the EVIs are deleted / freed
-	 */
-	bgp_evpn_vrf_delete(bgp);
-
 	/* Per-underlay teardown while the instance is still alive and still
 	 * registered as an underlay (resolution below depends on that):
 	 * withdraw/clean the ES routes and EVI routes riding THIS underlay
@@ -4649,10 +4719,10 @@ int bgp_delete(struct bgp *bgp)
 	 * dataplane. Configured EVIs survive - they are config-owned, hold
 	 * claims on their bindings and simply fail closed until their
 	 * underlay comes back. ESs and EVIs bound to other underlays are
-	 * untouched.
+	 * untouched. (The default-underlay resolution can only ever return a
+	 * configured vxlan-underlay, so the flag check covers it.)
 	 */
-	if (bgp->evpn_vxlan_underlay_cfgd ||
-	    bgp == bgp_get_evpn_default_underlay_vrf()) {
+	if (bgp->evpn_vxlan_underlay_cfgd) {
 		bgp_evpn_es_cleanup_routes(bgp);
 		bgp_evpn_cleanup_on_disable(bgp);
 	}
@@ -4817,6 +4887,11 @@ int bgp_delete(struct bgp *bgp)
 	if (bgp->evpn_dp_underlay)
 		bgp_instance_unclaim(&bgp->evpn_dp_underlay,
 				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+
+	/* Cleared before the final unlock below: dropping the initial
+	 * reference may free the struct outright.
+	 */
+	UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_IN_DELETE);
 
 	if (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating) {
 		if (bgp->process_queue)

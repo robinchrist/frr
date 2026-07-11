@@ -3810,6 +3810,14 @@ DEFPY (bgp_evpn_underlay_vrf,
 		   vrfname) == 0)
 		return CMD_SUCCESS;
 
+	/* A tenant claiming itself as underlay makes no sense and would make
+	 * the instance keep itself alive across `no router bgp`.
+	 */
+	if (strmatch(vrfname, bgp->name ? bgp->name : VRF_DEFAULT_NAME)) {
+		vty_out(vty, "%% A VRF cannot be its own underlay-vrf\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	/* Claims the instance (auto-created when absent, so config ordering
 	 * does not matter); origination fails closed until the instance is
 	 * a vxlan-underlay.
