@@ -1604,7 +1604,7 @@ DEFUN_HIDDEN (bgp_local_mac,
 	seq = strtoul(argv[7]->arg, NULL, 10);
 
 	bgp = bgp_get_default();
-	if (!bgp || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (!bgp || IS_BGP_INSTANCE_AUTO(bgp)) {
 		vty_out(vty, "Default BGP instance is not there\n");
 		return CMD_WARNING;
 	}
@@ -1644,7 +1644,7 @@ DEFUN_HIDDEN (no_bgp_local_mac,
 	memset(&ip, 0, sizeof(ip));
 
 	bgp = bgp_get_default();
-	if (!bgp || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (!bgp || IS_BGP_INSTANCE_AUTO(bgp)) {
 		vty_out(vty, "Default BGP instance is not there\n");
 		return CMD_WARNING;
 	}
@@ -1776,31 +1776,18 @@ DEFUN_NOSH (router_bgp,
 			vpn_leak_postchange_all();
 		}
 
-		if (inst_type == BGP_INSTANCE_TYPE_VRF || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+		/* User config arriving for an auto-created instance promotes
+		 * it to a regular one; any claims on it stay in place.
+		 */
+		if (inst_type == BGP_INSTANCE_TYPE_VRF || IS_BGP_INSTANCE_AUTO(bgp)) {
 			bgp_vpn_leak_export(bgp);
-			UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_HIDDEN);
+			UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
 			UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
 		}
 		/* Pending: handle when user tries to change a view to vrf n vv.
 		 */
-		/* for pre-existing bgp instance,
-		 * - update as_pretty
-		 * - update asnotation if explicitly mentioned
-		 */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO)) {
-			XFREE(MTYPE_BGP_NAME, bgp->as_pretty);
-			bgp->as_pretty = XSTRDUP(MTYPE_BGP_NAME,
-						 argv[idx_asn]->arg);
-			if (!CHECK_FLAG(bgp->config, BGP_CONFIG_ASNOTATION) &&
-			    asnotation != ASNOTATION_UNDEFINED) {
-				SET_FLAG(bgp->config, BGP_CONFIG_ASNOTATION);
-				bgp->asnotation = asnotation;
-			}
-		}
 	}
 
-	/* unset the auto created flag as the user config is now present */
-	UNSET_FLAG(bgp->vrf_flags, BGP_VRF_AUTO);
 	VTY_PUSH_CONTEXT(BGP_NODE, bgp);
 
 	return CMD_SUCCESS;
@@ -1879,12 +1866,6 @@ DEFUN (no_router_bgp,
 			for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, tmp_bgp)) {
 				if (tmp_bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
 					continue;
-
-				if (CHECK_FLAG(tmp_bgp->vrf_flags,
-					       BGP_VRF_AUTO)) {
-					bgp_delete(tmp_bgp);
-					continue;
-				}
 
 				if (CHECK_FLAG(
 					    tmp_bgp->af_flags[AFI_IP]
@@ -11341,23 +11322,15 @@ DEFPY(af_import_vrf_route_map, af_import_vrf_route_map_cmd,
 	if (afi == AFI_MAX)
 		return CMD_WARNING_CONFIG_FAILED;
 
+	/* The import config claims the default instance (the VPN RIB leak
+	 * transit), auto-creating it when it does not exist yet.
+	 */
+	vpn_leak_vpn_rib_claim(bgp, afi);
 	bgp_default = bgp_get_default();
 	if (!bgp_default) {
-		int32_t ret;
-		as_t as = AS_UNSPECIFIED;
-
-		/* Auto-create with AS_UNSPECIFIED, to be filled in later */
-		ret = bgp_get_vty(&bgp_default, &as, NULL,
-				  BGP_INSTANCE_TYPE_DEFAULT, NULL,
-				  ASNOTATION_UNDEFINED);
-
-		if (ret) {
-			vty_out(vty,
-				"VRF default is not configured as a bgp instance\n");
-			return CMD_WARNING;
-		}
-
-		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
+		vty_out(vty,
+			"VRF default is not configured as a bgp instance\n");
+		return CMD_WARNING;
 	}
 
 	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
@@ -11404,9 +11377,11 @@ DEFPY(af_no_import_vrf_route_map, af_no_import_vrf_route_map_cmd,
 	bgp->vpn_policy[afi].rmap_name[dir] = NULL;
 	bgp->vpn_policy[afi].rmap[dir] = NULL;
 
-	if (bgp->vpn_policy[afi].import_vrf->count == 0)
+	if (bgp->vpn_policy[afi].import_vrf->count == 0) {
 		UNSET_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
 			   BGP_CONFIG_VRF_TO_VRF_IMPORT);
+		vpn_leak_vpn_rib_unclaim(bgp, afi);
+	}
 
 	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
 
@@ -11423,8 +11398,6 @@ DEFPY(bgp_imexport_vrf, bgp_imexport_vrf_cmd,
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	struct listnode *node;
 	struct bgp *vrf_bgp, *bgp_default;
-	int32_t ret = 0;
-	as_t as = bgp->as;
 	bool remove = false;
 	int32_t idx = 0;
 	char *vname;
@@ -11458,22 +11431,21 @@ DEFPY(bgp_imexport_vrf, bgp_imexport_vrf_cmd,
 		return CMD_WARNING;
 	}
 
+	if (!remove) {
+		/* The import config claims the default instance (the VPN RIB
+		 * leak transit), auto-creating it when it does not exist yet.
+		 * vrf_import_from_vrf() takes the claim as well; taking it
+		 * here first makes the instance available for the vrf_bgp
+		 * resolution below.
+		 */
+		vpn_leak_vpn_rib_claim(bgp, afi);
+	}
+
 	bgp_default = bgp_get_default();
-	if (!bgp_default) {
-		as = AS_UNSPECIFIED;
-
-		/* Auto-create with AS_UNSPECIFIED, to be filled in later */
-		ret = bgp_get_vty(&bgp_default, &as, NULL,
-				  BGP_INSTANCE_TYPE_DEFAULT, NULL,
-				  ASNOTATION_UNDEFINED);
-
-		if (ret) {
-			vty_out(vty,
-				"VRF default is not configured as a bgp instance\n");
-			return CMD_WARNING;
-		}
-
-		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
+	if (!remove && !bgp_default) {
+		vty_out(vty,
+			"VRF default is not configured as a bgp instance\n");
+		return CMD_WARNING;
 	}
 
 	if (strcmp(import_name, VRF_DEFAULT_NAME) == 0)
@@ -13016,8 +12988,8 @@ DEFPY (show_bgp_vrfs,
 		if (bgp->inst_type == BGP_INSTANCE_TYPE_VIEW)
 			continue;
 
-		/* Skip hidden instances (no RIB/aggregate tables allocated). */
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		/* Skip auto-created instances (no RIB/aggregate tables allocated). */
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		count++;
@@ -13436,7 +13408,7 @@ DEFUN(show_bgp_martian_nexthop_db, show_bgp_martian_nexthop_db_cmd,
 	else
 		bgp = bgp_get_default();
 
-	if (!bgp || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (!bgp || IS_BGP_INSTANCE_AUTO(bgp)) {
 		vty_out(vty, "%% No BGP process is configured\n");
 		return CMD_WARNING;
 	}
@@ -14804,10 +14776,7 @@ static void bgp_show_all_instances_summary_vty(struct vty *vty, afi_t afi,
 		vty_out(vty, "{\n");
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
-			continue;
-
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		nbr_output = true;
@@ -18354,10 +18323,7 @@ static void bgp_show_all_instances_neighbors_vty(struct vty *vty, enum show_type
 		vty_out(vty, "{\n");
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
-			continue;
-
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		nbr_output = true;
@@ -18837,7 +18803,7 @@ static int bgp_show_all_instance_route_leak_vty(struct vty *vty, afi_t afi,
 		if (bgp->inst_type != BGP_INSTANCE_TYPE_DEFAULT)
 			vrf_name = bgp->name;
 
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		if (use_json) {
@@ -18930,10 +18896,7 @@ static void bgp_show_all_instances_updgrps_vty(struct vty *vty, afi_t afi,
 	struct bgp *bgp;
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
-			continue;
-
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		if (!uj)
@@ -19061,7 +19024,7 @@ DEFUN (show_bgp_updgrps_stats,
 	struct bgp *bgp;
 
 	bgp = bgp_get_default();
-	if (bgp && !IS_BGP_INSTANCE_HIDDEN(bgp))
+	if (bgp && !IS_BGP_INSTANCE_AUTO(bgp))
 		update_group_show_stats(bgp, vty);
 
 	return CMD_SUCCESS;
@@ -21334,8 +21297,8 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 	char *addr;
 	bool flag_scomm, flag_secomm, flag_slcomm;
 
-	/* skip hidden default vrf bgp instance */
-	if (IS_BGP_INSTANCE_HIDDEN(bgp))
+	/* skip auto-created instances: they have no user config */
+	if (IS_BGP_INSTANCE_AUTO(bgp))
 		return;
 
 	/* Skip dynamic neighbors. */
@@ -21650,8 +21613,8 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	struct peer_group *group;
 	struct listnode *node, *nnode;
 
-	/* skip hidden default vrf bgp instance */
-	if (IS_BGP_INSTANCE_HIDDEN(bgp))
+	/* skip auto-created instances: they have no user config */
+	if (IS_BGP_INSTANCE_AUTO(bgp))
 		return;
 
 	vty_frame(vty, " !\n address-family ");
@@ -21871,12 +21834,8 @@ int bgp_config_write(struct vty *vty)
 	/* BGP configuration. */
 	for (ALL_LIST_ELEMENTS(bm->bgp, mnode, mnnode, bgp)) {
 
-		/* skip all auto created vrf as they dont have user config */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
-			continue;
-
-		/* skip hidden default vrf bgp instance */
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		/* skip auto-created instances: they have no user config */
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		/* Router bgp ASN */

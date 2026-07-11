@@ -3134,6 +3134,31 @@ void vpn_policy_routemap_event(const char *rmap_name)
 		vpn_policy_routemap_update(bgp, rmap_name);
 }
 
+/* VRF<->VRF leaking transits the default instance's VPN RIB, so a VRF with
+ * import config claims the default instance: it is auto-created when absent
+ * and cannot go away (only be demoted to auto-created) while the import
+ * config exists. One claim per (VRF, afi), held for as long as
+ * BGP_CONFIG_VRF_TO_VRF_IMPORT is set, released by bgp_delete() at the
+ * latest.
+ */
+void vpn_leak_vpn_rib_claim(struct bgp *bgp, afi_t afi)
+{
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+		return;
+	if (bgp->vpn_policy[afi].vpn_rib_claim)
+		return;
+
+	bgp->vpn_policy[afi].vpn_rib_claim =
+		bgp_instance_claim(NULL, BGP_INSTANCE_USE_VPN_RIB);
+}
+
+void vpn_leak_vpn_rib_unclaim(struct bgp *bgp, afi_t afi)
+{
+	if (bgp->vpn_policy[afi].vpn_rib_claim)
+		bgp_instance_unclaim(&bgp->vpn_policy[afi].vpn_rib_claim,
+				     BGP_INSTANCE_USE_VPN_RIB);
+}
+
 void vrf_import_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp, const char *import_name,
 			 afi_t afi, safi_t safi)
 {
@@ -3178,6 +3203,7 @@ void vrf_import_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp, const char *i
 		XFREE(MTYPE_TMP, vname);
 
 	SET_FLAG(to_bgp->af_flags[afi][safi], BGP_CONFIG_VRF_TO_VRF_IMPORT);
+	vpn_leak_vpn_rib_claim(to_bgp, afi);
 
 	if (!from_bgp)
 		/* import vrf VRF context does not exist yet. */
@@ -3320,9 +3346,11 @@ void vrf_unimport_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp, const char 
 	vpn_leak_prechange(idir, afi, bgp_get_default(), to_bgp);
 
 	if (to_bgp->vpn_policy[afi].import_vrf->count == 0) {
-		if (!to_bgp->vpn_policy[afi].rmap[idir] && !to_bgp->vpn_policy[afi].rmap_name[idir])
+		if (!to_bgp->vpn_policy[afi].rmap[idir] && !to_bgp->vpn_policy[afi].rmap_name[idir]) {
 			UNSET_FLAG(to_bgp->af_flags[afi][safi],
 				   BGP_CONFIG_VRF_TO_VRF_IMPORT);
+			vpn_leak_vpn_rib_unclaim(to_bgp, afi);
+		}
 		if (to_bgp->vpn_policy[afi].rtlist[idir])
 			ecommunity_free(&to_bgp->vpn_policy[afi].rtlist[idir]);
 	} else if (from_bgp) {
@@ -4073,7 +4101,7 @@ void vpn_leak_postchange_all(void)
 		if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
 			continue;
 
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		vpn_leak_postchange(
@@ -4095,7 +4123,7 @@ void vpn_leak_postchange_all(void)
 		if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
 			continue;
 
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 
 		vpn_leak_postchange(
@@ -4187,6 +4215,7 @@ void bgp_vpn_leak_unimport(struct bgp *from_bgp)
 				     vname);
 			SET_FLAG(to_bgp->af_flags[afi][safi],
 				 BGP_CONFIG_VRF_TO_VRF_IMPORT);
+			vpn_leak_vpn_rib_claim(to_bgp, afi);
 
 			/* If to_bgp exports its routes to the bgp vrf
 			 * which is being deleted, un-import the

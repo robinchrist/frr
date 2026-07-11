@@ -3712,18 +3712,25 @@ static void bgp_vrf_string_name_delete(void *data)
 	XFREE(MTYPE_TMP, vname);
 }
 
-/* BGP instance creation by `router bgp' commands. */
+/* BGP instance creation by `router bgp' commands.
+ *
+ * With promote_auto set this does not create anything: bgp_old is an
+ * auto-created instance being promoted to a user-configured one, and only
+ * the parts a promotion changes (AS, peer init, ...) are (re)initialized in
+ * place - the rest of the struct, including everything claimants hold
+ * pointers to, is carried over.
+ */
 static struct bgp *bgp_create(as_t *as, const char *name,
 			      enum bgp_instance_type inst_type,
 			      const char *as_pretty,
 			      enum asnotation_mode asnotation,
-			      struct bgp *bgp_old, bool hidden)
+			      struct bgp *bgp_old, bool promote_auto)
 {
 	struct bgp *bgp;
 	afi_t afi;
 	safi_t safi;
 
-	if (hidden)
+	if (promote_auto)
 		bgp = bgp_old;
 	else
 		bgp = XCALLOC(MTYPE_BGP, sizeof(struct bgp));
@@ -3743,7 +3750,7 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 	} else
 		asn_str2asn_notation(bgp->as_pretty, NULL, &bgp->asnotation);
 
-	if (hidden)
+	if (promote_auto)
 		goto peer_init;
 
 	if (BGP_DEBUG(zebra, ZEBRA)) {
@@ -3794,12 +3801,12 @@ peer_init:
 					  "BGP Peer Hash");
 	bgp->connectionhash->max_size = BGP_PEER_MAX_HASH_SIZE;
 
-	if (!hidden)
+	if (!promote_auto)
 		bgp->group = list_new();
 	bgp->group->cmp = (int (*)(void *, void *))peer_group_cmp;
 
 	FOREACH_AFI_SAFI (afi, safi) {
-		if (!hidden) {
+		if (!promote_auto) {
 			bgp->static_routes[afi][safi] = bgp_table_init(bgp, afi, safi);
 			bgp->aggregate[afi][safi] = bgp_table_init(bgp, afi,
 								   safi);
@@ -3822,7 +3829,7 @@ peer_init:
 	bgp->default_subgroup_pkt_queue_max =
 		BGP_DEFAULT_SUBGROUP_PKT_QUEUE_MAX;
 	bgp_tcp_keepalive_unset(bgp);
-	if (!hidden)
+	if (!promote_auto)
 		bgp_timers_unset(bgp);
 	bgp->default_min_holdtime = 0;
 	bgp->restart_time = BGP_DEFAULT_RESTART_TIME;
@@ -3842,7 +3849,7 @@ peer_init:
 	bgp->rmap_def_originate_eval_timer = 0;
 
 #ifdef ENABLE_BGP_VNC
-	if (inst_type != BGP_INSTANCE_TYPE_VRF && !hidden) {
+	if (inst_type != BGP_INSTANCE_TYPE_VRF && !promote_auto) {
 		bgp->rfapi = bgp_rfapi_new(bgp);
 		assert(bgp->rfapi);
 		assert(bgp->rfapi_cfg);
@@ -3860,7 +3867,7 @@ peer_init:
 			bgp->vpn_policy[afi].import_vrf = list_new();
 		bgp->vpn_policy[afi].import_vrf->del =
 			bgp_vrf_string_name_delete;
-		if (!hidden) {
+		if (!promote_auto) {
 			bgp->vpn_policy[afi].export_vrf = list_new();
 			bgp->vpn_policy[afi].export_vrf->del =
 				bgp_vrf_string_name_delete;
@@ -3882,9 +3889,9 @@ peer_init:
 			bgp->restart_time, &bgp->t_startup);
 
 	/* printable name we can use in debug messages */
-	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT && !hidden) {
+	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT && !promote_auto) {
 		bgp->name_pretty = XSTRDUP(MTYPE_BGP_NAME, "VRF default");
-	} else if (!hidden) {
+	} else if (!promote_auto) {
 		const char *n;
 		int len;
 
@@ -3913,12 +3920,12 @@ peer_init:
 	/* Initialize IPv6 nexthop prefer-global defaults */
 	bgp_init_ipv6_nexthop_prefer_global(bgp);
 
-	if (!hidden)
+	if (!promote_auto)
 		QOBJ_REG(bgp, bgp);
 
 	update_bgp_group_init(bgp);
 
-	if (!hidden) {
+	if (!promote_auto) {
 		/* assign a unique rd id for auto derivation of vrf's RD */
 		bf_assign_index(bm->rd_idspace, bgp->vrf_rd_id);
 
@@ -3979,7 +3986,7 @@ struct bgp *bgp_lookup_by_name_filter(const char *name, bool filter_auto)
 	struct listnode *node, *nnode;
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (filter_auto && CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO))
+		if (filter_auto && IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 		if ((bgp->name == NULL && name == NULL)
 		    || (bgp->name && name && strcmp(bgp->name, name) == 0))
@@ -4004,6 +4011,101 @@ struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id)
 	if (!vrf)
 		return NULL;
 	return (vrf->info) ? (struct bgp *)vrf->info : NULL;
+}
+
+const char *bgp_instance_use2str(enum bgp_instance_use use)
+{
+	switch (use) {
+	case BGP_INSTANCE_USE_VPN_RIB:
+		return "vpn-rib";
+	case BGP_INSTANCE_USE_MAX:
+		break;
+	}
+	return "unknown";
+}
+
+bool bgp_instance_has_claims(const struct bgp *bgp)
+{
+	enum bgp_instance_use use;
+
+	for (use = 0; use < BGP_INSTANCE_USE_MAX; use++)
+		if (bgp->claim_count[use])
+			return true;
+
+	return false;
+}
+
+struct bgp *bgp_instance_claim(const char *vrf_name, enum bgp_instance_use use)
+{
+	bool default_vrf = !vrf_name || strmatch(vrf_name, VRF_DEFAULT_NAME);
+	struct bgp *bgp;
+
+	if (default_vrf)
+		bgp = bgp_get_default();
+	else
+		bgp = bgp_lookup_by_name_filter(vrf_name, false);
+
+	if (bgp && bgp->inst_type == BGP_INSTANCE_TYPE_VIEW) {
+		flog_err(EC_BGP_NO_DFLT,
+			 "cannot claim BGP instance '%s' for %s: the name belongs to a view",
+			 vrf_name, bgp_instance_use2str(use));
+		return NULL;
+	}
+
+	if (!bgp) {
+		as_t as = AS_UNSPECIFIED;
+		int ret;
+
+		ret = bgp_get_vty(&bgp, &as, default_vrf ? NULL : vrf_name,
+				  default_vrf ? BGP_INSTANCE_TYPE_DEFAULT
+					      : BGP_INSTANCE_TYPE_VRF,
+				  NULL, ASNOTATION_UNDEFINED);
+		if (ret || !bgp) {
+			flog_err(EC_BGP_NO_DFLT,
+				 "failed to auto-create BGP instance '%s' for %s",
+				 vrf_name ? vrf_name : VRF_DEFAULT_NAME,
+				 bgp_instance_use2str(use));
+			return NULL;
+		}
+
+		SET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
+
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("auto-created BGP instance %s (claimed for %s)",
+				   bgp->name_pretty, bgp_instance_use2str(use));
+	}
+
+	bgp->claim_count[use]++;
+
+	return bgp_lock(bgp);
+}
+
+void bgp_instance_unclaim(struct bgp **bgpp, enum bgp_instance_use use)
+{
+	struct bgp *bgp = *bgpp;
+
+	*bgpp = NULL;
+
+	assert(bgp && bgp->claim_count[use] > 0);
+	bgp->claim_count[use]--;
+
+	/* Auto-created and unclaimed: nothing needs this instance anymore,
+	 * tear it down for real. The auto flag is cleared first so
+	 * bgp_delete() does not defer the teardown again (it re-demotes on
+	 * its own if the VPN RIB still has routes to drain). During
+	 * termination the shutdown loop deletes every instance itself; a
+	 * nested delete here would free list nodes that loop still holds.
+	 */
+	if (!bm->terminating && IS_BGP_INSTANCE_AUTO(bgp) &&
+	    !bgp_instance_has_claims(bgp)) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("deleting auto-created BGP instance %s (last claim %s released)",
+				   bgp->name_pretty, bgp_instance_use2str(use));
+		UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
+		bgp_delete(bgp);
+	}
+
+	bgp_unlock(bgp);
 }
 
 /* Returns the default underlay BGP instance, or NULL if none resolves.
@@ -4093,7 +4195,7 @@ int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char *as_pr
 	struct bgp *bgp;
 	struct peer *peer = NULL;
 	struct listnode *node, *nnode;
-	bool hidden = false;
+	bool promote_auto = false;
 
 	/* Multiple instance check. */
 	if (name)
@@ -4102,23 +4204,20 @@ int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char *as_pr
 		bgp = bgp_get_default();
 
 	if (bgp) {
-		if (IS_BGP_INSTANCE_HIDDEN(bgp) && *as != AS_UNSPECIFIED)
-			hidden = true;
+		/* A real AS arriving for an auto-created instance promotes it
+		 * in place: bgp_create() re-initializes the existing struct,
+		 * so pointers held by claimants stay valid.
+		 */
+		if (IS_BGP_INSTANCE_AUTO(bgp) && *as != AS_UNSPECIFIED)
+			promote_auto = true;
 		/* Handle AS number change */
 		if (bgp->as != *as) {
-			if (hidden || CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO)) {
-				if (hidden) {
-					bgp_create(as, name, inst_type,
-						   as_pretty, asnotation, bgp,
-						   hidden);
-					UNSET_FLAG(bgp->flags,
-						   BGP_FLAG_INSTANCE_HIDDEN);
-					UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
-				} else {
-					bgp->as = *as;
-					if (force_config == false)
-						UNSET_FLAG(bgp->vrf_flags, BGP_VRF_AUTO);
-				}
+			if (promote_auto) {
+				bgp_create(as, name, inst_type, as_pretty,
+					   asnotation, bgp, promote_auto);
+				UNSET_FLAG(bgp->flags,
+					   BGP_FLAG_INSTANCE_AUTO_CREATED);
+				UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
 
 				/* Set all peer's local AS with this ASN */
 				for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode,
@@ -4134,9 +4233,9 @@ int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char *as_pr
 		}
 		if (bgp->inst_type != inst_type)
 			return BGP_ERR_INSTANCE_MISMATCH;
-		if (hidden)
+		if (promote_auto)
 			bgp_create(as, name, inst_type, as_pretty, asnotation,
-				   bgp, hidden);
+				   bgp, promote_auto);
 		*bgp_val = bgp;
 		return BGP_INSTANCE_EXISTS;
 	}
@@ -4496,13 +4595,22 @@ int bgp_delete(struct bgp *bgp)
 		bgp_damp_disable(bgp, afi, safi);
 	}
 
-	if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT &&
-	    (bgp_table_top(bgp->rib[AFI_IP][SAFI_MPLS_VPN]) ||
-	     bgp_table_top(bgp->rib[AFI_IP6][SAFI_MPLS_VPN]))) {
+	/* An instance that other subsystems still claim, and a default
+	 * instance whose VPN RIB still holds routes, must not be freed:
+	 * demote it to an auto-created instance instead. The teardown steps
+	 * below that would make the struct unusable are skipped for
+	 * auto-created instances; the deferred teardown runs when the last
+	 * claim is released (bgp_instance_unclaim()) or at daemon
+	 * termination.
+	 */
+	if (bgp_instance_has_claims(bgp) ||
+	    (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT &&
+	     (bgp_table_top(bgp->rib[AFI_IP][SAFI_MPLS_VPN]) ||
+	      bgp_table_top(bgp->rib[AFI_IP6][SAFI_MPLS_VPN])))) {
 		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug(
-				"Marking the deleting default bgp instance as hidden");
-		SET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_HIDDEN);
+			zlog_debug("Demoting deleted instance %s to auto-created",
+				   bgp->name_pretty);
+		SET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED);
 	}
 
 	if (BGP_DEBUG(zebra, ZEBRA)) {
@@ -4596,7 +4704,7 @@ int bgp_delete(struct bgp *bgp)
 		}
 	}
 
-	if (bgp->peer_self && (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating)) {
+	if (bgp->peer_self && (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating)) {
 		peer_delete(bgp->peer_self);
 		bgp->peer_self = NULL;
 	}
@@ -4613,7 +4721,7 @@ int bgp_delete(struct bgp *bgp)
 /* TODO - Other memory may need to be freed - e.g., NHT */
 
 #ifdef ENABLE_BGP_VNC
-	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating)
+	if (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating)
 		rfapi_delete(bgp);
 #endif
 
@@ -4656,7 +4764,7 @@ int bgp_delete(struct bgp *bgp)
 	}
 
 	/* Deregister from Zebra, if needed */
-	if (IS_BGP_INST_KNOWN_TO_ZEBRA(bgp) && !IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (IS_BGP_INST_KNOWN_TO_ZEBRA(bgp) && !IS_BGP_INSTANCE_AUTO(bgp)) {
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug(
 				"%s: deregistering this bgp %s instance from zebra",
@@ -4664,7 +4772,7 @@ int bgp_delete(struct bgp *bgp)
 		bgp_zebra_instance_deregister(bgp);
 	}
 
-	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating) {
+	if (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating) {
 		/* Remove visibility via the master list -
 		 * there may however still be routes to be processed
 		 * still referencing the struct bgp.
@@ -4676,7 +4784,7 @@ int bgp_delete(struct bgp *bgp)
 
 	vrf = bgp_vrf_lookup_by_instance_type(bgp);
 	bgp_handle_socket(bgp, vrf, VRF_UNKNOWN, false);
-	if (vrf && (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating))
+	if (vrf && (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating))
 		bgp_vrf_unlink(bgp, vrf);
 
 	/* Drop from the underlay registry if the instance goes away while
@@ -4687,7 +4795,15 @@ int bgp_delete(struct bgp *bgp)
 		bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
 	}
 
-	if (!IS_BGP_INSTANCE_HIDDEN(bgp) || bm->terminating) {
+	/* Release the claims this instance held on the default instance for
+	 * VRF<->VRF leaking. Residual name-only `import vrf` entries do not
+	 * go through vrf_unimport_from_vrf() on instance delete and would
+	 * otherwise keep the default instance claimed forever.
+	 */
+	vpn_leak_vpn_rib_unclaim(bgp, AFI_IP);
+	vpn_leak_vpn_rib_unclaim(bgp, AFI_IP6);
+
+	if (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating) {
 		if (bgp->process_queue)
 			work_queue_free_and_null(&bgp->process_queue);
 		bgp_unlock(bgp); /* initial reference */

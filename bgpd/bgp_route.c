@@ -4089,15 +4089,16 @@ void bgp_process_main_one(struct bgp *bgp, struct bgp_dest *dest, afi_t afi, saf
 	int debug = 0;
 
 	/*
-	 * For default bgp instance, which is deleted i.e. marked hidden
+	 * For a default bgp instance that was deleted but demoted to
+	 * auto-created
 	 * we are skipping SAFI_MPLS_VPN route table deletion
 	 * in bgp_cleanup_routes.
 	 * So, we need to delete routes from VPNV4 table.
-	 * Here for !IS_BGP_INSTANCE_HIDDEN,
+	 * Here for !IS_BGP_INSTANCE_AUTO,
 	 * !(SAFI_MPLS_VPN && AF_IP/AF_IP6),
 	 * we ignore the event for the prefix.
 	 */
-	if (BGP_INSTANCE_HIDDEN_DELETE_IN_PROGRESS(bgp, afi, safi)) {
+	if (BGP_INSTANCE_AUTO_DELETE_IN_PROGRESS(bgp, afi, safi)) {
 		if (dest)
 			debug = bgp_debug_bestpath(dest);
 		if (debug)
@@ -8104,7 +8105,7 @@ void bgp_cleanup_routes(struct bgp *bgp)
 		/*
 		 * VPN and ENCAP and EVPN tables are two-level (RD is top level)
 		 */
-		if (safi != SAFI_MPLS_VPN && IS_BGP_INSTANCE_HIDDEN(bgp) && !bm->terminating)
+		if (safi != SAFI_MPLS_VPN && IS_BGP_INSTANCE_AUTO(bgp) && !bm->terminating)
 			continue;
 
 		for (dest = bgp_table_top(bgp->rib[afi][safi]); dest; dest = bgp_route_next(dest)) {
@@ -14282,7 +14283,7 @@ static int bgp_show(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 		bgp = bgp_get_default();
 	}
 
-	if (bgp == NULL || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (bgp == NULL || IS_BGP_INSTANCE_AUTO(bgp)) {
 		if (!use_json)
 			vty_out(vty, "No BGP process is configured\n");
 		else
@@ -14327,7 +14328,7 @@ static void bgp_show_all_instances_routes_vty(struct vty *vty, afi_t afi,
 		vty_out(vty, "{\n");
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (IS_BGP_INSTANCE_HIDDEN(bgp))
+		if (IS_BGP_INSTANCE_AUTO(bgp))
 			continue;
 		route_output = true;
 		if (use_json) {
@@ -14906,7 +14907,7 @@ static int bgp_show_route(struct vty *vty, struct bgp *bgp, const char *ip_str, 
 {
 	if (!bgp) {
 		bgp = bgp_get_default();
-		if (!bgp || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+		if (!bgp || IS_BGP_INSTANCE_AUTO(bgp)) {
 			if (!use_json)
 				vty_out(vty, "No BGP process is configured\n");
 			else
@@ -16639,7 +16640,7 @@ DEFUN (show_ip_bgp_vpn_all_route_prefix,
 	int idx = 0;
 	char *network = NULL;
 	struct bgp *bgp = bgp_get_default();
-	if (!bgp || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+	if (!bgp || IS_BGP_INSTANCE_AUTO(bgp)) {
 		vty_out(vty, "Can't find default instance\n");
 		return CMD_WARNING;
 	}
@@ -18400,7 +18401,7 @@ static int bgp_clear_damp_route(struct vty *vty, const char *view_name,
 	/* BGP structure lookup. */
 	if (view_name) {
 		bgp = bgp_lookup_by_name(view_name);
-		if (bgp == NULL || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+		if (bgp == NULL || IS_BGP_INSTANCE_AUTO(bgp)) {
 			vty_out(vty, "%% Can't find BGP instance %s\n",
 				view_name);
 			return CMD_WARNING;

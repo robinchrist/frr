@@ -9682,8 +9682,6 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 		return -1;
 	}
 
-	bool is_auto_vrf = CHECK_FLAG(bgp_vrf->vrf_flags, BGP_VRF_AUTO);
-
 	bool import_auto_rt_active_before = bgp_evpn_vrf_should_generate_import_autort(bgp_vrf);
 	bool export_auto_rt_active_before = bgp_evpn_vrf_should_generate_export_autort(bgp_vrf);
 
@@ -9728,20 +9726,10 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 
 	/* Essentially what bgp_evpn_vrf_handle_import_rt_change does, but without the bgp_evpn_vrf_install_global_routes
 	 * We perform bgp_evpn_vrf_install_global_routes later due to bgp_evpn_evi_link_to_vrf_hash
-	 *
-	 * + little optimization for auto VRFs - delete the routes because the VRF will be deleted
-	 * and don't call bgp_evpn_vrf_uninstall_global_routes twice
 	 */
-	if(effective_import_rts_changed || is_auto_vrf) {
-		/* For Auto VRF:
-		 * Remove remote routes from BGP VRF if BGP_VRF_AUTO is configured, as
-		 * bgp_delete would not remove/decrement bgp_path_info of the ip_prefix
-		 * routes. This will uninstall the routes from zebra and decrement the
-		 * bgp info count.
-		 */
-		bgp_evpn_vrf_uninstall_global_routes(bgp_vrf);
-	}
 	if(effective_import_rts_changed) {
+		bgp_evpn_vrf_uninstall_global_routes(bgp_vrf);
+
 		bgp_evpn_vrf_unmap_from_vrf_irt_nodes(bgp_vrf);
 
 		bgp_evpn_vrf_regenerate_effective_import_rts(bgp_vrf);
@@ -9773,13 +9761,8 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	/* Re-Install received routes if required - just because we don't have a L3VNI, doesn't mean
 	 * we can't import routes!
 	*/
-	if(!is_auto_vrf && effective_import_rts_changed) {
+	if(effective_import_rts_changed) {
 		bgp_evpn_vrf_install_global_routes(bgp_vrf);
-	}
-
-	/* Delete the instance if it was autocreated */
-	if (is_auto_vrf) {
-		bgp_delete(bgp_vrf);
 	}
 
 	return 0;

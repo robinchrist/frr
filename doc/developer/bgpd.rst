@@ -9,4 +9,5 @@ BGPD
 
    next-hop-tracking
    bgp-typecodes
+   bgp-instance-claims
    bmp

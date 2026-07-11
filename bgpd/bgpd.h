@@ -408,6 +408,12 @@ struct vpn_policy {
 	 */
 	struct list *import_vrf;
 
+	/* Claim held on the default instance (the VPN RIB leak transit)
+	 * while this VRF has VRF<->VRF import config for this afi; NULL
+	 * otherwise. See vpn_leak_vpn_rib_claim()/vpn_leak_vpn_rib_unclaim().
+	 */
+	struct bgp *vpn_rib_claim;
+
 	/*
 	 * if we are being exported to another vrf keep a list of
 	 * vrf names that we are being exported to.
@@ -437,6 +443,27 @@ enum bgp_instance_type {
 	BGP_INSTANCE_TYPE_DEFAULT,
 	BGP_INSTANCE_TYPE_VRF,
 	BGP_INSTANCE_TYPE_VIEW
+};
+
+/* Uses for which a code path can claim a BGP instance via
+ * bgp_instance_claim().
+ *
+ * A claim expresses "this subsystem needs the instance for VRF <name> to
+ * exist", independent of whether the user has configured `router bgp` for
+ * that VRF and independent of any other subsystem's claims. Claiming an
+ * instance that does not exist auto-creates it (flagged
+ * BGP_FLAG_INSTANCE_AUTO_CREATED, invisible to config and show output); the
+ * instance is only freed once the user config AND every claim are gone.
+ * Claims are counted per use, so `show bgp vrf ... detail` can report why an
+ * auto-created instance exists.
+ */
+enum bgp_instance_use {
+	/* A VRF's VRF<->VRF leak config needs the default instance's VPN RIB
+	 * as leak transit (`import vrf ...` and friends).
+	 */
+	BGP_INSTANCE_USE_VPN_RIB,
+
+	BGP_INSTANCE_USE_MAX
 };
 
 /*
@@ -668,6 +695,13 @@ struct bgp {
 	/* Reference count to allow peer_delete to finish after bgp_delete */
 	int lock;
 
+	/* Per-use claim counts (see enum bgp_instance_use). Any non-zero
+	 * count keeps this instance alive across `no router bgp` (demoted to
+	 * auto-created instead of freed). Maintained only through
+	 * bgp_instance_claim()/bgp_instance_unclaim().
+	 */
+	uint32_t claim_count[BGP_INSTANCE_USE_MAX];
+
 	/* Self peer.  */
 	struct peer *peer_self;
 
@@ -837,7 +871,26 @@ struct bgp {
 #define BGP_FLAG_ENFORCE_FIRST_AS (1ULL << 36)
 #define BGP_FLAG_DYNAMIC_CAPABILITY (1ULL << 37)
 #define BGP_FLAG_VNI_DOWN		 (1ULL << 38)
-#define BGP_FLAG_INSTANCE_HIDDEN	 (1ULL << 39)
+/* Auto-created instance: this instance exists only because other code paths
+ * claimed it (see bgp_instance_claim()), not because the user configured
+ * `router bgp` for it. Auto-created instances are invisible: they are skipped
+ * by config-write and by show commands, and bgp_lookup_by_name() does not
+ * return them (bgp_lookup_by_name_filter(name, false) does).
+ *
+ * Lifecycle:
+ *  - created by bgp_instance_claim() with AS_UNSPECIFIED when a claimed
+ *    instance does not exist yet,
+ *  - promoted in place to a regular instance when the user configures
+ *    `router bgp` for it (bgp_lookup_by_as_name_type() re-initializes the
+ *    existing struct and clears this flag; every claimant's pointer stays
+ *    valid across the promotion),
+ *  - demoted back to auto-created by bgp_delete() when the user removes a
+ *    still-claimed instance: the struct survives with its claims intact and
+ *    this flag set (bgp_delete() defers the actual teardown),
+ *  - freed for real when the last claim is dropped while the flag is set
+ *    (bgp_instance_unclaim() then runs the deferred bgp_delete()).
+ */
+#define BGP_FLAG_INSTANCE_AUTO_CREATED	 (1ULL << 39)
 /* Prohibit BGP from enabling IPv6 RA on interfaces */
 #define BGP_FLAG_IPV6_NO_AUTO_RA	    (1ULL << 40)
 #define BGP_FLAG_LINK_LOCAL_CAPABILITY	    (1ULL << 43)
@@ -1154,7 +1207,9 @@ struct bgp {
 
 	/* vrf flags */
 	uint32_t vrf_flags;
-#define BGP_VRF_AUTO                        (1 << 0)
+/* (1 << 0) was BGP_VRF_AUTO; auto-created instances are now tracked via
+ * BGP_FLAG_INSTANCE_AUTO_CREATED and bgp_instance_claim()/unclaim().
+ */
 #define BGP_EVPN_VRF_RD_CFGD                     (1 << 1)
 
 /* Indicates that the L3VNI and generally the VRF should only be used for Type 5 (IP Prefix) routes
@@ -2817,6 +2872,24 @@ extern struct bgp *bgp_lookup_by_name(const char *name);
 extern struct bgp *bgp_lookup_by_name_filter(const char *name, bool filter_auto);
 extern struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id);
 extern struct bgp *bgp_get_evpn_default_underlay_vrf(void);
+
+/* Claim the instance for VRF vrf_name (NULL or VRF_DEFAULT_NAME: the default
+ * instance) for the given use, auto-creating it (invisible, AS_UNSPECIFIED) when
+ * it does not exist. Returns a locked pointer that stays valid - including
+ * across user config add/remove of the instance - until released with
+ * bgp_instance_unclaim(). Returns NULL only if the name is taken by a view
+ * or the instance cannot be created.
+ */
+extern struct bgp *bgp_instance_claim(const char *vrf_name,
+				      enum bgp_instance_use use);
+/* Release a claim taken with bgp_instance_claim() and NULL out the caller's
+ * pointer. Frees the instance when this was the last claim on an
+ * auto-created instance.
+ */
+extern void bgp_instance_unclaim(struct bgp **bgp, enum bgp_instance_use use);
+/* True if any subsystem currently holds a claim on this instance. */
+extern bool bgp_instance_has_claims(const struct bgp *bgp);
+extern const char *bgp_instance_use2str(enum bgp_instance_use use);
 extern struct peer *peer_lookup(struct bgp *bgp, union sockunion *su);
 extern struct peer *peer_lookup_by_conf_if(struct bgp *bgp, const char *ifname);
 extern struct peer *peer_lookup_by_hostname(struct bgp *bgp, const char *hostname);
@@ -3535,16 +3608,21 @@ struct srv6_locator *bgp_srv6_locator_lookup(struct bgp *bgp_vrf, struct bgp *bg
 /* clang-format on */
 #endif
 
-/* Macro to check if default bgp instance is hidden */
-#define IS_BGP_INSTANCE_HIDDEN(_bgp)                                           \
-	(CHECK_FLAG(_bgp->flags, BGP_FLAG_INSTANCE_HIDDEN) &&                  \
+/* True for an auto-created DEFAULT or VRF instance.
+ * See BGP_FLAG_INSTANCE_AUTO_CREATED for the lifecycle.
+ */
+#define IS_BGP_INSTANCE_AUTO(_bgp)                                             \
+	(CHECK_FLAG(_bgp->flags, BGP_FLAG_INSTANCE_AUTO_CREATED) &&            \
 	 (_bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT ||                      \
 	  _bgp->inst_type == BGP_INSTANCE_TYPE_VRF))
 
-/* Macro to check if bgp instance delete in-progress and !hidden */
-#define BGP_INSTANCE_HIDDEN_DELETE_IN_PROGRESS(_bgp, _afi, _safi)              \
+/* True when the instance is going away for real (not merely demoted to
+ * auto-created) and the given table is not one of the VPN tables that must
+ * keep draining while the deletion completes.
+ */
+#define BGP_INSTANCE_AUTO_DELETE_IN_PROGRESS(_bgp, _afi, _safi)                \
 	(CHECK_FLAG(_bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS) &&               \
-	 !IS_BGP_INSTANCE_HIDDEN(_bgp) &&                                      \
+	 !IS_BGP_INSTANCE_AUTO(_bgp) &&                                        \
 	 !(_afi == AFI_IP && _safi == SAFI_MPLS_VPN) &&                        \
 	 !(_afi == AFI_IP6 && _safi == SAFI_MPLS_VPN))
 

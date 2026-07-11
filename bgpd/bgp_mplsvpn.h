@@ -90,6 +90,12 @@ extern void ensure_vrf_tovpn_sid_per_af(struct bgp *vpn, struct bgp *vrf,
 extern void ensure_vrf_tovpn_sid_per_vrf(struct bgp *vpn, struct bgp *vrf);
 extern void transpose_sid(struct in6_addr *sid, uint32_t label, uint8_t offset, uint8_t size,
 			  uint8_t size_max);
+/* Claim/release of the default instance (VPN RIB leak transit) by a VRF's
+ * VRF<->VRF import config; see the definitions for the lifecycle.
+ */
+extern void vpn_leak_vpn_rib_claim(struct bgp *bgp, afi_t afi);
+extern void vpn_leak_vpn_rib_unclaim(struct bgp *bgp, afi_t afi);
+
 extern void vrf_import_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp, const char *import_name,
 				afi_t afi, safi_t safi);
 void vrf_unimport_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp, const char *import_name,
