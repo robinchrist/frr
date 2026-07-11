@@ -4018,6 +4018,8 @@ const char *bgp_instance_use2str(enum bgp_instance_use use)
 	switch (use) {
 	case BGP_INSTANCE_USE_VPN_RIB:
 		return "vpn-rib";
+	case BGP_INSTANCE_USE_EVPN_UNDERLAY:
+		return "evpn-underlay";
 	case BGP_INSTANCE_USE_MAX:
 		break;
 	}
@@ -4080,6 +4082,14 @@ struct bgp *bgp_instance_claim(const char *vrf_name, enum bgp_instance_use use)
 	return bgp_lock(bgp);
 }
 
+struct bgp *bgp_instance_claim_existing(struct bgp *bgp,
+					enum bgp_instance_use use)
+{
+	bgp->claim_count[use]++;
+
+	return bgp_lock(bgp);
+}
+
 void bgp_instance_unclaim(struct bgp **bgpp, enum bgp_instance_use use)
 {
 	struct bgp *bgp = *bgpp;
@@ -4113,28 +4123,30 @@ void bgp_instance_unclaim(struct bgp **bgpp, enum bgp_instance_use use)
  * The default underlay is the instance that overlay objects (tenant VRFs /
  * EVIs) bind to when they do not name their own `underlay-vrf`. It is the
  * deterministic replacement for the former "EVPN master instance" singleton:
- *   - if `default-underlay-vrf VRF` is configured (top-level `evpn` node), that
- *     instance (when it is actually a configured underlay), else
+ *   - if `default-underlay-vrf VRF` is configured (top-level `evpn` node),
+ *     that instance - and ONLY when it is actually a configured underlay
+ *     (fail closed otherwise), else
  *   - the default VRF instance, when it is itself a configured underlay.
  * Anything else (e.g. the sole underlay living in a non-default VRF with no
  * `default-underlay-vrf` configured) is intentionally unresolved.
  */
 struct bgp *bgp_get_evpn_default_underlay_vrf(void)
 {
-	struct bgp *underlay = NULL;
+	struct bgp *cfgd = bgp_evpn_gbl()->default_underlay;
 	struct bgp *bgp_default;
 
-	if (bgp_evpn_gbl()->default_underlay_vrf_name)
-		underlay = bgp_evpn_underlay_lookup_by_name(
-			bgp_evpn_gbl()->default_underlay_vrf_name);
+	/* Configured but not (yet) a vxlan-underlay: fail closed - the
+	 * implicit default must not kick in for an explicitly named
+	 * default-underlay-vrf.
+	 */
+	if (cfgd)
+		return is_evpn_underlay(cfgd) ? cfgd : NULL;
 
-	if (!underlay) {
-		bgp_default = bgp_get_default();
-		if (bgp_default && bgp_default->evpn_vxlan_underlay_cfgd)
-			underlay = bgp_default;
-	}
+	bgp_default = bgp_get_default();
+	if (bgp_default && bgp_default->evpn_vxlan_underlay_cfgd)
+		return bgp_default;
 
-	return underlay;
+	return NULL;
 }
 
 /* handle socket creation or deletion, if necessary
@@ -4802,6 +4814,14 @@ int bgp_delete(struct bgp *bgp)
 	 */
 	vpn_leak_vpn_rib_unclaim(bgp, AFI_IP);
 	vpn_leak_vpn_rib_unclaim(bgp, AFI_IP6);
+
+	/* Release this (tenant) instance's underlay bindings */
+	if (bgp->evpn_cfgd_underlay)
+		bgp_instance_unclaim(&bgp->evpn_cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	if (bgp->evpn_dp_underlay)
+		bgp_instance_unclaim(&bgp->evpn_dp_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	if (!IS_BGP_INSTANCE_AUTO(bgp) || bm->terminating) {
 		if (bgp->process_queue)

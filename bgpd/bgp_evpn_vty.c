@@ -3385,12 +3385,27 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgp_evpn_evi *ev
  */
 static void evpn_set_vxlan_underlay(struct bgp *bgp)
 {
+	struct bgp *bgp_vrf;
+	struct listnode *node;
+
 	if (bgp->evpn_vxlan_underlay_cfgd)
 		return;
 
 	bgp->evpn_vxlan_underlay_cfgd = true;
 	bgp_evpn_underlays_add_tail(&bgp_evpn_gbl()->underlays, bgp);
 	bgp_zebra_advertise_all_vni(bgp, true);
+
+	/* Overlay objects bound to this instance were failing closed until
+	 * now. EVIs come up via the zebra re-scan just triggered; tenant
+	 * VRFs with an already-live L3VNI must be re-driven here.
+	 */
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+		if (bgp_vrf->inst_type == BGP_INSTANCE_TYPE_VIEW)
+			continue;
+		if (bgp_evpn_vrf_get_underlay(bgp_vrf) == bgp)
+			bgp_evpn_vrf_update_advertise_originated_type_5_routes(
+				bgp_vrf);
+	}
 
 	/* Multihoming (Ethernet Segments) and a few instance-wide knobs
 	 * (advertise-pip, resolve-overlay-index, ...) are not multi-underlay
@@ -3407,8 +3422,22 @@ static void evpn_set_vxlan_underlay(struct bgp *bgp)
  */
 static void evpn_unset_vxlan_underlay(struct bgp *bgp)
 {
+	struct bgp *bgp_vrf;
+	struct listnode *node;
+
 	if (!bgp->evpn_vxlan_underlay_cfgd)
 		return;
+
+	/* Withdraw tenant-originated routes while the binding still
+	 * resolves to this instance (they fail closed afterwards).
+	 */
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+		if (bgp_vrf->inst_type == BGP_INSTANCE_TYPE_VIEW)
+			continue;
+		if (bgp_evpn_vrf_get_underlay(bgp_vrf) == bgp)
+			bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(
+				bgp_vrf);
+	}
 
 	bgp->evpn_vxlan_underlay_cfgd = false;
 	bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
@@ -3727,30 +3756,38 @@ DEFPY (bgp_evpn_underlay_vrf,
 		return CMD_WARNING;
 
 	if (no) {
-		if (!bgp->evpn_cfgd_underlay_vrf_name) {
+		if (!bgp->evpn_cfgd_underlay) {
 			vty_out(vty, "%% underlay-vrf is not configured\n");
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		if (vrfname && strcmp(vrfname, bgp->evpn_cfgd_underlay_vrf_name) != 0) {
+		if (vrfname &&
+		    strcmp(vrfname, bgp_evpn_underlay_ref_name(
+					    bgp->evpn_cfgd_underlay)) != 0) {
 			vty_out(vty, "%% Configured underlay-vrf is %s, not %s\n",
-				bgp->evpn_cfgd_underlay_vrf_name, vrfname);
+				bgp_evpn_underlay_ref_name(
+					bgp->evpn_cfgd_underlay),
+				vrfname);
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
+		bgp_evpn_vrf_set_cfgd_underlay(bgp, NULL);
 		return CMD_SUCCESS;
 	}
 
-	if (bgp->evpn_cfgd_underlay_vrf_name &&
-	    strcmp(bgp->evpn_cfgd_underlay_vrf_name, vrfname) == 0)
+	if (bgp->evpn_cfgd_underlay &&
+	    strcmp(bgp_evpn_underlay_ref_name(bgp->evpn_cfgd_underlay),
+		   vrfname) == 0)
 		return CMD_SUCCESS;
 
-	XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
-	bgp->evpn_cfgd_underlay_vrf_name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
-
-	/* Resolution is lazy (by name): the underlay instance does not need
-	 * to exist (yet). Operative use of this binding comes with the
-	 * import/origination decoupling.
+	/* Claims the instance (auto-created when absent, so config ordering
+	 * does not matter); origination fails closed until the instance is
+	 * a vxlan-underlay.
 	 */
+	if (!bgp_evpn_vrf_set_cfgd_underlay(bgp, vrfname)) {
+		vty_out(vty, "%% Cannot bind underlay-vrf %s (name belongs to a view)\n",
+			vrfname);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	return CMD_SUCCESS;
 }
 
@@ -4704,9 +4741,14 @@ static void show_evi_identity(struct vty *vty, struct bgp_evpn_evi *evi,
 		json_object_string_add(json_evi, "origin", evi_origin_str(evi->origin));
 		json_object_int_add(json_evi, "originationL2vni", evi->vni);
 		json_object_string_add(json_evi, "tenantVrf", tenant);
-		if (evi->cfgd_underlay_vrf_name)
+		if (evi->cfgd_underlay) {
 			json_object_string_add(json_evi, "cfgdUnderlayVrf",
-					       evi->cfgd_underlay_vrf_name);
+					       bgp_evpn_underlay_ref_name(
+						       evi->cfgd_underlay));
+			json_object_boolean_add(json_evi, "cfgdUnderlayVrfPending",
+						!is_evpn_underlay(
+							evi->cfgd_underlay));
+		}
 		if (underlay)
 			json_object_string_add(json_evi, "underlayVrf", underlay->name_pretty);
 		json_object_string_add(json_evi, "dataplaneState",
@@ -4797,8 +4839,8 @@ DEFPY(show_bgp_l2vpn_evpn_vxlan_underlay,
 		json_root = json_object_new_object();
 		json_arr = json_object_new_array();
 	} else {
-		vty_out(vty, "%-24s %-16s %-6s %s\n",
-			"Underlay-VRF", "Router-ID", "AutoD", "Flags");
+		vty_out(vty, "%-24s %-16s %-6s %-8s %s\n", "Underlay-VRF",
+			"Router-ID", "AutoD", "Bindings", "Flags");
 	}
 
 	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, underlay) {
@@ -4810,14 +4852,43 @@ DEFPY(show_bgp_l2vpn_evpn_vxlan_underlay,
 			json_object_string_addf(json_u, "routerId", "%pI4", &underlay->router_id);
 			json_object_boolean_add(json_u, "autoDiscoverVnis",
 						!!underlay->evpn_auto_discover_vnis);
+			json_object_int_add(json_u, "underlayBindings",
+					    underlay->claim_count
+						    [BGP_INSTANCE_USE_EVPN_UNDERLAY]);
+			json_object_boolean_add(json_u, "isDefaultUnderlay",
+						underlay ==
+							bgp_get_evpn_default_underlay_vrf());
 			json_object_array_add(json_arr, json_u);
 		} else {
-			vty_out(vty, "%-24s %-16pI4 %-6s %s\n",
+			vty_out(vty, "%-24s %-16pI4 %-6s %-8u %s%s\n",
 				underlay->name_pretty, &underlay->router_id,
 				underlay->evpn_auto_discover_vnis ? "yes" : "no",
+				underlay->claim_count[BGP_INSTANCE_USE_EVPN_UNDERLAY],
 				underlay->evpn_info &&
 				underlay->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL
-					? "HER" : "");
+					? "HER " : "",
+				underlay == bgp_get_evpn_default_underlay_vrf()
+					? "default-underlay" : "");
+		}
+	}
+
+	/* A configured default-underlay-vrf that is not (yet) a
+	 * vxlan-underlay is invisible in the registry walk above - surface
+	 * it, it explains why unbound overlay objects are down.
+	 */
+	if (bgp_evpn_gbl()->default_underlay &&
+	    !is_evpn_underlay(bgp_evpn_gbl()->default_underlay)) {
+		if (json) {
+			json_object_string_add(json_root, "cfgdDefaultUnderlayVrf",
+					       bgp_evpn_underlay_ref_name(
+						       bgp_evpn_gbl()->default_underlay));
+			json_object_boolean_add(json_root,
+						"cfgdDefaultUnderlayVrfPending",
+						true);
+		} else {
+			vty_out(vty, "%% default-underlay-vrf %s is pending (not a vxlan-underlay)\n",
+				bgp_evpn_underlay_ref_name(
+					bgp_evpn_gbl()->default_underlay));
 		}
 	}
 
@@ -6642,30 +6713,35 @@ DEFPY (bgp_evpn_default_underlay_vrf,
        "Underlay VRF that overlay objects bind to when they do not name their own underlay-vrf\n"
        "Name of the underlay VRF\n")
 {
-	char **name = &bgp_evpn_gbl()->default_underlay_vrf_name;
+	struct bgp *cfgd = bgp_evpn_gbl()->default_underlay;
 
 	if (no) {
-		if (!*name) {
+		if (!cfgd) {
 			vty_out(vty, "%% default-underlay-vrf is not configured\n");
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		if (vrfname && strcmp(vrfname, *name) != 0) {
+		if (vrfname &&
+		    strcmp(vrfname, bgp_evpn_underlay_ref_name(cfgd)) != 0) {
 			vty_out(vty, "%% Configured default-underlay-vrf is %s, not %s\n",
-				*name, vrfname);
+				bgp_evpn_underlay_ref_name(cfgd), vrfname);
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		XFREE(MTYPE_BGP_NAME, *name);
+		bgp_evpn_set_cfgd_default_underlay(NULL);
 		return CMD_SUCCESS;
 	}
 
-	if (*name && strcmp(*name, vrfname) == 0)
+	if (cfgd && strcmp(bgp_evpn_underlay_ref_name(cfgd), vrfname) == 0)
 		return CMD_SUCCESS;
 
-	/* Resolution is lazy (by name): the underlay instance does not need to
-	 * exist (yet); bgp_get_evpn_default_underlay_vrf() resolves on demand.
+	/* Claims the instance (auto-created when absent, so config ordering
+	 * does not matter); the default resolution fails closed until the
+	 * instance is a vxlan-underlay.
 	 */
-	XFREE(MTYPE_BGP_NAME, *name);
-	*name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
+	if (!bgp_evpn_set_cfgd_default_underlay(vrfname)) {
+		vty_out(vty, "%% Cannot bind default-underlay-vrf %s (name belongs to a view)\n",
+			vrfname);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
 
 	return CMD_SUCCESS;
 }
@@ -6701,28 +6777,36 @@ DEFPY (bgp_evpn_evi_underlay_vrf,
 	VTY_DECLVAR_CONTEXT_SUB(bgp_evpn_evi, evi);
 
 	if (no) {
-		if (!evi->cfgd_underlay_vrf_name) {
+		if (!evi->cfgd_underlay) {
 			vty_out(vty, "%% underlay-vrf is not configured for this EVI\n");
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		if (vrfname && strcmp(vrfname, evi->cfgd_underlay_vrf_name) != 0) {
+		if (vrfname &&
+		    strcmp(vrfname, bgp_evpn_underlay_ref_name(
+					    evi->cfgd_underlay)) != 0) {
 			vty_out(vty, "%% Configured underlay-vrf is %s, not %s\n",
-				evi->cfgd_underlay_vrf_name, vrfname);
+				bgp_evpn_underlay_ref_name(evi->cfgd_underlay),
+				vrfname);
 			return CMD_WARNING_CONFIG_FAILED;
 		}
-		XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
+		bgp_evpn_evi_set_cfgd_underlay(evi, NULL);
 		return CMD_SUCCESS;
 	}
 
-	if (evi->cfgd_underlay_vrf_name && strcmp(evi->cfgd_underlay_vrf_name, vrfname) == 0)
+	if (evi->cfgd_underlay &&
+	    strcmp(bgp_evpn_underlay_ref_name(evi->cfgd_underlay), vrfname) == 0)
 		return CMD_SUCCESS;
 
-	XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
-	evi->cfgd_underlay_vrf_name = XSTRDUP(MTYPE_BGP_NAME, vrfname);
-
-	/* Resolution is lazy (by name). While the single-underlay limitation
-	 * is in place, the master instance serves all EVIs operatively.
+	/* Claims the instance (auto-created when absent, so config ordering
+	 * does not matter); origination fails closed until the instance is
+	 * a vxlan-underlay.
 	 */
+	if (!bgp_evpn_evi_set_cfgd_underlay(evi, vrfname)) {
+		vty_out(vty, "%% Cannot bind underlay-vrf %s (name belongs to a view)\n",
+			vrfname);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	return CMD_SUCCESS;
 }
 
@@ -7631,8 +7715,9 @@ static void bgp_evpn_config_write_cfgd_evi(struct vty *vty, struct bgp_evpn_evi 
 {
 	vty_out(vty, "%svlan-based-evi %s\n", indent, evi->name);
 
-	if (evi->cfgd_underlay_vrf_name)
-		vty_out(vty, "%s underlay-vrf %s\n", indent, evi->cfgd_underlay_vrf_name);
+	if (evi->cfgd_underlay)
+		vty_out(vty, "%s underlay-vrf %s\n", indent,
+			bgp_evpn_underlay_ref_name(evi->cfgd_underlay));
 
 	if (evi->vni)
 		vty_out(vty, "%s origination-l2vni %u\n", indent, evi->vni);
@@ -7663,7 +7748,11 @@ int bgp_evpn_config_write_evpn_node(struct vty *vty)
 	struct bgp_evpn_evi *evi_entry;
 	struct listnode *ln;
 	struct bgp_evpn_evi *data;
-	const char *default_underlay_vrf = bgp_evpn_gbl()->default_underlay_vrf_name;
+	const char *default_underlay_vrf =
+		bgp_evpn_gbl()->default_underlay
+			? bgp_evpn_underlay_ref_name(
+				  bgp_evpn_gbl()->default_underlay)
+			: NULL;
 
 	frr_each (evi_name_hash, &bgp_evpn_gbl()->global_evis, evi_entry) {
 		if (evi_entry->origin == BGP_EVPN_EVI_ORIGIN_CFG && !evi_entry->bgp_vrf)
@@ -7712,8 +7801,9 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	if (bgp_vrf->evpn_auto_discover_vnis)
 		vty_out(vty, "  auto-discover-vnis\n");
 
-	if (bgp_vrf->evpn_cfgd_underlay_vrf_name)
-		vty_out(vty, "  underlay-vrf %s\n", bgp_vrf->evpn_cfgd_underlay_vrf_name);
+	if (bgp_vrf->evpn_cfgd_underlay)
+		vty_out(vty, "  underlay-vrf %s\n",
+			bgp_evpn_underlay_ref_name(bgp_vrf->evpn_cfgd_underlay));
 	if (bgp_vrf->evpn_cfgd_l3vni)
 		vty_out(vty, "  origination-l3vni %u%s\n", bgp_vrf->evpn_cfgd_l3vni,
 			bgp_vrf->evpn_cfgd_l3vni_prefix_routes_only ? " prefix-routes-only" : "");

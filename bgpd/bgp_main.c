@@ -285,7 +285,11 @@ static int bgp_vrf_enable(struct vrf *vrf)
 	if (BGP_DEBUG(zebra, ZEBRA))
 		zlog_debug("VRF enable add %s id %u", vrf->name, vrf->vrf_id);
 
-	bgp = bgp_lookup_by_name(vrf->name);
+	/* filter_auto=false: auto-created (claimed) instances link to their
+	 * VRF like regular ones, so a later in-place promotion finds the
+	 * instance already wired up.
+	 */
+	bgp = bgp_lookup_by_name_filter(vrf->name, false);
 	if (bgp && bgp->vrf_id != vrf->vrf_id) {
 		old_vrf_id = bgp->vrf_id;
 		/* We have instance configured, link to VRF and make it "up". */

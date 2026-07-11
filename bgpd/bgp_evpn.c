@@ -1099,60 +1099,43 @@ int vrf_fq_irt_node_hash_cmp(const struct vrf_fq_irt_node *a, const struct vrf_f
 	return memcmp(a->rt.val, b->rt.val, ECOMMUNITY_SIZE);
 }
 
-/* Look up an underlay instance by VRF name (as referenced by `underlay-vrf`
- * statements). "default" matches the default instance. Only instances
- * actually designated as vxlan-underlay are returned - resolution is
- * performed on demand against the underlay registry, so there are no stale
- * pointers to manage across instance lifecycles.
- */
-struct bgp *bgp_evpn_underlay_lookup_by_name(const char *vrfname)
+/* VRF name an underlay binding was configured with (for config/show) */
+const char *bgp_evpn_underlay_ref_name(const struct bgp *underlay)
 {
-	struct bgp *bgp;
-
-	if (!vrfname)
-		return NULL;
-
-	frr_each (bgp_evpn_underlays, &bgp_evpn_gbl()->underlays, bgp) {
-		const char *iname = bgp->name ? bgp->name : VRF_DEFAULT_NAME;
-
-		if (strcmp(iname, vrfname) == 0)
-			return bgp;
-	}
-	return NULL;
+	return underlay->name ? underlay->name : VRF_DEFAULT_NAME;
 }
 
-/* The underlay instance a tenant VRF originates its EVPN routes into:
- * the configured `underlay-vrf` binding wins; the ZAPI-derived binding
- * (legacy configs without underlay-vrf, set with the L3VNI report) is the
- * fallback; the master instance is the last resort while the
- * single-underlay limitation is in place.
+/* The underlay instance a tenant VRF originates its EVPN routes into.
+ *
+ * The configured `underlay-vrf` binding wins and fails closed: while the
+ * bound (claimed, possibly auto-created) instance is not a vxlan-underlay,
+ * the tenant does not originate at all - a bound-but-absent underlay must
+ * never silently fall through to the default underlay. The ZAPI-derived
+ * binding (set with the L3VNI report) is the fallback for tenants without
+ * an explicit binding; the default underlay is the last resort.
  */
 struct bgp *bgp_evpn_vrf_get_underlay(struct bgp *bgp_vrf)
 {
-	struct bgp *underlay = NULL;
-
-	if (bgp_vrf->evpn_cfgd_underlay_vrf_name)
-		underlay = bgp_evpn_underlay_lookup_by_name(
-			bgp_vrf->evpn_cfgd_underlay_vrf_name);
-	if (!underlay)
-		underlay = bgp_vrf->evpn_underlay_vrf;
-	if (!underlay)
-		underlay = bgp_get_evpn_default_underlay_vrf();
-	return underlay;
+	if (bgp_vrf->evpn_cfgd_underlay)
+		return is_evpn_underlay(bgp_vrf->evpn_cfgd_underlay)
+			       ? bgp_vrf->evpn_cfgd_underlay
+			       : NULL;
+	if (bgp_vrf->evpn_dp_underlay)
+		return is_evpn_underlay(bgp_vrf->evpn_dp_underlay)
+			       ? bgp_vrf->evpn_dp_underlay
+			       : NULL;
+	return bgp_get_evpn_default_underlay_vrf();
 }
 
 /* Same for an EVI (no ZAPI-derived fallback: EVIs only have the configured
- * binding or the master instance)
+ * binding or the default underlay)
  */
 struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi)
 {
-	struct bgp *underlay = NULL;
-
-	if (evi->cfgd_underlay_vrf_name)
-		underlay = bgp_evpn_underlay_lookup_by_name(evi->cfgd_underlay_vrf_name);
-	if (!underlay)
-		underlay = bgp_get_evpn_default_underlay_vrf();
-	return underlay;
+	if (evi->cfgd_underlay)
+		return is_evpn_underlay(evi->cfgd_underlay) ? evi->cfgd_underlay
+							    : NULL;
+	return bgp_get_evpn_default_underlay_vrf();
 }
 
 /*
@@ -6859,7 +6842,7 @@ void bgp_evpn_import_type2_route(struct bgp_path_info *pi, int import)
  * delete and withdraw all ipv4all originated route type 5 routes for all AFI / SAFI
  * (e.g. from routes injected from the the VRF table)
  */
-static void bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(struct bgp *bgp_vrf)
+void bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(struct bgp *bgp_vrf)
 {
 	/* Delete ipv4 default route and withdraw from peers */
 	if (evpn_default_originate_set(bgp_vrf, AFI_IP, SAFI_UNICAST))
@@ -6915,6 +6898,140 @@ void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf)
 	if (evpn_default_originate_set(bgp_vrf, AFI_IP6, SAFI_UNICAST))
 		bgp_evpn_install_uninstall_default_route(bgp_vrf, AFI_IP6, SAFI_UNICAST, NULL,
 							 true);
+}
+
+/* Change a tenant VRF's configured underlay binding. Claims the (possibly
+ * auto-created) instance named underlay_vrf_name, NULL = unbind. Routes the
+ * tenant originates are withdrawn from the old resolution and re-originated
+ * into the new one (a no-op when the new binding fails closed or the L3VNI
+ * is not live). False when the name cannot be claimed (taken by a view).
+ */
+bool bgp_evpn_vrf_set_cfgd_underlay(struct bgp *bgp_vrf,
+				    const char *underlay_vrf_name)
+{
+	struct bgp *claim = NULL;
+
+	if (underlay_vrf_name) {
+		claim = bgp_instance_claim(underlay_vrf_name,
+					   BGP_INSTANCE_USE_EVPN_UNDERLAY);
+		if (!claim)
+			return false;
+	}
+
+	/* Withdraw while the old binding still resolves */
+	if (bgp_evpn_vrf_get_underlay(bgp_vrf))
+		bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(bgp_vrf);
+
+	if (bgp_vrf->evpn_cfgd_underlay)
+		bgp_instance_unclaim(&bgp_vrf->evpn_cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	bgp_vrf->evpn_cfgd_underlay = claim;
+
+	bgp_evpn_vrf_update_advertise_originated_type_5_routes(bgp_vrf);
+
+	return true;
+}
+
+/* Change an EVI's configured underlay binding; semantics as for
+ * bgp_evpn_vrf_set_cfgd_underlay(). The EVI's liveness is dataplane-driven,
+ * so after a rebind zebra is asked to re-report the new underlay's VNIs:
+ * the EVI comes up again (only) if its VNI actually lives there.
+ */
+bool bgp_evpn_evi_set_cfgd_underlay(struct bgp_evpn_evi *evi,
+				    const char *underlay_vrf_name)
+{
+	struct bgp *old_underlay = bgp_evpn_evi_get_underlay(evi);
+	struct bgp *new_underlay;
+	struct bgp *claim = NULL;
+
+	if (underlay_vrf_name) {
+		claim = bgp_instance_claim(underlay_vrf_name,
+					   BGP_INSTANCE_USE_EVPN_UNDERLAY);
+		if (!claim)
+			return false;
+	}
+
+	if (evi->cfgd_underlay)
+		bgp_instance_unclaim(&evi->cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	evi->cfgd_underlay = claim;
+
+	new_underlay = bgp_evpn_evi_get_underlay(evi);
+	if (old_underlay == new_underlay)
+		return true;
+
+	if (old_underlay && CHECK_FLAG(evi->flags, EVI_FLAG_LIVE)) {
+		bgp_evpn_evi_delete_routes(old_underlay, evi);
+		UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
+	}
+	if (new_underlay)
+		bgp_zebra_advertise_all_vni(new_underlay, true);
+
+	return true;
+}
+
+/* Change the global default-underlay-vrf binding; semantics as for
+ * bgp_evpn_vrf_set_cfgd_underlay(), applied to every overlay object that
+ * rides the default resolution (no explicit binding of its own).
+ */
+bool bgp_evpn_set_cfgd_default_underlay(const char *underlay_vrf_name)
+{
+	struct bgp *old_def = bgp_get_evpn_default_underlay_vrf();
+	struct bgp *new_def;
+	struct bgp *claim = NULL;
+	struct bgp *bgp_vrf;
+	struct bgp_evpn_evi *evi;
+	struct listnode *node;
+
+	if (underlay_vrf_name) {
+		claim = bgp_instance_claim(underlay_vrf_name,
+					   BGP_INSTANCE_USE_EVPN_UNDERLAY);
+		if (!claim)
+			return false;
+	}
+
+	/* Withdraw everything riding the default resolution while the old
+	 * binding is still in effect
+	 */
+	if (old_def) {
+		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+			if (bgp_vrf->evpn_cfgd_underlay ||
+			    bgp_vrf->evpn_dp_underlay)
+				continue;
+			bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(
+				bgp_vrf);
+		}
+		frr_each (evihash, &bgp_evpn_gbl()->evihash, evi) {
+			if (evi->cfgd_underlay ||
+			    !CHECK_FLAG(evi->flags, EVI_FLAG_LIVE))
+				continue;
+			bgp_evpn_evi_delete_routes(old_def, evi);
+			UNSET_FLAG(evi->flags, EVI_FLAG_LIVE);
+		}
+	}
+
+	if (bgp_evpn_gbl()->default_underlay)
+		bgp_instance_unclaim(&bgp_evpn_gbl()->default_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	bgp_evpn_gbl()->default_underlay = claim;
+
+	new_def = bgp_get_evpn_default_underlay_vrf();
+	if (new_def == old_def)
+		return true;
+
+	if (new_def) {
+		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp_vrf)) {
+			if (bgp_vrf->evpn_cfgd_underlay ||
+			    bgp_vrf->evpn_dp_underlay)
+				continue;
+			bgp_evpn_vrf_update_advertise_originated_type_5_routes(
+				bgp_vrf);
+		}
+		/* EVI liveness re-establishes via the zebra re-scan */
+		bgp_zebra_advertise_all_vni(new_def, true);
+	}
+
+	return true;
 }
 
 /*
@@ -8850,7 +8967,9 @@ void bgp_evpn_evi_delete_and_free(struct bgp *bgp_evpn_mi, struct bgp_evpn_evi *
 
 	XFREE(MTYPE_BGP_NAME, evi->name);
 	XFREE(MTYPE_BGP_NAME, evi->cfgd_tenant_vrf_name);
-	XFREE(MTYPE_BGP_NAME, evi->cfgd_underlay_vrf_name);
+	if (evi->cfgd_underlay)
+		bgp_instance_unclaim(&evi->cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	if (evi->prd_pretty)
 		XFREE(MTYPE_BGP_NAME, evi->prd_pretty);
@@ -9446,7 +9565,13 @@ int bgp_evpn_add_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	bool export_auto_rt_active_before = bgp_evpn_vrf_should_generate_export_autort(bgp_vrf);
 
 	/* associate the vrf with l3vni and related parameters */
-	bgp_vrf->evpn_underlay_vrf = underlay_vrf;
+	if (bgp_vrf->evpn_dp_underlay != underlay_vrf) {
+		if (bgp_vrf->evpn_dp_underlay)
+			bgp_instance_unclaim(&bgp_vrf->evpn_dp_underlay,
+					     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+		bgp_vrf->evpn_dp_underlay = bgp_instance_claim_existing(
+			underlay_vrf, BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	}
 	bgp_vrf->l3vni = l3vni;
 	bgp_vrf->l3vni_svi_ifindex = svi_ifindex;
 	bgp_vrf->evpn_info->is_anycast_mac = is_anycast_mac;
@@ -9676,7 +9801,7 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 		return -1;
 	}
 
-	if(bgp_vrf->evpn_underlay_vrf != underlay_vrf) {
+	if(bgp_vrf->evpn_dp_underlay != underlay_vrf) {
 		zlog_err("Cannot del local L3VNI %u - BGP instance %s is not associated to the underlay VRF %s",
 				 l3vni, bgp_vrf->name, underlay_vrf->name);
 		return -1;
@@ -9704,7 +9829,8 @@ int bgp_evpn_del_local_l3vni(struct bgp *underlay_vrf, vni_t l3vni, vrf_id_t vrf
 	bgp_tip_del(underlay_vrf, &bgp_vrf->originator_ip);
 
 	/* Unlink from the EVPN underlay VRF */
-	bgp_vrf->evpn_underlay_vrf = NULL;
+	bgp_instance_unclaim(&bgp_vrf->evpn_dp_underlay,
+			     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	/* remove the l3vni from vrf instance */
 	bgp_vrf->l3vni = 0;
@@ -9847,7 +9973,7 @@ void bgp_evpn_instance_down(struct bgp *bgp)
 {
 	/* If we have a stale local vni, delete it */
 	if (bgp->l3vni)
-		bgp_evpn_del_local_l3vni(bgp->evpn_underlay_vrf, bgp->l3vni, bgp->vrf_id);
+		bgp_evpn_del_local_l3vni(bgp->evpn_dp_underlay, bgp->l3vni, bgp->vrf_id);
 }
 
 /*
@@ -10239,7 +10365,9 @@ void bgp_evpn_global_fini(void)
 	evi_name_hash_fini(&bgp_evpn_gbl()->global_evis);
 	bgp_evpn_underlays_fini(&bgp_evpn_gbl()->underlays);
 
-	XFREE(MTYPE_BGP_NAME, bgp_evpn_gbl()->default_underlay_vrf_name);
+	if (bgp_evpn_gbl()->default_underlay)
+		bgp_instance_unclaim(&bgp_evpn_gbl()->default_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 
 	uint32_t idx = 0;
 
@@ -10323,7 +10451,12 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 	if (bgp->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp->vrf_prd_pretty);
 
-	XFREE(MTYPE_BGP_NAME, bgp->evpn_cfgd_underlay_vrf_name);
+	if (bgp->evpn_cfgd_underlay)
+		bgp_instance_unclaim(&bgp->evpn_cfgd_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
+	if (bgp->evpn_dp_underlay)
+		bgp_instance_unclaim(&bgp->evpn_dp_underlay,
+				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 }
 
 /*

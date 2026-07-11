@@ -249,13 +249,14 @@ struct bgp_evpn_evi {
 	char *cfgd_tenant_vrf_name;
 	bool auto_tenant_vrf;
 
-	/* Configured underlay VRF binding (`underlay-vrf NAME`, stored by
-	 * name): the underlay this EVI originates its routes into. NULL =
-	 * unbound (the EVI cannot originate routes). While the
-	 * single-underlay limitation is in place, the master instance is what
-	 * is used operatively.
+	/* Configured underlay VRF binding (`underlay-vrf NAME`): the underlay
+	 * this EVI originates its routes into. Claimed reference
+	 * (BGP_INSTANCE_USE_EVPN_UNDERLAY): configuring it auto-creates the
+	 * instance when absent. NULL = unbound (the EVI rides the default
+	 * underlay). Origination fails closed while the referenced instance
+	 * is not a vxlan-underlay (see bgp_evpn_evi_get_underlay()).
 	 */
-	char *cfgd_underlay_vrf_name;
+	struct bgp *cfgd_underlay;
 
 	vni_t vni;
 	vrf_id_t tenant_vrf_id;
@@ -1188,9 +1189,20 @@ extern void bgp_evpn_vrf_derive_auto_rd(struct bgp *bgp);
 extern struct bgp_evpn_evi *bgp_evpn_lookup_evi_by_vni(struct bgp *bgp, vni_t vni);
 extern struct bgp_evpn_evi *bgp_evpn_evi_lookup_by_name(struct bgp *tenant_scope,
 							const char *name);
-extern struct bgp *bgp_evpn_underlay_lookup_by_name(const char *vrfname);
 extern struct bgp *bgp_evpn_vrf_get_underlay(struct bgp *bgp_vrf);
 extern struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi);
+/* Change an underlay binding (NULL name = unbind): claims the (auto-created
+ * when absent) instance and withdraws/re-originates affected routes. False
+ * when the name cannot be claimed (taken by a view).
+ */
+extern bool bgp_evpn_vrf_set_cfgd_underlay(struct bgp *bgp_vrf,
+					   const char *underlay_vrf_name);
+extern bool bgp_evpn_evi_set_cfgd_underlay(struct bgp_evpn_evi *evi,
+					   const char *underlay_vrf_name);
+extern bool bgp_evpn_set_cfgd_default_underlay(const char *underlay_vrf_name);
+/* VRF name an underlay binding was configured with (for config/show) */
+extern const char *bgp_evpn_underlay_ref_name(const struct bgp *underlay);
+extern void bgp_evpn_vrf_delete_withdraw_originated_type_5_routes(struct bgp *bgp_vrf);
 extern bool bgp_evpn_evi_name_is_valid(const char *name);
 extern struct bgp_evpn_evi *bgp_evpn_evi_new(struct bgp *bgp, vni_t vni,
 		struct ipaddr *originator_ip,

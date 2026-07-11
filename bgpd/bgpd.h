@@ -188,13 +188,16 @@ struct bgp_evpn_global {
 	 */
 	struct bgp_evpn_underlays_head underlays;
 
-	/* Configured name of the default underlay (`default-underlay-vrf VRF` under
-	 * the top-level `evpn` node). Overlay objects (tenant VRFs / EVIs) that
-	 * do not name their own `underlay-vrf` bind to this. Stored by name and
-	 * resolved lazily via bgp_get_evpn_default_underlay_vrf(); when unset, the
-	 * implicit default is the default VRF (if it is itself an underlay).
+	/* Configured default underlay (`default-underlay-vrf VRF` under the
+	 * top-level `evpn` node). Overlay objects (tenant VRFs / EVIs) that
+	 * do not name their own `underlay-vrf` bind to this. Claimed
+	 * reference (BGP_INSTANCE_USE_EVPN_UNDERLAY): configuring it
+	 * auto-creates the instance when absent. Resolution fails closed
+	 * while the referenced instance is not a vxlan-underlay; when unset,
+	 * the implicit default is the default VRF (if it is itself an
+	 * underlay). See bgp_get_evpn_default_underlay_vrf().
 	 */
-	char *default_underlay_vrf_name;
+	struct bgp *default_underlay;
 
 	/* Name registry for EVIs that are NOT scoped to a tenant VRF:
 	 * tenant-less EVIs (future top-level `evpn` node) as well as
@@ -462,6 +465,13 @@ enum bgp_instance_use {
 	 * as leak transit (`import vrf ...` and friends).
 	 */
 	BGP_INSTANCE_USE_VPN_RIB,
+
+	/* An EVPN overlay object (tenant VRF, EVI, or the global
+	 * default-underlay setting) is bound to this instance as its
+	 * underlay (`underlay-vrf` / `default-underlay-vrf`), or the zebra
+	 * L3VNI report bound a tenant VRF to it.
+	 */
+	BGP_INSTANCE_USE_EVPN_UNDERLAY,
 
 	BGP_INSTANCE_USE_MAX
 };
@@ -1155,18 +1165,23 @@ struct bgp {
 	/* Effective Fully-Qualified Export Route Targets (Export RT cannot be wildcard!) */
 	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
 
-	/* EVPN Underlay VRF to which this VRF is linked.
-	 * NOTE: currently still derived from the zebra L3VNI report; will be
-	 * driven purely by the configured intent below once the VNI intent
-	 * direction reversal (bgpd -> zebra) lands.
+	/* Underlay instance the zebra L3VNI report bound this (tenant) VRF
+	 * to (dataplane-derived). Claimed reference
+	 * (BGP_INSTANCE_USE_EVPN_UNDERLAY): stays valid until released with
+	 * the L3VNI del / instance teardown, even across the underlay
+	 * instance being unconfigured. Fallback binding when no
+	 * `underlay-vrf` is configured.
 	 */
-	struct bgp *evpn_underlay_vrf;
+	struct bgp *evpn_dp_underlay;
 
 	/* Configured intent: `underlay-vrf NAME` under this (tenant) VRF's
-	 * l2vpn evpn address-family. Stored by name and resolved lazily, so
-	 * config ordering and underlay instance lifecycle don't matter.
+	 * l2vpn evpn address-family. Claimed reference: configuring it
+	 * auto-creates the instance when absent, so config ordering and
+	 * underlay instance lifecycle don't matter. Origination fails closed
+	 * while the referenced instance is not a vxlan-underlay (see
+	 * bgp_evpn_vrf_get_underlay()).
 	 */
-	char *evpn_cfgd_underlay_vrf_name;
+	struct bgp *evpn_cfgd_underlay;
 
 	/* Configured intent: `origination-l3vni X [prefix-routes-only]`.
 	 * 0 = no L3VNI configured (VRF is import-only: it can import EVPN
@@ -2887,6 +2902,9 @@ extern struct bgp *bgp_instance_claim(const char *vrf_name,
  * auto-created instance.
  */
 extern void bgp_instance_unclaim(struct bgp **bgp, enum bgp_instance_use use);
+/* Claim an instance the caller already holds a pointer to. */
+extern struct bgp *bgp_instance_claim_existing(struct bgp *bgp,
+					       enum bgp_instance_use use);
 /* True if any subsystem currently holds a claim on this instance. */
 extern bool bgp_instance_has_claims(const struct bgp *bgp);
 extern const char *bgp_instance_use2str(enum bgp_instance_use use);
