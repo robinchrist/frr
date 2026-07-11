@@ -3755,7 +3755,7 @@ DEFPY (bgp_evpn_auto_discover_vnis,
        bgp_evpn_auto_discover_vnis_cmd,
        "[no$no] auto-discover-vnis",
        NO_STR
-       "Automatically create EVIs for VNIs discovered in this underlay's dataplane\n")
+       "DEPRECATED: automatically create EVIs for VNIs discovered in this underlay's dataplane (use explicit vlan-based-evi config)\n")
 {
 	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
 
@@ -3766,6 +3766,10 @@ DEFPY (bgp_evpn_auto_discover_vnis,
 		evpn_unset_auto_discover_vnis(bgp);
 		return CMD_SUCCESS;
 	}
+
+	vty_out(vty,
+		"%% auto-discover-vnis is deprecated and will be removed one year after multi-underlay EVPN support reached the FRR main branch; configure EVIs explicitly (vlan-based-evi)\n");
+	zlog_warn("auto-discover-vnis is deprecated and will be removed one year after multi-underlay EVPN support reached the FRR main branch; configure EVIs explicitly (vlan-based-evi)");
 
 	if (!bgp->evpn_vxlan_underlay_cfgd)
 		vty_out(vty,
@@ -3920,7 +3924,7 @@ DEFPY (bgp_evpn_advertise_all_vni,
 	if (!bgp)
 		return CMD_WARNING;
 
-	zlog_warn("advertise-all-vni is deprecated; it is an alias for vxlan-underlay + auto-discover-vnis and is written as such");
+	zlog_warn("advertise-all-vni is deprecated and will be removed one year after multi-underlay EVPN support reached the FRR main branch; it is an alias for vxlan-underlay + auto-discover-vnis and is written as such");
 	evpn_set_vxlan_underlay(bgp);
 	evpn_set_auto_discover_vnis(bgp);
 	return CMD_SUCCESS;
@@ -6586,7 +6590,7 @@ DEFPY(bgp_evpn_flood_control_vni,
 DEFPY_NOSH (bgp_evpn_vni,
             bgp_evpn_vni_cmd,
             "vni " CMD_VNI_RANGE,
-            "VXLAN Network Identifier\n"
+            "DEPRECATED: VXLAN Network Identifier (use vlan-based-evi)\n"
             "VNI number\n")
 {
 	vni_t validated_vni;
@@ -6607,7 +6611,9 @@ DEFPY_NOSH (bgp_evpn_vni,
 	}
 	validated_vni = vni;
 
-	zlog_warn("The `vni X` config is deprecated; use `vlan-based-evi NAME` (with origination-l2vni / tenant-vrf) instead");
+	vty_out(vty,
+		"%% The `vni X` config is deprecated and will be removed one year after multi-underlay EVPN support reached the FRR main branch; use `vlan-based-evi NAME` (with origination-l2vni / tenant-vrf) instead\n");
+	zlog_warn("The `vni X` config is deprecated and will be removed one year after multi-underlay EVPN support reached the FRR main branch; use `vlan-based-evi NAME` (with origination-l2vni / tenant-vrf) instead");
 
 	/* Create VNI, or mark as configured. */
 	evi = evpn_create_update_vni(bgp_evpn_mi, validated_vni);

@@ -855,6 +855,24 @@ the BUM flooding method for VNIs in this underlay.
 ``advertise-all-vni`` is accepted as a deprecated alias for
 ``vxlan-underlay auto-discover-vnis``.
 
+.. warning::
+
+   The following configuration statements are **deprecated** and will be
+   **removed one year after multi-underlay EVPN support is included in the
+   FRR main branch**:
+
+   - ``auto-discover-vnis`` — implicitly creates EVIs from dataplane
+     discovery. Configure EVIs explicitly with ``vlan-based-evi`` instead.
+   - the legacy ``vni X`` block (under an underlay's
+     ``address-family l2vpn evpn``) and its subcommands, including
+     ``tenant-vrf`` — use ``vlan-based-evi`` with ``origination-l2vni``
+     under the tenant VRF (or at the top-level ``evpn`` node) instead.
+   - ``advertise-all-vni`` — alias for ``vxlan-underlay`` +
+     ``auto-discover-vnis``; configure ``vxlan-underlay`` and explicit EVIs
+     instead.
+
+   Until removal they keep working; each use logs a deprecation warning.
+
 **Tenant VRF** (L3 overlay):
 
 .. code-block:: frr
