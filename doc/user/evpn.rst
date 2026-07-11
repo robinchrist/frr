@@ -869,6 +869,18 @@ dataplane L3VNI is up, the router-ID and AS of the underlay are used for
 auto-RT/auto-RD derivation. ``origination-l3vni`` declares the intent VNI;
 zebra is notified and programs the L3 role for that VNI.
 
+Configuration ordering does not matter: if the referenced BGP instance does
+not exist yet, it is auto-created internally and held (invisible to
+``show running-config`` and show commands) until ``router bgp ... vrf ...``
+is configured for it, at which point it is promoted in place. Conversely,
+removing a still-referenced instance only demotes it; all bindings survive
+and resume when it is re-configured.
+
+Bindings **fail closed**: while the referenced instance is not (yet) a
+``vxlan-underlay``, the bound object does not originate routes at all. A
+mistyped ``underlay-vrf`` name therefore results in a visibly down overlay
+object instead of routes silently going into the default underlay.
+
 **L2 EVI under a tenant VRF**:
 
 .. code-block:: frr
@@ -904,21 +916,43 @@ Diagnostics
 .. clicmd:: show bgp l2vpn evpn evi [EVINAME] [json]
 
    Display all configured EVIs with their name, type, origin, L2VNI binding,
-   tenant VRF, bound underlay VRF, dataplane state and liveness.
+   tenant VRF, bound underlay VRF, dataplane state and liveness. A binding
+   whose instance is not (yet) a ``vxlan-underlay`` is flagged as pending
+   (JSON: ``cfgdUnderlayVrfPending``).
 
 .. clicmd:: show bgp l2vpn evpn vxlan-underlay [json]
 
    List all registered underlay VRF instances with their router-ID,
-   auto-discover-vnis flag, and flood-control mode.
+   auto-discover-vnis flag, the number of objects bound to each underlay,
+   which instance is the default underlay, and the flood-control mode. A
+   configured-but-pending ``default-underlay-vrf`` is called out explicitly.
+
+.. clicmd:: show zebra evpn vni-intent [json]
+
+   Dump zebra's view of the VNI intent received from bgpd: per VNI the role
+   (L2/L3), the tenant VRF, whether the intent is served by the dataplane,
+   and the computed dataplane state/reason (``up``, ``misconfigured`` with
+   e.g. ``wrong-underlay-vrf``, ...).
+
+.. clicmd:: show zebra evpn <vni|l2vni|l3vni> [detail] [json]
+
+   The summary table includes each VNI's derived underlay VRF and its
+   dataplane state; the detail view adds the state reason. VNIs present in
+   the dataplane without any EVPN intent are listed as ``discovered``.
 
 Interaction with Ethernet Segments (ES/MH)
 ------------------------------------------
 
-Ethernet Segments (multi-homing) remain scoped to a single underlay per router.
-When a second underlay is configured, FRR logs a warning that ES/MH state and
-instance-wide knobs (advertise-pip, dup-addr-detection, etc.) will follow the
-**default-underlay-vrf** (see below). Deployments using ES/MH should use a
-single underlay VRF.
+Each Ethernet Segment is bound to one underlay instance: type-4 (ES) and
+EAD-per-ES routes originate into the ES's underlay, while EAD-per-EVI routes
+follow each EVI's own ``underlay-vrf`` binding (like the type-2/3 routes of
+that EVI). Local ES state binds to the **default-underlay-vrf** - zebra is
+told which underlay that is and (re)announces ES state there, including when
+the default underlay changes at runtime.
+
+Instance-wide knobs (advertise-pip, dup-addr-detection, mac-vrf soo, ...)
+still follow the default underlay; FRR logs a warning when a second underlay
+is configured to point this out.
 
 Default Underlay VRF
 --------------------
@@ -927,6 +961,9 @@ When an overlay object (tenant VRF or EVI) has no explicit ``underlay-vrf``
 statement, its underlay is resolved as follows:
 
 1. The VRF named by ``default-underlay-vrf`` in the top-level ``evpn`` block.
+   This is strict: while the named instance is not a ``vxlan-underlay`` the
+   default resolves to *nothing* (fail closed) - the implicit default below
+   does not kick in for an explicitly named default.
 2. If no ``default-underlay-vrf`` is configured: the default (global) BGP
    instance, if that instance is itself a ``vxlan-underlay``.
 3. Otherwise: unresolved (NULL underlay) — the overlay exists in import-only
