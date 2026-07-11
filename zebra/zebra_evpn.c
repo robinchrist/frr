@@ -57,7 +57,7 @@ int advertise_gw_macip_enabled(struct zebra_evpn *zevpn)
 {
 	struct zebra_vrf *zvrf;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	if (zvrf->advertise_gw_macip)
 		return 1;
 
@@ -71,7 +71,7 @@ int advertise_svi_macip_enabled(struct zebra_evpn *zevpn)
 {
 	struct zebra_vrf *zvrf;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	if (zvrf->advertise_svi_macip)
 		return 1;
 
@@ -1520,7 +1520,7 @@ void zebra_evpn_rem_macip_add(vni_t vni, const struct ethaddr *macaddr, uint16_t
 		}
 	}
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	if (!zvrf)
 		return;
 

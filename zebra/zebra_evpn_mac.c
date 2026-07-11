@@ -612,7 +612,7 @@ void zebra_evpn_print_mac(struct zebra_mac *mac, struct vty *vty, json_object *j
 	time_t uptime;
 	char up_str[MONOTIME_STRLEN];
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	prefix_mac2str(&mac->macaddr, buf1, sizeof(buf1));
 
 	uptime = monotime(NULL);
@@ -997,7 +997,7 @@ int zebra_evpn_macip_send_msg_to_client(vni_t vni, const struct ethaddr *macaddr
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	zclient_create_header(s, cmd, zebra_evpn_get_master_underlay_vrf_id());
+	zclient_create_header(s, cmd, zebra_evpn_get_default_underlay_vrf_id());
 	stream_putl(s, vni);
 	stream_put(s, macaddr->octet, ETH_ALEN);
 	if (ip) {
@@ -1367,7 +1367,7 @@ int zebra_evpn_mac_send_del_to_client(vni_t vni, const struct ethaddr *macaddr,
 		 * Upon receiving local delete ask bgp to reinstall
 		 * the best route (remote entry).
 		 */
-		zvrf = zebra_evpn_get_master_underlay_vrf();
+		zvrf = zebra_evpn_get_default_underlay_vrf();
 		if (zvrf && zvrf->dad_freeze && CHECK_FLAG(flags, ZEBRA_MAC_DUPLICATE))
 			state = ZEBRA_NEIGH_INACTIVE;
 	}

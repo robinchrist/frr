@@ -2084,7 +2084,7 @@ static int zebra_evpn_es_send_add_to_client(struct zebra_evpn_es *es)
 
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 
-	zclient_create_header(s, ZEBRA_LOCAL_ES_ADD, zebra_evpn_get_master_underlay_vrf_id());
+	zclient_create_header(s, ZEBRA_LOCAL_ES_ADD, zebra_evpn_get_default_underlay_vrf_id());
 	stream_put(s, &es->esi, sizeof(esi_t));
 	stream_put_ipaddr(s, &zmh_info->es_originator_ip);
 	oper_up = !!(es->flags & ZEBRA_EVPNES_OPER_UP);
@@ -2121,7 +2121,7 @@ static int zebra_evpn_es_send_del_to_client(struct zebra_evpn_es *es)
 	s = stream_new(ZEBRA_SMALL_PACKET_SIZE);
 	stream_reset(s);
 
-	zclient_create_header(s, ZEBRA_LOCAL_ES_DEL, zebra_evpn_get_master_underlay_vrf_id());
+	zclient_create_header(s, ZEBRA_LOCAL_ES_DEL, zebra_evpn_get_default_underlay_vrf_id());
 	stream_put(s, &es->esi, sizeof(esi_t));
 
 	/* Write packet size. */
@@ -2321,7 +2321,7 @@ static void zebra_evpn_mh_dup_addr_detect_off(void)
 	if (zmh_info->flags & ZEBRA_EVPN_MH_DUP_ADDR_DETECT_OFF)
 		return;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	old_detect = zebra_evpn_do_dup_addr_detect(zvrf);
 	zmh_info->flags |= ZEBRA_EVPN_MH_DUP_ADDR_DETECT_OFF;
 	new_detect = zebra_evpn_do_dup_addr_detect(zvrf);
@@ -2811,7 +2811,7 @@ static int zebra_evpn_es_evi_send_to_client(struct zebra_evpn_es *es,
 
 	zclient_create_header(s,
 			add ? ZEBRA_LOCAL_ES_EVI_ADD : ZEBRA_LOCAL_ES_EVI_DEL,
-			zebra_evpn_get_master_underlay_vrf_id());
+			zebra_evpn_get_default_underlay_vrf_id());
 	stream_put(s, &es->esi, sizeof(esi_t));
 	stream_putl(s, zevpn->vni);
 

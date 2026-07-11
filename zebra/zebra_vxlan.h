@@ -17,7 +17,7 @@
 
 #include "zebra/zserv.h" /* ZAPI_HANDLER_ARGS */
 #include "zebra/zebra_vrf.h"
-#include "zebra/zebra_router.h" /* zebra_evpn_get_master_underlay_vrf */
+#include "zebra/zebra_router.h" /* zebra_evpn_get_default_underlay_vrf */
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,7 +50,7 @@ static inline int is_evpn_enabled(void)
 static inline int
 is_vxlan_flooding_head_end(void)
 {
-	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
+	struct zebra_vrf *zvrf = zebra_evpn_get_default_underlay_vrf();
 	return (zvrf->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL);
 }
 
@@ -82,6 +82,7 @@ extern void zebra_vxlan_advertise_svi_macip(ZAPI_HANDLER_ARGS);
 extern void zebra_vxlan_advertise_gw_macip(ZAPI_HANDLER_ARGS);
 extern void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS);
 extern void zebra_vxlan_evpn_vni_intent(ZAPI_HANDLER_ARGS);
+extern void zebra_vxlan_evpn_default_underlay_set(ZAPI_HANDLER_ARGS);
 extern void zebra_vxlan_dup_addr_detection(ZAPI_HANDLER_ARGS);
 extern void zebra_vxlan_sg_replay(ZAPI_HANDLER_ARGS);
 

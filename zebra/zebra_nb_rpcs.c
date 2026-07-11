@@ -28,7 +28,7 @@ int clear_evpn_dup_addr_rpc(struct nb_cb_rpc_args *args)
 			 "%% EVPN not enabled\n");
 		return NB_ERR_VALIDATION;
 	}
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 
 	if (yang_dnode_exists(args->input, "all-vnis")) {
 		zebra_vxlan_clear_dup_detect_vni_all(zvrf);

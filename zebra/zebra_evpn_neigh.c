@@ -1720,7 +1720,7 @@ void zebra_evpn_print_neigh(const struct zebra_neigh *n, void *ctxt, json_object
 	time_t uptime;
 	char up_str[MONOTIME_STRLEN];
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	if (!zvrf)
 		return;
 

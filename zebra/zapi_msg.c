@@ -4198,6 +4198,7 @@ void (*const zserv_handlers[])(ZAPI_HANDLER_ARGS) = {
 	[ZEBRA_ADVERTISE_ALL_VNI] = zebra_vxlan_advertise_all_vni,
 	[ZEBRA_EVPN_VNI_INTENT_ADD] = zebra_vxlan_evpn_vni_intent,
 	[ZEBRA_EVPN_VNI_INTENT_DEL] = zebra_vxlan_evpn_vni_intent,
+	[ZEBRA_EVPN_DEFAULT_UNDERLAY_SET] = zebra_vxlan_evpn_default_underlay_set,
 	[ZEBRA_REMOTE_ES_VTEP_ADD] = zebra_evpn_proc_remote_es,
 	[ZEBRA_REMOTE_ES_VTEP_DEL] = zebra_evpn_proc_remote_es,
 	[ZEBRA_REMOTE_VTEP_ADD] = zebra_vxlan_remote_vtep_add_zapi,

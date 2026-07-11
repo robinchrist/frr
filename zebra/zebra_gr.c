@@ -507,7 +507,7 @@ static void zebra_gr_cleanup_of_non_gr_vrf(struct zebra_gr_afi_clean *gac)
 		/*
 		 * Skip if this is default EVPN VRF
 		 */
-		if (zvrf == zebra_evpn_get_master_underlay_vrf())
+		if (zvrf == zebra_evpn_get_default_underlay_vrf())
 			continue;
 
 		/*
@@ -690,7 +690,7 @@ static void zebra_gr_delete_stale_route_table_afi(struct event *event)
 
 	frrtrace(2, frr_zebra, gr_delete_stale_route_table_afi, zvrf->vrf->name, gac->afi);
 
-	if (gac->afi == AFI_L2VPN && zvrf == zebra_evpn_get_master_underlay_vrf()) {
+	if (gac->afi == AFI_L2VPN && zvrf == zebra_evpn_get_default_underlay_vrf()) {
 		zebra_gr_cleanup_of_non_gr_vrf(gac);
 		zebra_evpn_stale_entries_cleanup(gac->update_pending_time);
 		goto done;

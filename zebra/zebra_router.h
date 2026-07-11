@@ -204,10 +204,18 @@ struct zebra_router {
 	/* Mlag information for the router */
 	struct zebra_mlag_info mlag_info;
 
-	/*
-	 * The EVPN instance, if any
+	/* Fallback EVPN underlay: the most recently enabled underlay VRF
+	 * (last-write-wins). Only consulted until bgpd declares its default
+	 * underlay (evpn_default_underlay_vrf_id below).
 	 */
-	struct zebra_vrf *evpn_vrf;
+	struct zebra_vrf *evpn_fallback_underlay_vrf;
+
+	/* The underlay VRF bgpd declared as its default underlay
+	 * (ZEBRA_EVPN_DEFAULT_UNDERLAY_SET). Messages to bgpd that are not
+	 * scoped to a specific VNI's underlay (ES/MH, MACIP) are routed to
+	 * this VRF's instance. VRF_UNKNOWN = not declared.
+	 */
+	vrf_id_t evpn_default_underlay_vrf_id;
 
 	/* Global L2VNI/EVPN table (VNIs are unique per namespace; entries
 	 * know their derived underlay VRF). Moved here from the per-VRF
@@ -292,14 +300,30 @@ extern void zebra_router_show_table_summary(struct vty *vty);
 
 extern uint32_t zebra_router_get_next_sequence(void);
 
-static inline vrf_id_t zebra_evpn_get_master_underlay_vrf_id(void)
+/* The default EVPN underlay VRF: as declared by bgpd
+ * (ZEBRA_EVPN_DEFAULT_UNDERLAY_SET), falling back to the most recently
+ * enabled underlay, then to the default VRF. Messages to bgpd that are not
+ * scoped to a specific VNI's underlay (ES/MH, MACIP) are routed to (the BGP
+ * instance of) this VRF.
+ */
+static inline struct zebra_vrf *zebra_evpn_get_default_underlay_vrf(void)
 {
-	return zrouter.evpn_vrf ? zvrf_id(zrouter.evpn_vrf) : VRF_DEFAULT;
+	if (zrouter.evpn_default_underlay_vrf_id != VRF_UNKNOWN) {
+		struct zebra_vrf *zvrf = zebra_vrf_lookup_by_id(
+			zrouter.evpn_default_underlay_vrf_id);
+
+		if (zvrf)
+			return zvrf;
+	}
+	return zrouter.evpn_fallback_underlay_vrf
+		       ? zrouter.evpn_fallback_underlay_vrf
+		       : zebra_vrf_lookup_by_id(VRF_DEFAULT);
 }
-static inline struct zebra_vrf *zebra_evpn_get_master_underlay_vrf(void)
+static inline vrf_id_t zebra_evpn_get_default_underlay_vrf_id(void)
 {
-	return zrouter.evpn_vrf ? zrouter.evpn_vrf
-			        : zebra_vrf_lookup_by_id(VRF_DEFAULT);
+	struct zebra_vrf *zvrf = zebra_evpn_get_default_underlay_vrf();
+
+	return zvrf ? zvrf_id(zvrf) : VRF_DEFAULT;
 }
 
 extern bool zebra_router_notify_on_ack(void);

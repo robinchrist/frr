@@ -5173,7 +5173,7 @@ static int netlink_fdb_nh_update(uint32_t nh_id, struct ipaddr *vtep_ip)
 	struct zebra_vrf *zvrf;
 	struct zebra_ns *zns;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	zns = zvrf->zns;
 
 	memset(&req, 0, sizeof(req));
@@ -5216,7 +5216,7 @@ static int netlink_fdb_nh_del(uint32_t nh_id)
 	struct zebra_vrf *zvrf;
 	struct zebra_ns *zns;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	zns = zvrf->zns;
 
 	memset(&req, 0, sizeof(req));
@@ -5252,7 +5252,7 @@ static int netlink_fdb_nhg_update(uint32_t nhg_id, uint32_t nh_cnt,
 	struct nexthop_grp grp[nh_cnt];
 	uint32_t i;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	zns = zvrf->zns;
 
 	memset(&req, 0, sizeof(req));

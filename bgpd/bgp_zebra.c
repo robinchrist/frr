@@ -2849,6 +2849,49 @@ int bgp_zebra_send_evpn_vni_intent(struct bgp *tenant_bgp, vni_t vni,
 	return zclient_send_message(bgp_zclient);
 }
 
+/* Last default-underlay vrf_id declared to zebra; re-declared from scratch
+ * on reconnect (see bgp_zebra_connected()).
+ */
+static vrf_id_t evpn_default_underlay_declared = VRF_UNKNOWN;
+
+/* Declare bgpd's default underlay VRF to zebra
+ * (ZEBRA_EVPN_DEFAULT_UNDERLAY_SET): zebra routes EVPN messages that are
+ * not scoped to a specific VNI's underlay (ES/MH, MACIP) to this VRF's
+ * instance instead of guessing via the last-enabled underlay. Cheap to call
+ * after any event that may change the resolution - only changes are sent.
+ * VRF_UNKNOWN = no default underlay resolves.
+ */
+void bgp_zebra_evpn_default_underlay_sync(bool force)
+{
+	struct bgp *def;
+	vrf_id_t vrf_id;
+	struct stream *s;
+
+	/* Check socket. */
+	if (!bgp_zclient || bgp_zclient->sock < 0)
+		return;
+
+	def = bgp_get_evpn_default_underlay_vrf();
+	vrf_id = def ? def->vrf_id : VRF_UNKNOWN;
+
+	if (!force && vrf_id == evpn_default_underlay_declared)
+		return;
+	evpn_default_underlay_declared = vrf_id;
+
+	s = bgp_zclient->obuf;
+	stream_reset(s);
+
+	zclient_create_header(s, ZEBRA_EVPN_DEFAULT_UNDERLAY_SET, VRF_DEFAULT);
+	stream_putl(s, vrf_id);
+	stream_putw_at(s, 0, stream_get_endp(s));
+
+	if (BGP_DEBUG(zebra, ZEBRA))
+		zlog_debug("Tx EVPN default underlay %s(%u)",
+			   def ? def->name_pretty : "none", vrf_id);
+
+	zclient_send_message(bgp_zclient);
+}
+
 int bgp_zebra_advertise_all_vni(struct bgp *bgp, int advertise)
 {
 	struct stream *s;
@@ -3396,6 +3439,11 @@ static void bgp_zebra_connected(struct zclient *zclient)
 
 	/* Send the client registration */
 	bfd_client_sendmsg(zclient, ZEBRA_BFD_CLIENT_REGISTER, VRF_DEFAULT);
+
+	/* Zebra dropped the previous default-underlay declaration with the
+	 * old session; re-declare unconditionally.
+	 */
+	bgp_zebra_evpn_default_underlay_sync(true);
 
 	/* At this point, we may or may not have BGP instances configured, but
 	 * we're only interested in the default VRF (others wouldn't have learnt

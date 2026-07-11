@@ -7015,6 +7015,8 @@ bool bgp_evpn_set_cfgd_default_underlay(const char *underlay_vrf_name)
 				     BGP_INSTANCE_USE_EVPN_UNDERLAY);
 	bgp_evpn_gbl()->default_underlay = claim;
 
+	bgp_zebra_evpn_default_underlay_sync(false);
+
 	new_def = bgp_get_evpn_default_underlay_vrf();
 	if (new_def == old_def)
 		return true;

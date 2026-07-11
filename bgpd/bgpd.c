@@ -4805,6 +4805,7 @@ int bgp_delete(struct bgp *bgp)
 	if (bgp->evpn_vxlan_underlay_cfgd) {
 		bgp->evpn_vxlan_underlay_cfgd = false;
 		bgp_evpn_underlays_del(&bgp_evpn_gbl()->underlays, bgp);
+		bgp_zebra_evpn_default_underlay_sync(false);
 	}
 
 	/* Release the claims this instance held on the default instance for

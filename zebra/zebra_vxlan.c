@@ -1171,7 +1171,7 @@ static void zevpn_build_hash_table(void)
 {
 	struct zebra_vrf *zvrf;
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	if (zvrf == NULL)
 		return;
 
@@ -2348,7 +2348,7 @@ struct interface *zl3vni_map_to_vxlan_if(struct zebra_l3vni *zl3vni)
 	struct zl3vni_map_arg arg = {};
 
 	arg.zl3vni = zl3vni;
-	arg.zvrf = zebra_evpn_get_master_underlay_vrf();
+	arg.zvrf = zebra_evpn_get_default_underlay_vrf();
 
 	if (arg.zvrf == NULL)
 		return NULL;
@@ -2727,7 +2727,7 @@ static int zl3vni_send_del_to_client(struct zebra_l3vni *zl3vni)
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug("Send L3VNI_DEL %u VRF %s Underlay VRF %s to %s", zl3vni->vni,
 			   vrf_id_to_name(zl3vni_vrf_id(zl3vni)),
-			   vrf_id_to_name(zebra_evpn_get_master_underlay_vrf_id()),
+			   vrf_id_to_name(zebra_evpn_get_default_underlay_vrf_id()),
 			   zebra_route_string(client->proto));
 
 	client->l3vnidel_cnt++;
@@ -4396,7 +4396,7 @@ void zebra_vxlan_print_evpn(struct vty *vty, bool uj)
 		return;
 	}
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 
 	num_l3vnis = hashcount(zrouter.l3vni_table);
 	num_l2vnis = hashcount(zrouter.evpn_table);
@@ -5260,7 +5260,7 @@ int zebra_vxlan_local_mac_add_update(struct interface *ifp,
 		return -1;
 	}
 
-	zvrf = zebra_evpn_get_master_underlay_vrf();
+	zvrf = zebra_evpn_get_default_underlay_vrf();
 	return zebra_evpn_add_update_local_mac(zvrf, zevpn, ifp, macaddr, vid,
 					       sticky, local_inactive,
 					       dp_static, NULL);
@@ -6468,7 +6468,7 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 	zvrf->evpn_underlay_enabled = advertise;
 	if (EVPN_ENABLED(zvrf)) {
 		zrouter.evpn_underlay_count++;
-		zrouter.evpn_vrf = zvrf;
+		zrouter.evpn_fallback_underlay_vrf = zvrf;
 
 		/* Note BUM handling */
 		zvrf->vxlan_flood_ctrl = flood_ctrl;
@@ -6505,8 +6505,8 @@ void zebra_vxlan_advertise_all_vni(ZAPI_HANDLER_ARGS)
 		zrouter.evpn_underlay_count--;
 
 		/* Drop the master mirror if it pointed at this VRF */
-		if (zrouter.evpn_vrf == zvrf)
-			zrouter.evpn_vrf = NULL;
+		if (zrouter.evpn_fallback_underlay_vrf == zvrf)
+			zrouter.evpn_fallback_underlay_vrf = NULL;
 	}
 
 stream_failure:
@@ -6618,6 +6618,39 @@ static int zevpn_tier2_intent_ns_cb(struct interface *ifp, void *arg)
 
 	zebra_vxlan_if_vni_iterate(zif, zevpn_tier2_intent_vni_cb, arg);
 	return NS_WALK_CONTINUE;
+}
+
+/* Handle bgpd declaring its default underlay VRF
+ * (ZEBRA_EVPN_DEFAULT_UNDERLAY_SET). Messages that are not scoped to a
+ * specific VNI's underlay (ES/MH, MACIP) are routed to this VRF's instance;
+ * before this message existed zebra guessed via the last-enabled underlay
+ * (last-write-wins), which picks the wrong instance with multiple underlays.
+ * ES state already announced to the old default is moved: withdrawn while
+ * the old resolution is still in effect, re-announced into the new one.
+ */
+void zebra_vxlan_evpn_default_underlay_set(ZAPI_HANDLER_ARGS)
+{
+	struct stream *s = msg;
+	vrf_id_t vrf_id;
+
+	STREAM_GETL(s, vrf_id);
+
+	if (vrf_id == zrouter.evpn_default_underlay_vrf_id)
+		return;
+
+	if (IS_ZEBRA_DEBUG_VXLAN)
+		zlog_debug("EVPN default underlay VRF set to %s(%u) (was %u)",
+			   vrf_id_to_name(vrf_id), vrf_id,
+			   zrouter.evpn_default_underlay_vrf_id);
+
+	zebra_evpn_es_send_all_to_client(false /* add */);
+	zrouter.evpn_default_underlay_vrf_id = vrf_id;
+	zebra_evpn_es_send_all_to_client(true /* add */);
+
+	return;
+
+stream_failure:
+	zlog_err("%s: failed to read default underlay VRF from bgpd", __func__);
 }
 
 /* Handle a VNI intent from the control plane (bgpd): declares which role a
@@ -6776,7 +6809,7 @@ vrf_id_t zebra_vxlan_if_underlay_vrf_id(const struct interface *vxlan_if)
 	const struct zebra_if *zif;
 
 	if (!vxlan_if)
-		return zebra_evpn_get_master_underlay_vrf_id();
+		return zebra_evpn_get_default_underlay_vrf_id();
 
 	zif = vxlan_if->info;
 	if (zif && zif->link)
@@ -6813,7 +6846,8 @@ void zebra_vxlan_init(void)
 
 	zebra_neigh_db_init(svd_nh_table);
 
-	zrouter.evpn_vrf = NULL;
+	zrouter.evpn_fallback_underlay_vrf = NULL;
+	zrouter.evpn_default_underlay_vrf_id = VRF_UNKNOWN;
 	zrouter.evpn_underlay_count = 0;
 	zebra_evpn_mh_init();
 }
@@ -7262,7 +7296,7 @@ static int zebra_evpn_bgp_cfg_clean_up(struct zserv *client)
 
 static int zebra_evpn_pim_cfg_clean_up(struct zserv *client)
 {
-	struct zebra_vrf *zvrf = zebra_evpn_get_master_underlay_vrf();
+	struct zebra_vrf *zvrf = zebra_evpn_get_default_underlay_vrf();
 
 	if (CHECK_FLAG(zvrf->flags, ZEBRA_PIM_SEND_VXLAN_SG)) {
 		if (IS_ZEBRA_DEBUG_VXLAN)
@@ -7303,6 +7337,11 @@ static int zebra_evpn_cfg_clean_up(struct zserv *client)
 		hash_clean(zrouter.l2vni_intent_table, l2vni_intent_free_cb);
 		hash_iterate(zrouter.l3vni_table, zl3vni_placeholder_free_cb,
 			     NULL);
+
+		/* The default-underlay declaration is bgpd state as well;
+		 * it is re-declared on reconnect.
+		 */
+		zrouter.evpn_default_underlay_vrf_id = VRF_UNKNOWN;
 
 		if (DYNAMIC_CLIENT_GR_DISABLED(client)) {
 			if (IS_ZEBRA_DEBUG_EVENT)
