@@ -778,7 +778,25 @@ static void zl3vni_print(struct zebra_l3vni *zl3vni, void **ctx)
 		vty_out(vty, "  Vxlan-Intf: %s\n",
 			zl3vni_vxlan_if_name(zl3vni));
 		vty_out(vty, "  SVI-If: %s\n", zl3vni_svi_if_name(zl3vni));
+		vty_out(vty, "  Underlay VRF: %s\n",
+			vrf_id_to_name(zl3vni->vxlan_if
+					       ? zebra_vxlan_if_underlay_vrf_id(
+							 zl3vni->vxlan_if)
+					       : VRF_UNKNOWN));
 		vty_out(vty, "  State: %s\n", zl3vni_state2str(zl3vni));
+		{
+			enum zebra_evpn_dp_state dp_state;
+			enum zebra_evpn_dp_reason dp_reason;
+
+			zl3vni_compute_dp_state(zl3vni,
+						zl3vni_get_shape_flags(zl3vni),
+						&dp_state, &dp_reason);
+			vty_out(vty, "  Dataplane State: %s\n",
+				zebra_evpn_dp_state2str(dp_state));
+			if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+				vty_out(vty, "  Dataplane Reason: %s\n",
+					zebra_evpn_dp_reason2str(dp_reason));
+		}
 		vty_out(vty, "  VNI Filter: %s\n",
 			CHECK_FLAG(zl3vni->filter_flags, ZEBRA_EVPN_L3VNI_PREFIX_ROUTES_ONLY)
 				? "prefix-routes-only"
@@ -811,7 +829,27 @@ static void zl3vni_print(struct zebra_l3vni *zl3vni, void **ctx)
 				       zl3vni_vxlan_if_name(zl3vni));
 		json_object_string_add(json, "sviIntf",
 				       zl3vni_svi_if_name(zl3vni));
+		json_object_string_add(json, "underlayVrf",
+				       vrf_id_to_name(
+					       zl3vni->vxlan_if
+						       ? zebra_vxlan_if_underlay_vrf_id(
+								 zl3vni->vxlan_if)
+						       : VRF_UNKNOWN));
 		json_object_string_add(json, "state", zl3vni_state2str(zl3vni));
+		{
+			enum zebra_evpn_dp_state dp_state;
+			enum zebra_evpn_dp_reason dp_reason;
+
+			zl3vni_compute_dp_state(zl3vni,
+						zl3vni_get_shape_flags(zl3vni),
+						&dp_state, &dp_reason);
+			json_object_string_add(json, "dataplaneState",
+					       zebra_evpn_dp_state2str(dp_state));
+			if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+				json_object_string_add(json, "dataplaneReason",
+						       zebra_evpn_dp_reason2str(
+							       dp_reason));
+		}
 		json_object_string_add(
 			json, "sysMac",
 			zl3vni_sysmac2str(zl3vni, buf, sizeof(buf)));
@@ -847,15 +885,26 @@ static void zl3vni_print_hash(struct hash_bucket *bucket, void *ctx[])
 
 	zl3vni = (struct zebra_l3vni *)bucket->data;
 
+	vrf_id_t underlay_id = zl3vni->vxlan_if
+				       ? zebra_vxlan_if_underlay_vrf_id(zl3vni->vxlan_if)
+				       : VRF_UNKNOWN;
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
+
+	zl3vni_compute_dp_state(zl3vni, zl3vni_get_shape_flags(zl3vni),
+				&dp_state, &dp_reason);
+
 	if (!json) {
 		/* clang-format off */
 		vty_out(vty,
-			"%-10u %-4s %-21s %-8lu %-8zu %-15s %-15s %-10u %-37s\n",
+			"%-10u %-4s %-21s %-8lu %-8zu %-15s %-15s %-15s %-14s %-10u %-37s\n",
 			zl3vni->vni, "L3",
 			zl3vni_vxlan_if_name(zl3vni),
 			hashcount(zl3vni->rmac_table),
 			zebra_neigh_db_count(zl3vni->nh_table), "n/a",
-			zl3vni_vrf_name(zl3vni), zl3vni->vid,
+			zl3vni_vrf_name(zl3vni),
+			vrf_id_to_name(underlay_id),
+			zebra_evpn_dp_state2str(dp_state), zl3vni->vid,
 			zl3vni->bridge_if ? zl3vni->bridge_if->name : "-");
 		/* clang-format on */
 	} else {
@@ -876,6 +925,13 @@ static void zl3vni_print_hash(struct hash_bucket *bucket, void *ctx[])
 		json_object_string_add(json_evpn, "type", "L3");
 		json_object_string_add(json_evpn, "tenantVrf",
 				       zl3vni_vrf_name(zl3vni));
+		json_object_string_add(json_evpn, "underlayVrf",
+				       vrf_id_to_name(underlay_id));
+		json_object_string_add(json_evpn, "state",
+				       zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			json_object_string_add(json_evpn, "reason",
+					       zebra_evpn_dp_reason2str(dp_reason));
 		json_object_object_add(json, vni_str, json_evpn);
 	}
 }
@@ -2137,6 +2193,171 @@ struct zebra_l2vni_intent *zl2vni_intent_lookup(vni_t vni)
 	return hash_lookup(zrouter.l2vni_intent_table, &tmp);
 }
 
+/* Dump of the bgpd-driven VNI intent state: the ROLE_L2 intent registry and
+ * the (always intent-driven) L3VNI objects, each with whether/how the intent
+ * is currently served by the dataplane.
+ */
+struct vni_intent_show_ctx {
+	struct vty *vty;
+	json_object *json;
+};
+
+static void zl2vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
+{
+	struct vni_intent_show_ctx *ctx = arg;
+	struct zebra_l2vni_intent *zi = bucket->data;
+	struct zebra_evpn *zevpn = zebra_evpn_lookup(zi->vni);
+	enum zebra_evpn_dp_state dp_state = ZEBRA_EVPN_DP_NONE;
+	enum zebra_evpn_dp_reason dp_reason = ZEBRA_EVPN_DP_REASON_NONE;
+
+	if (zevpn)
+		zevpn_compute_dp_state(zevpn, zevpn_get_shape_flags(zevpn),
+				       &dp_state, &dp_reason);
+
+	if (ctx->json) {
+		json_object *json_vni = json_object_new_object();
+		char vni_str[VNI_STR_LEN];
+
+		json_object_int_add(json_vni, "vni", zi->vni);
+		json_object_string_add(json_vni, "role", "L2");
+		json_object_string_add(json_vni, "tenantVrf",
+				       vrf_id_to_name(zi->tenant_vrf_id));
+		json_object_boolean_add(json_vni, "served", !!zevpn);
+		json_object_string_add(json_vni, "dataplaneState",
+				       zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			json_object_string_add(json_vni, "dataplaneReason",
+					       zebra_evpn_dp_reason2str(dp_reason));
+		snprintf(vni_str, sizeof(vni_str), "%u", zi->vni);
+		json_object_object_add(ctx->json, vni_str, json_vni);
+	} else {
+		vty_out(ctx->vty, "%-10u %-6s %-20s %-8s %-14s %s\n", zi->vni,
+			"L2", vrf_id_to_name(zi->tenant_vrf_id),
+			zevpn ? "yes" : "no",
+			zebra_evpn_dp_state2str(dp_state),
+			dp_reason != ZEBRA_EVPN_DP_REASON_NONE
+				? zebra_evpn_dp_reason2str(dp_reason)
+				: "");
+	}
+}
+
+static void zl3vni_intent_show_cb(struct hash_bucket *bucket, void *arg)
+{
+	struct vni_intent_show_ctx *ctx = arg;
+	struct zebra_l3vni *zl3vni = bucket->data;
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
+	vrf_id_t tenant_vrf_id = zl3vni->intended_tenant_vrf_id;
+	bool served = zl3vni->vrf_id != VRF_UNKNOWN;
+
+	zl3vni_compute_dp_state(zl3vni, zl3vni_get_shape_flags(zl3vni),
+				&dp_state, &dp_reason);
+
+	if (ctx->json) {
+		json_object *json_vni = json_object_new_object();
+		char vni_str[VNI_STR_LEN];
+
+		json_object_int_add(json_vni, "vni", zl3vni->vni);
+		json_object_string_add(json_vni, "role", "L3");
+		json_object_string_add(json_vni, "tenantVrf",
+				       vrf_id_to_name(tenant_vrf_id));
+		json_object_boolean_add(json_vni, "served", served);
+		json_object_string_add(json_vni, "dataplaneState",
+				       zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			json_object_string_add(json_vni, "dataplaneReason",
+					       zebra_evpn_dp_reason2str(dp_reason));
+		snprintf(vni_str, sizeof(vni_str), "%u", zl3vni->vni);
+		json_object_object_add(ctx->json, vni_str, json_vni);
+	} else {
+		vty_out(ctx->vty, "%-10u %-6s %-20s %-8s %-14s %s\n",
+			zl3vni->vni, "L3", vrf_id_to_name(tenant_vrf_id),
+			served ? "yes" : "no",
+			zebra_evpn_dp_state2str(dp_state),
+			dp_reason != ZEBRA_EVPN_DP_REASON_NONE
+				? zebra_evpn_dp_reason2str(dp_reason)
+				: "");
+	}
+}
+
+void zebra_vxlan_print_vni_intents(struct vty *vty, bool use_json)
+{
+	struct vni_intent_show_ctx ctx = {};
+
+	ctx.vty = vty;
+	if (use_json)
+		ctx.json = json_object_new_object();
+	else
+		vty_out(vty, "%-10s %-6s %-20s %-8s %-14s %s\n", "VNI", "Role",
+			"Tenant VRF", "Served", "DP-State", "Reason");
+
+	hash_iterate(zrouter.l2vni_intent_table, zl2vni_intent_show_cb, &ctx);
+	hash_iterate(zrouter.l3vni_table, zl3vni_intent_show_cb, &ctx);
+
+	if (use_json)
+		vty_json(vty, ctx.json);
+}
+
+const char *zebra_evpn_dp_state2str(enum zebra_evpn_dp_state state)
+{
+	switch (state) {
+	case ZEBRA_EVPN_DP_NONE:
+		return "none";
+	case ZEBRA_EVPN_DP_DISCOVERED:
+		return "discovered";
+	case ZEBRA_EVPN_DP_DOWN:
+		return "down";
+	case ZEBRA_EVPN_DP_UP:
+		return "up";
+	case ZEBRA_EVPN_DP_MISCONFIGURED:
+		return "misconfigured";
+	}
+	return "unknown";
+}
+
+const char *zebra_evpn_dp_reason2str(enum zebra_evpn_dp_reason reason)
+{
+	switch (reason) {
+	case ZEBRA_EVPN_DP_REASON_NONE:
+		return "none";
+	case ZEBRA_EVPN_DP_REASON_WRONG_UNDERLAY_VRF:
+		return "wrong-underlay-vrf";
+	case ZEBRA_EVPN_DP_REASON_UNDERLAY_NOT_ENABLED:
+		return "underlay-not-enabled";
+	case ZEBRA_EVPN_DP_REASON_ROLE_MISMATCH:
+		return "role-mismatch";
+	case ZEBRA_EVPN_DP_REASON_NO_SVI:
+		return "no-svi";
+	case ZEBRA_EVPN_DP_REASON_TENANT_MISMATCH:
+		return "tenant-mismatch";
+	case ZEBRA_EVPN_DP_REASON_DUP_VNI:
+		return "dup-vni";
+	}
+	return "unknown";
+}
+
+/* Dataplane shape of an L2VNI (which constructs exist / are up); used in
+ * the L2VNI report to bgpd and for computing the dataplane state.
+ */
+uint32_t zevpn_get_shape_flags(const struct zebra_evpn *zevpn)
+{
+	uint32_t shape_flags = 0;
+
+	if (zevpn->vxlan_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
+		if (if_is_operative(zevpn->vxlan_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
+	}
+	if (zevpn->bridge_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
+	if (zevpn->svi_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
+		if (if_is_operative(zevpn->svi_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
+	}
+	return shape_flags;
+}
+
 /* Compute the dataplane state for an L2VNI.
  *
  * For auto-discovered L2VNIs (no entry in l2vni_intent_table) the state is
@@ -2529,11 +2750,34 @@ static inline void zl3vni_get_vrr_rmac(struct zebra_l3vni *zl3vni,
  * Compute the dataplane state and reason for an L3VNI based on the current
  * interface bindings and the intent recorded in the zl3vni object.
  *
+/* Dataplane shape of an L3VNI; see zevpn_get_shape_flags(). */
+uint32_t zl3vni_get_shape_flags(const struct zebra_l3vni *zl3vni)
+{
+	uint32_t shape_flags = 0;
+
+	if (zl3vni->vxlan_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
+		if (if_is_operative(zl3vni->vxlan_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
+	}
+	if (zl3vni->bridge_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
+	if (zl3vni->svi_if) {
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
+		if (if_is_operative(zl3vni->svi_if))
+			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
+	}
+	if (zl3vni->mac_vlan_if)
+		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_MACVLAN;
+	return shape_flags;
+}
+
+/*
  * Precedence (first match wins):
  *   DUP_VNI > UNDERLAY_NOT_ENABLED > WRONG_UNDERLAY_VRF > ROLE_MISMATCH
  *   > TENANT_MISMATCH > NO_SVI > DOWN > UP
  */
-static void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
+void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
 				    uint32_t shape_flags,
 				    enum zebra_evpn_dp_state *state,
 				    enum zebra_evpn_dp_reason *reason)
@@ -2646,22 +2890,8 @@ static int zl3vni_send_add_to_client(struct zebra_l3vni *zl3vni)
 	stream_putl(s, is_anycast_mac);
 
 	/* Dataplane shape/state report (diagnostics) */
-	uint32_t shape_flags = 0;
+	uint32_t shape_flags = zl3vni_get_shape_flags(zl3vni);
 
-	if (zl3vni->vxlan_if) {
-		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
-		if (if_is_operative(zl3vni->vxlan_if))
-			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
-	}
-	if (zl3vni->bridge_if)
-		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
-	if (zl3vni->svi_if) {
-		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
-		if (if_is_operative(zl3vni->svi_if))
-			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
-	}
-	if (zl3vni->mac_vlan_if)
-		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_MACVLAN;
 	stream_putl(s, zl3vni->vxlan_if ? zl3vni->vxlan_if->ifindex : 0);
 	stream_putw(s, zl3vni->vid);
 	stream_putl(s, shape_flags);
@@ -4608,9 +4838,10 @@ void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
 	if (is_evpn_enabled()) {
 		if (!use_json)
 			vty_out(vty,
-				"%-10s %-4s %-21s %-8s %-8s %-15s %-15s %-10s %-37s\n",
+				"%-10s %-4s %-21s %-8s %-8s %-15s %-15s %-15s %-14s %-10s %-37s\n",
 				"VNI", "Type", "VxLAN IF", "# MACs", "# ARPs",
-				"# Remote VTEPs", "Tenant VRF", "VLAN", "BRIDGE");
+				"# Remote VTEPs", "Tenant VRF", "Underlay VRF",
+				"State", "VLAN", "BRIDGE");
 
 		args[0] = vty;
 		args[1] = json;

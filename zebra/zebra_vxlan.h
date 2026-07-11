@@ -151,6 +151,7 @@ enum zebra_print_vni_filter {
 	ZEBRA_PRINT_VNI_FILTER_L3,
 };
 
+extern void zebra_vxlan_print_vni_intents(struct vty *vty, bool use_json);
 extern void zebra_vxlan_print_vnis(struct vty *vty, struct zebra_vrf *zvrf,
 				   bool use_json, enum zebra_print_vni_filter filter);
 extern void zebra_vxlan_print_vnis_detail(struct vty *vty,

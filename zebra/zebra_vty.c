@@ -3104,6 +3104,19 @@ DEFPY (show_zebra_evpn_vni_l2vni_l3vni,
 	return CMD_SUCCESS;
 }
 
+DEFPY (show_zebra_evpn_vni_intent,
+       show_zebra_evpn_vni_intent_cmd,
+       "show zebra evpn vni-intent [json$json]",
+       SHOW_STR
+       ZEBRA_STR
+       "EVPN\n"
+       "VNI intent received from the control plane (bgpd)\n"
+       JSON_STR)
+{
+	zebra_vxlan_print_vni_intents(vty, !!json);
+	return CMD_SUCCESS;
+}
+
 DEFPY (show_zebra_evpn_vni_vni,
        show_zebra_evpn_vni_vni_cmd,
        "show zebra evpn vni " CMD_VNI_RANGE "$vni [json$json]",
@@ -4304,6 +4317,7 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_frr_cmd);
 	install_element(VIEW_NODE, &show_zebra_evpn_global_cmd);
 	install_element(VIEW_NODE, &show_zebra_evpn_vni_l2vni_l3vni_cmd);
+	install_element(VIEW_NODE, &show_zebra_evpn_vni_intent_cmd);
 	install_element(VIEW_NODE, &show_zebra_evpn_vni_vni_cmd);
 	install_element(VIEW_NODE, &show_zebra_evpn_l2_nh_cmd);
 	install_element(VIEW_NODE, &show_zebra_evpn_es_cmd);

@@ -102,6 +102,11 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 	vrf_id_t underlay_id = zevpn->vxlan_if
 				       ? zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if)
 				       : VRF_UNKNOWN;
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
+
+	zevpn_compute_dp_state(zevpn, zevpn_get_shape_flags(zevpn), &dp_state,
+			       &dp_reason);
 
 	if (json == NULL) {
 		vty_out(vty, "VNI: %u\n", zevpn->vni);
@@ -111,6 +116,11 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 			zevpn->bridge_if ? zevpn->bridge_if->name : "-");
 		vty_out(vty, " Tenant VRF: %s\n", vrf_id_to_name(zevpn->vrf_id));
 		vty_out(vty, " Underlay VRF: %s\n", vrf_id_to_name(underlay_id));
+		vty_out(vty, " Dataplane State: %s\n",
+			zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			vty_out(vty, " Dataplane Reason: %s\n",
+				zebra_evpn_dp_reason2str(dp_reason));
 	} else {
 		json_object_int_add(json, "vni", zevpn->vni);
 		json_object_string_add(json, "type", "L2");
@@ -119,6 +129,11 @@ void zebra_evpn_print(struct zebra_evpn *zevpn, void **ctxt)
 				       zevpn->bridge_if ? zevpn->bridge_if->name : "");
 		json_object_string_add(json, "tenantVrf", vrf_id_to_name(zevpn->vrf_id));
 		json_object_string_add(json, "underlayVrf", vrf_id_to_name(underlay_id));
+		json_object_string_add(json, "dataplaneState",
+				       zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			json_object_string_add(json, "dataplaneReason",
+					       zebra_evpn_dp_reason2str(dp_reason));
 	}
 
 	if (!zevpn->vxlan_if) { // unexpected
@@ -229,10 +244,23 @@ void zebra_evpn_print_hash(struct hash_bucket *bucket, void *ctxt[])
 
 	num_macs = num_valid_macs(zevpn);
 	num_neigh = zebra_neigh_db_count(zevpn->neigh_table);
+
+	vrf_id_t underlay_id = zevpn->vxlan_if
+				       ? zebra_vxlan_if_underlay_vrf_id(zevpn->vxlan_if)
+				       : VRF_UNKNOWN;
+	enum zebra_evpn_dp_state dp_state;
+	enum zebra_evpn_dp_reason dp_reason;
+
+	zevpn_compute_dp_state(zevpn, zevpn_get_shape_flags(zevpn), &dp_state,
+			       &dp_reason);
+
 	if (json == NULL)
-		vty_out(vty, "%-10u %-4s %-21s %-8u %-8u %-15u %-15s %-10u %-37s\n", zevpn->vni,
-			"L2", zevpn->vxlan_if ? zevpn->vxlan_if->name : "unknown", num_macs,
-			num_neigh, num_vteps, vrf_id_to_name(zevpn->vrf_id), zevpn->vid,
+		vty_out(vty, "%-10u %-4s %-21s %-8u %-8u %-15u %-15s %-15s %-14s %-10u %-37s\n",
+			zevpn->vni, "L2",
+			zevpn->vxlan_if ? zevpn->vxlan_if->name : "unknown", num_macs,
+			num_neigh, num_vteps, vrf_id_to_name(zevpn->vrf_id),
+			vrf_id_to_name(underlay_id),
+			zebra_evpn_dp_state2str(dp_state), zevpn->vid,
 			zevpn->bridge_if ? zevpn->bridge_if->name : "-");
 	else {
 		char vni_str[VNI_STR_LEN];
@@ -247,6 +275,13 @@ void zebra_evpn_print_hash(struct hash_bucket *bucket, void *ctxt[])
 		json_object_int_add(json_evpn, "numRemoteVteps", num_vteps);
 		json_object_string_add(json_evpn, "tenantVrf",
 				       vrf_id_to_name(zevpn->vrf_id));
+		json_object_string_add(json_evpn, "underlayVrf",
+				       vrf_id_to_name(underlay_id));
+		json_object_string_add(json_evpn, "state",
+				       zebra_evpn_dp_state2str(dp_state));
+		if (dp_reason != ZEBRA_EVPN_DP_REASON_NONE)
+			json_object_string_add(json_evpn, "reason",
+					       zebra_evpn_dp_reason2str(dp_reason));
 		json_object_int_add(json_evpn, "vlan", zevpn->vid);
 		json_object_string_add(json_evpn, "bridge",
 				       zevpn->bridge_if ? zevpn->bridge_if->name : "-");
@@ -1123,20 +1158,8 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	stream_put(s, &svi_index, sizeof(ifindex_t));
 
 	/* Dataplane shape/state report (diagnostics) */
-	uint32_t shape_flags = 0;
+	uint32_t shape_flags = zevpn_get_shape_flags(zevpn);
 
-	if (zevpn->vxlan_if) {
-		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_VXLAN_IF;
-		if (if_is_operative(zevpn->vxlan_if))
-			shape_flags |= ZEBRA_EVPN_SHAPE_VXLAN_IF_UP;
-	}
-	if (zevpn->bridge_if)
-		shape_flags |= ZEBRA_EVPN_SHAPE_BRIDGE_ATTACHED;
-	if (zevpn->svi_if) {
-		shape_flags |= ZEBRA_EVPN_SHAPE_HAS_SVI;
-		if (if_is_operative(zevpn->svi_if))
-			shape_flags |= ZEBRA_EVPN_SHAPE_SVI_UP;
-	}
 	stream_putl(s, zevpn->vxlan_if ? zevpn->vxlan_if->ifindex : 0);
 	stream_putw(s, zevpn->vid);
 	stream_putl(s, shape_flags);

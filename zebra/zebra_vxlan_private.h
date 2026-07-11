@@ -240,6 +240,14 @@ struct zebra_evpn; /* forward decl; full definition in zebra_evpn_base.h */
 extern void zevpn_compute_dp_state(struct zebra_evpn *zevpn, uint32_t shape_flags,
 				   enum zebra_evpn_dp_state *state,
 				   enum zebra_evpn_dp_reason *reason);
+extern void zl3vni_compute_dp_state(struct zebra_l3vni *zl3vni,
+				    uint32_t shape_flags,
+				    enum zebra_evpn_dp_state *state,
+				    enum zebra_evpn_dp_reason *reason);
+extern uint32_t zevpn_get_shape_flags(const struct zebra_evpn *zevpn);
+extern uint32_t zl3vni_get_shape_flags(const struct zebra_l3vni *zl3vni);
+extern const char *zebra_evpn_dp_state2str(enum zebra_evpn_dp_state state);
+extern const char *zebra_evpn_dp_reason2str(enum zebra_evpn_dp_reason reason);
 
 DECLARE_HOOK(zebra_rmac_update,
 	     (struct zebra_mac * rmac, struct zebra_l3vni *zl3vni, bool delete,
