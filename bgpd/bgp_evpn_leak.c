@@ -133,6 +133,8 @@ void bgp_lal_compute_dests(struct bgp *src, struct vrf_mapped_bgp_instance_slu_h
 	}
 }
 
+static void bgp_lal_reexport_local_resync(struct bgp *bgp);
+
 void bgp_lal_reconcile_source(struct bgp *src)
 {
 	struct vrf_mapped_bgp_instance_slu_head new_dests;
@@ -164,6 +166,12 @@ void bgp_lal_reconcile_source(struct bgp *src)
 	}
 
 	vrf_mapped_bgp_instance_slu_fini(&new_dests);
+
+	/* Re-export destinations are per-route (rewritten RT sets) and thus
+	 * not covered by the pair diff above - resync them whenever the RT
+	 * landscape may have changed.
+	 */
+	bgp_lal_reexport_local_resync(src);
 }
 
 void bgp_lal_reconcile_all(void)
@@ -203,18 +211,47 @@ static struct bgp *bgp_lal_path_immediate_source(struct bgp_path_info *pi)
 	return bgp_dest_table(parent->net)->bgp;
 }
 
-static bool bgp_lal_source_path_eligible(struct bgp_path_info *pi)
+static bool bgp_lal_path_is_imported(struct bgp_path_info *pi)
+{
+	return pi->sub_type == BGP_ROUTE_IMPORTED && pi->extra && pi->extra->vrfleak &&
+	       pi->extra->vrfleak->parent;
+}
+
+static bool bgp_lal_path_is_evpn_imported(struct bgp_path_info *pi)
+{
+	struct bgp_path_info *parent;
+	struct bgp_table *table;
+
+	if (!bgp_lal_path_is_imported(pi))
+		return false;
+
+	parent = pi->extra->vrfleak->parent;
+	if (!parent->net)
+		return false;
+
+	table = bgp_dest_table(parent->net);
+	return table && table->afi == AFI_L2VPN && table->safi == SAFI_EVPN;
+}
+
+/* re-export requires at least one configured RT to become active */
+static bool bgp_lal_reexport_local_active(struct bgp *bgp)
+{
+	return bgp->evpn_reexport && CHECK_FLAG(bgp->evpn_reexport->scope, BGP_REEXPORT_SCOPE_LOCAL) &&
+	       bgp->evpn_reexport->rt_ecom;
+}
+
+static bool bgp_lal_source_path_eligible(struct bgp *src, struct bgp_path_info *pi)
 {
 	if (bgp_path_suppressed(pi))
 		return false;
 
-	/* Any imported path - EVPN-, VPN- or LAL-imported - is blocked from
-	 * onward propagation by default; the re-export-imported config is
-	 * the single opt-in (follow-up commits).
+	/* Imported paths are blocked from onward propagation by default;
+	 * the re-export-imported block is the single opt-in, and only for
+	 * EVPN- and LAL-imported paths (never VPN-imported ones).
 	 */
-	if (pi->sub_type == BGP_ROUTE_IMPORTED && pi->extra && pi->extra->vrfleak &&
-	    pi->extra->vrfleak->parent)
-		return false;
+	if (bgp_lal_path_is_imported(pi))
+		return bgp_lal_reexport_local_active(src) &&
+		       (bgp_lal_path_is_lal(pi) || bgp_lal_path_is_evpn_imported(pi));
 
 	return true;
 }
@@ -434,6 +471,109 @@ static struct bgp_path_info *bgp_lal_leak_update(struct bgp *dst, struct bgp_des
 	return new;
 }
 
+/* Rewritten RT set for re-exporting an imported path (matching artifact
+ * only - local leaking never attaches RTs to the leaked copy). Returns a
+ * fresh ecommunity owned by the caller, or NULL when nothing applies.
+ */
+static struct ecommunity *bgp_lal_reexport_rt_set(struct bgp *bgp, struct bgp_path_info *pi)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp->evpn_reexport;
+	struct ecommunity *result = NULL;
+
+	if (cfg->mode == BGP_REEXPORT_OVERRIDE)
+		return ecommunity_dup(cfg->rt_ecom);
+
+	/* additive: original carried RTs + configured */
+	if (bgp_lal_path_is_evpn_imported(pi)) {
+		/* The VRF copy had its RTs stripped on install - the original
+		 * carried RTs live on the parent (EVPN) path's attr.
+		 */
+		struct bgp_path_info *parent = pi->extra->vrfleak->parent;
+		struct ecommunity *parent_ecom = bgp_attr_get_ecommunity(parent->attr);
+		uint32_t i;
+		uint8_t *pnt;
+
+		for (i = 0; parent_ecom && i < parent_ecom->size; i++) {
+			struct ecommunity_val eval;
+
+			pnt = parent_ecom->val + (i * parent_ecom->unit_size);
+			if (pnt[1] != ECOMMUNITY_ROUTE_TARGET ||
+			    (pnt[0] != ECOMMUNITY_ENCODE_AS && pnt[0] != ECOMMUNITY_ENCODE_IP &&
+			     pnt[0] != ECOMMUNITY_ENCODE_AS4))
+				continue;
+
+			memcpy(&eval, pnt, ECOMMUNITY_SIZE);
+			if (!result)
+				result = ecommunity_new();
+			ecommunity_add_val(result, &eval, true, false);
+		}
+	} else {
+		/* LAL-imported: unicast paths carry no RTs - the "original"
+		 * set is what the leak was matched on, the ultimate origin
+		 * VRF's effective export RTs.
+		 */
+		struct bgp *bgp_orig = pi->extra->vrfleak->bgp_orig;
+		struct bgp_evpn_effective_fq_rt *rt;
+
+		if (bgp_orig) {
+			frr_each (bgp_evpn_effective_fq_rt_slu, &bgp_orig->effective_fq_export_rts,
+				  rt) {
+				if (!result)
+					result = ecommunity_new();
+				ecommunity_add_val(result, &rt->ecom_val, true, false);
+			}
+		}
+	}
+
+	/* merge in the configured RTs (ecommunity_merge mutates arg 1, which
+	 * is ours; cfg->rt_ecom is only read)
+	 */
+	if (!result)
+		result = ecommunity_dup(cfg->rt_ecom);
+	else
+		result = ecommunity_merge(result, cfg->rt_ecom);
+
+	return result;
+}
+
+/* Per-route destination set for a re-exported path: match the rewritten
+ * RT set against the process-global import-RT tables. Additive mode makes
+ * the set path-dependent, so the cached lal_dests cannot be used here.
+ */
+static void bgp_lal_reexport_compute_dests(struct bgp *src, struct ecommunity *rt_set,
+					   struct vrf_mapped_bgp_instance_slu_head *out)
+{
+	uint32_t i;
+	struct vrf_mapped_bgp_instance *mapped;
+
+	for (i = 0; i < rt_set->size; i++) {
+		struct ecommunity_val eval;
+		struct vrf_fq_irt_node *fq_irt;
+		struct vrf_wildcard_irt_node *wc_irt;
+
+		memcpy(&eval, rt_set->val + (i * rt_set->unit_size), ECOMMUNITY_SIZE);
+
+		fq_irt = lookup_vrf_fq_irt_node_by_ecom_val(eval);
+		if (fq_irt) {
+			frr_each (vrf_mapped_bgp_instance_slu, &fq_irt->vrfs, mapped) {
+				if (bgp_lal_dest_eligible(src, mapped->bgp))
+					bgp_lal_dests_add(out, mapped->bgp);
+			}
+		}
+
+		wc_irt = lookup_vrf_wildcard_irt_node_by_ecom_val(eval);
+		if (wc_irt) {
+			frr_each (vrf_mapped_bgp_instance_slu, &wc_irt->vrfs, mapped) {
+				if (bgp_lal_dest_eligible(src, mapped->bgp))
+					bgp_lal_dests_add(out, mapped->bgp);
+			}
+		}
+	}
+}
+
+static void bgp_lal_remove_leaked_path(struct bgp *dst, struct bgp_dest *bn,
+				       struct bgp_path_info *bpi, afi_t afi);
+
 static void bgp_lal_leak_path_to_dest(struct bgp *src, struct bgp_path_info *pi, struct bgp *dst)
 {
 	const struct prefix *p = bgp_dest_get_prefix(pi->net);
@@ -441,6 +581,7 @@ static void bgp_lal_leak_path_to_dest(struct bgp *src, struct bgp_path_info *pi,
 	struct attr static_attr;
 	struct attr *new_attr;
 	struct bgp_dest *bn;
+	struct bgp_path_info *child;
 	struct bgp *bgp_orig;
 	struct prefix nexthop_orig = { 0 };
 
@@ -480,13 +621,48 @@ static void bgp_lal_leak_path_to_dest(struct bgp *src, struct bgp_path_info *pi,
 	new_attr = bgp_attr_intern(&static_attr);
 
 	bn = bgp_node_get(dst->rib[afi][SAFI_UNICAST], p);
-	bgp_lal_leak_update(dst, bn, new_attr, afi, pi, src, bgp_orig, &nexthop_orig);
+	child = bgp_lal_leak_update(dst, bn, new_attr, afi, pi, src, bgp_orig, &nexthop_orig);
+	bgp_dest_unlock_node(bn);
+
+	/* Chain propagation: if the destination re-exports its imported
+	 * routes into the local leak, the fresh child continues onward.
+	 * Bounded by the traversal-chain guard (depth <= number of VRFs).
+	 */
+	if (child)
+		bgp_lal_from_vrf_update(dst, child);
+}
+
+/* Remove the child of `pi` in dst's unicast table, if any (recursively
+ * withdrawing grandchildren first).
+ */
+static void bgp_lal_withdraw_child_in_dest(struct bgp *src, struct bgp_path_info *pi,
+					   struct bgp *dst, afi_t afi)
+{
+	const struct prefix *p = bgp_dest_get_prefix(pi->net);
+	struct bgp_dest *bn;
+	struct bgp_path_info *bpi;
+
+	bn = bgp_node_lookup(dst->rib[afi][SAFI_UNICAST], p);
+	if (!bn)
+		return;
+
+	for (bpi = bgp_dest_get_bgp_path_info(bn); bpi; bpi = bpi->next) {
+		if (bpi->extra && bpi->extra->vrfleak && bpi->extra->vrfleak->parent == pi)
+			break;
+	}
+
+	if (bpi)
+		bgp_lal_remove_leaked_path(dst, bn, bpi, afi);
+
 	bgp_dest_unlock_node(bn);
 }
 
 static void bgp_lal_remove_leaked_path(struct bgp *dst, struct bgp_dest *bn,
 				       struct bgp_path_info *bpi, afi_t afi)
 {
+	/* re-export chains: take down grandchildren first */
+	bgp_lal_from_vrf_withdraw(dst, bpi);
+
 	bgp_aggregate_decrement(dst, bgp_dest_get_prefix(bn), bpi, afi, SAFI_UNICAST);
 	bgp_path_info_mark_for_delete(bn, bpi);
 	bgp_process(dst, bn, bpi, afi, SAFI_UNICAST);
@@ -496,12 +672,59 @@ void bgp_lal_from_vrf_update(struct bgp *from_bgp, struct bgp_path_info *pi)
 {
 	struct vrf_mapped_bgp_instance *dest;
 
-	if (!from_bgp || from_bgp->inst_type != BGP_INSTANCE_TYPE_VRF ||
-	    !vrf_mapped_bgp_instance_slu_count(&from_bgp->lal_dests))
+	if (!from_bgp || from_bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
 		return;
 
-	if (!bgp_lal_source_path_eligible(pi))
+	if (!vrf_mapped_bgp_instance_slu_count(&from_bgp->lal_dests) &&
+	    !bgp_lal_reexport_local_active(from_bgp))
 		return;
+
+	if (!bgp_lal_source_path_eligible(from_bgp, pi))
+		return;
+
+	if (bgp_lal_path_is_imported(pi)) {
+		/* Re-export: per-route destination set from the rewritten RT
+		 * set (path-dependent in additive mode). Destinations no
+		 * longer matching are pruned right here so that a parent
+		 * attr change (e.g. changed RTs on the remote EVPN route)
+		 * cleans up its stale children.
+		 */
+		struct vrf_mapped_bgp_instance_slu_head dests;
+		struct vrf_mapped_bgp_instance key;
+		struct ecommunity *rt_set;
+		struct vrf_mapped_bgp_instance *item;
+		struct listnode *node;
+		struct bgp *dst;
+		const struct prefix *p = bgp_dest_get_prefix(pi->net);
+		afi_t afi = family2afi(p->family);
+
+		if (afi != AFI_IP && afi != AFI_IP6)
+			return;
+
+		rt_set = bgp_lal_reexport_rt_set(from_bgp, pi);
+		if (!rt_set)
+			return;
+
+		vrf_mapped_bgp_instance_slu_init(&dests);
+		bgp_lal_reexport_compute_dests(from_bgp, rt_set, &dests);
+		ecommunity_free(&rt_set);
+
+		for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, dst)) {
+			if (dst == from_bgp || dst->inst_type != BGP_INSTANCE_TYPE_VRF)
+				continue;
+
+			key.bgp = dst;
+			if (vrf_mapped_bgp_instance_slu_find(&dests, &key))
+				bgp_lal_leak_path_to_dest(from_bgp, pi, dst);
+			else
+				bgp_lal_withdraw_child_in_dest(from_bgp, pi, dst, afi);
+		}
+
+		while ((item = vrf_mapped_bgp_instance_slu_pop(&dests)))
+			vrf_mapped_bgp_instance_free(item);
+		vrf_mapped_bgp_instance_slu_fini(&dests);
+		return;
+	}
 
 	frr_each (vrf_mapped_bgp_instance_slu, &from_bgp->lal_dests, dest)
 		bgp_lal_leak_path_to_dest(from_bgp, pi, dest->bgp);
@@ -509,7 +732,6 @@ void bgp_lal_from_vrf_update(struct bgp *from_bgp, struct bgp_path_info *pi)
 
 void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info *pi)
 {
-	const struct prefix *p;
 	afi_t afi;
 	struct listnode *node;
 	struct bgp *dst;
@@ -517,8 +739,7 @@ void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info *pi)
 	if (!from_bgp || from_bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
 		return;
 
-	p = bgp_dest_get_prefix(pi->net);
-	afi = family2afi(p->family);
+	afi = family2afi(bgp_dest_get_prefix(pi->net)->family);
 	if (afi != AFI_IP && afi != AFI_IP6)
 		return;
 
@@ -528,25 +749,10 @@ void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info *pi)
 	 * withdraw must never miss a child).
 	 */
 	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, dst)) {
-		struct bgp_dest *bn;
-		struct bgp_path_info *bpi;
-
 		if (dst == from_bgp || dst->inst_type != BGP_INSTANCE_TYPE_VRF)
 			continue;
 
-		bn = bgp_node_lookup(dst->rib[afi][SAFI_UNICAST], p);
-		if (!bn)
-			continue;
-
-		for (bpi = bgp_dest_get_bgp_path_info(bn); bpi; bpi = bpi->next) {
-			if (bpi->extra && bpi->extra->vrfleak && bpi->extra->vrfleak->parent == pi)
-				break;
-		}
-
-		if (bpi)
-			bgp_lal_remove_leaked_path(dst, bn, bpi, afi);
-
-		bgp_dest_unlock_node(bn);
+		bgp_lal_withdraw_child_in_dest(from_bgp, pi, dst, afi);
 	}
 }
 
@@ -560,7 +766,14 @@ void bgp_lal_leak_rib_to_dest(struct bgp *src, struct bgp *dst)
 		for (bn = bgp_table_top(src->rib[afi][SAFI_UNICAST]); bn;
 		     bn = bgp_route_next(bn)) {
 			for (pi = bgp_dest_get_bgp_path_info(bn); pi; pi = pi->next) {
-				if (!bgp_lal_source_path_eligible(pi))
+				/* imported (re-export) paths use per-route
+				 * destination sets and are resynced by
+				 * bgp_lal_reexport_local_resync(), not by
+				 * pair-level walks
+				 */
+				if (bgp_lal_path_is_imported(pi))
+					continue;
+				if (!bgp_lal_source_path_eligible(src, pi))
 					continue;
 				if (CHECK_FLAG(pi->flags, BGP_PATH_REMOVED))
 					continue;
@@ -590,6 +803,69 @@ void bgp_lal_flush_dest_from_source(struct bgp *dst, struct bgp *src)
 					continue;
 
 				bgp_lal_remove_leaked_path(dst, bn, bpi, afi);
+			}
+		}
+	}
+}
+
+/* Flush all re-export-derived children of `src` (LAL paths elsewhere whose
+ * parent is an imported path in src), then re-evaluate every imported path
+ * against the current re-export config. Called on any event that may have
+ * changed per-route re-export destination sets; parent-matched restore in
+ * the leak core keeps unchanged children churn-free.
+ */
+static void bgp_lal_reexport_local_resync(struct bgp *bgp)
+{
+	afi_t afi;
+	struct bgp_dest *bn;
+	struct bgp_path_info *bpi, *bpi_next;
+	struct listnode *node;
+	struct bgp *dst;
+
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+		return;
+
+	/* flush stale children */
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, dst)) {
+		if (dst == bgp || dst->inst_type != BGP_INSTANCE_TYPE_VRF)
+			continue;
+
+		for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+			for (bn = bgp_table_top(dst->rib[afi][SAFI_UNICAST]); bn;
+			     bn = bgp_route_next(bn)) {
+				bpi_next = bgp_dest_get_bgp_path_info(bn);
+				while (bpi_next) {
+					bpi = bpi_next;
+					bpi_next = bpi->next;
+
+					if (!bgp_lal_path_is_lal(bpi))
+						continue;
+					if (bgp_lal_path_immediate_source(bpi) != bgp)
+						continue;
+					if (!bgp_lal_path_is_imported(bpi->extra->vrfleak->parent))
+						continue;
+
+					bgp_lal_remove_leaked_path(dst, bn, bpi, afi);
+				}
+			}
+		}
+	}
+
+	if (!bgp_lal_reexport_local_active(bgp))
+		return;
+
+	/* re-evaluate all imported paths (the marked-for-delete children
+	 * above are found by parent match and restored when still wanted)
+	 */
+	for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+		for (bn = bgp_table_top(bgp->rib[afi][SAFI_UNICAST]); bn;
+		     bn = bgp_route_next(bn)) {
+			for (bpi = bgp_dest_get_bgp_path_info(bn); bpi; bpi = bpi->next) {
+				if (!bgp_lal_path_is_imported(bpi))
+					continue;
+				if (CHECK_FLAG(bpi->flags, BGP_PATH_REMOVED))
+					continue;
+				bgp_lal_from_vrf_update(bgp, bpi);
 			}
 		}
 	}
@@ -716,14 +992,16 @@ void bgp_lal_reexport_set_scope(struct bgp *bgp, uint8_t scope)
 	bgp_lal_reexport_config_changed(bgp);
 }
 
-/* Re-evaluate everything that depends on the re-export block. The engine
- * parts (withdrawing/re-leaking affected imported routes) land in follow-up
- * commits; the ecom rebuild is needed from day one for config-write.
+/* Re-evaluate everything that depends on the re-export block: rebuild the
+ * prebuilt ecom, then withdraw/re-leak the affected imported routes.
  */
 void bgp_lal_reexport_config_changed(struct bgp *bgp)
 {
 	if (bgp->evpn_reexport)
 		bgp_lal_reexport_rebuild_ecom(bgp->evpn_reexport);
+
+	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF)
+		bgp_lal_reexport_local_resync(bgp);
 }
 
 /* Instance teardown: synchronously flush every local-leak relationship the
