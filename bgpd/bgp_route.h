@@ -200,6 +200,20 @@ struct bgp_path_info_extra_vrfleak {
 	 * Set nexthop_orig.family to 0 if not valid.
 	 */
 	struct prefix nexthop_orig;
+
+	/*
+	 * Local-auto-leak traversal chain: the ordered list of local
+	 * instances this path traversed via local auto leak / re-export,
+	 * [0] = ultimate local origin VRF. Each entry holds a bgp_lock()
+	 * reference. NULL if the path is not locally auto-leaked.
+	 * Materialized (not derived by walking parents) because the chain
+	 * identity crosses re-export RT rewrites where the parent no
+	 * longer names a local VRF, and the loop guard runs on every
+	 * candidate leak.
+	 */
+	struct bgp **lal_traversed;
+	uint8_t lal_num_traversed;
+#define BGP_LAL_MAX_HOPS 8
 };
 
 #ifdef ENABLE_BGP_VNC

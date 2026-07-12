@@ -218,6 +218,63 @@ static bool bgp_lal_source_path_eligible(struct bgp_path_info *pi)
 	return true;
 }
 
+/* Loop guard: would leaking src_pi from src_bgp into dst_bgp revisit an
+ * instance the path already traversed? The materialized traversal chain
+ * makes cycles (including those closed by future re-export RT rewrites)
+ * self-terminating; the depth cap is a pure resource backstop far above
+ * any sane VRF chain.
+ */
+bool bgp_lal_would_loop(struct bgp_path_info *src_pi, struct bgp *src_bgp, struct bgp *dst_bgp)
+{
+	struct bgp_path_info_extra_vrfleak *vrfleak =
+		src_pi->extra ? src_pi->extra->vrfleak : NULL;
+	uint8_t i;
+
+	if (dst_bgp == src_bgp)
+		return true;
+
+	if (!vrfleak || !vrfleak->lal_traversed)
+		return false; /* first hop */
+
+	if (vrfleak->lal_num_traversed + 1 >= BGP_LAL_MAX_HOPS) {
+		zlog_warn("%s: local auto leak chain for %pBD would exceed %u hops, not leaking into %s",
+			  __func__, src_pi->net, BGP_LAL_MAX_HOPS, dst_bgp->name_pretty);
+		return true;
+	}
+
+	for (i = 0; i < vrfleak->lal_num_traversed; i++) {
+		if (vrfleak->lal_traversed[i] == dst_bgp)
+			return true;
+	}
+
+	return false;
+}
+
+/* chain(new) = chain(parent) + [src_bgp]; every entry bgp_lock()ed,
+ * released in bgp_path_info_extra_free()
+ */
+static void bgp_lal_traversed_populate(struct bgp_path_info *new, struct bgp_path_info *src_pi,
+				       struct bgp *src_bgp)
+{
+	struct bgp_path_info_extra_vrfleak *parent_vrfleak =
+		src_pi->extra ? src_pi->extra->vrfleak : NULL;
+	uint8_t parent_len = 0;
+	uint8_t i;
+
+	if (parent_vrfleak && parent_vrfleak->lal_traversed)
+		parent_len = parent_vrfleak->lal_num_traversed;
+
+	new->extra->vrfleak->lal_traversed = XCALLOC(MTYPE_BGP_ROUTE_EXTRA_VRFLEAK,
+						     sizeof(struct bgp *) * (parent_len + 1));
+
+	for (i = 0; i < parent_len; i++)
+		new->extra->vrfleak->lal_traversed[i] =
+			bgp_lock(parent_vrfleak->lal_traversed[i]);
+
+	new->extra->vrfleak->lal_traversed[parent_len] = bgp_lock(src_bgp);
+	new->extra->vrfleak->lal_num_traversed = parent_len + 1;
+}
+
 /* Sibling of leak_update_nexthop_valid() (bgp_mplsvpn.c), minus the
  * VPN-only parts (SRv6/labels). The ultimate-parent walk keeps the
  * NHT exemptions correct across multi-hop chains.
@@ -271,7 +328,8 @@ static bool bgp_lal_nexthop_valid(struct bgp *dst, struct attr *new_attr, afi_t 
  */
 static struct bgp_path_info *bgp_lal_leak_update(struct bgp *dst, struct bgp_dest *bn,
 						 struct attr *new_attr /* interned */, afi_t afi,
-						 struct bgp_path_info *src_pi, struct bgp *bgp_orig,
+						 struct bgp_path_info *src_pi, struct bgp *src_bgp,
+						 struct bgp *bgp_orig,
 						 const struct prefix *nexthop_orig)
 {
 	int debug = BGP_DEBUG(vpn, VPN_LEAK_FROM_VRF);
@@ -355,6 +413,8 @@ static struct bgp_path_info *bgp_lal_leak_update(struct bgp *dst, struct bgp_des
 
 	new->extra->vrfleak->bgp_orig = bgp_lock(bgp_orig);
 
+	bgp_lal_traversed_populate(new, src_pi, src_bgp);
+
 	if (nexthop_orig)
 		new->extra->vrfleak->nexthop_orig = *nexthop_orig;
 
@@ -395,9 +455,10 @@ static void bgp_lal_leak_path_to_dest(struct bgp *src, struct bgp_path_info *pi,
 	else
 		bgp_orig = src;
 
-	/* never hand a route back to the instance whose table resolves its
-	 * nexthop (the full traversal-chain guard lands in a follow-up)
-	 */
+	if (bgp_lal_would_loop(pi, src, dst))
+		return;
+
+	/* extra safety net on top of the chain guard */
 	if (dst == bgp_orig)
 		return;
 
@@ -418,7 +479,7 @@ static void bgp_lal_leak_path_to_dest(struct bgp *src, struct bgp_path_info *pi,
 	new_attr = bgp_attr_intern(&static_attr);
 
 	bn = bgp_node_get(dst->rib[afi][SAFI_UNICAST], p);
-	bgp_lal_leak_update(dst, bn, new_attr, afi, pi, bgp_orig, &nexthop_orig);
+	bgp_lal_leak_update(dst, bn, new_attr, afi, pi, src, bgp_orig, &nexthop_orig);
 	bgp_dest_unlock_node(bn);
 }
 

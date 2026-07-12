@@ -375,6 +375,14 @@ void bgp_path_info_extra_free(struct bgp_path_info_extra **extra)
 	if (e->vrfleak && e->vrfleak->peer_orig)
 		peer_unlock(e->vrfleak->peer_orig);
 
+	if (e->vrfleak && e->vrfleak->lal_traversed) {
+		uint8_t i;
+
+		for (i = 0; i < e->vrfleak->lal_num_traversed; i++)
+			bgp_unlock(e->vrfleak->lal_traversed[i]);
+		XFREE(MTYPE_BGP_ROUTE_EXTRA_VRFLEAK, e->vrfleak->lal_traversed);
+	}
+
 	if (e->aggr_suppressors)
 		list_delete(&e->aggr_suppressors);
 

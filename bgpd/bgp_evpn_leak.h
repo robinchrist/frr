@@ -60,6 +60,12 @@ extern void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info
  */
 extern bool bgp_lal_path_is_lal(struct bgp_path_info *pi);
 
+/* Loop guard over the materialized traversal chain (see
+ * bgp_path_info_extra_vrfleak.lal_traversed).
+ */
+extern bool bgp_lal_would_loop(struct bgp_path_info *src_pi, struct bgp *src_bgp,
+			       struct bgp *dst_bgp);
+
 /* Synchronous full teardown for bgp_delete(). */
 extern void bgp_lal_instance_down(struct bgp *bgp);
 
