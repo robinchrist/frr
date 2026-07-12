@@ -1005,3 +1005,120 @@ and does not need an explicit statement.
 ES/MH knobs and per-underlay instance-wide settings (advertise-pip,
 dup-addr-detection, mac-vrf soo) are applied against the resolved
 default-underlay-vrf instance.
+
+Local Auto Route Leak
+=====================
+
+Local auto route leak provides direct VRF-to-VRF unicast route leaking
+between local BGP instances, driven purely by EVPN route-target
+intersection - comparable to Juniper's ``auto-export``. A route in tenant
+VRF A is leaked into tenant VRF B when A's *effective EVPN export
+route-targets* intersect B's *effective EVPN import route-targets* (the same
+route-target configuration described in the sections above, including
+auto-derived route-targets; a wildcard import route-target matches any local
+exporter with the same local administrator value).
+
+Unlike the classic ``import vrf`` / ``rt vpn`` machinery, local auto leak
+does not transit the default instance's MPLS-VPN RIB: there is no route
+distinguisher, no label and no VPN table involvement. It also works without
+any VXLAN underlay or L3VNI - a pair of import-only tenant VRFs on a single
+box is sufficient. All paths (bestpath and multipath candidates) are leaked;
+the leaked copy keeps the original nexthop, which is resolved in the
+originating VRF.
+
+The two mechanisms are mutually exclusive per tenant instance: configuring
+``local-auto-route-leak-*`` on a VRF that uses classic leak commands (or
+vice versa) is rejected.
+
+Configuration
+-------------
+
+Both knobs live under ``address-family l2vpn evpn``. On the default
+instance they are plain on/off switches that set the process-wide default;
+on tenant VRFs they take a mandatory ``enable``/``disable`` argument and act
+as a tristate override (absent = inherit the process-wide default):
+
+.. code-block:: frr
+
+   ! process-wide defaults
+   router bgp 65000
+    address-family l2vpn evpn
+     local-auto-route-leak-export
+     local-auto-route-leak-import
+   !
+   router bgp 65000 vrf blue
+    address-family l2vpn evpn
+     route-target both 65000:100
+     ! inherits both defaults (on)
+   !
+   router bgp 65000 vrf red
+    address-family l2vpn evpn
+     route-target import 65000:100
+     local-auto-route-leak-import enable   ! explicit on
+     local-auto-route-leak-export disable  ! never a source
+   !
+
+A leak from A to B happens iff A has export effectively on, B has import
+effectively on, and the route-target sets intersect.
+
+Re-Export of Imported Routes
+----------------------------
+
+By default, routes imported into a VRF - from remote EVPN or via local auto
+leak - are never propagated onward (no re-leak, no type-5 re-origination).
+The ``re-export-imported`` block under a tenant VRF's
+``address-family l2vpn evpn`` is the single opt-in:
+
+.. code-block:: frr
+
+   router bgp 65000 vrf hub
+    address-family l2vpn evpn
+     re-export-imported
+      route-target 65000:999
+      mode override
+      scope local-and-external
+     exit
+
+- ``route-target`` (repeatable, no wildcards): the rewritten export
+  route-target set. The block is inactive until at least one is configured.
+- ``mode additive`` (default): the originally carried route-targets plus
+  the configured ones. For routes imported from EVPN the original set is
+  taken from the received EVPN route; for locally leaked routes it is the
+  origin VRF's effective export set. ``mode override``: only the configured
+  route-targets.
+- ``scope``: ``local-only`` feeds the rewritten set back into the local
+  auto-leak matching (sibling VRFs importing those route-targets receive
+  the route); ``external-only`` re-originates the imported *bestpath* into
+  EVPN as this VRF's type-5 (own RD, VTEP nexthop, RMAC and L3VNI,
+  transitive attributes carried over, route-targets replaced by the
+  rewritten set); ``local-and-external`` (default) does both. External
+  re-origination requires the VRF to be capable of origination (underlay
+  binding and live L3VNI).
+
+Loop Prevention
+---------------
+
+Every locally leaked path records the ordered chain of local VRFs it has
+traversed. A route is never leaked into a VRF already present in its chain
+(including its ultimate origin), so route-target rewrite cycles such as
+A -> B -> C -> A terminate at the VRF they would revisit. An additional
+depth cap (8 hops) bounds resource usage. Loops across remote EVPN sites
+remain the business of route-target design and AS-path, as usual.
+
+Operational Commands
+--------------------
+
+.. clicmd:: show bgp l2vpn evpn local-auto-route-leak [json]
+
+   Process-wide defaults, per-VRF configured/effective knob state,
+   effective route-target sets and the currently resolved leak
+   destinations of every tenant VRF.
+
+.. clicmd:: show bgp vrf NAME l2vpn evpn re-export-imported [json]
+
+   The VRF's re-export configuration plus counts of currently leaked
+   children and externally re-originatable prefixes.
+
+Locally leaked routes show their origin VRF and full traversal chain in the
+per-prefix detail output (``localLeakOriginVrf`` / ``localLeakPath`` in
+JSON).
