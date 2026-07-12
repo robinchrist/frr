@@ -10,6 +10,7 @@
 #include "prefix.h"
 
 #include "bgpd/bgpd.h"
+#include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_table.h"
 #include "bgpd/bgp_route.h"
@@ -592,6 +593,137 @@ void bgp_lal_flush_dest_from_source(struct bgp *dst, struct bgp *src)
 			}
 		}
 	}
+}
+
+/* ------------------- re-export-imported configuration ------------------- */
+
+DEFINE_MTYPE_STATIC(BGPD, BGP_EVPN_REEXPORT_CFG, "BGP EVPN re-export-imported config");
+
+/* Rebuild cfg->rt_ecom from the configured RT list. Called on every config
+ * change; the engine reconciliation lands in a follow-up commit.
+ */
+static void bgp_lal_reexport_rebuild_ecom(struct bgp_evpn_reexport_config *cfg)
+{
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+	struct ecommunity_val eval;
+
+	if (cfg->rt_ecom)
+		ecommunity_free(&cfg->rt_ecom);
+
+	frr_each (bgp_evpn_cfgd_rt_slu, &cfg->rts, cfgd_rt) {
+		if (!bgp_evpn_cfgd_rt_to_ecom_val(cfgd_rt, &eval))
+			continue; /* cannot happen - wildcards are rejected at config time */
+
+		if (!cfg->rt_ecom)
+			cfg->rt_ecom = ecommunity_new();
+		ecommunity_add_val(cfg->rt_ecom, &eval, true, false);
+	}
+}
+
+struct bgp_evpn_reexport_config *bgp_lal_reexport_get(struct bgp *bgp)
+{
+	struct bgp_evpn_reexport_config *cfg;
+
+	if (bgp->evpn_reexport)
+		return bgp->evpn_reexport;
+
+	cfg = XCALLOC(MTYPE_BGP_EVPN_REEXPORT_CFG, sizeof(*cfg));
+	bgp_evpn_cfgd_rt_slu_init(&cfg->rts);
+	cfg->mode = BGP_REEXPORT_ADDITIVE;
+	cfg->scope = BGP_REEXPORT_SCOPE_DEFAULT;
+
+	bgp->evpn_reexport = cfg;
+	return cfg;
+}
+
+void bgp_lal_reexport_delete(struct bgp *bgp)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp->evpn_reexport;
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+
+	if (!cfg)
+		return;
+
+	bgp->evpn_reexport = NULL;
+	bgp_lal_reexport_config_changed(bgp);
+
+	while ((cfgd_rt = bgp_evpn_cfgd_rt_slu_pop(&cfg->rts)))
+		bgp_evpn_cfgd_rt_free(cfgd_rt);
+	bgp_evpn_cfgd_rt_slu_fini(&cfg->rts);
+
+	if (cfg->rt_ecom)
+		ecommunity_free(&cfg->rt_ecom);
+
+	XFREE(MTYPE_BGP_EVPN_REEXPORT_CFG, cfg);
+}
+
+/* Consumes cfgd_rt. Returns -1 on duplicate. */
+int bgp_lal_reexport_add_rt(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfgd_rt)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp_lal_reexport_get(bgp);
+
+	if (bgp_evpn_cfgd_rt_slu_add(&cfg->rts, cfgd_rt) != NULL) {
+		bgp_evpn_cfgd_rt_free(cfgd_rt);
+		return -1;
+	}
+
+	bgp_lal_reexport_config_changed(bgp);
+	return 0;
+}
+
+/* Consumes cfgd_rt (used as lookup key). Returns -1 when not configured. */
+int bgp_lal_reexport_del_rt(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfgd_rt)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp->evpn_reexport;
+	struct bgp_evpn_cfgd_rt *found;
+
+	if (cfg)
+		found = bgp_evpn_cfgd_rt_slu_find(&cfg->rts, cfgd_rt);
+	else
+		found = NULL;
+
+	bgp_evpn_cfgd_rt_free(cfgd_rt);
+
+	if (!found)
+		return -1;
+
+	bgp_evpn_cfgd_rt_slu_del(&cfg->rts, found);
+	bgp_evpn_cfgd_rt_free(found);
+
+	bgp_lal_reexport_config_changed(bgp);
+	return 0;
+}
+
+void bgp_lal_reexport_set_mode(struct bgp *bgp, enum bgp_reexport_mode mode)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp_lal_reexport_get(bgp);
+
+	if (cfg->mode == mode)
+		return;
+
+	cfg->mode = mode;
+	bgp_lal_reexport_config_changed(bgp);
+}
+
+void bgp_lal_reexport_set_scope(struct bgp *bgp, uint8_t scope)
+{
+	struct bgp_evpn_reexport_config *cfg = bgp_lal_reexport_get(bgp);
+
+	if (cfg->scope == scope)
+		return;
+
+	cfg->scope = scope;
+	bgp_lal_reexport_config_changed(bgp);
+}
+
+/* Re-evaluate everything that depends on the re-export block. The engine
+ * parts (withdrawing/re-leaking affected imported routes) land in follow-up
+ * commits; the ecom rebuild is needed from day one for config-write.
+ */
+void bgp_lal_reexport_config_changed(struct bgp *bgp)
+{
+	if (bgp->evpn_reexport)
+		bgp_lal_reexport_rebuild_ecom(bgp->evpn_reexport);
 }
 
 /* Instance teardown: synchronously flush every local-leak relationship the

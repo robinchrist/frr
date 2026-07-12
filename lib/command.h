@@ -167,6 +167,7 @@ enum node_type {
 	LINK_PARAMS_NODE,	/* Link-parameters node */
 	BGP_EVPN_VNI_NODE,       /* BGP EVPN VNI (legacy `vni X` config) */
 	BGP_EVPN_EVI_NODE,       /* BGP EVPN EVI (`vlan-based-evi NAME`) */
+	BGP_EVPN_REEXPORT_NODE,  /* `re-export-imported` under a tenant VRF's l2vpn evpn AF */
 	EVPN_NODE,               /* Top-level `evpn` node (tenant-less EVIs) */
 	EVPN_EVI_NODE,           /* `vlan-based-evi NAME` under the top-level evpn node */
 	RPKI_NODE,     /* RPKI node for configuration of RPKI cache server

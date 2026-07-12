@@ -1474,6 +1474,13 @@ static struct cmd_node bgp_evpn_evi_node = {
 	.prompt = "%s(config-router-af-evi)# ",
 };
 
+static struct cmd_node bgp_evpn_reexport_node = {
+	.name = "bgp evpn re-export-imported",
+	.node = BGP_EVPN_REEXPORT_NODE,
+	.parent_node = BGP_EVPN_NODE,
+	.prompt = "%s(config-router-af-re-export)# ",
+};
+
 static struct cmd_node evpn_node = {
 	.name = "evpn",
 	.node = EVPN_NODE,
@@ -2029,6 +2036,14 @@ DEFUNSH(VTYSH_BGPD, bgp_evpn_vlan_based_evi, bgp_evpn_vlan_based_evi_cmd,
 	"Name of the EVI (unique within this tenant VRF)\n")
 {
 	vty->node = (vty->node == EVPN_NODE) ? EVPN_EVI_NODE : BGP_EVPN_EVI_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD, bgp_evpn_reexport_imported, bgp_evpn_reexport_imported_cmd,
+	"re-export-imported",
+	"Re-export routes imported into this VRF (from remote EVPN or via local auto leak) with a rewritten route-target set\n")
+{
+	vty->node = BGP_EVPN_REEXPORT_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -5360,6 +5375,7 @@ void vtysh_init_vty(void)
 	install_node(&bgp_evpn_node);
 	install_node(&bgp_evpn_vni_node);
 	install_node(&bgp_evpn_evi_node);
+	install_node(&bgp_evpn_reexport_node);
 	install_node(&evpn_node);
 	install_node(&evpn_evi_node);
 	install_node(&rpki_node);
@@ -5537,6 +5553,11 @@ void vtysh_init_vty(void)
 	install_element(BGP_EVPN_EVI_NODE, &vtysh_quit_bgpd_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &vtysh_end_all_cmd);
 	install_element(BGP_EVPN_EVI_NODE, &exit_evi_cmd);
+
+	install_element(BGP_EVPN_NODE, &bgp_evpn_reexport_imported_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &vtysh_exit_bgpd_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &vtysh_quit_bgpd_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &vtysh_end_all_cmd);
 
 	install_element(CONFIG_NODE, &evpn_enter_cmd);
 	install_element(EVPN_NODE, &bgp_evpn_vlan_based_evi_cmd);

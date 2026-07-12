@@ -11,6 +11,7 @@
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_ecommunity.h"
+#include "bgpd/bgp_evpn_leak.h"
 
 /* Maximum length of a formatted EVPN Route Target
  * Worst case route target: IPv4 + 2-byte local admin, e.g. 255.255.255.255:65535 
@@ -95,6 +96,9 @@ struct bgp_evpn_cfgd_rt {
 
 extern int bgp_evpn_cfgd_rt_cmp(const struct bgp_evpn_cfgd_rt *rt1, const struct bgp_evpn_cfgd_rt *rt2);
 extern struct bgp_evpn_cfgd_rt *bgp_evpn_cfgd_rt_from_ecom(const struct ecommunity *ecom, bool is_wildcard);
+extern void bgp_evpn_cfgd_rt_free(struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern bool bgp_evpn_cfgd_rt_to_ecom_val(const struct bgp_evpn_cfgd_rt *cfgd_rt,
+					 struct ecommunity_val *eval);
 
 
 DECLARE_SORTLIST_UNIQ(bgp_evpn_cfgd_rt_slu, struct bgp_evpn_cfgd_rt, slu_item, bgp_evpn_cfgd_rt_cmp);
@@ -156,6 +160,29 @@ struct bgp_evpn_rt_config {
 
 
 
+
+/* `re-export-imported` (sub-node under a tenant VRF's l2vpn evpn AF):
+ * re-export routes imported into this VRF (from remote EVPN or via local
+ * auto leak) with a rewritten route-target set. Mode/scope types live in
+ * bgp_evpn_leak.h (the engine's public header).
+ */
+struct bgp_evpn_reexport_config {
+	/* configured replacement/additional export RTs (no wildcards) */
+	struct bgp_evpn_cfgd_rt_slu_head rts;
+
+	enum bgp_reexport_mode mode;
+	uint8_t scope;
+
+	/* prebuilt ecommunity mirroring `rts`; owned by this struct, rebuilt
+	 * on every config change, never handed to an attr directly (always
+	 * dup/merge into a transient attr that is interned and flushed)
+	 */
+	struct ecommunity *rt_ecom;
+
+	/* live counters for the show command */
+	uint32_t local_leaked_cnt;
+	uint32_t external_originated_cnt;
+};
 
 struct bgp_evpn_effective_wildcard_rt {
 	/* local_admin value in network byte order (so it's parallel with ecommunity_val) */

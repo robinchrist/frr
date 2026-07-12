@@ -259,6 +259,7 @@ ctx_keywords = {
         "address-family ": {
             "vni ": {},
             "vlan-based-evi ": {},
+            "re-export-imported": {},
         },
         "vnc defaults": {},
         "vnc nve-group ": {},

@@ -15,6 +15,17 @@
 
 #include "bgpd/bgpd.h"
 
+/* `re-export-imported` mode: what the rewritten RT set is based on */
+enum bgp_reexport_mode {
+	BGP_REEXPORT_ADDITIVE = 0, /* original carried RTs + configured (default) */
+	BGP_REEXPORT_OVERRIDE,	   /* only the configured RTs */
+};
+
+/* `re-export-imported` scope bits */
+#define BGP_REEXPORT_SCOPE_LOCAL    (1 << 0) /* feeds the local auto-leak matcher */
+#define BGP_REEXPORT_SCOPE_EXTERNAL (1 << 1) /* re-originated into EVPN as type-5 */
+#define BGP_REEXPORT_SCOPE_DEFAULT  (BGP_REEXPORT_SCOPE_LOCAL | BGP_REEXPORT_SCOPE_EXTERNAL)
+
 /* Effective on/off state of the knobs: a tenant VRF's explicit tristate
  * wins, otherwise the default instance's process-wide setting applies.
  * Only tenant VRF instances participate in local auto leak - on the
@@ -68,5 +79,19 @@ extern bool bgp_lal_would_loop(struct bgp_path_info *src_pi, struct bgp *src_bgp
 
 /* Synchronous full teardown for bgp_delete(). */
 extern void bgp_lal_instance_down(struct bgp *bgp);
+
+/* re-export-imported configuration management (struct defined in
+ * bgp_evpn_private.h). All mutators trigger
+ * bgp_lal_reexport_config_changed().
+ */
+struct bgp_evpn_cfgd_rt;
+struct bgp_evpn_reexport_config;
+extern struct bgp_evpn_reexport_config *bgp_lal_reexport_get(struct bgp *bgp);
+extern void bgp_lal_reexport_delete(struct bgp *bgp);
+extern int bgp_lal_reexport_add_rt(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern int bgp_lal_reexport_del_rt(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern void bgp_lal_reexport_set_mode(struct bgp *bgp, enum bgp_reexport_mode mode);
+extern void bgp_lal_reexport_set_scope(struct bgp *bgp, uint8_t scope);
+extern void bgp_lal_reexport_config_changed(struct bgp *bgp);
 
 #endif /* _FRR_BGP_EVPN_LEAK_H */

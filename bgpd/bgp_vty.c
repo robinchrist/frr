@@ -22465,6 +22465,13 @@ static struct cmd_node bgp_evpn_evi_node = {
 	.prompt = "%s(config-router-af-evi)# ",
 };
 
+static struct cmd_node bgp_evpn_reexport_node = {
+	.name = "bgp evpn re-export-imported",
+	.node = BGP_EVPN_REEXPORT_NODE,
+	.parent_node = BGP_EVPN_NODE,
+	.prompt = "%s(config-router-af-re-export)# ",
+};
+
 static struct cmd_node evpn_node = {
 	.name = "evpn",
 	.node = EVPN_NODE,
@@ -22828,6 +22835,7 @@ void bgp_vty_init(void)
 	install_node(&bgp_evpn_node);
 	install_node(&bgp_evpn_vni_node);
 	install_node(&bgp_evpn_evi_node);
+	install_node(&bgp_evpn_reexport_node);
 	install_node(&evpn_node);
 	install_node(&evpn_evi_node);
 	install_node(&bgp_flowspecv4_node);
@@ -22850,6 +22858,7 @@ void bgp_vty_init(void)
 	install_default(BGP_EVPN_NODE);
 	install_default(BGP_EVPN_VNI_NODE);
 	install_default(BGP_EVPN_EVI_NODE);
+	install_default(BGP_EVPN_REEXPORT_NODE);
 	install_default(EVPN_NODE);
 	install_default(EVPN_EVI_NODE);
 	install_default(BGP_SRV6_NODE);

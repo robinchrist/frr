@@ -128,7 +128,7 @@ static struct bgp_evpn_cfgd_rt* bgp_evpn_cfgd_rt_new(void)
 }
 
 /* free user configured route target bgp_evpn_cfgd_rt */
-static void bgp_evpn_cfgd_rt_free(struct bgp_evpn_cfgd_rt *cfgd_rt)
+void bgp_evpn_cfgd_rt_free(struct bgp_evpn_cfgd_rt *cfgd_rt)
 {
 	if (!cfgd_rt)
 		return;
@@ -691,30 +691,39 @@ static inline uint32_t bgp_evpn_rt_eval_get_local_admin_nbo(struct ecommunity_va
 /* convert a configured fully qualified RT to a fully qualified effective RT
  * must ONLY be called for fully qualified RTs! Wildcard RTs have a separate function
  */
-static struct bgp_evpn_effective_fq_rt* bgp_evpn_effective_fq_rt_from_cfgd_rt_new(const struct bgp_evpn_cfgd_rt* cfgd_rt) {
-
-	if(!cfgd_rt)
-		return NULL;
-
-	if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD) {
-		/* This function should only be called for fully qualified RTs, wildcard RTs should be converted to effective wildcard RTs instead */
-		return NULL;
-	}
+/* Encode a fully-qualified configured RT into an ecommunity value.
+ * Returns false for wildcard / unknown types.
+ */
+bool bgp_evpn_cfgd_rt_to_ecom_val(const struct bgp_evpn_cfgd_rt *cfgd_rt,
+				  struct ecommunity_val *eval)
+{
+	if (!cfgd_rt)
+		return false;
 
 	/* BGP Route Targets are transitive communities */
-	struct ecommunity_val eval;
-
 	if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_AS2) {
-		encode_route_target_as(cfgd_rt->payload.as2_rt.as, cfgd_rt->payload.as2_rt.local_admin, &eval, true);
+		encode_route_target_as(cfgd_rt->payload.as2_rt.as, cfgd_rt->payload.as2_rt.local_admin, eval, true);
 
 	} else if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_AS4) {
-		encode_route_target_as4(cfgd_rt->payload.as4_rt.as, cfgd_rt->payload.as4_rt.local_admin, &eval, true);
+		encode_route_target_as4(cfgd_rt->payload.as4_rt.as, cfgd_rt->payload.as4_rt.local_admin, eval, true);
 
 	} else if(cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_IP4) {
-		encode_route_target_ip(&cfgd_rt->payload.ip4_rt.ip, cfgd_rt->payload.ip4_rt.local_admin, &eval, true);
+		encode_route_target_ip(&cfgd_rt->payload.ip4_rt.ip, cfgd_rt->payload.ip4_rt.local_admin, eval, true);
 
 	} else {
-		return NULL; /* unknown / unsupported RT type */
+		return false; /* wildcard or unknown / unsupported RT type */
+	}
+
+	return true;
+}
+
+static struct bgp_evpn_effective_fq_rt* bgp_evpn_effective_fq_rt_from_cfgd_rt_new(const struct bgp_evpn_cfgd_rt* cfgd_rt) {
+
+	struct ecommunity_val eval;
+
+	if(!bgp_evpn_cfgd_rt_to_ecom_val(cfgd_rt, &eval)) {
+		/* This function should only be called for fully qualified RTs, wildcard RTs should be converted to effective wildcard RTs instead */
+		return NULL;
 	}
 
 	return bgp_evpn_effective_fq_rt_new(eval);
@@ -10529,6 +10538,8 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 			vrf_mapped_bgp_instance_free(lal_dest);
 		vrf_mapped_bgp_instance_slu_fini(&bgp->lal_dests);
 	}
+
+	bgp_lal_reexport_delete(bgp);
 
 	if (bgp->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp->vrf_prd_pretty);

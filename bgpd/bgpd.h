@@ -1199,6 +1199,11 @@ struct bgp {
 	 */
 	struct vrf_mapped_bgp_instance_slu_head lal_dests;
 
+	/* `re-export-imported` block of this tenant VRF; NULL = feature off
+	 * (imported routes are then blocked from any onward propagation).
+	 */
+	struct bgp_evpn_reexport_config *evpn_reexport;
+
 	/* Underlay instance the zebra L3VNI report bound this (tenant) VRF
 	 * to (dataplane-derived). Claimed reference
 	 * (BGP_INSTANCE_USE_EVPN_UNDERLAY): stays valid until released with

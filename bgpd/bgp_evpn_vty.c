@@ -7600,6 +7600,149 @@ DEFPY (bgp_evpn_local_auto_route_leak,
 	return CMD_SUCCESS;
 }
 
+/* Parse a single fully-qualified RT argument into a cfgd_rt (wildcards
+ * rejected - a re-export RT set is attached to routes, not matched).
+ */
+static struct bgp_evpn_cfgd_rt *bgp_evpn_reexport_parse_rt_arg(struct vty *vty, const char *arg)
+{
+	struct ecommunity *ecom;
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+
+	if (arg[0] == '*') {
+		vty_out(vty, "%% Wildcard route targets are not allowed here\n");
+		return NULL;
+	}
+
+	ecom = ecommunity_str2com(arg, ECOMMUNITY_ROUTE_TARGET, 0);
+	if (!ecom) {
+		vty_out(vty, "%% Malformed Route Target '%s'\n", arg);
+		return NULL;
+	}
+
+	cfgd_rt = bgp_evpn_cfgd_rt_from_ecom(ecom, false);
+	ecommunity_free(&ecom);
+	if (!cfgd_rt)
+		vty_out(vty, "%% Malformed Route Target '%s'\n", arg);
+
+	return cfgd_rt;
+}
+
+DEFPY_NOSH (bgp_evpn_reexport_imported,
+            bgp_evpn_reexport_imported_cmd,
+            "re-export-imported",
+            "Re-export routes imported into this VRF (from remote EVPN or via local auto leak) with a rewritten route-target set\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF) {
+		vty_out(vty, "%% re-export-imported is only valid on tenant VRF instances\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_lal_reexport_get(bgp);
+	VTY_PUSH_CONTEXT_SUB(BGP_EVPN_REEXPORT_NODE, bgp);
+	return CMD_SUCCESS;
+}
+
+DEFPY (no_bgp_evpn_reexport_imported,
+       no_bgp_evpn_reexport_imported_cmd,
+       "no re-export-imported",
+       NO_STR
+       "Re-export routes imported into this VRF (from remote EVPN or via local auto leak) with a rewritten route-target set\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (!bgp->evpn_reexport) {
+		vty_out(vty, "%% re-export-imported is not configured\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_lal_reexport_delete(bgp);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_reexport_rt,
+       bgp_evpn_reexport_rt_cmd,
+       "[no$no] route-target RTVAL$rtval",
+       NO_STR
+       "Route Target attached to re-exported routes\n"
+       "Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp, bgp);
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	cfgd_rt = bgp_evpn_reexport_parse_rt_arg(vty, rtval);
+	if (!cfgd_rt)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (no) {
+		if (bgp_lal_reexport_del_rt(bgp, cfgd_rt) != 0) {
+			vty_out(vty, "%% Route Target '%s' is not configured here\n", rtval);
+			return CMD_WARNING;
+		}
+	} else {
+		if (bgp_lal_reexport_add_rt(bgp, cfgd_rt) != 0) {
+			vty_out(vty, "%% Route Target '%s' is already configured here\n", rtval);
+			return CMD_WARNING;
+		}
+	}
+
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_reexport_mode,
+       bgp_evpn_reexport_mode_cmd,
+       "[no$no] mode <additive$additive|override$override>",
+       NO_STR
+       "How the rewritten route-target set is derived\n"
+       "Originally carried route-targets plus the configured ones (default)\n"
+       "Only the configured route-targets\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp, bgp);
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_lal_reexport_set_mode(bgp, (no || additive) ? BGP_REEXPORT_ADDITIVE
+							: BGP_REEXPORT_OVERRIDE);
+	return CMD_SUCCESS;
+}
+
+DEFPY (bgp_evpn_reexport_scope,
+       bgp_evpn_reexport_scope_cmd,
+       "[no$no] scope <local-only$lonly|external-only$eonly|local-and-external$both>",
+       NO_STR
+       "Where re-exported routes propagate to\n"
+       "Only into the local auto-leak matching (sibling VRFs)\n"
+       "Only into EVPN as re-originated type-5 routes\n"
+       "Both local auto-leak and EVPN (default)\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bgp, bgp);
+	uint8_t scope;
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (no || both)
+		scope = BGP_REEXPORT_SCOPE_DEFAULT;
+	else if (lonly)
+		scope = BGP_REEXPORT_SCOPE_LOCAL;
+	else
+		scope = BGP_REEXPORT_SCOPE_EXTERNAL;
+
+	bgp_lal_reexport_set_scope(bgp, scope);
+	return CMD_SUCCESS;
+}
+
 DEFPY(bgp_evpn_ead_ess_frag_evi_limit, bgp_evpn_ead_es_frag_evi_limit_cmd,
       "[no$no] ead-es-frag evi-limit (1-1000)$limit",
       NO_STR
@@ -7943,6 +8086,29 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 			vty_out(vty, "  local-auto-route-leak-import %s\n",
 				bgp_vrf->evpn_lal_import_cfgd == BGP_LAL_ENABLE ? "enable"
 										: "disable");
+	}
+
+	if (bgp_vrf->evpn_reexport) {
+		struct bgp_evpn_reexport_config *reexport = bgp_vrf->evpn_reexport;
+		struct bgp_evpn_cfgd_rt *cfgd_rt;
+		char rt_buf[BGP_EVPN_RT_STR_LEN];
+
+		vty_out(vty, "  re-export-imported\n");
+
+		frr_each (bgp_evpn_cfgd_rt_slu, &reexport->rts, cfgd_rt) {
+			bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+			vty_out(vty, "   route-target %s\n", rt_buf);
+		}
+
+		if (reexport->mode != BGP_REEXPORT_ADDITIVE)
+			vty_out(vty, "   mode override\n");
+
+		if (reexport->scope != BGP_REEXPORT_SCOPE_DEFAULT)
+			vty_out(vty, "   scope %s\n",
+				reexport->scope == BGP_REEXPORT_SCOPE_LOCAL ? "local-only"
+									    : "external-only");
+
+		vty_out(vty, "  exit\n");
 	}
 
 	/* Legacy `vni X` blocks: only allowed in (and written for) the master
@@ -8304,6 +8470,11 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_without_val_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_local_auto_route_leak_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_reexport_imported_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_reexport_imported_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &bgp_evpn_reexport_rt_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &bgp_evpn_reexport_mode_cmd);
+	install_element(BGP_EVPN_REEXPORT_NODE, &bgp_evpn_reexport_scope_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cmd);
