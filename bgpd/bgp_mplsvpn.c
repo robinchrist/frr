@@ -33,6 +33,7 @@
 #include "bgpd/bgp_nexthop.h"
 #include "bgpd/bgp_nht.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_memory.h"
 #include "bgpd/bgp_aspath.h"
 
@@ -1880,6 +1881,12 @@ void vpn_leak_from_vrf_update(struct bgp *to_bgp,	     /* to */
 	struct ecommunity *new_ecom = NULL;
 	struct ecommunity *rtlist_ecom;
 
+	/* Local auto leak piggybacks on the exact same trigger points but is
+	 * independent of the VPN machinery below (works without a default
+	 * instance); cheap no-op unless the source has leak destinations.
+	 */
+	bgp_lal_from_vrf_update(from_bgp, path_vrf);
+
 	if (debug)
 		zlog_debug("%s: from vrf %s", __func__, from_bgp->name_pretty);
 
@@ -2137,6 +2144,9 @@ void vpn_leak_from_vrf_withdraw(struct bgp *to_bgp,		/* to */
 	struct bgp_path_info *bpi, *bpi_next;
 	struct bgp_dest *bn;
 	const char *debugmsg;
+
+	/* local auto leak withdraw - same trigger points, independent engine */
+	bgp_lal_from_vrf_withdraw(from_bgp, path_vrf);
 
 	if (debug) {
 		zlog_debug(

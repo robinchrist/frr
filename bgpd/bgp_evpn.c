@@ -2597,6 +2597,14 @@ bool is_route_injectable_into_evpn_non_supp(struct bgp_path_info *pi)
             table->safi == SAFI_EVPN)
                 return false;
 
+	/* Locally auto-leaked routes (parent in another local instance's
+	 * unicast table) are likewise blocked from EVPN (re-)origination by
+	 * default - the re-export-imported config is the only opt-in and
+	 * drives its own explicit origination, never these generic hooks.
+	 */
+	if (table && table->safi == SAFI_UNICAST)
+		return false;
+
         return true;
 }
 

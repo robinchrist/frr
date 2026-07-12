@@ -47,4 +47,20 @@ extern void bgp_lal_reconcile_all(void);
 extern void bgp_lal_leak_rib_to_dest(struct bgp *src, struct bgp *dst);
 extern void bgp_lal_flush_dest_from_source(struct bgp *dst, struct bgp *src);
 
+/* Per-path triggers, called from the same points as the classic
+ * vpn_leak_from_vrf_update/withdraw (hooked inside those functions).
+ * Cheap early-out when the source has no leak destinations.
+ */
+struct bgp_path_info;
+extern void bgp_lal_from_vrf_update(struct bgp *from_bgp, struct bgp_path_info *pi);
+extern void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info *pi);
+
+/* Is this a locally auto-leaked path (parent lives in another local
+ * instance's unicast table)?
+ */
+extern bool bgp_lal_path_is_lal(struct bgp_path_info *pi);
+
+/* Synchronous full teardown for bgp_delete(). */
+extern void bgp_lal_instance_down(struct bgp *bgp);
+
 #endif /* _FRR_BGP_EVPN_LEAK_H */

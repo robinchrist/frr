@@ -58,6 +58,7 @@
 #include "bgpd/rfapi/rfapi_backend.h"
 #endif
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_advertise.h"
 #include "bgpd/bgp_network.h"
 #include "bgpd/bgp_vty.h"
@@ -4575,6 +4576,13 @@ int bgp_delete(struct bgp *bgp)
 	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP6, bgp_default, bgp);
 
 	bgp_vpn_leak_unimport(bgp);
+
+	/* Synchronously flush all local-auto-leak state involving this
+	 * instance while the tables still exist - leaked children hold
+	 * bgp_lock references on their origin and must not outlive it as
+	 * zombies.
+	 */
+	bgp_lal_instance_down(bgp);
 
 	/*
 	 * Release SRv6 SIDs, like it's done in `vpn_leak_postchange()`

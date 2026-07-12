@@ -48,6 +48,7 @@
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_script.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_nhg.h"
 #include "bgpd/bgp_routemap_nb.h"
@@ -321,6 +322,9 @@ static int bgp_vrf_enable(struct vrf *vrf)
 				    bgp_get_default(), bgp);
 		vpn_leak_postchange(BGP_VPN_POLICY_DIR_FROMVPN, AFI_IP6,
 				    bgp_get_default(), bgp);
+
+		/* the VRF just became usable for local auto leaking */
+		bgp_lal_reconcile_all();
 	}
 
 	return 0;
@@ -361,6 +365,11 @@ static int bgp_vrf_disable(struct vrf *vrf)
 		if (bgp->evpn_vxlan_underlay_cfgd)
 			/* intents carry the underlay's vrf_id - refresh */
 			bgp_evpn_vni_intent_resync();
+
+		/* vrf_id is VRF_UNKNOWN now: the reconcile flushes all
+		 * local-auto-leak pairs involving this VRF
+		 */
+		bgp_lal_reconcile_all();
 	}
 
 	/* Note: This is a callback, the VRF will be deleted by the caller. */
