@@ -233,6 +233,14 @@ static bool bgp_lal_path_is_evpn_imported(struct bgp_path_info *pi)
 	return table && table->afi == AFI_L2VPN && table->safi == SAFI_EVPN;
 }
 
+/* imported path of a kind the re-export feature covers (EVPN- or
+ * LAL-imported; never VPN-imported)
+ */
+bool bgp_lal_path_is_reexportable_import(struct bgp_path_info *pi)
+{
+	return bgp_lal_path_is_lal(pi) || bgp_lal_path_is_evpn_imported(pi);
+}
+
 /* re-export requires at least one configured RT to become active */
 static bool bgp_lal_reexport_local_active(struct bgp *bgp)
 {
@@ -808,6 +816,81 @@ void bgp_lal_flush_dest_from_source(struct bgp *dst, struct bgp *src)
 	}
 }
 
+/* ---------------------- re-export scope external ---------------------- */
+
+static bool bgp_lal_reexport_external_active(struct bgp *bgp)
+{
+	return bgp->evpn_reexport &&
+	       CHECK_FLAG(bgp->evpn_reexport->scope, BGP_REEXPORT_SCOPE_EXTERNAL) &&
+	       bgp->evpn_reexport->rt_ecom;
+}
+
+/* Should this (bestpath) path be re-originated into EVPN as a type-5 with
+ * the rewritten RT set? Driven from the bestpath injection hook in
+ * bgp_route.c - the generic origination path stays blocked for imported
+ * routes (is_route_injectable_into_evpn), this is the single opt-in.
+ */
+bool bgp_lal_reexport_external_applies(struct bgp *bgp, struct bgp_path_info *pi)
+{
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+		return false;
+	if (!bgp_lal_reexport_external_active(bgp))
+		return false;
+	if (bgp_path_suppressed(pi))
+		return false;
+
+	return bgp_lal_path_is_lal(pi) || bgp_lal_path_is_evpn_imported(pi);
+}
+
+struct ecommunity *bgp_lal_reexport_external_rt_set(struct bgp *bgp, struct bgp_path_info *pi)
+{
+	return bgp_lal_reexport_rt_set(bgp, pi);
+}
+
+/* Bring the externally re-originated type-5s in line with the current
+ * config/RIB: for every prefix whose bestpath is an imported path, upsert
+ * or delete its type-5. Needed on re-export config changes and when the
+ * origination preconditions (underlay/L3VNI) come up - the bestpath hook
+ * only fires on selection changes.
+ */
+void bgp_lal_reexport_external_resync(struct bgp *bgp)
+{
+	afi_t afi;
+	struct bgp_dest *bn;
+	struct bgp_path_info *pi;
+
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+		return;
+
+	for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+		for (bn = bgp_table_top(bgp->rib[afi][SAFI_UNICAST]); bn;
+		     bn = bgp_route_next(bn)) {
+			for (pi = bgp_dest_get_bgp_path_info(bn); pi; pi = pi->next) {
+				if (!CHECK_FLAG(pi->flags, BGP_PATH_SELECTED))
+					continue;
+				if (!bgp_lal_path_is_imported(pi))
+					break; /* normal origination owns this prefix */
+
+				if (bgp_lal_reexport_external_applies(bgp, pi)) {
+					struct ecommunity *rt_override =
+						bgp_lal_reexport_rt_set(bgp, pi);
+
+					bgp_evpn_vrf_upsert_prefix_as_type5_route_rt_override(
+						bgp, pi, bgp_dest_get_prefix(bn), pi->attr, afi,
+						SAFI_UNICAST, 0, rt_override);
+					if (rt_override)
+						ecommunity_free(&rt_override);
+				} else {
+					bgp_evpn_vrf_delete_prefix_as_type5_route(
+						bgp, pi, bgp_dest_get_prefix(bn), afi,
+						SAFI_UNICAST, 0);
+				}
+				break; /* one bestpath per prefix */
+			}
+		}
+	}
+}
+
 /* Flush all re-export-derived children of `src` (LAL paths elsewhere whose
  * parent is an imported path in src), then re-evaluate every imported path
  * against the current re-export config. Called on any event that may have
@@ -1000,8 +1083,10 @@ void bgp_lal_reexport_config_changed(struct bgp *bgp)
 	if (bgp->evpn_reexport)
 		bgp_lal_reexport_rebuild_ecom(bgp->evpn_reexport);
 
-	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF)
+	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
 		bgp_lal_reexport_local_resync(bgp);
+		bgp_lal_reexport_external_resync(bgp);
+	}
 }
 
 /* Instance teardown: synchronously flush every local-leak relationship the

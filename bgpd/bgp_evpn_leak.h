@@ -71,6 +71,11 @@ extern void bgp_lal_from_vrf_withdraw(struct bgp *from_bgp, struct bgp_path_info
  */
 extern bool bgp_lal_path_is_lal(struct bgp_path_info *pi);
 
+/* Imported path of a kind the re-export feature covers (EVPN- or
+ * LAL-imported; never VPN-imported).
+ */
+extern bool bgp_lal_path_is_reexportable_import(struct bgp_path_info *pi);
+
 /* Loop guard over the materialized traversal chain (see
  * bgp_path_info_extra_vrfleak.lal_traversed).
  */
@@ -93,5 +98,15 @@ extern int bgp_lal_reexport_del_rt(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfg
 extern void bgp_lal_reexport_set_mode(struct bgp *bgp, enum bgp_reexport_mode mode);
 extern void bgp_lal_reexport_set_scope(struct bgp *bgp, uint8_t scope);
 extern void bgp_lal_reexport_config_changed(struct bgp *bgp);
+
+/* re-export scope external: type-5 re-origination with the rewritten RT
+ * set, driven from the bestpath injection hook (bgp_route.c) and resynced
+ * on config / origination-precondition changes.
+ */
+extern bool bgp_lal_reexport_external_applies(struct bgp *bgp, struct bgp_path_info *pi);
+struct ecommunity;
+extern struct ecommunity *bgp_lal_reexport_external_rt_set(struct bgp *bgp,
+							   struct bgp_path_info *pi);
+extern void bgp_lal_reexport_external_resync(struct bgp *bgp);
 
 #endif /* _FRR_BGP_EVPN_LEAK_H */

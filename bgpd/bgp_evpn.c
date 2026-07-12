@@ -3041,8 +3041,12 @@ bgp_zebra_send_remote_vtep(struct bgp *bgp, struct bgp_evpn_evi *evi,
 /*
  * Build extended communities for EVPN prefix route (Route Type 5).
  */
+/* rt_override != NULL (re-export-imported): the rewritten RT set replaces
+ * both the RTs carried in the source attr and the VRF's own export RTs.
+ */
 static void bgp_evpn_build_route_type_5_extcomm(struct bgp *bgp_vrf,
-					   struct attr *attr)
+					   struct attr *attr,
+					   struct ecommunity *rt_override)
 {
 	struct ecommunity* ecom_merge;
 	struct ecommunity_val eval_encap;
@@ -3070,6 +3074,12 @@ static void bgp_evpn_build_route_type_5_extcomm(struct bgp *bgp_vrf,
 		ecom_merge = ecommunity_new();
 	}
 
+	if (rt_override)
+		/* drop the RTs the (re-exported) source attr carried before
+		 * attaching the rewritten set below
+		 */
+		ecommunity_strip_rts(ecom_merge);
+
 	/* Add Encap */
 	tnl_type = BGP_ENCAP_TYPE_VXLAN;
 	encode_encap_extcomm(&eval_encap, tnl_type);
@@ -3078,9 +3088,12 @@ static void bgp_evpn_build_route_type_5_extcomm(struct bgp *bgp_vrf,
 	ecommunity_append_val_unchecked(ecom_merge, &eval_encap);
 	attr->encap_tunneltype = tnl_type;
 
-	/* Add the export RTs for VRF */
-	frr_each(bgp_evpn_effective_fq_rt_slu, &bgp_vrf->effective_fq_export_rts, effective_rt)
-		ecommunity_append_val_unchecked(ecom_merge, &effective_rt->ecom_val);
+	if (rt_override)
+		ecom_merge = ecommunity_merge(ecom_merge, rt_override);
+	else
+		/* Add the export RTs for VRF */
+		frr_each(bgp_evpn_effective_fq_rt_slu, &bgp_vrf->effective_fq_export_rts, effective_rt)
+			ecommunity_append_val_unchecked(ecom_merge, &effective_rt->ecom_val);
 
 	/* override the router mac extended community */
 	if (!is_zero_mac(&attr->rmac)) {
@@ -3796,7 +3809,8 @@ static int _bgp_evpn_vrf_upsert_type5_route_entry(struct bgp *bgp_evpn_mi, struc
  */
 static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,
 				   struct prefix_evpn *evp, struct attr *src_attr, afi_t src_afi,
-				   safi_t src_safi, uint32_t addpath_id)
+				   safi_t src_safi, uint32_t addpath_id,
+				   struct ecommunity *rt_override)
 {
 	afi_t afi = AFI_L2VPN;
 	safi_t safi = SAFI_EVPN;
@@ -3868,7 +3882,7 @@ static int bgp_evpn_upsert_type5_route(struct bgp *bgp_vrf, struct bgp_path_info
 	}
 
 	/* Setup RT and encap extended community */
-	bgp_evpn_build_route_type_5_extcomm(bgp_vrf, &attr);
+	bgp_evpn_build_route_type_5_extcomm(bgp_vrf, &attr, rt_override);
 
 	/* get the route node in global table */
 	dest = bgp_evpn_global_node_get(underlay_bgp->rib[AFI_L2VPN][SAFI_EVPN], evp,
@@ -3936,11 +3950,26 @@ void bgp_evpn_vrf_upsert_prefix_as_type5_route(struct bgp *bgp_vrf, struct bgp_p
 				    const struct prefix *p, struct attr *src_attr, afi_t afi,
 				    safi_t safi, uint32_t addpath_id)
 {
+	bgp_evpn_vrf_upsert_prefix_as_type5_route_rt_override(bgp_vrf, originator, p, src_attr,
+							      afi, safi, addpath_id, NULL);
+}
+
+/* re-export-imported variant: rt_override (non-NULL) replaces both the RTs
+ * carried in src_attr and the VRF's own export RTs on the type-5.
+ */
+void bgp_evpn_vrf_upsert_prefix_as_type5_route_rt_override(struct bgp *bgp_vrf,
+							   struct bgp_path_info *originator,
+							   const struct prefix *p,
+							   struct attr *src_attr, afi_t afi,
+							   safi_t safi, uint32_t addpath_id,
+							   struct ecommunity *rt_override)
+{
 	int ret = 0;
 	struct prefix_evpn evp;
 
 	bgp_evpn_build_type5_prefix_evpn_from_ip_prefix(&evp, p);
-	ret = bgp_evpn_upsert_type5_route(bgp_vrf, originator, &evp, src_attr, afi, safi, addpath_id);
+	ret = bgp_evpn_upsert_type5_route(bgp_vrf, originator, &evp, src_attr, afi, safi,
+					  addpath_id, rt_override);
 	if (ret)
 		flog_err(EC_BGP_EVPN_ROUTE_CREATE,
 			 "%u: Failed to create type-5 route for prefix %pFX",
@@ -6929,6 +6958,12 @@ void bgp_evpn_vrf_update_advertise_originated_type_5_routes(struct bgp *bgp_vrf)
 	if (evpn_default_originate_set(bgp_vrf, AFI_IP6, SAFI_UNICAST))
 		bgp_evpn_install_uninstall_default_route(bgp_vrf, AFI_IP6, SAFI_UNICAST, NULL,
 							 true);
+
+	/* re-export-imported (scope external) type-5s share the same
+	 * origination preconditions (underlay + live L3VNI) - bring them in
+	 * line as well
+	 */
+	bgp_lal_reexport_external_resync(bgp_vrf);
 }
 
 /* Change a tenant VRF's configured underlay binding. Claims the (possibly

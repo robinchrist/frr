@@ -151,6 +151,10 @@ static inline bool evpn_resolve_overlay_index(void)
 extern void bgp_evpn_vrf_upsert_prefix_as_type5_route(struct bgp *bgp_vrf, struct bgp_path_info *originator,
 					   const struct prefix *p, struct attr *src_attr,
 					   afi_t afi, safi_t safi, uint32_t addpath_id);
+extern void bgp_evpn_vrf_upsert_prefix_as_type5_route_rt_override(
+	struct bgp *bgp_vrf, struct bgp_path_info *originator, const struct prefix *p,
+	struct attr *src_attr, afi_t afi, safi_t safi, uint32_t addpath_id,
+	struct ecommunity *rt_override);
 extern void bgp_evpn_vrf_delete_prefix_as_type5_route(struct bgp *bgp_vrf,
 					  const struct bgp_path_info *originator,
 					  const struct prefix *p, afi_t afi, safi_t safi,

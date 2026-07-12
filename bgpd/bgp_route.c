@@ -78,6 +78,7 @@
 #include "bgpd/bgp_encap_types.h"
 #include "bgpd/bgp_encap_tlv.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_evpn_vty.h"
 #include "bgpd/bgp_flowspec.h"
@@ -3924,9 +3925,30 @@ static void bgp_process_evpn_route_injection(struct bgp *bgp, afi_t afi,
 			bgp_evpn_vrf_upsert_prefix_as_type5_route(bgp, new_select, p, new_select->attr, afi,
 						       safi, 0);
 		}
+	} else if (new_select && bgp_lal_reexport_external_applies(bgp, new_select)) {
+		/* re-export-imported (scope external): re-originate the
+		 * imported bestpath as this VRF's type-5 with the rewritten
+		 * RT set. Exactly one owner per prefix: the normal branch
+		 * above never fires for imported bestpaths
+		 * (is_route_injectable_into_evpn).
+		 */
+		struct ecommunity *rt_override = bgp_lal_reexport_external_rt_set(bgp, new_select);
+
+		bgp_evpn_vrf_upsert_prefix_as_type5_route_rt_override(bgp, new_select, p,
+								      new_select->attr, afi, safi,
+								      0, rt_override);
+		if (rt_override)
+			ecommunity_free(&rt_override);
 	} else if (bgp_evpn_should_originate_type5_routes_bestpath(bgp, afi) && old_select &&
 		   is_route_injectable_into_evpn(old_select))
 		bgp_evpn_vrf_delete_prefix_as_type5_route(bgp, old_select, p, afi, safi, 0);
+	else if (old_select && bgp_lal_path_is_reexportable_import(old_select))
+		bgp_evpn_vrf_delete_prefix_as_type5_route(bgp, old_select, p, afi, safi, 0);
+	else if (new_select && bgp_lal_path_is_reexportable_import(new_select))
+		/* imported bestpath that no longer re-exports externally
+		 * (delete is a no-op when no type-5 exists)
+		 */
+		bgp_evpn_vrf_delete_prefix_as_type5_route(bgp, new_select, p, afi, safi, 0);
 }
 
 /*
