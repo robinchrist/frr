@@ -7520,6 +7520,79 @@ DEFPY (no_bgp_evpn_vrf_rt_auto_without_val,
 	return CMD_SUCCESS;
 }
 
+/* Local auto route leak and the classic VRF leak machinery (`import vrf`,
+ * manual `rt vpn` + `import|export vpn`) are mutually exclusive per instance:
+ * both active would deliver the same source route twice via two different
+ * paths. Counterpart guard lives in vpn_policy_getafi() / bgp_imexport_vrf.
+ */
+static bool bgp_evpn_lal_conflicts_with_classic_leak(struct vty *vty, struct bgp *bgp)
+{
+	afi_t afi;
+
+	for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+		if (CHECK_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
+			       BGP_CONFIG_VRF_TO_VRF_IMPORT | BGP_CONFIG_VRF_TO_VRF_EXPORT |
+				       BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT |
+				       BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT)) {
+			vty_out(vty,
+				"%% error: Please unconfigure the import vrf / vpn leak commands before using local-auto-route-leak\n");
+			return true;
+		}
+	}
+
+	return false;
+}
+
+DEFPY (bgp_evpn_local_auto_route_leak,
+       bgp_evpn_local_auto_route_leak_cmd,
+       "[no$no] <local-auto-route-leak-export$exp|local-auto-route-leak-import$imp> [<enable$enable|disable$disable>]",
+       NO_STR
+       "Automatically leak this VRF's unicast routes to local VRFs with matching EVPN import route-targets\n"
+       "Automatically import unicast routes from local VRFs with matching EVPN export route-targets\n"
+       "Override the default instance's setting: force on for this VRF\n"
+       "Override the default instance's setting: force off for this VRF\n")
+{
+	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+	enum bgp_lal_override val;
+
+	if (!bgp)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
+		if (enable || disable) {
+			vty_out(vty,
+				"%% The enable/disable override is only valid on VRF instances; the default instance setting is the plain on/off process-wide default\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		val = no ? BGP_LAL_INHERIT : BGP_LAL_ENABLE;
+	} else if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
+		if (no) {
+			val = BGP_LAL_INHERIT;
+		} else {
+			if (!enable && !disable) {
+				vty_out(vty,
+					"%% Specify enable or disable (absent config = inherit the default instance's setting)\n");
+				return CMD_WARNING_CONFIG_FAILED;
+			}
+			val = enable ? BGP_LAL_ENABLE : BGP_LAL_DISABLE;
+		}
+
+		if (val != BGP_LAL_INHERIT &&
+		    bgp_evpn_lal_conflicts_with_classic_leak(vty, bgp))
+			return CMD_WARNING_CONFIG_FAILED;
+	} else {
+		vty_out(vty, "%% local-auto-route-leak is not supported on view instances\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (exp)
+		bgp->evpn_lal_export_cfgd = val;
+	else
+		bgp->evpn_lal_import_cfgd = val;
+
+	return CMD_SUCCESS;
+}
+
 DEFPY(bgp_evpn_ead_ess_frag_evi_limit, bgp_evpn_ead_es_frag_evi_limit_cmd,
       "[no$no] ead-es-frag evi-limit (1-1000)$limit",
       NO_STR
@@ -7846,6 +7919,24 @@ void bgp_evpn_config_write_vrf(struct vty *vty, struct bgp *bgp_vrf, afi_t afi, 
 	if (bgp_vrf->evpn_cfgd_l3vni)
 		vty_out(vty, "  origination-l3vni %u%s\n", bgp_vrf->evpn_cfgd_l3vni,
 			bgp_vrf->evpn_cfgd_l3vni_prefix_routes_only ? " prefix-routes-only" : "");
+
+	if (bgp_vrf->inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
+		/* Process-wide defaults: plain on/off */
+		if (bgp_vrf->evpn_lal_export_cfgd == BGP_LAL_ENABLE)
+			vty_out(vty, "  local-auto-route-leak-export\n");
+		if (bgp_vrf->evpn_lal_import_cfgd == BGP_LAL_ENABLE)
+			vty_out(vty, "  local-auto-route-leak-import\n");
+	} else {
+		/* Tenant VRF tristate override */
+		if (bgp_vrf->evpn_lal_export_cfgd != BGP_LAL_INHERIT)
+			vty_out(vty, "  local-auto-route-leak-export %s\n",
+				bgp_vrf->evpn_lal_export_cfgd == BGP_LAL_ENABLE ? "enable"
+										: "disable");
+		if (bgp_vrf->evpn_lal_import_cfgd != BGP_LAL_INHERIT)
+			vty_out(vty, "  local-auto-route-leak-import %s\n",
+				bgp_vrf->evpn_lal_import_cfgd == BGP_LAL_ENABLE ? "enable"
+										: "disable");
+	}
 
 	/* Legacy `vni X` blocks: only allowed in (and written for) the master
 	 * instance - the VNI index is global, so don't dump it elsewhere
@@ -8205,6 +8296,7 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_without_val_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_local_auto_route_leak_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cmd);

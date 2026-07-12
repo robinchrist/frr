@@ -35,6 +35,18 @@ PREDECL_HASH(evi_wildcard_irt_nodes);
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_fq_rt_slu);
 PREDECL_SORTLIST_UNIQ(bgp_evpn_effective_wildcard_rt_slu);
 PREDECL_SORTLIST_UNIQ(bgp_evis_slu);
+PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
+
+/* `local-auto-route-leak-<export|import>` tristate. On the default instance
+ * only INHERIT (= off) and ENABLE are used (plain on/off, the process-wide
+ * default); tenant VRFs override the default-instance state with
+ * ENABLE/DISABLE and fall back to it while INHERIT (not configured).
+ */
+enum bgp_lal_override {
+	BGP_LAL_INHERIT = 0,
+	BGP_LAL_ENABLE,
+	BGP_LAL_DISABLE,
+};
 
 enum bgp_bp_install_type {
 	BGP_BP_INSTALL_ROUTE,
@@ -1172,6 +1184,20 @@ struct bgp {
 
 	/* Effective Fully-Qualified Export Route Targets (Export RT cannot be wildcard!) */
 	struct bgp_evpn_effective_fq_rt_slu_head effective_fq_export_rts;
+
+	/* `local-auto-route-leak-<export|import>`: local VRF-to-VRF unicast
+	 * auto-leaking driven by EVPN route-target intersection (this VRF's
+	 * effective export RTs vs the sibling's effective import RTs), no
+	 * VPN-RIB transit. Mutually exclusive with the classic `import vrf` /
+	 * `rt vpn` leak config on this instance.
+	 */
+	enum bgp_lal_override evpn_lal_export_cfgd;
+	enum bgp_lal_override evpn_lal_import_cfgd;
+
+	/* Cached local-auto-leak adjacency: destination instances this
+	 * instance currently leaks into (recomputed on RT/knob changes).
+	 */
+	struct vrf_mapped_bgp_instance_slu_head lal_dests;
 
 	/* Underlay instance the zebra L3VNI report bound this (tenant) VRF
 	 * to (dataplane-derived). Claimed reference

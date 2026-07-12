@@ -10596,6 +10596,19 @@ static afi_t vpn_policy_getafi(struct vty *vty, struct bgp *bgp, bool v2vimport)
 		return AFI_MAX;
 	}
 
+	/* Classic leak config and local-auto-route-leak are mutually exclusive
+	 * on tenant instances (guard only against *explicit* per-VRF config -
+	 * the default instance's process-wide knob must not retroactively
+	 * conflict with existing classic-leak VRFs).
+	 */
+	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF &&
+	    (bgp->evpn_lal_export_cfgd != BGP_LAL_INHERIT ||
+	     bgp->evpn_lal_import_cfgd != BGP_LAL_INHERIT)) {
+		vty_out(vty,
+			"%% error: Please unconfigure local-auto-route-leak before using vpn/import vrf commands\n");
+		return AFI_MAX;
+	}
+
 	if (!v2vimport) {
 		if (CHECK_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
 			       BGP_CONFIG_VRF_TO_VRF_IMPORT)

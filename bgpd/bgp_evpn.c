@@ -10500,6 +10500,14 @@ void bgp_evpn_clean_and_free(struct bgp *bgp)
 	}
 	bgp_evpn_effective_fq_rt_slu_fini(&bgp->effective_fq_export_rts);
 
+	{
+		struct vrf_mapped_bgp_instance *lal_dest;
+
+		while ((lal_dest = vrf_mapped_bgp_instance_slu_pop(&bgp->lal_dests)))
+			vrf_mapped_bgp_instance_free(lal_dest);
+		vrf_mapped_bgp_instance_slu_fini(&bgp->lal_dests);
+	}
+
 	if (bgp->vrf_prd_pretty)
 		XFREE(MTYPE_BGP_NAME, bgp->vrf_prd_pretty);
 
@@ -10559,6 +10567,8 @@ void bgp_evpn_init(struct bgp *bgp)
 	bgp_evpn_effective_wildcard_rt_slu_init(&bgp->effective_wildcard_import_rts);
 	bgp_evpn_effective_fq_rt_slu_init(&bgp->effective_fq_import_rts);
 	bgp_evpn_effective_fq_rt_slu_init(&bgp->effective_fq_export_rts);
+
+	vrf_mapped_bgp_instance_slu_init(&bgp->lal_dests);
 
 	bgp_evpn_nh_init(bgp);
 }

@@ -421,7 +421,9 @@ static inline int evi_name_hash_cmp(const struct bgp_evpn_evi *a,
 DECLARE_HASH(evi_name_hash, struct bgp_evpn_evi, evi_name_item,
 	     evi_name_hash_cmp, evi_name_hash_key);
 
-PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu);
+/* PREDECL_SORTLIST_UNIQ(vrf_mapped_bgp_instance_slu) lives in bgpd.h: the
+ * head type is embedded in struct bgp (lal_dests).
+ */
 
 /* Wrapper struct to maintain a sorted unique list of VRFs mapped to something
  * (something is currently vrf_..._irt_node)
