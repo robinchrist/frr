@@ -891,6 +891,73 @@ void bgp_lal_reexport_external_resync(struct bgp *bgp)
 	}
 }
 
+/* show-command helper: number of re-export-derived children of this VRF
+ * currently present in sibling VRFs (scope local artifacts)
+ */
+uint32_t bgp_lal_reexport_count_local_children(struct bgp *bgp)
+{
+	uint32_t count = 0;
+	afi_t afi;
+	struct bgp_dest *bn;
+	struct bgp_path_info *bpi;
+	struct listnode *node;
+	struct bgp *dst;
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, dst)) {
+		if (dst == bgp || dst->inst_type != BGP_INSTANCE_TYPE_VRF)
+			continue;
+
+		for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+			for (bn = bgp_table_top(dst->rib[afi][SAFI_UNICAST]); bn;
+			     bn = bgp_route_next(bn)) {
+				for (bpi = bgp_dest_get_bgp_path_info(bn); bpi; bpi = bpi->next) {
+					if (CHECK_FLAG(bpi->flags, BGP_PATH_REMOVED))
+						continue;
+					if (!bgp_lal_path_is_lal(bpi))
+						continue;
+					if (bgp_lal_path_immediate_source(bpi) != bgp)
+						continue;
+					if (!bgp_lal_path_is_imported(bpi->extra->vrfleak->parent))
+						continue;
+					count++;
+				}
+			}
+		}
+	}
+
+	return count;
+}
+
+/* show-command helper: number of prefixes whose imported bestpath currently
+ * qualifies for external (type-5) re-origination. Whether the type-5s are
+ * actually out there additionally requires underlay + live L3VNI.
+ */
+uint32_t bgp_lal_reexport_count_external_eligible(struct bgp *bgp)
+{
+	uint32_t count = 0;
+	afi_t afi;
+	struct bgp_dest *bn;
+	struct bgp_path_info *pi;
+
+	if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+		return 0;
+
+	for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
+		for (bn = bgp_table_top(bgp->rib[afi][SAFI_UNICAST]); bn;
+		     bn = bgp_route_next(bn)) {
+			for (pi = bgp_dest_get_bgp_path_info(bn); pi; pi = pi->next) {
+				if (!CHECK_FLAG(pi->flags, BGP_PATH_SELECTED))
+					continue;
+				if (bgp_lal_reexport_external_applies(bgp, pi))
+					count++;
+				break;
+			}
+		}
+	}
+
+	return count;
+}
+
 /* Flush all re-export-derived children of `src` (LAL paths elsewhere whose
  * parent is an imported path in src), then re-evaluate every imported path
  * against the current re-export config. Called on any event that may have

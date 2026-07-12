@@ -109,4 +109,8 @@ extern struct ecommunity *bgp_lal_reexport_external_rt_set(struct bgp *bgp,
 							   struct bgp_path_info *pi);
 extern void bgp_lal_reexport_external_resync(struct bgp *bgp);
 
+/* show-command helpers */
+extern uint32_t bgp_lal_reexport_count_local_children(struct bgp *bgp);
+extern uint32_t bgp_lal_reexport_count_external_eligible(struct bgp *bgp);
+
 #endif /* _FRR_BGP_EVPN_LEAK_H */

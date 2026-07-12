@@ -12531,6 +12531,32 @@ void route_vty_out_detail(struct vty *vty, struct bgp *bgp, struct bgp_dest *bn,
 		}
 	}
 
+	/* Local auto leak provenance: origin VRF + full traversal chain */
+	if (path->extra && path->extra->vrfleak && path->extra->vrfleak->lal_traversed) {
+		struct bgp_path_info_extra_vrfleak *vrfleak = path->extra->vrfleak;
+		uint8_t i;
+
+		if (json_paths) {
+			json_object *json_chain = json_object_new_array();
+
+			for (i = 0; i < vrfleak->lal_num_traversed; i++)
+				json_object_array_add(json_chain,
+						      json_object_new_string(
+							      vrfleak->lal_traversed[i]
+								      ->name_pretty));
+			json_object_string_add(json_path, "localLeakOriginVrf",
+					       vrfleak->lal_traversed[0]->name_pretty);
+			json_object_object_add(json_path, "localLeakPath", json_chain);
+		} else {
+			vty_out(vty, "  Locally auto-leaked, origin %s, path:",
+				vrfleak->lal_traversed[0]->name_pretty);
+			for (i = 0; i < vrfleak->lal_num_traversed; i++)
+				vty_out(vty, "%s %s", i ? " ->" : "",
+					vrfleak->lal_traversed[i]->name_pretty);
+			vty_out(vty, "\n");
+		}
+	}
+
 	/* Line1 display AS-path, Aggregator */
 	if (attr->aspath) {
 		if (json_paths) {

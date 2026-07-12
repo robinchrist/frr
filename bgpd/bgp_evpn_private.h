@@ -178,10 +178,6 @@ struct bgp_evpn_reexport_config {
 	 * dup/merge into a transient attr that is interned and flushed)
 	 */
 	struct ecommunity *rt_ecom;
-
-	/* live counters for the show command */
-	uint32_t local_leaked_cnt;
-	uint32_t external_originated_cnt;
 };
 
 struct bgp_evpn_effective_wildcard_rt {

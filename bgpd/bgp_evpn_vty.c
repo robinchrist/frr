@@ -4948,6 +4948,265 @@ DEFPY(show_bgp_l2vpn_evpn_vxlan_underlay,
 	return CMD_SUCCESS;
 }
 
+static const char *bgp_lal_override_str(enum bgp_lal_override cfgd)
+{
+	switch (cfgd) {
+	case BGP_LAL_ENABLE:
+		return "enable";
+	case BGP_LAL_DISABLE:
+		return "disable";
+	case BGP_LAL_INHERIT:
+		break;
+	}
+	return "inherit";
+}
+
+static void show_lal_rt_list_vty(struct vty *vty, const char *label, struct bgp *bgp,
+				 bool import)
+{
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	struct bgp_evpn_effective_fq_rt *fq;
+	struct bgp_evpn_effective_wildcard_rt *wcard;
+	bool first = true;
+
+	vty_out(vty, "  %s:", label);
+
+	if (import) {
+		frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp->effective_wildcard_import_rts,
+			  wcard) {
+			bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf),
+								wcard->local_admin_nbo);
+			vty_out(vty, "%s %s", first ? "" : ",", rt_buf);
+			first = false;
+		}
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,
+		  import ? &bgp->effective_fq_import_rts : &bgp->effective_fq_export_rts, fq) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+		vty_out(vty, "%s %s", first ? "" : ",", rt_buf);
+		first = false;
+	}
+
+	vty_out(vty, "%s\n", first ? " -" : "");
+}
+
+static void show_lal_rt_list_json(json_object *json_parent, const char *key, struct bgp *bgp,
+				  bool import)
+{
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	struct bgp_evpn_effective_fq_rt *fq;
+	struct bgp_evpn_effective_wildcard_rt *wcard;
+	json_object *json_arr = json_object_new_array();
+
+	if (import) {
+		frr_each (bgp_evpn_effective_wildcard_rt_slu, &bgp->effective_wildcard_import_rts,
+			  wcard) {
+			bgp_evpn_format_wildcard_rt_local_admin(rt_buf, sizeof(rt_buf),
+								wcard->local_admin_nbo);
+			json_object_array_add(json_arr, json_object_new_string(rt_buf));
+		}
+	}
+
+	frr_each (bgp_evpn_effective_fq_rt_slu,
+		  import ? &bgp->effective_fq_import_rts : &bgp->effective_fq_export_rts, fq) {
+		bgp_evpn_format_fq_rt_ecom_val(rt_buf, sizeof(rt_buf), fq->ecom_val);
+		json_object_array_add(json_arr, json_object_new_string(rt_buf));
+	}
+
+	json_object_object_add(json_parent, key, json_arr);
+}
+
+DEFPY(show_bgp_l2vpn_evpn_local_auto_route_leak,
+      show_bgp_l2vpn_evpn_local_auto_route_leak_cmd,
+      "show bgp l2vpn evpn local-auto-route-leak [json$uj]",
+      SHOW_STR
+      BGP_STR
+      L2VPN_HELP_STR
+      EVPN_HELP_STR
+      "Local auto route leak state\n"
+      JSON_STR)
+{
+	struct listnode *node;
+	struct bgp *bgp;
+	struct bgp *bgp_default = bgp_get_default();
+	json_object *json = NULL;
+	json_object *json_vrfs = NULL;
+
+	if (uj) {
+		json = json_object_new_object();
+		json_vrfs = json_object_new_object();
+
+		json_object_boolean_add(json, "exportDefault",
+					bgp_default && bgp_default->evpn_lal_export_cfgd ==
+							       BGP_LAL_ENABLE);
+		json_object_boolean_add(json, "importDefault",
+					bgp_default && bgp_default->evpn_lal_import_cfgd ==
+							       BGP_LAL_ENABLE);
+	} else {
+		vty_out(vty, "Process-wide defaults (default instance): export %s, import %s\n",
+			bgp_default && bgp_default->evpn_lal_export_cfgd == BGP_LAL_ENABLE ? "on"
+											   : "off",
+			bgp_default && bgp_default->evpn_lal_import_cfgd == BGP_LAL_ENABLE ? "on"
+											   : "off");
+	}
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
+		struct vrf_mapped_bgp_instance *dest;
+
+		if (bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
+			continue;
+
+		if (uj) {
+			json_object *json_vrf = json_object_new_object();
+			json_object *json_dests = json_object_new_array();
+
+			json_object_string_add(json_vrf, "exportConfigured",
+					       bgp_lal_override_str(bgp->evpn_lal_export_cfgd));
+			json_object_boolean_add(json_vrf, "exportEffective",
+						bgp_lal_export_effective(bgp));
+			json_object_string_add(json_vrf, "importConfigured",
+					       bgp_lal_override_str(bgp->evpn_lal_import_cfgd));
+			json_object_boolean_add(json_vrf, "importEffective",
+						bgp_lal_import_effective(bgp));
+
+			show_lal_rt_list_json(json_vrf, "effectiveExportRts", bgp, false);
+			show_lal_rt_list_json(json_vrf, "effectiveImportRts", bgp, true);
+
+			frr_each (vrf_mapped_bgp_instance_slu, &bgp->lal_dests, dest)
+				json_object_array_add(json_dests,
+						      json_object_new_string(
+							      dest->bgp->name_pretty));
+			json_object_object_add(json_vrf, "leaksTo", json_dests);
+
+			json_object_object_add(json_vrfs, bgp->name_pretty, json_vrf);
+		} else {
+			bool first = true;
+
+			vty_out(vty, "%s:\n", bgp->name_pretty);
+			vty_out(vty, "  export: %s (configured: %s), import: %s (configured: %s)\n",
+				bgp_lal_export_effective(bgp) ? "on" : "off",
+				bgp_lal_override_str(bgp->evpn_lal_export_cfgd),
+				bgp_lal_import_effective(bgp) ? "on" : "off",
+				bgp_lal_override_str(bgp->evpn_lal_import_cfgd));
+
+			show_lal_rt_list_vty(vty, "effective export route-targets", bgp, false);
+			show_lal_rt_list_vty(vty, "effective import route-targets", bgp, true);
+
+			vty_out(vty, "  leaks to:");
+			frr_each (vrf_mapped_bgp_instance_slu, &bgp->lal_dests, dest) {
+				vty_out(vty, "%s %s", first ? "" : ",",
+					dest->bgp->name_pretty);
+				first = false;
+			}
+			vty_out(vty, "%s\n", first ? " -" : "");
+		}
+	}
+
+	if (uj) {
+		json_object_object_add(json, "vrfs", json_vrfs);
+		vty_json(vty, json);
+	}
+
+	return CMD_SUCCESS;
+}
+
+DEFPY(show_bgp_vrf_l2vpn_evpn_reexport_imported,
+      show_bgp_vrf_l2vpn_evpn_reexport_imported_cmd,
+      "show bgp vrf VRFNAME$vrfname l2vpn evpn re-export-imported [json$uj]",
+      SHOW_STR
+      BGP_STR
+      "BGP VRF\n"
+      "BGP VRF Name\n"
+      L2VPN_HELP_STR
+      EVPN_HELP_STR
+      "Re-export of imported routes with a rewritten route-target set\n"
+      JSON_STR)
+{
+	struct bgp *bgp = bgp_lookup_by_name_filter(vrfname, false);
+	struct bgp_evpn_reexport_config *reexport;
+	struct bgp_evpn_cfgd_rt *cfgd_rt;
+	char rt_buf[BGP_EVPN_RT_STR_LEN];
+	json_object *json = NULL;
+
+	if (!bgp || bgp->inst_type != BGP_INSTANCE_TYPE_VRF) {
+		if (uj)
+			vty_json_empty(vty, NULL);
+		else
+			vty_out(vty, "%% No such tenant VRF instance\n");
+		return CMD_WARNING;
+	}
+
+	reexport = bgp->evpn_reexport;
+
+	if (uj) {
+		json_object *json_rts = json_object_new_array();
+
+		json = json_object_new_object();
+		json_object_boolean_add(json, "configured", !!reexport);
+
+		if (reexport) {
+			frr_each (bgp_evpn_cfgd_rt_slu, &reexport->rts, cfgd_rt) {
+				bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+				json_object_array_add(json_rts,
+						      json_object_new_string(rt_buf));
+			}
+			json_object_object_add(json, "routeTargets", json_rts);
+			json_object_string_add(json, "mode",
+					       reexport->mode == BGP_REEXPORT_OVERRIDE
+						       ? "override"
+						       : "additive");
+			json_object_string_add(
+				json, "scope",
+				reexport->scope == BGP_REEXPORT_SCOPE_LOCAL	? "local-only"
+				: reexport->scope == BGP_REEXPORT_SCOPE_EXTERNAL
+					? "external-only"
+					: "local-and-external");
+			json_object_int_add(json, "localLeakedChildren",
+					    bgp_lal_reexport_count_local_children(bgp));
+			json_object_int_add(json, "externalEligiblePrefixes",
+					    bgp_lal_reexport_count_external_eligible(bgp));
+		} else {
+			json_object_put(json_rts);
+		}
+
+		vty_json(vty, json);
+		return CMD_SUCCESS;
+	}
+
+	if (!reexport) {
+		vty_out(vty, "re-export-imported is not configured in %s\n", bgp->name_pretty);
+		return CMD_SUCCESS;
+	}
+
+	vty_out(vty, "%s re-export-imported:\n", bgp->name_pretty);
+	vty_out(vty, "  route-targets:");
+	if (bgp_evpn_cfgd_rt_slu_count(&reexport->rts)) {
+		bool first = true;
+
+		frr_each (bgp_evpn_cfgd_rt_slu, &reexport->rts, cfgd_rt) {
+			bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+			vty_out(vty, "%s %s", first ? "" : ",", rt_buf);
+			first = false;
+		}
+		vty_out(vty, "\n");
+	} else {
+		vty_out(vty, " - (inactive until at least one is configured)\n");
+	}
+	vty_out(vty, "  mode: %s\n",
+		reexport->mode == BGP_REEXPORT_OVERRIDE ? "override" : "additive");
+	vty_out(vty, "  scope: %s\n",
+		reexport->scope == BGP_REEXPORT_SCOPE_LOCAL	  ? "local-only"
+		: reexport->scope == BGP_REEXPORT_SCOPE_EXTERNAL ? "external-only"
+								  : "local-and-external");
+	vty_out(vty, "  locally leaked children: %u\n",
+		bgp_lal_reexport_count_local_children(bgp));
+	vty_out(vty, "  externally eligible prefixes: %u\n",
+		bgp_lal_reexport_count_external_eligible(bgp));
+
+	return CMD_SUCCESS;
+}
+
 DEFPY(show_bgp_l2vpn_evpn_vni,
       show_bgp_l2vpn_evpn_vni_cmd,
       "show bgp l2vpn evpn vni [" CMD_VNI_RANGE "] [json$uj]",
@@ -8367,6 +8626,8 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_evi_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vxlan_underlay_cmd);
+	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_local_auto_route_leak_cmd);
+	install_element(VIEW_NODE, &show_bgp_vrf_l2vpn_evpn_reexport_imported_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_vni_remote_ip_hash_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_evi_svi_hash_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_summary_cmd);
