@@ -27,6 +27,7 @@
 #include "bgpd/bgp_label.h"
 #include "bgpd/bgp_evpn.h"
 #include "bgpd/bgp_evpn_private.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_encap_types.h"
@@ -1142,7 +1143,7 @@ struct bgp *bgp_evpn_evi_get_underlay(struct bgp_evpn_evi *evi)
  * Function to lookup a fully qualified Import RT node - used to map a RT to set of
  * VRFs importing routes with that RT.
  */
-static struct vrf_fq_irt_node *lookup_vrf_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val)
+struct vrf_fq_irt_node *lookup_vrf_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val)
 {
 	struct vrf_fq_irt_node tmp;
 
@@ -1175,7 +1176,7 @@ int vrf_wildcard_irt_node_hash_cmp(const struct vrf_wildcard_irt_node *a, const 
  * Function to lookup a wildcard qualified Import RT node by route target ecommunity value
  * will return NULL if route target is not of type AS, AS4 or IP
  */
-static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval)
+struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval)
 {
 	struct vrf_wildcard_irt_node tmp;
 
@@ -1196,7 +1197,7 @@ static struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(st
 	return vrf_wildcard_irt_nodes_find(&bgp_evpn_gbl()->vrf_wildcard_irt_nodes, &tmp);
 }
 
-static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp_vrf)
+struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp_vrf)
 {
 	struct vrf_mapped_bgp_instance *item;
 
@@ -1205,7 +1206,7 @@ static struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *b
 	return item;
 }
 
-static void vrf_mapped_bgp_instance_free(struct vrf_mapped_bgp_instance *item)
+void vrf_mapped_bgp_instance_free(struct vrf_mapped_bgp_instance *item)
 {
 	XFREE(MTYPE_BGP_EVPN_VRF_MAPPED_BGP_INSTANCE, item);
 }
@@ -1471,11 +1472,19 @@ void bgp_evpn_vrf_handle_import_rt_change(struct bgp *bgp_vrf)
 	/* Now we can regenerate the effective RTs based on the new config */
 	bgp_evpn_vrf_regenerate_effective_import_rts(bgp_vrf);
 
-	/* Setup the Import again, now with the new effective RTs 
+	/* Setup the Import again, now with the new effective RTs
 	 * Import even when the L3VNI is not yet active, because SENDING traffic (we import routes -> we send traffic)
 	 * is independent from the VRFs L3VNI (Downstream VNI - remote peer dictates the VNI!)
 	 */
 	bgp_evpn_vrf_setup_import(bgp_vrf);
+
+	/* This VRF may have (dis)appeared in other sources' local-auto-leak
+	 * destination sets - the irt tables were just remapped, so a global
+	 * reconcile sees the fresh state. Pair-level diffing inside the
+	 * reconcile handles all cleanup; no prechange flush is needed since
+	 * leaked routes do not carry the matched RT.
+	 */
+	bgp_lal_reconcile_all();
 }
 
 /* Call this when you've done modifications that could potentially influence the effective Export Route Targets
@@ -1492,6 +1501,11 @@ void bgp_evpn_vrf_handle_export_rt_change(struct bgp *bgp_vrf)
 	 * EVPN instance).
 	 */
 	bgp_evpn_vrf_regenerate_effective_export_rts(bgp_vrf);
+
+	/* Local auto leak works without any underlay/L3VNI (it is purely
+	 * local), so reconcile before the dataplane early-returns below.
+	 */
+	bgp_lal_reconcile_source(bgp_vrf);
 
 	underlay_bgp = bgp_evpn_vrf_get_underlay(bgp_vrf);
 	if (!underlay_bgp)

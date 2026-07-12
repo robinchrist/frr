@@ -23,6 +23,7 @@
 #include "bgpd/bgp_evpn_vty.h"
 #include "bgpd/bgp_evpn.h"
 #include "bgpd/bgp_evpn_private.h"
+#include "bgpd/bgp_evpn_leak.h"
 #include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_vty.h"
@@ -7589,6 +7590,12 @@ DEFPY (bgp_evpn_local_auto_route_leak,
 		bgp->evpn_lal_export_cfgd = val;
 	else
 		bgp->evpn_lal_import_cfgd = val;
+
+	/* Default-instance knobs shift the process-wide default and import
+	 * knobs change other sources' destination sets - a global reconcile
+	 * covers every case.
+	 */
+	bgp_lal_reconcile_all();
 
 	return CMD_SUCCESS;
 }

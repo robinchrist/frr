@@ -465,6 +465,10 @@ struct vrf_fq_irt_node {
 
 extern int vrf_fq_irt_node_hash_cmp(const struct vrf_fq_irt_node *a, const struct vrf_fq_irt_node *b);
 extern uint32_t vrf_fq_irt_node_hash_key(const struct vrf_fq_irt_node *irt);
+extern struct vrf_fq_irt_node *lookup_vrf_fq_irt_node_by_ecom_val(struct ecommunity_val rt_val);
+
+extern struct vrf_mapped_bgp_instance *vrf_mapped_bgp_instance_new(struct bgp *bgp_vrf);
+extern void vrf_mapped_bgp_instance_free(struct vrf_mapped_bgp_instance *item);
 
 DECLARE_HASH(vrf_fq_irt_nodes, struct vrf_fq_irt_node, hash_item, vrf_fq_irt_node_hash_cmp, vrf_fq_irt_node_hash_key);
 
@@ -485,6 +489,7 @@ struct vrf_wildcard_irt_node {
 
 extern int vrf_wildcard_irt_node_hash_cmp(const struct vrf_wildcard_irt_node *a, const struct vrf_wildcard_irt_node *b);
 extern uint32_t vrf_wildcard_irt_node_hash_key(const struct vrf_wildcard_irt_node *irt);
+extern struct vrf_wildcard_irt_node *lookup_vrf_wildcard_irt_node_by_ecom_val(struct ecommunity_val eval);
 
 DECLARE_HASH(vrf_wildcard_irt_nodes, struct vrf_wildcard_irt_node, hash_item, vrf_wildcard_irt_node_hash_cmp, vrf_wildcard_irt_node_hash_key);
 
