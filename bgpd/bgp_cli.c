@@ -965,6 +965,66 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B5: instance 'default' container, AFI-activation group
+ * ('bgp default <afi-safi>'). All eleven tokens share one legacy grammar
+ * and one legacy DEFPY (bgp_default_afi_safi_cmd, bgp_vty.c). ipv4-unicast
+ * is the sole static default-on/no-inheritance leaf in this family (the
+ * only default/<afi-safi> leaf that is on by default): its negative form is
+ * a real "false" modify rather than a delete, and its positive form
+ * destroys back to the true default, matching the
+ * fast-external-failover/reject-as-sets/client-to-client-reflection shape.
+ * Every other token here defaults false in YANG and is positive-only, so
+ * its negative form deletes back to that default. Every token string is
+ * identical to its YANG leaf name, so the xpath is built directly from the
+ * matched token, no translation table needed (unlike the legacy DEFPY's
+ * strtok_r() afi/safi decomposition).
+ */
+DEFPY_YANG(
+	bgp_default_afi_safi, bgp_default_afi_safi_cli_cmd,
+	"[no] bgp default <ipv4-unicast|"
+	"ipv4-multicast|"
+	"ipv4-vpn|"
+	"ipv4-labeled-unicast|"
+	"ipv4-flowspec|"
+	"ipv6-unicast|"
+	"ipv6-multicast|"
+	"ipv6-vpn|"
+	"ipv6-labeled-unicast|"
+	"ipv6-flowspec|"
+	"l2vpn-evpn>$afi_safi",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Activate ipv4-unicast for a peer by default\n"
+	"Activate ipv4-multicast for a peer by default\n"
+	"Activate ipv4-vpn for a peer by default\n"
+	"Activate ipv4-labeled-unicast for a peer by default\n"
+	"Activate ipv4-flowspec for a peer by default\n"
+	"Activate ipv6-unicast for a peer by default\n"
+	"Activate ipv6-multicast for a peer by default\n"
+	"Activate ipv6-vpn for a peer by default\n"
+	"Activate ipv6-labeled-unicast for a peer by default\n"
+	"Activate ipv6-flowspec for a peer by default\n"
+	"Activate l2vpn-evpn for a peer by default\n")
+{
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./default/%s", afi_safi);
+
+	if (strmatch(afi_safi, "ipv4-unicast")) {
+		if (no)
+			nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "false");
+		else
+			nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else if (no)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -1237,6 +1297,92 @@ static void instance_bestpath_bandwidth_cli_write(struct vty *vty, const struct 
 	vty_out(vty, " bgp bestpath bandwidth %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
+/* 'bgp default <afi-safi>' (batch B5): ipv4-unicast is the sole static
+ * default-on/no-inheritance leaf (bgp_vty.c's FOREACH_AFI_SAFI
+ * special-cases AFI_IP/SAFI_UNICAST), so it renders the legacy negative
+ * line iff explicitly false. Every other leaf here is positive-only,
+ * matching bgp_config_write()'s "if (bgp->default_af[...])" arm for all
+ * other AFI/SAFI pairs.
+ */
+static void instance_default_ipv4_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no bgp default ipv4-unicast\n");
+}
+
+static void instance_default_ipv4_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv4-multicast\n");
+}
+
+static void instance_default_ipv4_labeled_unicast_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv4-labeled-unicast\n");
+}
+
+static void instance_default_ipv4_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv4-vpn\n");
+}
+
+static void instance_default_ipv4_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv4-flowspec\n");
+}
+
+static void instance_default_ipv6_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv6-unicast\n");
+}
+
+static void instance_default_ipv6_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv6-multicast\n");
+}
+
+static void instance_default_ipv6_labeled_unicast_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv6-labeled-unicast\n");
+}
+
+static void instance_default_ipv6_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv6-vpn\n");
+}
+
+static void instance_default_ipv6_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default ipv6-flowspec\n");
+}
+
+static void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default l2vpn-evpn\n");
+}
+
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -1442,6 +1588,72 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/default/ipv4-unicast",
+			.cbs = {
+				.cli_show = instance_default_ipv4_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv4-multicast",
+			.cbs = {
+				.cli_show = instance_default_ipv4_multicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv4-labeled-unicast",
+			.cbs = {
+				.cli_show = instance_default_ipv4_labeled_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv4-vpn",
+			.cbs = {
+				.cli_show = instance_default_ipv4_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv4-flowspec",
+			.cbs = {
+				.cli_show = instance_default_ipv4_flowspec_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv6-unicast",
+			.cbs = {
+				.cli_show = instance_default_ipv6_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv6-multicast",
+			.cbs = {
+				.cli_show = instance_default_ipv6_multicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv6-labeled-unicast",
+			.cbs = {
+				.cli_show = instance_default_ipv6_labeled_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv6-vpn",
+			.cbs = {
+				.cli_show = instance_default_ipv6_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/ipv6-flowspec",
+			.cbs = {
+				.cli_show = instance_default_ipv6_flowspec_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/l2vpn-evpn",
+			.cbs = {
+				.cli_show = instance_default_l2vpn_evpn_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/route-map-delay-timer",
 			.cbs = {
 				.cli_show = process_route_map_delay_timer_cli_write,
@@ -1549,6 +1761,8 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_bestpath_peer_type_multipath_relax_cli_cmd);
 	install_element(BGP_NODE, &bgp_bestpath_bw_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_bestpath_bw_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_afi_safi_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

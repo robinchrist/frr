@@ -622,115 +622,6 @@ int argv_find_and_parse_safi(struct cmd_token **argv, int argc, int *index,
 	return ret;
 }
 
-/*
- * Convert an afi_t/safi_t pair to matching BGP_DEFAULT_AF* flag.
- *
- * afi
- *    address-family identifier
- *
- * safi
- *    subsequent address-family identifier
- *
- * Returns:
- *    default_af string corresponding to the supplied afi/safi pair.
- *    If afi/safi is invalid or if flag for afi/safi doesn't exist,
- *    return -1.
- */
-static const char *get_bgp_default_af_flag(afi_t afi, safi_t safi)
-{
-	switch (afi) {
-	case AFI_IP:
-		switch (safi) {
-		case SAFI_UNICAST:
-			return "ipv4-unicast";
-		case SAFI_MULTICAST:
-			return "ipv4-multicast";
-		case SAFI_MPLS_VPN:
-			return "ipv4-vpn";
-		case SAFI_ENCAP:
-			return "ipv4-encap";
-		case SAFI_LABELED_UNICAST:
-			return "ipv4-labeled-unicast";
-		case SAFI_FLOWSPEC:
-			return "ipv4-flowspec";
-		case SAFI_BGP_LS:
-			return "ipv4-bgp-ls";
-		case SAFI_UNREACH:
-			return "ipv4-unreachability";
-		case SAFI_UNSPEC:
-		case SAFI_EVPN:
-		case SAFI_MAX:
-			return "unknown-afi/safi";
-		}
-		break;
-	case AFI_IP6:
-		switch (safi) {
-		case SAFI_UNICAST:
-			return "ipv6-unicast";
-		case SAFI_MULTICAST:
-			return "ipv6-multicast";
-		case SAFI_MPLS_VPN:
-			return "ipv6-vpn";
-		case SAFI_ENCAP:
-			return "ipv6-encap";
-		case SAFI_LABELED_UNICAST:
-			return "ipv6-labeled-unicast";
-		case SAFI_FLOWSPEC:
-			return "ipv6-flowspec";
-		case SAFI_BGP_LS:
-			return "ipv6-bgp-ls";
-		case SAFI_UNREACH:
-			return "ipv6-unreachability";
-		case SAFI_UNSPEC:
-		case SAFI_EVPN:
-		case SAFI_MAX:
-			return "unknown-afi/safi";
-		}
-		break;
-	case AFI_L2VPN:
-		switch (safi) {
-		case SAFI_EVPN:
-			return "l2vpn-evpn";
-		case SAFI_BGP_LS:
-		case SAFI_UNICAST:
-		case SAFI_MULTICAST:
-		case SAFI_MPLS_VPN:
-		case SAFI_ENCAP:
-		case SAFI_LABELED_UNICAST:
-		case SAFI_FLOWSPEC:
-		case SAFI_UNREACH:
-		case SAFI_UNSPEC:
-		case SAFI_MAX:
-			return "unknown-afi/safi";
-		}
-		break;
-	case AFI_BGP_LS:
-		switch (safi) {
-		case SAFI_BGP_LS:
-			return "link-state";
-		case SAFI_UNICAST:
-		case SAFI_MULTICAST:
-		case SAFI_MPLS_VPN:
-		case SAFI_ENCAP:
-		case SAFI_LABELED_UNICAST:
-		case SAFI_FLOWSPEC:
-		case SAFI_EVPN:
-		case SAFI_UNREACH:
-		case SAFI_UNSPEC:
-		case SAFI_MAX:
-			return "unknown-afi/safi";
-		}
-		break;
-	case AFI_UNSPEC:
-	case AFI_MAX:
-		return "unknown-afi/safi";
-	}
-	/* all AFIs are accounted for above, so this shouldn't happen */
-
-	assert(!"Reached end of function where we did not expect to");
-	return "DEV ESCAPE";
-}
-
 bool bgp_log_neighbor_changes_default(void)
 {
 	return DFLT_BGP_LOG_NEIGHBOR_CHANGES;
@@ -3856,69 +3747,6 @@ DEFPY (bgp_bestpath_aigp,
 		SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
 
 	bgp_recalculate_all_bestpaths(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(bgp_default_afi_safi, bgp_default_afi_safi_cmd,
-      "[no] bgp default <ipv4-unicast|"
-      "ipv4-multicast|"
-      "ipv4-vpn|"
-      "ipv4-labeled-unicast|"
-      "ipv4-flowspec|"
-      "ipv6-unicast|"
-      "ipv6-multicast|"
-      "ipv6-vpn|"
-      "ipv6-labeled-unicast|"
-      "ipv6-flowspec|"
-      "l2vpn-evpn>$afi_safi",
-      NO_STR
-      BGP_STR
-      "Configure BGP defaults\n"
-      "Activate ipv4-unicast for a peer by default\n"
-      "Activate ipv4-multicast for a peer by default\n"
-      "Activate ipv4-vpn for a peer by default\n"
-      "Activate ipv4-labeled-unicast for a peer by default\n"
-      "Activate ipv4-flowspec for a peer by default\n"
-      "Activate ipv6-unicast for a peer by default\n"
-      "Activate ipv6-multicast for a peer by default\n"
-      "Activate ipv6-vpn for a peer by default\n"
-      "Activate ipv6-labeled-unicast for a peer by default\n"
-      "Activate ipv6-flowspec for a peer by default\n"
-      "Activate l2vpn-evpn for a peer by default\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	char afi_safi_str[strlen(afi_safi) + 1];
-	char *afi_safi_str_tok;
-
-	strlcpy(afi_safi_str, afi_safi, sizeof(afi_safi_str));
-	char *afi_str = strtok_r(afi_safi_str, "-", &afi_safi_str_tok);
-	char *safi_str = strtok_r(NULL, "-", &afi_safi_str_tok);
-	afi_t afi = bgp_vty_afi_from_str(afi_str);
-	safi_t safi;
-
-	/*
-	 * Impossible situation but making coverity happy
-	 */
-	assert(afi != AFI_MAX);
-
-	if (strmatch(safi_str, "labeled"))
-		safi = bgp_vty_safi_from_str("labeled-unicast");
-	else
-		safi = bgp_vty_safi_from_str(safi_str);
-
-	assert(safi != SAFI_MAX);
-	if (no)
-		bgp->default_af[afi][safi] = false;
-	else {
-		if ((safi == SAFI_LABELED_UNICAST
-		     && bgp->default_af[afi][SAFI_UNICAST])
-		    || (safi == SAFI_UNICAST
-			&& bgp->default_af[afi][SAFI_LABELED_UNICAST]))
-			bgp_vty_return(vty, BGP_ERR_PEER_SAFI_CONFLICT);
-		else
-			bgp->default_af[afi][safi] = true;
-	}
 
 	return CMD_SUCCESS;
 }
@@ -21041,8 +20869,6 @@ int bgp_config_write(struct vty *vty)
 	struct peer *peer;
 	struct listnode *node, *nnode;
 	struct listnode *mnode, *mnnode;
-	afi_t afi;
-	safi_t safi;
 	uint32_t tovpn_sid_index = 0;
 
 	hook_call(bgp_snmp_traps_config_write, vty);
@@ -21168,18 +20994,6 @@ int bgp_config_write(struct vty *vty)
 					   BGP_FLAG_HARD_ADMIN_RESET)
 					? ""
 					: "no ");
-
-		/* BGP default <afi>-<safi> */
-		FOREACH_AFI_SAFI (afi, safi) {
-			if (afi == AFI_IP && safi == SAFI_UNICAST) {
-				if (!bgp->default_af[afi][safi])
-					vty_out(vty, " no bgp default %s\n",
-						get_bgp_default_af_flag(afi,
-									safi));
-			} else if (bgp->default_af[afi][safi])
-				vty_out(vty, " bgp default %s\n",
-					get_bgp_default_af_flag(afi, safi));
-		}
 
 		/* BGP default local-preference. */
 		if (bgp->default_local_pref != BGP_DEFAULT_LOCAL_PREF)
@@ -22184,9 +21998,6 @@ void bgp_vty_init(void)
 
 	/* "bgp bestpath aigp" commands */
 	install_element(BGP_NODE, &bgp_bestpath_aigp_cmd);
-
-	/* "no bgp default <afi>-<safi>" commands. */
-	install_element(BGP_NODE, &bgp_default_afi_safi_cmd);
 
 	/* "bgp network import-check" commands. */
 	install_element(BGP_NODE, &bgp_network_import_check_cmd);

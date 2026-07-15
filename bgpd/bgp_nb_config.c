@@ -1300,32 +1300,58 @@ int instance_hard_administrative_reset_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
-int instance_default_ipv4_unicast_modify(struct nb_cb_modify_args *args)
+/*
+ * 'bgp default <afi-safi>' SAFI-conflict check (legacy bgp_vty.c:3918,
+ * BGP_ERR_PEER_SAFI_CONFLICT): the unicast and labeled-unicast leaves for a
+ * given AFI can't both be default-activated at once. The legacy DEFPY only
+ * rejects when the *new* value is true (clearing either leaf is always
+ * fine), so this only runs from a leaf's modify path, never destroy.
+ *
+ * ipv4-unicast now carries a static YANG default of "true" (Tier A: static
+ * default-on boolean, no inheritance, chain root); ipv6-unicast and the
+ * ipv4/ipv6-labeled-unicast siblings carry a YANG default of "false". Every
+ * leaf in this conflict pair is therefore always materialized in the data
+ * tree, so a plain read is safe on both sides; sibling_absent_default is
+ * kept only as a defensive fallback and should never actually trigger.
+ */
+static int bgp_nb_default_af_safi_conflict_validate(struct nb_cb_modify_args *args,
+						    const char *sibling_relpath,
+						    bool sibling_absent_default)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-unicast");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	bool sibling_active;
 
-	return NB_OK;
+	if (!yang_dnode_get_bool(args->dnode, NULL))
+		return NB_OK;
+
+	if (yang_dnode_exists(args->dnode, sibling_relpath))
+		sibling_active = yang_dnode_get_bool(args->dnode, "%s", sibling_relpath);
+	else
+		sibling_active = sibling_absent_default;
+
+	if (!sibling_active)
+		return NB_OK;
+
+	snprintf(args->errmsg, args->errmsg_len,
+		 "Cannot activate peer for both 'unicast' and 'labeled-unicast' by default");
+	return NB_ERR_VALIDATION;
 }
 
-int instance_default_ipv4_unicast_destroy(struct nb_cb_destroy_args *args)
+int instance_default_ipv4_unicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-unicast");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_default_af_safi_conflict_validate(args, "../ipv4-labeled-unicast",
+								false);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP][SAFI_UNICAST] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1334,14 +1360,18 @@ int instance_default_ipv4_unicast_destroy(struct nb_cb_destroy_args *args)
 
 int instance_default_ipv4_multicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-multicast");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP][SAFI_MULTICAST] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1350,14 +1380,20 @@ int instance_default_ipv4_multicast_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv4_labeled_unicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-labeled-unicast");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_default_af_safi_conflict_validate(args, "../ipv4-unicast", true);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP][SAFI_LABELED_UNICAST] = yang_dnode_get_bool(args->dnode,
+										    NULL);
 		break;
 	}
 
@@ -1366,14 +1402,18 @@ int instance_default_ipv4_labeled_unicast_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv4_vpn_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-vpn");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP][SAFI_MPLS_VPN] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1382,14 +1422,18 @@ int instance_default_ipv4_vpn_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv4_flowspec_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv4-flowspec");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP][SAFI_FLOWSPEC] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1398,14 +1442,20 @@ int instance_default_ipv4_flowspec_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv6_unicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv6-unicast");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_default_af_safi_conflict_validate(args, "../ipv6-labeled-unicast",
+								false);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP6][SAFI_UNICAST] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1414,14 +1464,18 @@ int instance_default_ipv6_unicast_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv6_multicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv6-multicast");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP6][SAFI_MULTICAST] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1430,14 +1484,20 @@ int instance_default_ipv6_multicast_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv6_labeled_unicast_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv6-labeled-unicast");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_default_af_safi_conflict_validate(args, "../ipv6-unicast", true);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP6][SAFI_LABELED_UNICAST] = yang_dnode_get_bool(args->dnode,
+										     NULL);
 		break;
 	}
 
@@ -1446,14 +1506,18 @@ int instance_default_ipv6_labeled_unicast_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv6_vpn_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv6-vpn");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP6][SAFI_MPLS_VPN] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1462,14 +1526,18 @@ int instance_default_ipv6_vpn_modify(struct nb_cb_modify_args *args)
 
 int instance_default_ipv6_flowspec_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/ipv6-flowspec");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_IP6][SAFI_FLOWSPEC] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
@@ -1478,14 +1546,18 @@ int instance_default_ipv6_flowspec_modify(struct nb_cb_modify_args *args)
 
 int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/l2vpn-evpn");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->default_af[AFI_L2VPN][SAFI_EVPN] = yang_dnode_get_bool(args->dnode, NULL);
 		break;
 	}
 
