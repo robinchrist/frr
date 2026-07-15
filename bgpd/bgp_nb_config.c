@@ -16,6 +16,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_updgrp.h"
 #include "bgpd/bgp_conditional_adv.h"
+#include "bgpd/bgp_zebra.h"
 
 /* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
  * from, so unlike the instance-scoped callbacks below there is no
@@ -2670,14 +2671,22 @@ int instance_tcp_keepalive_probes_destroy(struct nb_cb_destroy_args *args)
 
 int instance_bestpath_as_path_ignore_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/as-path-ignore");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_ASPATH_IGNORE);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_ASPATH_IGNORE);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2686,14 +2695,22 @@ int instance_bestpath_as_path_ignore_modify(struct nb_cb_modify_args *args)
 
 int instance_bestpath_as_path_confed_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/as-path-confed");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_ASPATH_CONFED);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_ASPATH_CONFED);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2702,14 +2719,22 @@ int instance_bestpath_as_path_confed_modify(struct nb_cb_modify_args *args)
 
 int instance_bestpath_as_path_multipath_relax_enabled_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/as-path-multipath-relax/enabled");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_ASPATH_MULTIPATH_RELAX);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_ASPATH_MULTIPATH_RELAX);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2718,14 +2743,22 @@ int instance_bestpath_as_path_multipath_relax_enabled_modify(struct nb_cb_modify
 
 int instance_bestpath_as_path_multipath_relax_as_set_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/as-path-multipath-relax/as-set");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_MULTIPATH_RELAX_AS_SET);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_MULTIPATH_RELAX_AS_SET);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2734,30 +2767,51 @@ int instance_bestpath_as_path_multipath_relax_as_set_modify(struct nb_cb_modify_
 
 int instance_bestpath_compare_routerid_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/compare-routerid");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_ROUTER_ID);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_COMPARE_ROUTER_ID);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
 	return NB_OK;
 }
 
+/* Legacy DEFPY guarded the flag flip on CHECK_FLAG() first and only called
+ * bgp_recalculate_all_bestpaths() when the value actually changed; that
+ * guard is redundant here because the northbound layer only invokes
+ * .modify when the candidate value differs from the running one.
+ */
 int instance_bestpath_use_imported_attributes_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/use-imported-attributes");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_BESTPATH_USE_IMPORTED_ATTRS);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_BESTPATH_USE_IMPORTED_ATTRS);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2798,14 +2852,22 @@ int instance_bestpath_aigp_destroy(struct nb_cb_destroy_args *args)
 
 int instance_bestpath_med_confed_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/med/confed");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_MED_CONFED);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_MED_CONFED);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2814,14 +2876,22 @@ int instance_bestpath_med_confed_modify(struct nb_cb_modify_args *args)
 
 int instance_bestpath_med_missing_as_worst_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/med/missing-as-worst");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_MED_MISSING_AS_WORST);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_MED_MISSING_AS_WORST);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2830,30 +2900,63 @@ int instance_bestpath_med_missing_as_worst_modify(struct nb_cb_modify_args *args
 
 int instance_bestpath_peer_type_multipath_relax_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/peer-type-multipath-relax");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_PEERTYPE_MULTIPATH_RELAX);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_PEERTYPE_MULTIPATH_RELAX);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
 	return NB_OK;
 }
 
+/* bgp->lb_handling is a separate enum field, not a BGP_FLAG_* bit; unset
+ * (destroy) maps to BGP_LINK_BW_ECMP, the legacy no-form's target. Both
+ * modify and destroy redo route install exactly like the legacy DEFPYs'
+ * FOREACH_AFI_SAFI/bgp_zebra_announce_table() loop.
+ */
 int instance_bestpath_bandwidth_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	const char *bw_cfg;
+	afi_t afi;
+	safi_t safi;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/bandwidth");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		bw_cfg = yang_dnode_get_string(args->dnode, NULL);
+		if (strmatch(bw_cfg, "ignore"))
+			bgp->lb_handling = BGP_LINK_BW_IGNORE_BW;
+		else if (strmatch(bw_cfg, "skip-missing"))
+			bgp->lb_handling = BGP_LINK_BW_SKIP_MISSING;
+		else if (strmatch(bw_cfg, "default-weight-for-missing"))
+			bgp->lb_handling = BGP_LINK_BW_DEFWT_4_MISSING;
+
+		FOREACH_AFI_SAFI (afi, safi) {
+			if (!bgp_fibupd_safi(safi))
+				continue;
+			bgp_zebra_announce_table(bgp, afi, safi);
+		}
 		break;
 	}
 
@@ -2862,14 +2965,27 @@ int instance_bestpath_bandwidth_modify(struct nb_cb_modify_args *args)
 
 int instance_bestpath_bandwidth_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	afi_t afi;
+	safi_t safi;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/bandwidth");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		bgp->lb_handling = BGP_LINK_BW_ECMP;
+
+		FOREACH_AFI_SAFI (afi, safi) {
+			if (!bgp_fibupd_safi(safi))
+				continue;
+			bgp_zebra_announce_table(bgp, afi, safi);
+		}
 		break;
 	}
 
