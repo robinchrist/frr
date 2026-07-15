@@ -653,6 +653,11 @@ struct vty;
 extern void if_vty_config_start(struct vty *vty, struct interface *ifp);
 extern void if_vty_config_end(struct vty *vty);
 extern void if_cmd_init(int (*config_write)(struct vty *));
+/* INTERFACE_NODE only, without the mgmtd-owned interface create/destroy
+ * commands; for FRR_MGMTD_BACKEND daemons with surviving legacy
+ * subcommands under the node.
+ */
+extern void if_cmd_init_node(int (*config_write)(struct vty *));
 extern void if_cmd_init_default(void);
 
 extern void if_new_via_zapi(struct interface *ifp);

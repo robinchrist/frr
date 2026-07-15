@@ -769,14 +769,27 @@ void vrf_install_commands(void)
 	install_element(ENABLE_NODE, &no_vrf_debug_cmd);
 }
 
-void vrf_cmd_init(int (*writefunc)(struct vty *vty))
+/*
+ * Install VRF_NODE (with its defaults, config_write hook and exit-vrf)
+ * without the northbound-backed frr-vrf commands (vrf / no vrf), which are
+ * owned by mgmtd.  For FRR_MGMTD_BACKEND daemons that still install their
+ * own legacy subcommands under VRF_NODE: running the northbound commands
+ * locally would race mgmtd's backend config push for the daemon's single
+ * northbound transaction.
+ */
+void vrf_cmd_init_node(int (*writefunc)(struct vty *vty))
 {
-	install_element(CONFIG_NODE, &vrf_cmd);
-	install_element(CONFIG_NODE, &no_vrf_cmd);
 	vrf_node.config_write = writefunc;
 	install_node(&vrf_node);
 	install_default(VRF_NODE);
 	install_element(VRF_NODE, &vrf_exit_cmd);
+}
+
+void vrf_cmd_init(int (*writefunc)(struct vty *vty))
+{
+	vrf_cmd_init_node(writefunc);
+	install_element(CONFIG_NODE, &vrf_cmd);
+	install_element(CONFIG_NODE, &no_vrf_cmd);
 }
 
 void vrf_set_default_name(const char *default_name)

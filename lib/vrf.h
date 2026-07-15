@@ -280,6 +280,12 @@ extern int vrf_switchback_to_initial(void);
  */
 extern void vrf_cmd_init(int (*writefunc)(struct vty *vty));
 
+/* VRF_NODE only, without the mgmtd-owned vrf create/destroy commands; for
+ * FRR_MGMTD_BACKEND daemons with surviving legacy subcommands under the
+ * node.
+ */
+extern void vrf_cmd_init_node(int (*writefunc)(struct vty *vty));
+
 /* VRF vty debugging
  */
 extern void vrf_install_commands(void);

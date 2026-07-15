@@ -1525,17 +1525,32 @@ static int if_nb_config_write(struct vty *vty)
 	return 1;
 }
 
-void if_cmd_init(int (*config_write)(struct vty *))
+/*
+ * Install INTERFACE_NODE (with its defaults, config_write hook and IFNAME
+ * completion) without the northbound-backed frr-interface commands
+ * (interface / no interface / description), which are owned by mgmtd.  For
+ * FRR_MGMTD_BACKEND daemons that still install their own legacy subcommands
+ * under INTERFACE_NODE: running the northbound commands locally would race
+ * mgmtd's backend config push for the daemon's single northbound
+ * transaction.
+ */
+void if_cmd_init_node(int (*config_write)(struct vty *))
 {
 	cmd_variable_handler_register(if_var_handlers);
 
 	interface_node.config_write = config_write;
 	install_node(&interface_node);
 
+	install_default(INTERFACE_NODE);
+}
+
+void if_cmd_init(int (*config_write)(struct vty *))
+{
+	if_cmd_init_node(config_write);
+
 	install_element(CONFIG_NODE, &interface_cmd);
 	install_element(CONFIG_NODE, &no_interface_cmd);
 
-	install_default(INTERFACE_NODE);
 	install_element(INTERFACE_NODE, &interface_desc_cmd);
 	install_element(INTERFACE_NODE, &no_interface_desc_cmd);
 }
