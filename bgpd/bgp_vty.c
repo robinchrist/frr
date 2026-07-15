@@ -1976,48 +1976,6 @@ DEFPY (bgp_suppress_fib_pending,
 	return CMD_SUCCESS;
 }
 
-/* BGP Cluster ID.  */
-DEFUN (bgp_cluster_id,
-       bgp_cluster_id_cmd,
-       "bgp cluster-id <A.B.C.D|(1-4294967295)>",
-       BGP_STR
-       "Configure Route-Reflector Cluster-id\n"
-       "Route-Reflector Cluster-id in IP address format\n"
-       "Route-Reflector Cluster-id as 32 bit quantity\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_ipv4 = 2;
-	int ret;
-	struct in_addr cluster;
-
-	ret = inet_aton(argv[idx_ipv4]->arg, &cluster);
-	if (!ret) {
-		vty_out(vty, "%% Malformed bgp cluster identifier\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_cluster_id_set(bgp, &cluster);
-	bgp_clear_star_soft_out(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_cluster_id,
-       no_bgp_cluster_id_cmd,
-       "no bgp cluster-id [<A.B.C.D|(1-4294967295)>]",
-       NO_STR
-       BGP_STR
-       "Configure Route-Reflector Cluster-id\n"
-       "Route-Reflector Cluster-id in IP address format\n"
-       "Route-Reflector Cluster-id as 32 bit quantity\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_cluster_id_unset(bgp);
-	bgp_clear_star_soft_out(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
 DEFUN (bgp_confederation_identifier,
        bgp_confederation_identifier_cmd,
        "bgp confederation identifier ASNUM",
@@ -2746,63 +2704,6 @@ DEFPY(no_bgp_tcp_keepalive, no_bgp_tcp_keepalive_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_client_to_client_reflection,
-       bgp_client_to_client_reflection_cmd,
-       "bgp client-to-client reflection",
-       BGP_STR
-       "Configure client to client route reflection\n"
-       "reflection of routes allowed\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_NO_CLIENT_TO_CLIENT);
-	bgp_clear_star_soft_out(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_client_to_client_reflection,
-       no_bgp_client_to_client_reflection_cmd,
-       "no bgp client-to-client reflection",
-       NO_STR
-       BGP_STR
-       "Configure client to client route reflection\n"
-       "reflection of routes allowed\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_NO_CLIENT_TO_CLIENT);
-	bgp_clear_star_soft_out(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-/* "bgp always-compare-med" configuration. */
-DEFUN (bgp_always_compare_med,
-       bgp_always_compare_med_cmd,
-       "bgp always-compare-med",
-       BGP_STR
-       "Allow comparing MED from different neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_ALWAYS_COMPARE_MED);
-	bgp_recalculate_all_bestpaths(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_always_compare_med,
-       no_bgp_always_compare_med_cmd,
-       "no bgp always-compare-med",
-       NO_STR
-       BGP_STR
-       "Allow comparing MED from different neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_ALWAYS_COMPARE_MED);
-	bgp_recalculate_all_bestpaths(bgp);
-
-	return CMD_SUCCESS;
-}
-
 
 DEFUN(bgp_ebgp_requires_policy, bgp_ebgp_requires_policy_cmd,
       "bgp ebgp-requires-policy",
@@ -2856,31 +2757,6 @@ DEFPY(bgp_enforce_first_as,
 	return CMD_SUCCESS;
 }
 
-DEFPY(bgp_lu_uses_explicit_null, bgp_lu_uses_explicit_null_cmd,
-      "[no] bgp labeled-unicast <explicit-null|ipv4-explicit-null|ipv6-explicit-null>$value",
-      NO_STR BGP_STR
-      "BGP Labeled-unicast options\n"
-      "Use explicit-null label values for all local prefixes\n"
-      "Use the IPv4 explicit-null label value for IPv4 local prefixes\n"
-      "Use the IPv6 explicit-null label value for IPv6 local prefixes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	uint64_t label_mode;
-
-	if (strmatch(value, "ipv4-explicit-null"))
-		label_mode = BGP_FLAG_LU_IPV4_EXPLICIT_NULL;
-	else if (strmatch(value, "ipv6-explicit-null"))
-		label_mode = BGP_FLAG_LU_IPV6_EXPLICIT_NULL;
-	else
-		label_mode = BGP_FLAG_LU_IPV4_EXPLICIT_NULL |
-			     BGP_FLAG_LU_IPV6_EXPLICIT_NULL;
-	if (no)
-		UNSET_FLAG(bgp->flags, label_mode);
-	else
-		SET_FLAG(bgp->flags, label_mode);
-	return CMD_SUCCESS;
-}
-
 DEFUN(bgp_suppress_duplicates, bgp_suppress_duplicates_cmd,
       "bgp suppress-duplicates",
       BGP_STR
@@ -2899,51 +2775,6 @@ DEFUN(no_bgp_suppress_duplicates, no_bgp_suppress_duplicates_cmd,
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	UNSET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
-	return CMD_SUCCESS;
-}
-
-DEFUN(bgp_reject_as_sets, bgp_reject_as_sets_cmd,
-      "bgp reject-as-sets",
-      BGP_STR
-      "Reject routes with AS_SET or AS_CONFED_SET flag\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	bgp->reject_as_sets = true;
-
-	/* Reset existing BGP sessions to reject routes
-	 * with aspath containing AS_SET or AS_CONFED_SET.
-	 */
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-		peer_set_last_reset(peer, PEER_DOWN_AS_SETS_REJECT);
-		peer_notify_config_change(peer->connection);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_reject_as_sets, no_bgp_reject_as_sets_cmd,
-      "no bgp reject-as-sets",
-      NO_STR
-      BGP_STR
-      "Reject routes with AS_SET or AS_CONFED_SET flag\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	bgp->reject_as_sets = false;
-
-	/* Reset existing BGP sessions to reject routes
-	 * with aspath containing AS_SET or AS_CONFED_SET.
-	 */
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-		peer_set_last_reset(peer, PEER_DOWN_AS_SETS_REJECT);
-		peer_notify_config_change(peer->connection);
-	}
-
 	return CMD_SUCCESS;
 }
 
@@ -4009,30 +3840,6 @@ DEFUN (no_bgp_graceful_shutdown,
 	return CMD_SUCCESS;
 }
 
-/* "bgp fast-external-failover" configuration. */
-DEFUN (bgp_fast_external_failover,
-       bgp_fast_external_failover_cmd,
-       "bgp fast-external-failover",
-       BGP_STR
-       "Immediately reset session if a link to a directly connected external peer goes down\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_NO_FAST_EXT_FAILOVER);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_fast_external_failover,
-       no_bgp_fast_external_failover_cmd,
-       "no bgp fast-external-failover",
-       NO_STR
-       BGP_STR
-       "Immediately reset session if a link to a directly connected external peer goes down\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_NO_FAST_EXT_FAILOVER);
-	return CMD_SUCCESS;
-}
-
 DEFPY (bgp_bestpath_aigp,
        bgp_bestpath_aigp_cmd,
        "[no$no] bgp bestpath aigp",
@@ -4925,34 +4732,6 @@ void bgp_config_write_listen(struct vty *vty, struct bgp *bgp)
 			}
 		}
 	}
-}
-
-
-DEFUN (bgp_disable_connected_route_check,
-       bgp_disable_connected_route_check_cmd,
-       "bgp disable-ebgp-connected-route-check",
-       BGP_STR
-       "Disable checking if nexthop is connected on ebgp sessions\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK);
-	bgp_clear_star_soft_in(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_disable_connected_route_check,
-       no_bgp_disable_connected_route_check_cmd,
-       "no bgp disable-ebgp-connected-route-check",
-       NO_STR
-       BGP_STR
-       "Disable checking if nexthop is connected on ebgp sessions\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK);
-	bgp_clear_star_soft_in(vty, bgp->name);
-
-	return CMD_SUCCESS;
 }
 
 
@@ -21654,10 +21433,6 @@ int bgp_config_write(struct vty *vty)
 
 		vty_out(vty, "\n");
 
-		/* BGP fast-external-failover. */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_NO_FAST_EXT_FAILOVER))
-			vty_out(vty, " no bgp fast-external-failover\n");
-
 		/* Suppress fib pending */
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_FIB_PENDING)) {
 			if (bgp->suppress_fib_adv_delay !=
@@ -21668,10 +21443,6 @@ int bgp_config_write(struct vty *vty)
 			else
 				vty_out(vty, " bgp suppress-fib-pending\n");
 		}
-
-		/* BGP configuration. */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_ALWAYS_COMPARE_MED))
-			vty_out(vty, " bgp always-compare-med\n");
 
 		/* RFC8212 default eBGP policy. */
 		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY)
@@ -21690,22 +21461,6 @@ int bgp_config_write(struct vty *vty)
 					   BGP_FLAG_ENFORCE_FIRST_AS)
 					? ""
 					: "no ");
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_LU_IPV4_EXPLICIT_NULL) &&
-		    !!CHECK_FLAG(bgp->flags, BGP_FLAG_LU_IPV6_EXPLICIT_NULL))
-			vty_out(vty, " bgp labeled-unicast explicit-null\n");
-		else if (!!CHECK_FLAG(bgp->flags,
-				      BGP_FLAG_LU_IPV4_EXPLICIT_NULL))
-			vty_out(vty,
-				" bgp labeled-unicast ipv4-explicit-null\n");
-		else if (!!CHECK_FLAG(bgp->flags,
-				      BGP_FLAG_LU_IPV6_EXPLICIT_NULL))
-			vty_out(vty,
-				" bgp labeled-unicast ipv6-explicit-null\n");
-
-		/* rfc9774 */
-		if (!bgp->reject_as_sets)
-			vty_out(vty, " no bgp reject-as-sets\n");
 
 		/* Suppress duplicate updates if the route actually not changed
 		 */
@@ -21794,20 +21549,6 @@ int bgp_config_write(struct vty *vty)
 		    != BGP_DEFAULT_SUBGROUP_PKT_QUEUE_MAX)
 			vty_out(vty, " bgp default subgroup-pkt-queue-max %u\n",
 				bgp->default_subgroup_pkt_queue_max);
-
-		/* BGP client-to-client reflection. */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_NO_CLIENT_TO_CLIENT))
-			vty_out(vty, " no bgp client-to-client reflection\n");
-
-		/* BGP cluster ID. */
-		if (CHECK_FLAG(bgp->config, BGP_CONFIG_CLUSTER_ID))
-			vty_out(vty, " bgp cluster-id %pI4\n",
-				&bgp->cluster_id);
-
-		/* Disable ebgp connected nexthop check */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK))
-			vty_out(vty,
-				" bgp disable-ebgp-connected-route-check\n");
 
 		/* Confederation identifier*/
 		if (CHECK_FLAG(bgp->config, BGP_CONFIG_CONFEDERATION))
@@ -22660,10 +22401,6 @@ void bgp_vty_init(void)
 	/* "bgp suppress-fib-pending" command */
 	install_element(BGP_NODE, &bgp_suppress_fib_pending_cmd);
 
-	/* "bgp cluster-id" commands. */
-	install_element(BGP_NODE, &bgp_cluster_id_cmd);
-	install_element(BGP_NODE, &no_bgp_cluster_id_cmd);
-
 	/* "bgp confederation" commands. */
 	install_element(BGP_NODE, &bgp_confederation_identifier_cmd);
 	install_element(BGP_NODE, &no_bgp_confederation_identifier_cmd);
@@ -22692,10 +22429,6 @@ void bgp_vty_init(void)
 
 	/* "neighbor graceful-shutdown" command */
 	install_element(BGP_NODE, &neighbor_graceful_shutdown_cmd);
-
-	/* bgp disable-ebgp-connected-nh-check */
-	install_element(BGP_NODE, &bgp_disable_connected_route_check_cmd);
-	install_element(BGP_NODE, &no_bgp_disable_connected_route_check_cmd);
 
 	/* bgp update-delay command */
 	install_element(BGP_NODE, &bgp_update_delay_cmd);
@@ -22740,14 +22473,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
 	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
 
-	/* "bgp client-to-client reflection" commands */
-	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cmd);
-	install_element(BGP_NODE, &bgp_client_to_client_reflection_cmd);
-
-	/* "bgp always-compare-med" commands */
-	install_element(BGP_NODE, &bgp_always_compare_med_cmd);
-	install_element(BGP_NODE, &no_bgp_always_compare_med_cmd);
-
 	/* bgp ebgp-requires-policy */
 	install_element(BGP_NODE, &bgp_ebgp_requires_policy_cmd);
 	install_element(BGP_NODE, &no_bgp_ebgp_requires_policy_cmd);
@@ -22755,16 +22480,9 @@ void bgp_vty_init(void)
 	/* bgp enforce-first-as */
 	install_element(BGP_NODE, &bgp_enforce_first_as_cmd);
 
-	/* bgp labeled-unicast explicit-null */
-	install_element(BGP_NODE, &bgp_lu_uses_explicit_null_cmd);
-
 	/* bgp suppress-duplicates */
 	install_element(BGP_NODE, &bgp_suppress_duplicates_cmd);
 	install_element(BGP_NODE, &no_bgp_suppress_duplicates_cmd);
-
-	/* bgp reject-as-sets */
-	install_element(BGP_NODE, &bgp_reject_as_sets_cmd);
-	install_element(BGP_NODE, &no_bgp_reject_as_sets_cmd);
 
 	/* "bgp deterministic-med" commands */
 	install_element(BGP_NODE, &bgp_deterministic_med_cmd);
@@ -22820,10 +22538,6 @@ void bgp_vty_init(void)
 	/* "bgp long-lived-graceful-restart" commands */
 	install_element(BGP_NODE, &bgp_llgr_stalepath_time_cmd);
 	install_element(BGP_NODE, &no_bgp_llgr_stalepath_time_cmd);
-
-	/* "bgp fast-external-failover" commands */
-	install_element(BGP_NODE, &bgp_fast_external_failover_cmd);
-	install_element(BGP_NODE, &no_bgp_fast_external_failover_cmd);
 
 	/* "bgp bestpath aigp" commands */
 	install_element(BGP_NODE, &bgp_bestpath_aigp_cmd);

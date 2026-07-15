@@ -572,6 +572,183 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B3: instance-scoped simple independent flags ('bgp
+ * cluster-id', 'bgp fast-external-failover', 'bgp always-compare-med',
+ * 'bgp disable-ebgp-connected-route-check', 'bgp client-to-client
+ * reflection', 'bgp labeled-unicast <...>', 'bgp reject-as-sets'). All
+ * installed at BGP_NODE, relative "./..." xpaths against the pushed
+ * instance xpath.
+ */
+
+DEFPY_YANG(
+	bgp_cluster_id, bgp_cluster_id_cli_cmd,
+	"bgp cluster-id <A.B.C.D|(1-4294967295)>$cluster_id",
+	BGP_STR
+	"Configure Route-Reflector Cluster-id\n"
+	"Route-Reflector Cluster-id in IP address format\n"
+	"Route-Reflector Cluster-id as 32 bit quantity\n")
+{
+	nb_cli_enqueue_change(vty, "./cluster-id", NB_OP_MODIFY, cluster_id);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_cluster_id, no_bgp_cluster_id_cli_cmd,
+	"no bgp cluster-id [<A.B.C.D|(1-4294967295)>]",
+	NO_STR
+	BGP_STR
+	"Configure Route-Reflector Cluster-id\n"
+	"Route-Reflector Cluster-id in IP address format\n"
+	"Route-Reflector Cluster-id as 32 bit quantity\n")
+{
+	nb_cli_enqueue_change(vty, "./cluster-id", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Static default-on boolean, no inheritance: legacy grammar, positive form
+ * destroys back to the true default, "no" form modifies an explicit false.
+ */
+DEFPY_YANG(
+	bgp_fast_external_failover, bgp_fast_external_failover_cli_cmd,
+	"bgp fast-external-failover",
+	BGP_STR
+	"Immediately reset session if a link to a directly connected external peer goes down\n")
+{
+	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_fast_external_failover, no_bgp_fast_external_failover_cli_cmd,
+	"no bgp fast-external-failover",
+	NO_STR
+	BGP_STR
+	"Immediately reset session if a link to a directly connected external peer goes down\n")
+{
+	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_always_compare_med, bgp_always_compare_med_cli_cmd,
+	"bgp always-compare-med",
+	BGP_STR
+	"Allow comparing MED from different neighbors\n")
+{
+	nb_cli_enqueue_change(vty, "./always-compare-med", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_always_compare_med, no_bgp_always_compare_med_cli_cmd,
+	"no bgp always-compare-med",
+	NO_STR
+	BGP_STR
+	"Allow comparing MED from different neighbors\n")
+{
+	nb_cli_enqueue_change(vty, "./always-compare-med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_lu_uses_explicit_null, bgp_lu_uses_explicit_null_cli_cmd,
+	"[no] bgp labeled-unicast <explicit-null|ipv4-explicit-null|ipv6-explicit-null>$value",
+	NO_STR BGP_STR
+	"BGP Labeled-unicast options\n"
+	"Use explicit-null label values for all local prefixes\n"
+	"Use the IPv4 explicit-null label value for IPv4 local prefixes\n"
+	"Use the IPv6 explicit-null label value for IPv6 local prefixes\n")
+{
+	if (no) {
+		nb_cli_enqueue_change(vty, "./labeled-unicast-explicit-null", NB_OP_DESTROY, NULL);
+	} else {
+		const char *enum_value;
+
+		if (strmatch(value, "ipv4-explicit-null"))
+			enum_value = "ipv4";
+		else if (strmatch(value, "ipv6-explicit-null"))
+			enum_value = "ipv6";
+		else
+			enum_value = "both";
+
+		nb_cli_enqueue_change(vty, "./labeled-unicast-explicit-null", NB_OP_MODIFY,
+				      enum_value);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Static default-on boolean, no inheritance: legacy grammar, positive form
+ * destroys back to the true default, "no" form modifies an explicit false.
+ */
+DEFPY_YANG(
+	bgp_reject_as_sets, bgp_reject_as_sets_cli_cmd,
+	"bgp reject-as-sets",
+	BGP_STR
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n")
+{
+	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_reject_as_sets, no_bgp_reject_as_sets_cli_cmd,
+	"no bgp reject-as-sets",
+	NO_STR
+	BGP_STR
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n")
+{
+	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Static default-on boolean, no inheritance: legacy grammar, positive form
+ * destroys back to the true default, "no" form modifies an explicit false.
+ */
+DEFPY_YANG(
+	bgp_client_to_client_reflection, bgp_client_to_client_reflection_cli_cmd,
+	"bgp client-to-client reflection",
+	BGP_STR
+	"Configure client to client route reflection\n"
+	"reflection of routes allowed\n")
+{
+	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_client_to_client_reflection, no_bgp_client_to_client_reflection_cli_cmd,
+	"no bgp client-to-client reflection",
+	NO_STR
+	BGP_STR
+	"Configure client to client route reflection\n"
+	"reflection of routes allowed\n")
+{
+	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_disable_connected_route_check, bgp_disable_connected_route_check_cli_cmd,
+	"bgp disable-ebgp-connected-route-check",
+	BGP_STR
+	"Disable checking if nexthop is connected on ebgp sessions\n")
+{
+	nb_cli_enqueue_change(vty, "./disable-ebgp-connected-route-check", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_disable_connected_route_check, no_bgp_disable_connected_route_check_cli_cmd,
+	"no bgp disable-ebgp-connected-route-check",
+	NO_STR
+	BGP_STR
+	"Disable checking if nexthop is connected on ebgp sessions\n")
+{
+	nb_cli_enqueue_change(vty, "./disable-ebgp-connected-route-check", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -619,13 +796,6 @@ static void instance_log_neighbor_changes_cli_write(struct vty *vty, const struc
 						    bool show_defaults)
 {
 	vty_out(vty, " bgp log-neighbor-changes %s\n",
-		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
-}
-
-static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					    bool show_defaults)
-{
-	vty_out(vty, " bgp ipv6-auto-ra %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
@@ -692,6 +862,78 @@ static void instance_timers_default_originate_cli_write(struct vty *vty,
 							bool show_defaults)
 {
 	vty_out(vty, " bgp default-originate timer %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void instance_cluster_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	struct in_addr cluster;
+
+	/* inet_aton(), not inet_pton(): the union type also accepts a plain
+	 * decimal 32-bit value, and inet_aton() is what the legacy DEFUN
+	 * used to accept both forms. Always rendered dotted-quad on output,
+	 * matching bgp_config_write()'s "%pI4" regardless of input notation.
+	 */
+	inet_aton(yang_dnode_get_string(dnode, NULL), &cluster);
+	vty_out(vty, " bgp cluster-id %pI4\n", &cluster);
+}
+
+static void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						      bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no bgp fast-external-failover\n");
+}
+
+static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, " bgp ipv6-auto-ra %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp always-compare-med\n");
+}
+
+static void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	const char *value = yang_dnode_get_string(dnode, NULL);
+
+	if (strmatch(value, "both"))
+		vty_out(vty, " bgp labeled-unicast explicit-null\n");
+	else if (strmatch(value, "ipv4"))
+		vty_out(vty, " bgp labeled-unicast ipv4-explicit-null\n");
+	else if (strmatch(value, "ipv6"))
+		vty_out(vty, " bgp labeled-unicast ipv6-explicit-null\n");
+}
+
+static void instance_reject_as_sets_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no bgp reject-as-sets\n");
+}
+
+static void instance_client_to_client_reflection_cli_write(struct vty *vty,
+							   const struct lyd_node *dnode,
+							   bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no bgp client-to-client reflection\n");
+}
+
+static void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
+								  const struct lyd_node *dnode,
+								  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp disable-ebgp-connected-route-check\n");
 }
 
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -803,9 +1045,51 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/cluster-id",
+			.cbs = {
+				.cli_show = instance_cluster_id_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/fast-external-failover",
+			.cbs = {
+				.cli_show = instance_fast_external_failover_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/ipv6-auto-ra",
 			.cbs = {
 				.cli_show = instance_ipv6_auto_ra_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/always-compare-med",
+			.cbs = {
+				.cli_show = instance_always_compare_med_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/labeled-unicast-explicit-null",
+			.cbs = {
+				.cli_show = instance_labeled_unicast_explicit_null_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/reject-as-sets",
+			.cbs = {
+				.cli_show = instance_reject_as_sets_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/client-to-client-reflection",
+			.cbs = {
+				.cli_show = instance_client_to_client_reflection_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/disable-ebgp-connected-route-check",
+			.cbs = {
+				.cli_show = instance_disable_ebgp_connected_route_check_cli_write,
 			}
 		},
 		{
@@ -886,6 +1170,20 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_minimum_holdtime_cli_cmd);
 	install_element(BGP_NODE, &bgp_condadv_period_cli_cmd);
 	install_element(BGP_NODE, &bgp_def_originate_eval_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_cluster_id_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_cluster_id_cli_cmd);
+	install_element(BGP_NODE, &bgp_fast_external_failover_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_fast_external_failover_cli_cmd);
+	install_element(BGP_NODE, &bgp_always_compare_med_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_always_compare_med_cli_cmd);
+	install_element(BGP_NODE, &bgp_lu_uses_explicit_null_cli_cmd);
+	install_element(BGP_NODE, &bgp_reject_as_sets_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_reject_as_sets_cli_cmd);
+	install_element(BGP_NODE, &bgp_client_to_client_reflection_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cli_cmd);
+	install_element(BGP_NODE, &bgp_disable_connected_route_check_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_disable_connected_route_check_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);
