@@ -6,23 +6,37 @@
 #include "lib/asn.h"
 #include "lib/log.h"
 #include "lib/yang_wrappers.h"
+#include "lib/frrevent.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_nb.h"
 
+/* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
+ * from, so unlike the instance-scoped callbacks below there is no
+ * bgp_nb_instance_lookup() equivalent needed here: the callback reads/writes
+ * bm-> directly. Some leaves also mirror their value into every VRF
+ * instance's struct bgp on write, matching the legacy CONFIG_NODE DEFUN
+ * behavior exactly.
+ */
+
 int process_route_map_delay_timer_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/route-map-delay-timer");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	uint16_t rmap_delay_timer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	rmap_delay_timer = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->rmap_update_timer = rmap_delay_timer;
+
+	/* if the dynamic update handling is being disabled, and a timer is
+	 * running, stop the timer and act as if the timer has already fired.
+	 */
+	if (!rmap_delay_timer && event_is_scheduled(bm->t_rmap_update)) {
+		event_cancel(&bm->t_rmap_update);
+		event_execute(bm->master, bgp_route_map_update_timer, NULL, 0, NULL);
 	}
 
 	return NB_OK;
@@ -30,16 +44,10 @@ int process_route_map_delay_timer_modify(struct nb_cb_modify_args *args)
 
 int process_route_map_delay_timer_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/route-map-delay-timer");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->rmap_update_timer = RMAP_DEFAULT_UPDATE_TIMER;
 
 	return NB_OK;
 }
@@ -382,160 +390,110 @@ int process_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 
 int process_no_rib_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/no-rib");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		bgp_option_norib_set_runtime();
+	else
+		bgp_option_norib_unset_runtime();
 
 	return NB_OK;
 }
 
 int process_send_extra_data_zebra_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/send-extra-data-zebra");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		SET_FLAG(bm->flags, BM_FLAG_SEND_EXTRA_DATA_TO_ZEBRA);
+	else
+		UNSET_FLAG(bm->flags, BM_FLAG_SEND_EXTRA_DATA_TO_ZEBRA);
+
+	return NB_OK;
+}
+
+/* Shared APPLY body for the process-wide ipv6-auto-ra leaf: mirrors the
+ * legacy CONFIG_NODE branch of bgp_ipv6_auto_ra_cmd exactly, including
+ * unconditionally overwriting every existing instance's per-VRF flag.
+ */
+static int process_ipv6_auto_ra_apply(bool auto_ra)
+{
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	COND_FLAG(bm->flags, BM_FLAG_IPV6_NO_AUTO_RA, !auto_ra);
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		COND_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA, !auto_ra);
 
 	return NB_OK;
 }
 
 int process_ipv6_auto_ra_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/ipv6-auto-ra");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
-}
-
-int process_ipv6_auto_ra_destroy(struct nb_cb_destroy_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/ipv6-auto-ra");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return process_ipv6_auto_ra_apply(yang_dnode_get_bool(args->dnode, NULL));
 }
 
 int process_session_dscp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/session-dscp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->ip_tos = yang_dnode_get_uint8(args->dnode, NULL) << 2;
 
 	return NB_OK;
 }
 
 int process_session_dscp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/session-dscp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->ip_tos = IPTOS_PREC_INTERNETCONTROL;
 
 	return NB_OK;
 }
 
 int process_input_queue_limit_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/input-queue-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->inq_limit = yang_dnode_get_uint32(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int process_input_queue_limit_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/input-queue-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->inq_limit = BM_DEFAULT_Q_LIMIT;
 
 	return NB_OK;
 }
 
 int process_output_queue_limit_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/output-queue-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->outq_limit = yang_dnode_get_uint32(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int process_output_queue_limit_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/output-queue-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->outq_limit = BM_DEFAULT_Q_LIMIT;
 
 	return NB_OK;
 }
@@ -922,16 +880,28 @@ int instance_fast_external_failover_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Per-VRF override of the process-wide '/proteus-bgp:process/ipv6-auto-ra'
+ * leaf: mirrors the legacy BGP_NODE branch of bgp_ipv6_auto_ra_cmd (this
+ * instance's flag only, no bm-> touch). Destroy restores the leaf's
+ * "inherit process behavior" semantics by resyncing this instance's flag
+ * to the process-wide bm-> setting, exactly what the legacy DEFPY left in
+ * place before any per-VRF override was ever typed.
+ */
 int instance_ipv6_auto_ra_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/ipv6-auto-ra");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		COND_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA,
+			  !yang_dnode_get_bool(args->dnode, NULL));
 		break;
 	}
 
@@ -940,14 +910,19 @@ int instance_ipv6_auto_ra_modify(struct nb_cb_modify_args *args)
 
 int instance_ipv6_auto_ra_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/ipv6-auto-ra");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		COND_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA,
+			  CHECK_FLAG(bm->flags, BM_FLAG_IPV6_NO_AUTO_RA));
 		break;
 	}
 

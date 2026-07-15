@@ -1861,33 +1861,6 @@ DEFUN_NOSH (router_bgp,
 	return CMD_SUCCESS;
 }
 
-/* bgp session-dscp */
-
-DEFPY (bgp_session_dscp,
-       bgp_session_dscp_cmd,
-       "bgp session-dscp (0-63)$dscp",
-       BGP_STR
-       "Override default (CS6) DSCP for BGP connections\n"
-       "Manually configured DSCP value\n")
-{
-	bm->ip_tos = dscp << 2;
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_session_dscp,
-       no_bgp_session_dscp_cmd,
-       "no bgp session-dscp [(0-63)]",
-       NO_STR
-       BGP_STR
-       "Override default (CS6) DSCP for BGP connections\n"
-       "Manually configured DSCP value\n")
-{
-	bm->ip_tos = IPTOS_PREC_INTERNETCONTROL;
-
-	return CMD_SUCCESS;
-}
-
 DEFPY(bgp_community_alias, bgp_community_alias_cmd,
       "[no$no] bgp community alias WORD$community ALIAS_NAME$alias_name",
       NO_STR BGP_STR
@@ -2041,57 +2014,6 @@ DEFUN (no_bgp_cluster_id,
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	bgp_cluster_id_unset(bgp);
 	bgp_clear_star_soft_out(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_norib,
-       bgp_norib_cmd,
-       "bgp no-rib",
-       BGP_STR
-       "Disable BGP route installation to RIB (Zebra)\n")
-{
-	if (bgp_option_check(BGP_OPT_NO_FIB)) {
-		vty_out(vty,
-			"%% No-RIB option is already set, nothing to do here.\n");
-		return CMD_SUCCESS;
-	}
-
-	bgp_option_norib_set_runtime();
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_norib,
-       no_bgp_norib_cmd,
-       "no bgp no-rib",
-       NO_STR
-       BGP_STR
-       "Disable BGP route installation to RIB (Zebra)\n")
-{
-	if (!bgp_option_check(BGP_OPT_NO_FIB)) {
-		vty_out(vty,
-			"%% No-RIB option is not set, nothing to do here.\n");
-		return CMD_SUCCESS;
-	}
-
-	bgp_option_norib_unset_runtime();
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_send_extra_data,
-       no_bgp_send_extra_data_cmd,
-       "[no] bgp send-extra-data zebra",
-       NO_STR
-       BGP_STR
-       "Extra data to Zebra for display/use\n"
-       "To zebra\n")
-{
-	if (no)
-		UNSET_FLAG(bm->flags, BM_FLAG_SEND_EXTRA_DATA_TO_ZEBRA);
-	else
-		SET_FLAG(bm->flags, BM_FLAG_SEND_EXTRA_DATA_TO_ZEBRA);
 
 	return CMD_SUCCESS;
 }
@@ -5402,27 +5324,6 @@ DEFUN(no_bgp_fast_convergence, no_bgp_fast_convergence_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_ipv6_auto_ra,
-       bgp_ipv6_auto_ra_cmd,
-       "[no] bgp ipv6-auto-ra",
-       NO_STR
-       BGP_STR
-       "Allow enabling IPv6 ND RA sending\n")
-{
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		COND_FLAG(bm->flags, BM_FLAG_IPV6_NO_AUTO_RA, no);
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-			COND_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA, no);
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		COND_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA, no);
-	}
-	return CMD_SUCCESS;
-}
-
 static int peer_conf_interface_get(struct vty *vty, const char *conf_if,
 				   int v6only,
 				   const char *peer_group_name,
@@ -8524,54 +8425,6 @@ DEFUN (no_neighbor_advertise_interval,
 	return peer_advertise_interval_vty(vty, argv[idx_peer]->arg, NULL, 0);
 }
 
-
-/* Time to wait before processing route-map updates */
-DEFUN (bgp_set_route_map_delay_timer,
-       bgp_set_route_map_delay_timer_cmd,
-       "bgp route-map delay-timer (0-600)",
-       SET_STR
-       "BGP route-map delay timer\n"
-       "Time in secs to wait before processing route-map changes\n"
-       "0 disables the timer, no route updates happen when route-maps change\n")
-{
-	int idx_number = 3;
-	uint32_t rmap_delay_timer;
-
-	if (argv[idx_number]->arg) {
-		rmap_delay_timer = strtoul(argv[idx_number]->arg, NULL, 10);
-		bm->rmap_update_timer = rmap_delay_timer;
-
-		/* if the dynamic update handling is being disabled, and a timer
-		 * is
-		 * running, stop the timer and act as if the timer has already
-		 * fired.
-		 */
-		if (!rmap_delay_timer && event_is_scheduled(bm->t_rmap_update)) {
-			event_cancel(&bm->t_rmap_update);
-			event_execute(bm->master, bgp_route_map_update_timer,
-				      NULL, 0, NULL);
-		}
-		return CMD_SUCCESS;
-	} else {
-		vty_out(vty, "%% BGP invalid route-map delay-timer\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-}
-
-DEFUN (no_bgp_set_route_map_delay_timer,
-       no_bgp_set_route_map_delay_timer_cmd,
-       "no bgp route-map delay-timer [(0-600)]",
-       NO_STR
-       BGP_STR
-       "Default BGP route-map delay timer\n"
-       "Reset to default time to wait for processing route-map changes\n"
-       "0 disables the timer, no route updates happen when route-maps change\n")
-{
-
-	bm->rmap_update_timer = RMAP_DEFAULT_UPDATE_TIMER;
-
-	return CMD_SUCCESS;
-}
 
 /* neighbor interface */
 static int peer_interface_vty(struct vty *vty, const char *ip_str,
@@ -21961,9 +21814,6 @@ int bgp_config_write(struct vty *vty)
 	hook_call(bgp_snmp_traps_config_write, vty);
 
 	vty_out(vty, "!\n");
-	if (bm->rmap_update_timer != RMAP_DEFAULT_UPDATE_TIMER)
-		vty_out(vty, "bgp route-map delay-timer %u\n",
-			bm->rmap_update_timer);
 
 	if (bm->v_update_delay != BGP_UPDATE_DELAY_DEFAULT) {
 		vty_out(vty, "bgp update-delay %d", bm->v_update_delay);
@@ -22009,27 +21859,6 @@ int bgp_config_write(struct vty *vty)
 
 	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
 		vty_out(vty, "bgp graceful-shutdown\n");
-
-	/* No-RIB (Zebra) option flag configuration */
-	if (bgp_option_check(BGP_OPT_NO_FIB))
-		vty_out(vty, "bgp no-rib\n");
-
-	if (CHECK_FLAG(bm->flags, BM_FLAG_SEND_EXTRA_DATA_TO_ZEBRA))
-		vty_out(vty, "bgp send-extra-data zebra\n");
-
-	if (CHECK_FLAG(bm->flags, BM_FLAG_IPV6_NO_AUTO_RA))
-		vty_out(vty, "no bgp ipv6-auto-ra\n");
-
-	/* DSCP value for outgoing packets in BGP connections */
-	if (bm->ip_tos != IPTOS_PREC_INTERNETCONTROL)
-		vty_out(vty, "bgp session-dscp %u\n", bm->ip_tos >> 2);
-
-	/* BGP InQ limit */
-	if (bm->inq_limit != BM_DEFAULT_Q_LIMIT)
-		vty_out(vty, "bgp input-queue-limit %u\n", bm->inq_limit);
-
-	if (bm->outq_limit != BM_DEFAULT_Q_LIMIT)
-		vty_out(vty, "bgp output-queue-limit %u\n", bm->outq_limit);
 
 	vty_out(vty, "!\n");
 
@@ -22457,10 +22286,9 @@ int bgp_config_write(struct vty *vty)
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_SHUTDOWN))
 			vty_out(vty, " bgp shutdown\n");
 
-		/* Automatic RA enabling by BGP */
-		if (!CHECK_FLAG(bm->flags, BM_FLAG_IPV6_NO_AUTO_RA))
-			if (CHECK_FLAG(bgp->flags, BGP_FLAG_IPV6_NO_AUTO_RA))
-				vty_out(vty, " no bgp ipv6-auto-ra\n");
+		/* Automatic RA enabling by BGP: converted to northbound, see
+		 * '/proteus-bgp:instance/ipv6-auto-ra' cli_show in bgp_cli.c.
+		 */
 
 		if (bgp->allow_martian)
 			vty_out(vty, " bgp allow-martian-nexthop\n");
@@ -22927,57 +22755,6 @@ DEFPY(mpls_bgp_l3vpn_multi_domain_switching,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_inq_limit,
-       bgp_inq_limit_cmd,
-       "bgp input-queue-limit (1-4294967295)$limit",
-       BGP_STR
-       "Set the BGP Input Queue limit for all peers when message parsing\n"
-       "Input-Queue limit\n")
-{
-	bm->inq_limit = limit;
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_inq_limit,
-       no_bgp_inq_limit_cmd,
-       "no bgp input-queue-limit [(1-4294967295)$limit]",
-       NO_STR
-       BGP_STR
-       "Set the BGP Input Queue limit for all peers when message parsing\n"
-       "Input-Queue limit\n")
-{
-	bm->inq_limit = BM_DEFAULT_Q_LIMIT;
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_outq_limit,
-       bgp_outq_limit_cmd,
-       "bgp output-queue-limit (1-4294967295)$limit",
-       BGP_STR
-       "Set the BGP Output Queue limit for all peers when message parsing\n"
-       "Output-Queue limit\n")
-{
-	bm->outq_limit = limit;
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_outq_limit,
-       no_bgp_outq_limit_cmd,
-       "no bgp output-queue-limit [(1-4294967295)$limit]",
-       NO_STR
-       BGP_STR
-       "Set the BGP Output Queue limit for all peers when message parsing\n"
-       "Output-Queue limit\n")
-{
-	bm->outq_limit = BM_DEFAULT_Q_LIMIT;
-
-	return CMD_SUCCESS;
-}
-
-
 /*
  * Local node-entry commands for the mgmtd-owned interface/vrf nodes.
  *
@@ -23095,12 +22872,6 @@ void bgp_vty_init(void)
 	install_default(BGP_SRV6_NODE);
 	install_default(BGP_LS_NODE);
 
-	/* "global bgp inq-limit command */
-	install_element(CONFIG_NODE, &bgp_inq_limit_cmd);
-	install_element(CONFIG_NODE, &no_bgp_inq_limit_cmd);
-	install_element(CONFIG_NODE, &bgp_outq_limit_cmd);
-	install_element(CONFIG_NODE, &no_bgp_outq_limit_cmd);
-
 	/* "bgp local-mac" hidden commands. */
 	install_element(CONFIG_NODE, &bgp_local_mac_cmd);
 	install_element(CONFIG_NODE, &no_bgp_local_mac_cmd);
@@ -23108,21 +22879,14 @@ void bgp_vty_init(void)
 	/* "bgp suppress-fib-pending" global */
 	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cmd);
 
-	/* bgp route-map delay-timer commands. */
-	install_element(CONFIG_NODE, &bgp_set_route_map_delay_timer_cmd);
-	install_element(CONFIG_NODE, &no_bgp_set_route_map_delay_timer_cmd);
-
 	install_element(BGP_NODE, &bgp_allow_martian_cmd);
 
 	/* bgp fast-convergence command */
 	install_element(BGP_NODE, &bgp_fast_convergence_cmd);
 	install_element(BGP_NODE, &no_bgp_fast_convergence_cmd);
 
-	/* global bgp ipv6-auto-ra command */
-	install_element(CONFIG_NODE, &bgp_ipv6_auto_ra_cmd);
-
-	/* bgp ipv6-auto-ra command */
-	install_element(BGP_NODE, &bgp_ipv6_auto_ra_cmd);
+	/* bgp ipv6-auto-ra: both process and per-VRF instance scopes are
+	 * northbound now, see bgp_cli.c */
 
 	/* global bgp update-delay command */
 	install_element(CONFIG_NODE, &bgp_global_update_delay_cmd);
@@ -23159,22 +22923,12 @@ void bgp_vty_init(void)
 	/* "router bgp" commands. */
 	install_element(CONFIG_NODE, &router_bgp_cmd);
 
-	/* "bgp session-dscp command */
-	install_element(CONFIG_NODE, &bgp_session_dscp_cmd);
-	install_element(CONFIG_NODE, &no_bgp_session_dscp_cmd);
-
 	/* "bgp suppress-fib-pending" command */
 	install_element(BGP_NODE, &bgp_suppress_fib_pending_cmd);
 
 	/* "bgp cluster-id" commands. */
 	install_element(BGP_NODE, &bgp_cluster_id_cmd);
 	install_element(BGP_NODE, &no_bgp_cluster_id_cmd);
-
-	/* "bgp no-rib" commands. */
-	install_element(CONFIG_NODE, &bgp_norib_cmd);
-	install_element(CONFIG_NODE, &no_bgp_norib_cmd);
-
-	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cmd);
 
 	/* "bgp confederation" commands. */
 	install_element(BGP_NODE, &bgp_confederation_identifier_cmd);
@@ -23265,11 +23019,6 @@ void bgp_vty_init(void)
 	/* "minimum-holdtime" commands. */
 	install_element(BGP_NODE, &bgp_minimum_holdtime_cmd);
 	install_element(BGP_NODE, &no_bgp_minimum_holdtime_cmd);
-
-	/* route-map delay-timer commands - per instance for backwards compat.
-	 */
-	install_element(BGP_NODE, &bgp_set_route_map_delay_timer_cmd);
-	install_element(BGP_NODE, &no_bgp_set_route_map_delay_timer_cmd);
 
 	/* "bgp client-to-client reflection" commands */
 	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cmd);

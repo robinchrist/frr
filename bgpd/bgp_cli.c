@@ -193,6 +193,243 @@ DEFPY_ATTR(
 }
 
 /*
+ * Milestone 2 batch B1: process-wide independent scalars
+ * ('/proteus-bgp:process/route-map-delay-timer', 'session-dscp',
+ * 'input-queue-limit', 'output-queue-limit', 'no-rib',
+ * 'send-extra-data-zebra', 'ipv6-auto-ra'). All installed at CONFIG_NODE,
+ * fully qualified xpath (no BGP_NODE context to relativize against).
+ */
+
+DEFPY_YANG(
+	bgp_route_map_delay_timer, bgp_route_map_delay_timer_cli_cmd,
+	"bgp route-map delay-timer (0-600)$rmap_delay_timer",
+	SET_STR
+	"BGP route-map delay timer\n"
+	"Time in secs to wait before processing route-map changes\n"
+	"0 disables the timer, no route updates happen when route-maps change\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/route-map-delay-timer", NB_OP_MODIFY,
+			      rmap_delay_timer_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_route_map_delay_timer, no_bgp_route_map_delay_timer_cli_cmd,
+	"no bgp route-map delay-timer [(0-600)]",
+	NO_STR
+	BGP_STR
+	"Default BGP route-map delay timer\n"
+	"Reset to default time to wait for processing route-map changes\n"
+	"0 disables the timer, no route updates happen when route-maps change\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/route-map-delay-timer", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_session_dscp, bgp_session_dscp_cli_cmd,
+	"bgp session-dscp (0-63)$dscp",
+	BGP_STR
+	"Override default (CS6) DSCP for BGP connections\n"
+	"Manually configured DSCP value\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/session-dscp", NB_OP_MODIFY, dscp_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_session_dscp, no_bgp_session_dscp_cli_cmd,
+	"no bgp session-dscp [(0-63)]",
+	NO_STR
+	BGP_STR
+	"Override default (CS6) DSCP for BGP connections\n"
+	"Manually configured DSCP value\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/session-dscp", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_inq_limit, bgp_inq_limit_cli_cmd,
+	"bgp input-queue-limit (1-4294967295)$limit",
+	BGP_STR
+	"Set the BGP Input Queue limit for all peers when message parsing\n"
+	"Input-Queue limit\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/input-queue-limit", NB_OP_MODIFY,
+			      limit_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_inq_limit, no_bgp_inq_limit_cli_cmd,
+	"no bgp input-queue-limit [(1-4294967295)$limit]",
+	NO_STR
+	BGP_STR
+	"Set the BGP Input Queue limit for all peers when message parsing\n"
+	"Input-Queue limit\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/input-queue-limit", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_outq_limit, bgp_outq_limit_cli_cmd,
+	"bgp output-queue-limit (1-4294967295)$limit",
+	BGP_STR
+	"Set the BGP Output Queue limit for all peers when message parsing\n"
+	"Output-Queue limit\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/output-queue-limit", NB_OP_MODIFY,
+			      limit_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_outq_limit, no_bgp_outq_limit_cli_cmd,
+	"no bgp output-queue-limit [(1-4294967295)$limit]",
+	NO_STR
+	BGP_STR
+	"Set the BGP Output Queue limit for all peers when message parsing\n"
+	"Output-Queue limit\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/output-queue-limit", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_norib, bgp_norib_cli_cmd,
+	"bgp no-rib",
+	BGP_STR
+	"Disable BGP route installation to RIB (Zebra)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/no-rib", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_norib, no_bgp_norib_cli_cmd,
+	"no bgp no-rib",
+	NO_STR
+	BGP_STR
+	"Disable BGP route installation to RIB (Zebra)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/no-rib", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_send_extra_data, bgp_send_extra_data_cli_cmd,
+	"bgp send-extra-data zebra",
+	BGP_STR
+	"Extra data to Zebra for display/use\n"
+	"To zebra\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/send-extra-data-zebra", NB_OP_MODIFY,
+			      "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_send_extra_data, no_bgp_send_extra_data_cli_cmd,
+	"no bgp send-extra-data zebra",
+	NO_STR
+	BGP_STR
+	"Extra data to Zebra for display/use\n"
+	"To zebra\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/send-extra-data-zebra", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * 'bgp ipv6-auto-ra' has both a PROCESS scope (CONFIG_NODE, this block)
+ * and an INSTANCE scope (BGP_NODE per-VRF override, further below in the
+ * B3 section): both are northbound now, the legacy per-VRF DEFPY
+ * (bgp_ipv6_auto_ra_cmd in bgp_vty.c) is fully retired. The process leaf is
+ * the chain root: a static default-on boolean, no inheritance, legacy
+ * grammar (positive form destroys back to the true default, "no" form
+ * modifies an explicit false). The instance leaf overrides it per VRF and
+ * stays tri-state (no YANG default, absence = inherit the process leaf),
+ * keeping the enabled|disabled scheme with deprecated bare aliases.
+ */
+DEFPY_YANG(
+	bgp_process_ipv6_auto_ra, bgp_process_ipv6_auto_ra_cli_cmd,
+	"bgp ipv6-auto-ra",
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_process_ipv6_auto_ra, no_bgp_process_ipv6_auto_ra_cli_cmd,
+	"no bgp ipv6-auto-ra",
+	NO_STR
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Instance (BGP_NODE) scope: per-VRF override of the process-wide leaf
+ * above. Retires the legacy bgp_ipv6_auto_ra_cmd DEFPY entirely (it used
+ * to serve this scope only; see bgp_vty.c history).
+ */
+DEFPY_YANG(
+	bgp_instance_ipv6_auto_ra, bgp_instance_ipv6_auto_ra_cli_cmd,
+	"bgp ipv6-auto-ra <enabled|disabled>$mode",
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n"
+	"Enable automatic IPv6 ND RA sending for this instance\n"
+	"Disable automatic IPv6 ND RA sending for this instance\n")
+{
+	nb_cli_enqueue_change(vty, "./ipv6-auto-ra", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_instance_ipv6_auto_ra, no_bgp_instance_ipv6_auto_ra_cli_cmd,
+	"no bgp ipv6-auto-ra <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n"
+	"Enable automatic IPv6 ND RA sending for this instance\n"
+	"Disable automatic IPv6 ND RA sending for this instance\n")
+{
+	nb_cli_enqueue_change(vty, "./ipv6-auto-ra", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_instance_ipv6_auto_ra_deprecated, bgp_instance_ipv6_auto_ra_deprecated_cli_cmd,
+	"bgp ipv6-auto-ra",
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./ipv6-auto-ra", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_instance_ipv6_auto_ra_deprecated, no_bgp_instance_ipv6_auto_ra_deprecated_cli_cmd,
+	"no bgp ipv6-auto-ra",
+	NO_STR
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./ipv6-auto-ra", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -243,6 +480,56 @@ static void instance_log_neighbor_changes_cli_write(struct vty *vty, const struc
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, " bgp ipv6-auto-ra %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	vty_out(vty, "bgp route-map delay-timer %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void process_session_dscp_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "bgp session-dscp %u\n", yang_dnode_get_uint8(dnode, NULL));
+}
+
+static void process_input_queue_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	vty_out(vty, "bgp input-queue-limit %u\n", yang_dnode_get_uint32(dnode, NULL));
+}
+
+static void process_output_queue_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
+{
+	vty_out(vty, "bgp output-queue-limit %u\n", yang_dnode_get_uint32(dnode, NULL));
+}
+
+static void process_no_rib_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults)
+{
+	vty_out(vty, "bgp no-rib\n");
+}
+
+static void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	vty_out(vty, "bgp send-extra-data zebra\n");
+}
+
+static void process_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "no bgp ipv6-auto-ra\n");
+}
+
 const struct frr_yang_module_info proteus_bgp_cli_info = {
 	.name = "proteus-bgp",
 	.ignore_cfg_cbs = true,
@@ -267,6 +554,54 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/ipv6-auto-ra",
+			.cbs = {
+				.cli_show = instance_ipv6_auto_ra_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/route-map-delay-timer",
+			.cbs = {
+				.cli_show = process_route_map_delay_timer_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/session-dscp",
+			.cbs = {
+				.cli_show = process_session_dscp_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/input-queue-limit",
+			.cbs = {
+				.cli_show = process_input_queue_limit_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/output-queue-limit",
+			.cbs = {
+				.cli_show = process_output_queue_limit_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/no-rib",
+			.cbs = {
+				.cli_show = process_no_rib_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/send-extra-data-zebra",
+			.cbs = {
+				.cli_show = process_send_extra_data_zebra_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/ipv6-auto-ra",
+			.cbs = {
+				.cli_show = process_ipv6_auto_ra_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -286,4 +621,24 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_log_neighbor_changes_cli_cmd);
 	install_element(BGP_NODE, &bgp_log_neighbor_changes_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_log_neighbor_changes_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_instance_ipv6_auto_ra_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_cli_cmd);
+	install_element(BGP_NODE, &bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
+
+	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_session_dscp_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_session_dscp_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_inq_limit_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_inq_limit_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_outq_limit_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_outq_limit_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_norib_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_norib_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_send_extra_data_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
 }
