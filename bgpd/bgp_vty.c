@@ -1783,6 +1783,21 @@ DEFUN_NOSH (router_bgp,
 
 		ret = bgp_lookup_by_as_name_type(&bgp, &as, argv[idx_asn]->arg, asnotation, name,
 						 inst_type, true);
+		if (bgp && bgp_config_inprocess() &&
+		    (ret == BGP_ERR_AS_MISMATCH || ret == BGP_ERR_INSTANCE_MISMATCH)) {
+			/* An ASN change during config replay arrives without
+			 * its preceding 'no router bgp' (retired here, owned
+			 * by mgmtd), so the mismatching header stands in for
+			 * it: recreate, preserving the legacy file-load
+			 * delete + create sequence. The converted path's
+			 * northbound callbacks look the instance up by name
+			 * and converge on the recreated struct. Interactive
+			 * use keeps the mismatch errors below.
+			 */
+			bgp_delete(bgp);
+			bgp = NULL;
+			ret = CMD_SUCCESS;
+		}
 		if (bgp && ret == BGP_INSTANCE_EXISTS)
 			ret = CMD_SUCCESS;
 		else if (bgp == NULL && ret == CMD_SUCCESS)
@@ -1846,139 +1861,6 @@ DEFUN_NOSH (router_bgp,
 	return CMD_SUCCESS;
 }
 
-/* "no router bgp" commands. */
-DEFUN (no_router_bgp,
-       no_router_bgp_cmd,
-       "no router bgp [ASNUM$instasn [<view|vrf> VIEWVRFNAME] [as-notation <dot|dot+|plain>]]",
-       NO_STR
-       ROUTER_STR
-       BGP_STR
-       AS_STR
-       BGP_INSTANCE_HELP_STR
-       "Force the AS notation output\n"
-       "use 'AA.BB' format for AS 4 byte values\n"
-       "use 'AA.BB' format for all AS values\n"
-       "use plain format for all AS values\n")
-{
-	int idx_asn = 3;
-	int idx_vrf = 5;
-	as_t as = 0;
-	struct bgp *bgp = NULL;
-	const char *name = NULL;
-
-	// "no router bgp" without an ASN
-	if (argc == 3) {
-		// Pending: Make VRF option available for ASN less config
-		bgp = bgp_get_default();
-
-		if (bgp == NULL) {
-			vty_out(vty, "%% No BGP process is configured\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (listcount(bm->bgp) > 1) {
-			vty_out(vty, "%% Please specify ASN and VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (bgp->l3vni) {
-			vty_out(vty, "%% Please unconfigure l3vni %u\n",
-				bgp->l3vni);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	} else {
-		if (!asn_str2asn(argv[idx_asn]->arg, &as)) {
-			vty_out(vty, "%% BGP: No such AS %s\n",
-				argv[idx_asn]->arg);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		if (argc > 4 && (strmatch(argv[4]->arg, "vrf") || strmatch(argv[4]->arg, "view"))) {
-			name = argv[idx_vrf]->arg;
-			if (strmatch(argv[idx_vrf - 1]->text, "vrf")
-			    && strmatch(name, VRF_DEFAULT_NAME))
-				name = NULL;
-		}
-
-		/* Lookup bgp structure. */
-		bgp = bgp_lookup(as, name);
-		if (!bgp) {
-			vty_out(vty, "%% Can't find BGP instance\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (bgp->l3vni) {
-			vty_out(vty, "%% Please unconfigure l3vni %u\n", bgp->l3vni);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		/* Cannot delete default instance if vrf instances exist */
-		if (bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
-			struct listnode *node, *nnode;
-			struct bgp *tmp_bgp;
-
-			for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, tmp_bgp)) {
-				if (tmp_bgp->inst_type != BGP_INSTANCE_TYPE_VRF)
-					continue;
-
-				if (CHECK_FLAG(tmp_bgp->vrf_flags,
-					       BGP_VRF_AUTO)) {
-					bgp_delete(tmp_bgp);
-					continue;
-				}
-
-				if (CHECK_FLAG(
-					    tmp_bgp->af_flags[AFI_IP]
-							     [SAFI_UNICAST],
-					    BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT) ||
-				    CHECK_FLAG(
-					    tmp_bgp->af_flags[AFI_IP6]
-							     [SAFI_UNICAST],
-					    BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT) ||
-				    CHECK_FLAG(
-					    tmp_bgp->af_flags[AFI_IP]
-							     [SAFI_UNICAST],
-					    BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT) ||
-				    CHECK_FLAG(
-					    tmp_bgp->af_flags[AFI_IP6]
-							     [SAFI_UNICAST],
-					    BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT) ||
-				    CHECK_FLAG(tmp_bgp->af_flags[AFI_IP]
-								[SAFI_UNICAST],
-					       BGP_CONFIG_VRF_TO_VRF_EXPORT) ||
-				    CHECK_FLAG(tmp_bgp->af_flags[AFI_IP6]
-								[SAFI_UNICAST],
-					       BGP_CONFIG_VRF_TO_VRF_EXPORT) ||
-				    (bgp == bgp_get_evpn() &&
-				     (CHECK_FLAG(
-					      tmp_bgp->af_flags[AFI_L2VPN]
-							       [SAFI_EVPN],
-					      BGP_L2VPN_EVPN_ADV_IPV4_UNICAST) ||
-				      CHECK_FLAG(
-					      tmp_bgp->af_flags[AFI_L2VPN]
-							       [SAFI_EVPN],
-					      BGP_L2VPN_EVPN_ADV_IPV4_UNICAST_GW_IP) ||
-				      CHECK_FLAG(
-					      tmp_bgp->af_flags[AFI_L2VPN]
-							       [SAFI_EVPN],
-					      BGP_L2VPN_EVPN_ADV_IPV6_UNICAST) ||
-				      CHECK_FLAG(
-					      tmp_bgp->af_flags[AFI_L2VPN]
-							       [SAFI_EVPN],
-					      BGP_L2VPN_EVPN_ADV_IPV6_UNICAST_GW_IP))) ||
-				    (tmp_bgp->l3vni)) {
-					vty_out(vty,
-						"%% Cannot delete default BGP instance. Dependent VRF instances exist\n");
-					return CMD_WARNING_CONFIG_FAILED;
-				}
-			}
-		}
-	}
-
-	bgp_delete(bgp);
-
-	return CMD_SUCCESS;
-}
-
 /* bgp session-dscp */
 
 DEFPY (bgp_session_dscp,
@@ -2002,43 +1884,6 @@ DEFPY (no_bgp_session_dscp,
        "Manually configured DSCP value\n")
 {
 	bm->ip_tos = IPTOS_PREC_INTERNETCONTROL;
-
-	return CMD_SUCCESS;
-}
-
-/* BGP router-id.  */
-
-DEFPY (bgp_router_id,
-       bgp_router_id_cmd,
-       "bgp router-id A.B.C.D",
-       BGP_STR
-       "Override configured router identifier\n"
-       "Manually configured router identifier\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_router_id_static_set(bgp, router_id);
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_router_id,
-       no_bgp_router_id_cmd,
-       "no bgp router-id [A.B.C.D]",
-       NO_STR
-       BGP_STR
-       "Override configured router identifier\n"
-       "Manually configured router identifier\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (router_id_str) {
-		if (!IPV4_ADDR_SAME(&bgp->router_id_static, &router_id)) {
-			vty_out(vty, "%% BGP router-id doesn't match\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	router_id.s_addr = 0;
-	bgp_router_id_static_set(bgp, router_id);
 
 	return CMD_SUCCESS;
 }
@@ -4665,30 +4510,6 @@ DEFUN(no_bgp_bestpath_peer_type_multipath_relax,
 	UNSET_FLAG(bgp->flags, BGP_FLAG_PEERTYPE_MULTIPATH_RELAX);
 	bgp_recalculate_all_bestpaths(bgp);
 
-	return CMD_SUCCESS;
-}
-
-/* "bgp log-neighbor-changes" configuration.  */
-DEFUN (bgp_log_neighbor_changes,
-       bgp_log_neighbor_changes_cmd,
-       "bgp log-neighbor-changes",
-       BGP_STR
-       "Log neighbor up/down and reset reason\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_log_neighbor_changes,
-       no_bgp_log_neighbor_changes_cmd,
-       "no bgp log-neighbor-changes",
-       NO_STR
-       BGP_STR
-       "Log neighbor up/down and reset reason\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
 	return CMD_SUCCESS;
 }
 
@@ -22240,11 +22061,6 @@ int bgp_config_write(struct vty *vty)
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_NO_FAST_EXT_FAILOVER))
 			vty_out(vty, " no bgp fast-external-failover\n");
 
-		/* BGP router ID. */
-		if (bgp->router_id_static.s_addr != INADDR_ANY)
-			vty_out(vty, " bgp router-id %pI4\n",
-				&bgp->router_id_static);
-
 		/* Suppress fib pending */
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_FIB_PENDING)) {
 			if (bgp->suppress_fib_adv_delay !=
@@ -22255,15 +22071,6 @@ int bgp_config_write(struct vty *vty)
 			else
 				vty_out(vty, " bgp suppress-fib-pending\n");
 		}
-
-		/* BGP log-neighbor-changes. */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES)
-		    != SAVE_BGP_LOG_NEIGHBOR_CHANGES)
-			vty_out(vty, " %sbgp log-neighbor-changes\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_LOG_NEIGHBOR_CHANGES)
-					? ""
-					: "no ");
 
 		/* BGP configuration. */
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_ALWAYS_COMPARE_MED))
@@ -23352,16 +23159,9 @@ void bgp_vty_init(void)
 	/* "router bgp" commands. */
 	install_element(CONFIG_NODE, &router_bgp_cmd);
 
-	/* "no router bgp" commands. */
-	install_element(CONFIG_NODE, &no_router_bgp_cmd);
-
 	/* "bgp session-dscp command */
 	install_element(CONFIG_NODE, &bgp_session_dscp_cmd);
 	install_element(CONFIG_NODE, &no_bgp_session_dscp_cmd);
-
-	/* "bgp router-id" commands. */
-	install_element(BGP_NODE, &bgp_router_id_cmd);
-	install_element(BGP_NODE, &no_bgp_router_id_cmd);
 
 	/* "bgp suppress-fib-pending" command */
 	install_element(BGP_NODE, &bgp_suppress_fib_pending_cmd);
@@ -23582,10 +23382,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &bgp_bestpath_peer_type_multipath_relax_cmd);
 	install_element(BGP_NODE,
 			&no_bgp_bestpath_peer_type_multipath_relax_cmd);
-
-	/* "bgp log-neighbor-changes" commands */
-	install_element(BGP_NODE, &bgp_log_neighbor_changes_cmd);
-	install_element(BGP_NODE, &no_bgp_log_neighbor_changes_cmd);
 
 	/* "bgp bestpath med" commands */
 	install_element(BGP_NODE, &bgp_bestpath_med_cmd);

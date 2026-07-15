@@ -1804,7 +1804,7 @@ DEFUNSH(VTYSH_ZEBRA, srv6_sid_format_f4024_uncompressed, srv6_sid_format_f4024_u
 }
 
 #ifdef HAVE_BGPD
-DEFUNSH(VTYSH_BGPD, router_bgp, router_bgp_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, router_bgp, router_bgp_cmd,
 	"router bgp [ASNUM [<view|vrf> VIEWVRFNAME] [as-notation <dot|dot+|plain>]]",
 	ROUTER_STR BGP_STR AS_STR
 	"BGP view\nBGP VRF\n"
