@@ -49,6 +49,7 @@ noinst_HEADERS += \
 	mgmtd/mgmt_txn.h \
 	mgmtd/mgmt_txn_priv.h \
 	zebra/zebra_cli.h \
+	bgpd/bgp_cli.h \
 	# end
 
 sbin_PROGRAMS += mgmtd/mgmtd
@@ -104,6 +105,22 @@ nodist_mgmtd_mgmtd_SOURCES += \
 	# end
 nodist_mgmtd_libmgmt_be_nb_la_SOURCES += \
 	staticd/static_vty.c \
+	# end
+endif
+
+if BGPD
+nodist_mgmtd_mgmtd_SOURCES += \
+	yang/proteus/proteus-types.yang.c \
+	yang/proteus/proteus-filter.yang.c \
+	yang/proteus/proteus-bgp-filter.yang.c \
+	yang/proteus/proteus-bfd.yang.c \
+	yang/proteus/proteus-interface.yang.c \
+	yang/proteus/proteus-route-map.yang.c \
+	yang/proteus/proteus-bgp-evpn.yang.c \
+	yang/proteus/proteus-bgp.yang.c \
+	# end
+mgmtd_libmgmt_be_nb_la_SOURCES += \
+	bgpd/bgp_cli.c \
 	# end
 endif
 
