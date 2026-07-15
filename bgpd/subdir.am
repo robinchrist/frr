@@ -85,6 +85,8 @@ bgpd_libbgp_a_SOURCES = \
 	bgpd/bgp_nhg.c \
 	bgpd/bgp_nhc.c \
 	bgpd/bgp_srv6.c \
+	bgpd/bgp_nb.c \
+	bgpd/bgp_nb_config.c \
 	# end
 
 if ENABLE_BGP_VNC
@@ -197,6 +199,7 @@ noinst_HEADERS += \
 	bgpd/rfapi/vnc_import_bgp_p.h \
 	bgpd/bgp_vnc_types.h \
 	bgpd/bgp_nhc.h \
+	bgpd/bgp_nb.h \
 	# end
 
 bgpd_bgpd_SOURCES = bgpd/bgp_main.c
@@ -248,4 +251,12 @@ nodist_bgpd_bgpd_SOURCES = \
 	yang/frr-deviations-bgp-datacenter.yang.c \
 	yang/frr-bgp-filter.yang.c \
 	yang/frr-bgp-route-map.yang.c \
+	yang/proteus/proteus-types.yang.c \
+	yang/proteus/proteus-filter.yang.c \
+	yang/proteus/proteus-bgp-filter.yang.c \
+	yang/proteus/proteus-bfd.yang.c \
+	yang/proteus/proteus-interface.yang.c \
+	yang/proteus/proteus-route-map.yang.c \
+	yang/proteus/proteus-bgp-evpn.yang.c \
+	yang/proteus/proteus-bgp.yang.c \
 	# end

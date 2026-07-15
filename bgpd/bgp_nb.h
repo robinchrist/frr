@@ -1,0 +1,4475 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#ifndef _FRR_BGP_NB_H_
+#define _FRR_BGP_NB_H_
+
+#include "lib/northbound.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern const struct frr_yang_module_info proteus_bgp_nb_info;
+extern const struct frr_yang_module_info proteus_filter_info;
+extern const struct frr_yang_module_info proteus_bgp_filter_info;
+extern const struct frr_yang_module_info proteus_bfd_info;
+extern const struct frr_yang_module_info proteus_interface_info;
+extern const struct frr_yang_module_info proteus_route_map_info;
+
+int process_route_map_delay_timer_modify(struct nb_cb_modify_args *args);
+int process_route_map_delay_timer_destroy(struct nb_cb_destroy_args *args);
+int process_update_delay_delay_modify(struct nb_cb_modify_args *args);
+int process_update_delay_delay_destroy(struct nb_cb_destroy_args *args);
+int process_update_delay_establish_wait_modify(struct nb_cb_modify_args *args);
+int process_update_delay_establish_wait_destroy(struct nb_cb_destroy_args *args);
+int process_advertisement_delay_modify(struct nb_cb_modify_args *args);
+int process_advertisement_delay_destroy(struct nb_cb_destroy_args *args);
+int process_suppress_fib_pending_enabled_modify(struct nb_cb_modify_args *args);
+int process_suppress_fib_pending_advertisement_delay_modify(struct nb_cb_modify_args *args);
+int process_suppress_fib_pending_advertisement_delay_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_restart_mode_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_restart_stalepath_time_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_stalepath_time_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args);
+int process_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args);
+int process_graceful_shutdown_modify(struct nb_cb_modify_args *args);
+int process_no_rib_modify(struct nb_cb_modify_args *args);
+int process_send_extra_data_zebra_modify(struct nb_cb_modify_args *args);
+int process_ipv6_auto_ra_modify(struct nb_cb_modify_args *args);
+int process_session_dscp_modify(struct nb_cb_modify_args *args);
+int process_session_dscp_destroy(struct nb_cb_destroy_args *args);
+int process_input_queue_limit_modify(struct nb_cb_modify_args *args);
+int process_input_queue_limit_destroy(struct nb_cb_destroy_args *args);
+int process_output_queue_limit_modify(struct nb_cb_modify_args *args);
+int process_output_queue_limit_destroy(struct nb_cb_destroy_args *args);
+int instance_create(struct nb_cb_create_args *args);
+int instance_destroy(struct nb_cb_destroy_args *args);
+int instance_instance_type_modify(struct nb_cb_modify_args *args);
+int instance_autonomous_system_plain_modify(struct nb_cb_modify_args *args);
+int instance_autonomous_system_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_autonomous_system_asdot_create(struct nb_cb_create_args *args);
+int instance_autonomous_system_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_autonomous_system_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_autonomous_system_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_as_notation_modify(struct nb_cb_modify_args *args);
+int instance_as_notation_destroy(struct nb_cb_destroy_args *args);
+int instance_router_id_modify(struct nb_cb_modify_args *args);
+int instance_router_id_destroy(struct nb_cb_destroy_args *args);
+int instance_cluster_id_modify(struct nb_cb_modify_args *args);
+int instance_cluster_id_destroy(struct nb_cb_destroy_args *args);
+int instance_fast_external_failover_modify(struct nb_cb_modify_args *args);
+int instance_ipv6_auto_ra_modify(struct nb_cb_modify_args *args);
+int instance_ipv6_auto_ra_destroy(struct nb_cb_destroy_args *args);
+int instance_suppress_fib_pending_enabled_modify(struct nb_cb_modify_args *args);
+int instance_suppress_fib_pending_advertisement_delay_modify(struct nb_cb_modify_args *args);
+int instance_suppress_fib_pending_advertisement_delay_destroy(struct nb_cb_destroy_args *args);
+int instance_log_neighbor_changes_modify(struct nb_cb_modify_args *args);
+int instance_log_neighbor_changes_destroy(struct nb_cb_destroy_args *args);
+int instance_always_compare_med_modify(struct nb_cb_modify_args *args);
+int instance_ebgp_requires_policy_modify(struct nb_cb_modify_args *args);
+int instance_ebgp_requires_policy_destroy(struct nb_cb_destroy_args *args);
+int instance_enforce_first_as_modify(struct nb_cb_modify_args *args);
+int instance_enforce_first_as_destroy(struct nb_cb_destroy_args *args);
+int instance_labeled_unicast_explicit_null_modify(struct nb_cb_modify_args *args);
+int instance_labeled_unicast_explicit_null_destroy(struct nb_cb_destroy_args *args);
+int instance_reject_as_sets_modify(struct nb_cb_modify_args *args);
+int instance_suppress_duplicates_modify(struct nb_cb_modify_args *args);
+int instance_suppress_duplicates_destroy(struct nb_cb_destroy_args *args);
+int instance_hard_administrative_reset_modify(struct nb_cb_modify_args *args);
+int instance_hard_administrative_reset_destroy(struct nb_cb_destroy_args *args);
+int instance_default_ipv4_unicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv4_multicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv4_labeled_unicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv4_vpn_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv4_flowspec_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv6_unicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv6_multicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv6_labeled_unicast_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv6_vpn_modify(struct nb_cb_modify_args *args);
+int instance_default_ipv6_flowspec_modify(struct nb_cb_modify_args *args);
+int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args);
+int instance_default_local_preference_modify(struct nb_cb_modify_args *args);
+int instance_default_local_preference_destroy(struct nb_cb_destroy_args *args);
+int instance_default_show_hostname_modify(struct nb_cb_modify_args *args);
+int instance_default_show_hostname_destroy(struct nb_cb_destroy_args *args);
+int instance_default_show_nexthop_hostname_modify(struct nb_cb_modify_args *args);
+int instance_default_show_nexthop_hostname_destroy(struct nb_cb_destroy_args *args);
+int instance_default_software_version_capability_modify(struct nb_cb_modify_args *args);
+int instance_default_software_version_capability_destroy(struct nb_cb_destroy_args *args);
+int instance_default_software_version_capability_latest_encoding_modify(
+	struct nb_cb_modify_args *args);
+int instance_default_software_version_capability_latest_encoding_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_default_link_local_capability_modify(struct nb_cb_modify_args *args);
+int instance_default_link_local_capability_destroy(struct nb_cb_destroy_args *args);
+int instance_default_dynamic_capability_modify(struct nb_cb_modify_args *args);
+int instance_default_dynamic_capability_destroy(struct nb_cb_destroy_args *args);
+int instance_default_subgroup_pkt_queue_max_modify(struct nb_cb_modify_args *args);
+int instance_default_subgroup_pkt_queue_max_destroy(struct nb_cb_destroy_args *args);
+int instance_default_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_client_to_client_reflection_modify(struct nb_cb_modify_args *args);
+int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args);
+int instance_confederation_identifier_plain_modify(struct nb_cb_modify_args *args);
+int instance_confederation_identifier_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_confederation_identifier_asdot_create(struct nb_cb_create_args *args);
+int instance_confederation_identifier_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_confederation_identifier_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_confederation_identifier_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_confederation_peers_plain_create(struct nb_cb_create_args *args);
+int instance_confederation_peers_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_confederation_peers_asdot_create(struct nb_cb_create_args *args);
+int instance_confederation_peers_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_deterministic_med_modify(struct nb_cb_modify_args *args);
+int instance_deterministic_med_destroy(struct nb_cb_destroy_args *args);
+int instance_update_delay_delay_modify(struct nb_cb_modify_args *args);
+int instance_update_delay_delay_destroy(struct nb_cb_destroy_args *args);
+int instance_update_delay_establish_wait_modify(struct nb_cb_modify_args *args);
+int instance_update_delay_establish_wait_destroy(struct nb_cb_destroy_args *args);
+int instance_advertisement_delay_modify(struct nb_cb_modify_args *args);
+int instance_advertisement_delay_destroy(struct nb_cb_destroy_args *args);
+int instance_max_med_on_startup_period_modify(struct nb_cb_modify_args *args);
+int instance_max_med_on_startup_period_destroy(struct nb_cb_destroy_args *args);
+int instance_max_med_on_startup_med_modify(struct nb_cb_modify_args *args);
+int instance_max_med_on_startup_med_destroy(struct nb_cb_destroy_args *args);
+int instance_max_med_administrative_enabled_modify(struct nb_cb_modify_args *args);
+int instance_max_med_administrative_med_modify(struct nb_cb_modify_args *args);
+int instance_max_med_administrative_med_destroy(struct nb_cb_destroy_args *args);
+int instance_write_quanta_modify(struct nb_cb_modify_args *args);
+int instance_write_quanta_destroy(struct nb_cb_destroy_args *args);
+int instance_read_quanta_modify(struct nb_cb_modify_args *args);
+int instance_read_quanta_destroy(struct nb_cb_destroy_args *args);
+int instance_coalesce_time_modify(struct nb_cb_modify_args *args);
+int instance_coalesce_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_long_lived_graceful_restart_stale_time_modify(struct nb_cb_modify_args *args);
+int instance_long_lived_graceful_restart_stale_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_mode_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_notification_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_notification_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_stalepath_time_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_stalepath_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args);
+int instance_tcp_keepalive_idle_modify(struct nb_cb_modify_args *args);
+int instance_tcp_keepalive_idle_destroy(struct nb_cb_destroy_args *args);
+int instance_tcp_keepalive_interval_modify(struct nb_cb_modify_args *args);
+int instance_tcp_keepalive_interval_destroy(struct nb_cb_destroy_args *args);
+int instance_tcp_keepalive_probes_modify(struct nb_cb_modify_args *args);
+int instance_tcp_keepalive_probes_destroy(struct nb_cb_destroy_args *args);
+int instance_bestpath_as_path_ignore_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_as_path_confed_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_as_path_multipath_relax_enabled_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_as_path_multipath_relax_as_set_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_compare_routerid_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_use_imported_attributes_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_aigp_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_aigp_destroy(struct nb_cb_destroy_args *args);
+int instance_bestpath_med_confed_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_med_missing_as_worst_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_peer_type_multipath_relax_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_bandwidth_modify(struct nb_cb_modify_args *args);
+int instance_bestpath_bandwidth_destroy(struct nb_cb_destroy_args *args);
+int instance_route_reflector_allow_outbound_policy_modify(struct nb_cb_modify_args *args);
+int instance_route_reflector_allow_outbound_policy_destroy(struct nb_cb_destroy_args *args);
+int instance_network_import_check_modify(struct nb_cb_modify_args *args);
+int instance_network_import_check_destroy(struct nb_cb_destroy_args *args);
+int instance_timers_keepalive_modify(struct nb_cb_modify_args *args);
+int instance_timers_keepalive_destroy(struct nb_cb_destroy_args *args);
+int instance_timers_holdtime_modify(struct nb_cb_modify_args *args);
+int instance_timers_holdtime_destroy(struct nb_cb_destroy_args *args);
+int instance_timers_minimum_holdtime_modify(struct nb_cb_modify_args *args);
+int instance_timers_minimum_holdtime_destroy(struct nb_cb_destroy_args *args);
+int instance_timers_conditional_advertisement_modify(struct nb_cb_modify_args *args);
+int instance_timers_conditional_advertisement_destroy(struct nb_cb_destroy_args *args);
+int instance_timers_default_originate_modify(struct nb_cb_modify_args *args);
+int instance_timers_default_originate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_create(struct nb_cb_create_args *args);
+int instance_peer_group_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_remote_as_plain_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_remote_as_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_remote_as_asdot_create(struct nb_cb_create_args *args);
+int instance_peer_group_remote_as_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_remote_as_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_remote_as_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_remote_as_type_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_remote_as_type_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_local_as_plain_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_as_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_local_as_asdot_create(struct nb_cb_create_args *args);
+int instance_peer_group_local_as_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_local_as_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_as_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_as_no_prepend_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_as_replace_as_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_as_dual_as_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_description_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_description_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_shutdown_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_shutdown_message_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_shutdown_message_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_shutdown_rtt_count_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_bfd_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_bfd_check_control_plane_failure_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_bfd_profile_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_bfd_profile_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_password_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_password_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_solo_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_port_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_port_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_source_interface_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_source_interface_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_tcp_mss_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_tcp_mss_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_passive_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_ebgp_multihop_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_ebgp_multihop_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_aigp_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_graceful_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_role_role_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_local_role_role_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_local_role_strict_mode_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_oad_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_ttl_security_hops_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_ttl_security_hops_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_disable_connected_check_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_enforce_first_as_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_enforce_first_as_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_update_source_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_update_source_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_ip_transparent_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_advertisement_interval_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_advertisement_interval_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_timers_keepalive_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_timers_keepalive_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_timers_holdtime_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_timers_holdtime_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_timers_connect_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_timers_connect_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_timers_delayopen_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_timers_delayopen_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_dynamic_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_dynamic_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_extended_nexthop_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_extended_nexthop_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_software_version_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_software_version_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_software_version_latest_encoding_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_software_version_latest_encoding_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_link_local_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_link_local_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_fqdn_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_fqdn_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_capabilities_dont_capability_negotiate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_override_capability_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_capabilities_strict_capability_match_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_rpki_strict_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_sender_as_path_loop_detection_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_path_attribute_discard_create(struct nb_cb_create_args *args);
+int instance_peer_group_path_attribute_discard_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_path_attribute_treat_as_withdraw_create(struct nb_cb_create_args *args);
+int instance_peer_group_path_attribute_treat_as_withdraw_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_graceful_restart_mode_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_send_nexthop_characteristics_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_extended_link_bandwidth_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_extended_optional_parameters_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_listen_range_create(struct nb_cb_create_args *args);
+int instance_peer_group_listen_range_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_activate_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_as_override_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_accept_own_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as2_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as4_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_weight_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_orf_prefix_list_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_remove_private_as_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_origin_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_activate_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_tx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_tx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_as_override_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_accept_own_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_weight_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_orf_prefix_list_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_remove_private_as_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_origin_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_create(struct nb_cb_create_args *args);
+int instance_neighbor_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_interface_peer_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_v6only_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_peer_group_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_remote_as_plain_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_remote_as_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_remote_as_asdot_create(struct nb_cb_create_args *args);
+int instance_neighbor_remote_as_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_remote_as_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_remote_as_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_remote_as_type_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_remote_as_type_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_local_as_plain_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_as_plain_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_local_as_asdot_create(struct nb_cb_create_args *args);
+int instance_neighbor_local_as_asdot_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_local_as_asdot_high_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_as_asdot_low_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_as_no_prepend_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_as_replace_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_as_dual_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_description_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_description_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_shutdown_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_shutdown_message_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_shutdown_message_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_shutdown_rtt_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_bfd_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_bfd_check_control_plane_failure_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_bfd_profile_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_bfd_profile_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_password_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_password_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_solo_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_port_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_port_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_source_interface_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_source_interface_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_tcp_mss_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_tcp_mss_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_passive_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_ebgp_multihop_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_ebgp_multihop_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_aigp_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_graceful_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_role_role_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_local_role_role_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_local_role_strict_mode_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_oad_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_ttl_security_hops_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_ttl_security_hops_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_disable_connected_check_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_enforce_first_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_enforce_first_as_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_update_source_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_update_source_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_ip_transparent_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_advertisement_interval_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_advertisement_interval_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_timers_keepalive_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_timers_keepalive_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_timers_holdtime_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_timers_holdtime_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_timers_connect_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_timers_connect_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_timers_delayopen_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_timers_delayopen_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_dynamic_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_dynamic_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_extended_nexthop_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_extended_nexthop_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_software_version_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_software_version_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_software_version_latest_encoding_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_software_version_latest_encoding_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_link_local_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_link_local_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_fqdn_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_fqdn_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_capabilities_dont_capability_negotiate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_override_capability_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_capabilities_strict_capability_match_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_rpki_strict_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_sender_as_path_loop_detection_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_path_attribute_discard_create(struct nb_cb_create_args *args);
+int instance_neighbor_path_attribute_discard_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_path_attribute_treat_as_withdraw_create(struct nb_cb_create_args *args);
+int instance_neighbor_path_attribute_treat_as_withdraw_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_graceful_restart_mode_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_send_nexthop_characteristics_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_extended_link_bandwidth_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_extended_optional_parameters_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_activate_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_tx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_tx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_as_override_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_accept_own_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_orf_prefix_list_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_next_hop_self_force_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_remove_private_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_remove_private_as_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_large_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_force_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_route_server_client_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_origin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_route_map_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as2_global_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as2_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as4_global_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_as4_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_soo_ipv4_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_route_map_in_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_activate_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_tx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_tx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_orf_prefix_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_orf_prefix_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_remove_private_as_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_as_override_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_accept_own_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_orf_prefix_list_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_next_hop_self_force_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_remove_private_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_remove_private_as_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_large_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_force_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_route_server_client_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_origin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_route_map_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as2_global_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as2_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as4_global_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_as4_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_soo_ipv4_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_route_map_in_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_activate_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_tx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_tx_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_tx_best_selected_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_tx_best_selected_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_rx_paths_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_addpath_rx_paths_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_orf_prefix_list_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_orf_prefix_list_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_route_reflector_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_next_hop_self_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_remove_private_as_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_remove_private_as_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_as_override_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_standard_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_standard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_extended_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_extended_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_large_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_large_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_send_community_extended_rpki_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_default_originate_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_default_originate_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_default_originate_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soft_reconfiguration_inbound_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_route_server_client_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_nexthop_local_unchanged_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_count_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_origin_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_accept_own_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as2_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as2_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_as4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_weight_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_weight_destroy(struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_as_path_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_next_hop_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_med_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_distribute_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_distribute_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_distribute_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_distribute_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_prefix_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_prefix_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_prefix_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_prefix_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_filter_list_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_filter_list_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_filter_list_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_filter_list_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_unsuppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_unsuppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_advertise_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_advertise_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_condition_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_listen_limit_modify(struct nb_cb_modify_args *args);
+int instance_listen_limit_destroy(struct nb_cb_destroy_args *args);
+int instance_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_allow_martian_nexthop_modify(struct nb_cb_modify_args *args);
+int instance_fast_convergence_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_network_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_network_label_index_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_network_label_index_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_network_backdoor_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_as_set_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_origin_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_metric_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_metric_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_redistribute_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_distance_prefix_distance_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_export_vpn_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_import_vpn_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_import_vrf_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_import_vrf_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_import_vrf_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_route_map_import_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_route_map_export_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_value_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_auto_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_allocation_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_label_export_allocation_mode_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_raw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rd_export_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_nexthop_export_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_nexthop_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_import_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_multicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_network_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_network_label_index_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_network_label_index_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_network_backdoor_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_as_set_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_multicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_multicast_distance_prefix_distance_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_multicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_label_index_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_label_index_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_network_backdoor_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_as_set_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_maximum_paths_ebgp_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_maximum_paths_ebgp_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_maximum_paths_ibgp_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_maximum_paths_ibgp_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_prefix_distance_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_labeled_unicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_vpn_network_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_as2_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_as2_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_as2_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_vpn_network_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_vpn_network_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_as4_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_as4_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_as4_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_raw_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_vpn_network_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_network_raw_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_raw_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_network_raw_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv4_vpn_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_distance_prefix_distance_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_distance_prefix_access_list_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv4_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_vpn_retain_route_target_all_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_network_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_network_label_index_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_network_label_index_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_as_set_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_origin_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_metric_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_metric_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_redistribute_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_distance_prefix_distance_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_export_vpn_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_import_vpn_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_import_vrf_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_import_vrf_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_import_vrf_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_route_map_import_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_route_map_export_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_value_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_auto_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_allocation_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_label_export_allocation_mode_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as2_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as2_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_ipv4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_ipv4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_as4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_raw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rd_export_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_nexthop_export_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_nexthop_export_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_import_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_unicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_multicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_network_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_network_label_index_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_network_label_index_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_as_set_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_multicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_multicast_distance_prefix_distance_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_label_index_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_network_label_index_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_as_set_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_summary_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_matching_med_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_suppress_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_suppress_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ebgp_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ebgp_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ibgp_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ibgp_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_half_life_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_distance_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_vpn_network_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_as2_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_as2_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_as2_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_vpn_network_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_vpn_network_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_as4_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_as4_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_as4_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_raw_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_vpn_network_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_network_raw_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_raw_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_network_raw_route_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_maximum_paths_ibgp_equal_cluster_length_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_table_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_table_map_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_half_life_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_half_life_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_suppress_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_distance_ebgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_distance_ebgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_distance_ibgp_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_distance_ibgp_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_distance_local_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_distance_local_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_distance_prefix_create(struct nb_cb_create_args *args);
+int instance_afi_safis_ipv6_vpn_distance_prefix_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_distance_prefix_distance_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_vpn_retain_route_target_all_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_all_vni_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_autort_rfc8365_compatible_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_default_gw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_svi_ip_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as2_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as2_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_as4_local_admin_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_ipv4_global_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_ipv4_local_admin_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_enable_resolve_overlay_index_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_frag_evi_limit_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_frag_evi_limit_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_time_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_time_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_freeze_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_freeze_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_flooding_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_flooding_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as2_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as2_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_ipv4_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_ipv4_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as4_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_as4_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_raw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_rd_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_flooding_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_flooding_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_advertise_default_gw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_advertise_svi_ip_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_advertise_subnet_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as2_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as2_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_ipv4_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_ipv4_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as4_administrator_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_as4_assigned_number_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_raw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_rd_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_auto_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_auto_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_gateway_ip_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_gateway_ip_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_default_originate_ipv4_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_default_originate_ipv6_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_network_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as2_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as2_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as2_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as4_administrator_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_as4_assigned_number_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_mac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_mac_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_raw_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_rd_raw_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_network_ethtag_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_label_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_esi_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_gwip_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_routermac_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_route_map_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_network_route_map_destroy(struct nb_cb_destroy_args *args);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
