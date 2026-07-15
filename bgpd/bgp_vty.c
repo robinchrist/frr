@@ -2541,78 +2541,6 @@ DEFPY(no_bgp_advertisement_delay, no_bgp_advertisement_delay_cmd,
 	return CMD_SUCCESS;
 }
 
-static int bgp_wpkt_quanta_config_vty(struct vty *vty, uint32_t quanta,
-				      bool set)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	quanta = set ? quanta : BGP_WRITE_PACKET_MAX;
-	atomic_store_explicit(&bgp->wpkt_quanta, quanta, memory_order_relaxed);
-
-	return CMD_SUCCESS;
-}
-
-static int bgp_rpkt_quanta_config_vty(struct vty *vty, uint32_t quanta,
-				      bool set)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	quanta = set ? quanta : BGP_READ_PACKET_MAX;
-	atomic_store_explicit(&bgp->rpkt_quanta, quanta, memory_order_relaxed);
-
-	return CMD_SUCCESS;
-}
-
-void bgp_config_write_wpkt_quanta(struct vty *vty, struct bgp *bgp)
-{
-	uint32_t quanta =
-		atomic_load_explicit(&bgp->wpkt_quanta, memory_order_relaxed);
-	if (quanta != BGP_WRITE_PACKET_MAX)
-		vty_out(vty, " write-quanta %d\n", quanta);
-}
-
-void bgp_config_write_rpkt_quanta(struct vty *vty, struct bgp *bgp)
-{
-	uint32_t quanta =
-		atomic_load_explicit(&bgp->rpkt_quanta, memory_order_relaxed);
-	if (quanta != BGP_READ_PACKET_MAX)
-		vty_out(vty, " read-quanta %d\n", quanta);
-}
-
-/* Packet quanta configuration
- *
- * XXX: The value set here controls the size of a stack buffer in the IO
- * thread. When changing these limits be careful to prevent stack overflow.
- *
- * Furthermore, the maximums used here should correspond to
- * BGP_WRITE_PACKET_MAX and BGP_READ_PACKET_MAX.
- */
-DEFPY (bgp_wpkt_quanta,
-       bgp_wpkt_quanta_cmd,
-       "[no] write-quanta (1-64)$quanta",
-       NO_STR
-       "How many packets to write to peer socket per run\n"
-       "Number of packets\n")
-{
-	return bgp_wpkt_quanta_config_vty(vty, quanta, !no);
-}
-
-DEFPY (bgp_rpkt_quanta,
-       bgp_rpkt_quanta_cmd,
-       "[no] read-quanta (1-10)$quanta",
-       NO_STR
-       "How many packets to read from peer socket per I/O cycle\n"
-       "Number of packets\n")
-{
-	return bgp_rpkt_quanta_config_vty(vty, quanta, !no);
-}
-
-void bgp_config_write_coalesce_time(struct vty *vty, struct bgp *bgp)
-{
-	if (!bgp->heuristic_coalesce)
-		vty_out(vty, " coalesce-time %u\n", bgp->coalesce_time);
-}
-
 /* BGP TCP keepalive */
 static void bgp_config_tcp_keepalive(struct vty *vty, struct bgp *bgp)
 {
@@ -2621,38 +2549,6 @@ static void bgp_config_tcp_keepalive(struct vty *vty, struct bgp *bgp)
 			bgp->tcp_keepalive_idle, bgp->tcp_keepalive_intvl,
 			bgp->tcp_keepalive_probes);
 	}
-}
-
-DEFUN (bgp_coalesce_time,
-       bgp_coalesce_time_cmd,
-       "coalesce-time (0-4294967295)",
-       "Subgroup coalesce timer\n"
-       "Subgroup coalesce timer value (in ms)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	int idx = 0;
-
-	bgp->heuristic_coalesce = false;
-
-	if (argv_find(argv, argc, "(0-4294967295)", &idx))
-		bgp->coalesce_time = strtoul(argv[idx]->arg, NULL, 10);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_coalesce_time,
-       no_bgp_coalesce_time_cmd,
-       "no coalesce-time (0-4294967295)",
-       NO_STR
-       "Subgroup coalesce timer\n"
-       "Subgroup coalesce timer value (in ms)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->heuristic_coalesce = true;
-	bgp->coalesce_time = BGP_DEFAULT_SUBGROUP_COALESCE_TIME;
-	return CMD_SUCCESS;
 }
 
 DEFPY (bgp_use_underlying_nexthop_weight,
@@ -2814,87 +2710,6 @@ DEFPY (bgp_af_nexthop_prefer_global,
 		bgp->nexthop_prefer_global[afi][safi] = enable;
 		bgp_clear_soft_in(bgp, afi, safi);
 	}
-
-	return CMD_SUCCESS;
-}
-
-/* BGP timers.  */
-
-DEFUN (bgp_timers,
-       bgp_timers_cmd,
-       "timers bgp (0-65535) (0-65535)",
-       "Adjust routing timers\n"
-       "BGP timers\n"
-       "Keepalive interval\n"
-       "Holdtime\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 2;
-	int idx_number_2 = 3;
-	unsigned long keepalive = 0;
-	unsigned long holdtime = 0;
-
-	keepalive = strtoul(argv[idx_number]->arg, NULL, 10);
-	holdtime = strtoul(argv[idx_number_2]->arg, NULL, 10);
-
-	/* Holdtime value check. */
-	if (holdtime < 3 && holdtime != 0) {
-		vty_out(vty,
-			"%% hold time value must be either 0 or greater than 3\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_timers_set(vty, bgp, keepalive, holdtime, DFLT_BGP_CONNECT_RETRY,
-		       BGP_DEFAULT_DELAYOPEN);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_timers,
-       no_bgp_timers_cmd,
-       "no timers bgp [(0-65535) (0-65535)]",
-       NO_STR
-       "Adjust routing timers\n"
-       "BGP timers\n"
-       "Keepalive interval\n"
-       "Holdtime\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_timers_set(vty, bgp, DFLT_BGP_KEEPALIVE, DFLT_BGP_HOLDTIME,
-		       DFLT_BGP_CONNECT_RETRY, BGP_DEFAULT_DELAYOPEN);
-
-	return CMD_SUCCESS;
-}
-
-/* BGP minimum holdtime.  */
-
-DEFUN(bgp_minimum_holdtime, bgp_minimum_holdtime_cmd,
-      "bgp minimum-holdtime (1-65535)",
-      "BGP specific commands\n"
-      "BGP minimum holdtime\n"
-      "Seconds\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 2;
-	unsigned long min_holdtime;
-
-	min_holdtime = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	bgp->default_min_holdtime = min_holdtime;
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_minimum_holdtime, no_bgp_minimum_holdtime_cmd,
-      "no bgp minimum-holdtime [(1-65535)]",
-      NO_STR
-      "BGP specific commands\n"
-      "BGP minimum holdtime\n"
-      "Seconds\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->default_min_holdtime = 0;
 
 	return CMD_SUCCESS;
 }
@@ -8779,53 +8594,6 @@ static int peer_advertise_map_set_vty(struct vty *vty, const char *ip_str,
 					       condition_map, condition);
 
 	return bgp_vty_return(vty, ret);
-}
-
-DEFPY (bgp_condadv_period,
-       bgp_condadv_period_cmd,
-       "[no$no] bgp conditional-advertisement timer (5-240)$period",
-       NO_STR
-       BGP_STR
-       "Conditional advertisement settings\n"
-       "Set period to rescan BGP table to check if condition is met\n"
-       "Period between BGP table scans, in seconds; default 60\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	struct listnode *node, *nnode = NULL;
-	struct peer *peer = NULL;
-
-	if (no) {
-		if (bgp->condition_check_period == DEFAULT_CONDITIONAL_ROUTES_POLL_TIME)
-			return CMD_SUCCESS;
-
-		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
-			UNSET_FLAG(peer->sflags, PEER_STATUS_COND_ADV_PENDING);
-
-		bgp->condition_check_period = DEFAULT_CONDITIONAL_ROUTES_POLL_TIME;
-	} else {
-		bgp->condition_check_period = period;
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_def_originate_eval,
-       bgp_def_originate_eval_cmd,
-       "[no$no] bgp default-originate timer (0-65535)$timer",
-       NO_STR
-       BGP_STR
-       "Control default-originate\n"
-       "Set period to rescan BGP table to check if default-originate condition is met\n"
-       "Period between BGP table scans, in seconds; default 5\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->rmap_def_originate_eval_timer = no ? 0 : timer;
-
-	event_cancel(&bgp->t_rmap_def_originate_eval);
-
-	return CMD_SUCCESS;
 }
 
 DEFPY (neighbor_advertise_map,
@@ -22091,14 +21859,6 @@ int bgp_config_write(struct vty *vty)
 			vty_out(vty, "\n");
 		}
 
-		/* write quanta */
-		bgp_config_write_wpkt_quanta(vty, bgp);
-		/* read quanta */
-		bgp_config_write_rpkt_quanta(vty, bgp);
-
-		/* coalesce time */
-		bgp_config_write_coalesce_time(vty, bgp);
-
 		/* BGP per-instance graceful-shutdown */
 		/* BGP-wide settings and per-instance settings are mutually
 		 * exclusive.
@@ -22231,32 +21991,6 @@ int bgp_config_write(struct vty *vty)
 				CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK)
 					? ""
 					: "no ");
-
-		/* BGP timers configuration. */
-		if (bgp->default_keepalive != SAVE_BGP_KEEPALIVE
-		    || bgp->default_holdtime != SAVE_BGP_HOLDTIME)
-			vty_out(vty, " timers bgp %u %u\n",
-				bgp->default_keepalive, bgp->default_holdtime);
-
-		/* BGP minimum holdtime configuration. */
-		if (bgp->default_min_holdtime != SAVE_BGP_HOLDTIME
-		    && bgp->default_min_holdtime != 0)
-			vty_out(vty, " bgp minimum-holdtime %u\n",
-				bgp->default_min_holdtime);
-
-		/* Conditional advertisement timer configuration */
-		if (bgp->condition_check_period
-		    != DEFAULT_CONDITIONAL_ROUTES_POLL_TIME)
-			vty_out(vty,
-				" bgp conditional-advertisement timer %u\n",
-				bgp->condition_check_period);
-
-		/* default-originate timer configuration */
-		if (bgp->rmap_def_originate_eval_timer &&
-		    bgp->rmap_def_originate_eval_timer !=
-			    RMAP_DEFAULT_ORIGINATE_EVAL_TIMER)
-			vty_out(vty, " bgp default-originate timer %u\n",
-				bgp->rmap_def_originate_eval_timer);
 
 		/* peer-group */
 		for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group)) {
@@ -22971,12 +22705,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &bgp_advertisement_delay_cmd);
 	install_element(BGP_NODE, &no_bgp_advertisement_delay_cmd);
 
-	install_element(BGP_NODE, &bgp_wpkt_quanta_cmd);
-	install_element(BGP_NODE, &bgp_rpkt_quanta_cmd);
-
-	install_element(BGP_NODE, &bgp_coalesce_time_cmd);
-	install_element(BGP_NODE, &no_bgp_coalesce_time_cmd);
-
 	install_element(BGP_NODE, &bgp_use_underlying_nexthop_weight_cmd);
 
 	/* "nexthop prefer-global" commands */
@@ -23011,14 +22739,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cmd);
 	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
 	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
-
-	/* "timers bgp" commands. */
-	install_element(BGP_NODE, &bgp_timers_cmd);
-	install_element(BGP_NODE, &no_bgp_timers_cmd);
-
-	/* "minimum-holdtime" commands. */
-	install_element(BGP_NODE, &bgp_minimum_holdtime_cmd);
-	install_element(BGP_NODE, &no_bgp_minimum_holdtime_cmd);
 
 	/* "bgp client-to-client reflection" commands */
 	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cmd);
@@ -24108,7 +23828,6 @@ void bgp_vty_init(void)
 	install_element(BGP_VPNV6_NODE, &no_neighbor_unsuppress_map_cmd);
 
 	/* "neighbor advertise-map" commands. */
-	install_element(BGP_NODE, &bgp_condadv_period_cmd);
 	install_element(BGP_NODE, &neighbor_advertise_map_hidden_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_advertise_map_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_advertise_map_cmd);
@@ -24118,9 +23837,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &neighbor_advertise_map_cmd);
 	install_element(BGP_VPNV4_NODE, &neighbor_advertise_map_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_advertise_map_cmd);
-
-	/* bgp default-originate timer */
-	install_element(BGP_NODE, &bgp_def_originate_eval_cmd);
 
 	/* neighbor maximum-prefix-out commands. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_out_cmd);

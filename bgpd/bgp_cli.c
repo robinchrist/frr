@@ -430,6 +430,148 @@ DEFPY_ATTR(
 }
 
 /*
+ * Milestone 2 batch B2: instance-scoped independent tuning scalars
+ * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
+ * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
+ * conditional-advertisement timer', 'bgp default-originate timer'). All
+ * installed at BGP_NODE, relative "./..." xpaths against the pushed
+ * instance xpath.
+ */
+
+DEFPY_YANG(
+	bgp_wpkt_quanta, bgp_wpkt_quanta_cli_cmd,
+	"[no] write-quanta (1-64)$quanta",
+	NO_STR
+	"How many packets to write to peer socket per run\n"
+	"Number of packets\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./write-quanta", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./write-quanta", NB_OP_MODIFY, quanta_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_rpkt_quanta, bgp_rpkt_quanta_cli_cmd,
+	"[no] read-quanta (1-10)$quanta",
+	NO_STR
+	"How many packets to read from peer socket per I/O cycle\n"
+	"Number of packets\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./read-quanta", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./read-quanta", NB_OP_MODIFY, quanta_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_coalesce_time, bgp_coalesce_time_cli_cmd,
+	"coalesce-time (0-4294967295)$time",
+	"Subgroup coalesce timer\n"
+	"Subgroup coalesce timer value (in ms)\n")
+{
+	nb_cli_enqueue_change(vty, "./coalesce-time", NB_OP_MODIFY, time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_coalesce_time, no_bgp_coalesce_time_cli_cmd,
+	"no coalesce-time (0-4294967295)",
+	NO_STR
+	"Subgroup coalesce timer\n"
+	"Subgroup coalesce timer value (in ms)\n")
+{
+	nb_cli_enqueue_change(vty, "./coalesce-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_timers, bgp_timers_cli_cmd,
+	"timers bgp (0-65535)$keepalive (0-65535)$holdtime",
+	"Adjust routing timers\n"
+	"BGP timers\n"
+	"Keepalive interval\n"
+	"Holdtime\n")
+{
+	nb_cli_enqueue_change(vty, "./timers/keepalive", NB_OP_MODIFY, keepalive_str);
+	nb_cli_enqueue_change(vty, "./timers/holdtime", NB_OP_MODIFY, holdtime_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_timers, no_bgp_timers_cli_cmd,
+	"no timers bgp [(0-65535) (0-65535)]",
+	NO_STR
+	"Adjust routing timers\n"
+	"BGP timers\n"
+	"Keepalive interval\n"
+	"Holdtime\n")
+{
+	nb_cli_enqueue_change(vty, "./timers/keepalive", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./timers/holdtime", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_minimum_holdtime, bgp_minimum_holdtime_cli_cmd,
+	"bgp minimum-holdtime (1-65535)$min_holdtime",
+	BGP_STR
+	"BGP minimum holdtime\n"
+	"Seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./timers/minimum-holdtime", NB_OP_MODIFY, min_holdtime_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_minimum_holdtime, no_bgp_minimum_holdtime_cli_cmd,
+	"no bgp minimum-holdtime [(1-65535)]",
+	NO_STR
+	BGP_STR
+	"BGP minimum holdtime\n"
+	"Seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./timers/minimum-holdtime", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_condadv_period, bgp_condadv_period_cli_cmd,
+	"[no$no] bgp conditional-advertisement timer (5-240)$period",
+	NO_STR
+	BGP_STR
+	"Conditional advertisement settings\n"
+	"Set period to rescan BGP table to check if condition is met\n"
+	"Period between BGP table scans, in seconds; default 60\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./timers/conditional-advertisement", NB_OP_DESTROY,
+				      NULL);
+	else
+		nb_cli_enqueue_change(vty, "./timers/conditional-advertisement", NB_OP_MODIFY,
+				      period_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_def_originate_eval, bgp_def_originate_eval_cli_cmd,
+	"[no$no] bgp default-originate timer (0-65535)$timer",
+	NO_STR
+	BGP_STR
+	"Control default-originate\n"
+	"Set period to rescan BGP table to check if default-originate condition is met\n"
+	"Period between BGP table scans, in seconds; default 5\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./timers/default-originate", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./timers/default-originate", NB_OP_MODIFY, timer_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -485,6 +627,71 @@ static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_no
 {
 	vty_out(vty, " bgp ipv6-auto-ra %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_write_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, " write-quanta %u\n", yang_dnode_get_uint8(dnode, NULL));
+}
+
+static void instance_read_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, " read-quanta %u\n", yang_dnode_get_uint8(dnode, NULL));
+}
+
+static void instance_coalesce_time_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	vty_out(vty, " coalesce-time %u\n", yang_dnode_get_uint32(dnode, NULL));
+}
+
+/* Joint emission of 'timers bgp <keepalive> <holdtime>': registered on the
+ * shared "timers" container rather than either leaf's own xpath, because
+ * the legacy config_write emits both values on a single line. A container-
+ * level cli_show fires once whenever any descendant leaf is configured
+ * (libyang implicitly materializes non-presence containers with data
+ * underneath), so the other timers-container leaves (minimum-holdtime,
+ * conditional-advertisement, default-originate) can trigger it too; guard
+ * on keepalive/holdtime actually being present before emitting.
+ */
+static void instance_timers_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	bool has_keepalive = yang_dnode_exists(dnode, "keepalive");
+	bool has_holdtime = yang_dnode_exists(dnode, "holdtime");
+	uint16_t keepalive = has_keepalive ? yang_dnode_get_uint16(dnode, "keepalive")
+					   : (uint16_t)DFLT_BGP_KEEPALIVE;
+	uint16_t holdtime = has_holdtime ? yang_dnode_get_uint16(dnode, "holdtime")
+					 : (uint16_t)DFLT_BGP_HOLDTIME;
+
+	if (!has_keepalive && !has_holdtime)
+		return;
+
+	vty_out(vty, " timers bgp %u %u\n", keepalive, holdtime);
+}
+
+static void instance_timers_minimum_holdtime_cli_write(struct vty *vty,
+						       const struct lyd_node *dnode,
+						       bool show_defaults)
+{
+	vty_out(vty, " bgp minimum-holdtime %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void instance_timers_conditional_advertisement_cli_write(struct vty *vty,
+								const struct lyd_node *dnode,
+								bool show_defaults)
+{
+	vty_out(vty, " bgp conditional-advertisement timer %u\n",
+		yang_dnode_get_uint8(dnode, NULL));
+}
+
+static void instance_timers_default_originate_cli_write(struct vty *vty,
+							const struct lyd_node *dnode,
+							bool show_defaults)
+{
+	vty_out(vty, " bgp default-originate timer %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -551,6 +758,48 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/log-neighbor-changes",
 			.cbs = {
 				.cli_show = instance_log_neighbor_changes_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/write-quanta",
+			.cbs = {
+				.cli_show = instance_write_quanta_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/read-quanta",
+			.cbs = {
+				.cli_show = instance_read_quanta_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/coalesce-time",
+			.cbs = {
+				.cli_show = instance_coalesce_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/timers",
+			.cbs = {
+				.cli_show = instance_timers_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/timers/minimum-holdtime",
+			.cbs = {
+				.cli_show = instance_timers_minimum_holdtime_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/timers/conditional-advertisement",
+			.cbs = {
+				.cli_show = instance_timers_conditional_advertisement_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/timers/default-originate",
+			.cbs = {
+				.cli_show = instance_timers_default_originate_cli_write,
 			}
 		},
 		{
@@ -626,6 +875,17 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_cli_cmd);
 	install_element(BGP_NODE, &bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
+	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
+	install_element(BGP_NODE, &bgp_coalesce_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_coalesce_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_timers_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_timers_cli_cmd);
+	install_element(BGP_NODE, &bgp_minimum_holdtime_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_minimum_holdtime_cli_cmd);
+	install_element(BGP_NODE, &bgp_condadv_period_cli_cmd);
+	install_element(BGP_NODE, &bgp_def_originate_eval_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

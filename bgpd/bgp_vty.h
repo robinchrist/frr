@@ -165,10 +165,7 @@ extern int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 extern bool bgp_log_neighbor_changes_default(void);
 extern void bgp_config_write_update_delay(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_advertisement_delay(struct vty *vty, struct bgp *bgp);
-extern void bgp_config_write_wpkt_quanta(struct vty *vty, struct bgp *bgp);
-extern void bgp_config_write_rpkt_quanta(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_listen(struct vty *vty, struct bgp *bgp);
-extern void bgp_config_write_coalesce_time(struct vty *vty, struct bgp *bgp);
 extern int bgp_vty_return(struct vty *vty, enum bgp_create_error_code ret);
 extern bool bgp_config_inprocess(void);
 extern struct peer *peer_and_group_lookup_vty(struct vty *vty,

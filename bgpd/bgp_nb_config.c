@@ -12,6 +12,10 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_nb.h"
+#include "bgpd/bgp_io.h"
+#include "bgpd/bgp_route.h"
+#include "bgpd/bgp_updgrp.h"
+#include "bgpd/bgp_conditional_adv.h"
 
 /* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
  * from, so unlike the instance-scoped callbacks below there is no
@@ -2147,96 +2151,100 @@ int instance_max_med_administrative_med_destroy(struct nb_cb_destroy_args *args)
 
 int instance_write_quanta_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/write-quanta");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	atomic_store_explicit(&bgp->wpkt_quanta, yang_dnode_get_uint8(args->dnode, NULL),
+			      memory_order_relaxed);
 
 	return NB_OK;
 }
 
 int instance_write_quanta_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/write-quanta");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	atomic_store_explicit(&bgp->wpkt_quanta, BGP_WRITE_PACKET_MAX, memory_order_relaxed);
 
 	return NB_OK;
 }
 
 int instance_read_quanta_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/read-quanta");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	atomic_store_explicit(&bgp->rpkt_quanta, yang_dnode_get_uint8(args->dnode, NULL),
+			      memory_order_relaxed);
 
 	return NB_OK;
 }
 
 int instance_read_quanta_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/read-quanta");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	atomic_store_explicit(&bgp->rpkt_quanta, BGP_READ_PACKET_MAX, memory_order_relaxed);
 
 	return NB_OK;
 }
 
 int instance_coalesce_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/coalesce-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->heuristic_coalesce = false;
+	bgp->coalesce_time = yang_dnode_get_uint32(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_coalesce_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/coalesce-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->heuristic_coalesce = true;
+	bgp->coalesce_time = BGP_DEFAULT_SUBGROUP_COALESCE_TIME;
 
 	return NB_OK;
 }
@@ -2865,162 +2873,207 @@ int instance_network_import_check_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* 'timers bgp <keepalive> <holdtime>' sets both leaves in one CLI line
+ * (bgp_cli.c's bgp_timers_cli_cmd enqueues both changes in a single
+ * transaction), so either leaf's APPLY may run first; each reads its
+ * sibling out of the same candidate dnode tree via a relative xpath,
+ * falling back to the instance's current value if the sibling was never
+ * configured (e.g. a hypothetical single-leaf northbound edit outside the
+ * CLI). Both converge on the same bgp_timers_set() call the legacy DEFUN
+ * used, preserving its keepalive-vs-holdtime/3 clamp exactly.
+ */
 int instance_timers_keepalive_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/keepalive");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	uint16_t keepalive, holdtime;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	keepalive = yang_dnode_get_uint16(args->dnode, NULL);
+	holdtime = yang_dnode_exists(args->dnode, "../holdtime")
+			   ? yang_dnode_get_uint16(args->dnode, "../holdtime")
+			   : bgp->default_holdtime;
+
+	bgp_timers_set(NULL, bgp, keepalive, holdtime, DFLT_BGP_CONNECT_RETRY,
+		       BGP_DEFAULT_DELAYOPEN);
 
 	return NB_OK;
 }
 
 int instance_timers_keepalive_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/keepalive");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_timers_set(NULL, bgp, DFLT_BGP_KEEPALIVE, DFLT_BGP_HOLDTIME, DFLT_BGP_CONNECT_RETRY,
+		       BGP_DEFAULT_DELAYOPEN);
 
 	return NB_OK;
 }
 
 int instance_timers_holdtime_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	uint16_t keepalive, holdtime;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/holdtime");
-		return NB_ERR_VALIDATION;
+		holdtime = yang_dnode_get_uint16(args->dnode, NULL);
+		if (holdtime < 3 && holdtime != 0) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "hold time value must be either 0 or greater than 3");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	holdtime = yang_dnode_get_uint16(args->dnode, NULL);
+	keepalive = yang_dnode_exists(args->dnode, "../keepalive")
+			    ? yang_dnode_get_uint16(args->dnode, "../keepalive")
+			    : bgp->default_keepalive;
+
+	bgp_timers_set(NULL, bgp, keepalive, holdtime, DFLT_BGP_CONNECT_RETRY,
+		       BGP_DEFAULT_DELAYOPEN);
 
 	return NB_OK;
 }
 
 int instance_timers_holdtime_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/holdtime");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_timers_set(NULL, bgp, DFLT_BGP_KEEPALIVE, DFLT_BGP_HOLDTIME, DFLT_BGP_CONNECT_RETRY,
+		       BGP_DEFAULT_DELAYOPEN);
 
 	return NB_OK;
 }
 
 int instance_timers_minimum_holdtime_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/minimum-holdtime");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->default_min_holdtime = yang_dnode_get_uint16(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_timers_minimum_holdtime_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/minimum-holdtime");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->default_min_holdtime = 0;
 
 	return NB_OK;
 }
 
 int instance_timers_conditional_advertisement_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/conditional-advertisement");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->condition_check_period = yang_dnode_get_uint8(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_timers_conditional_advertisement_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/conditional-advertisement");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+		UNSET_FLAG(peer->sflags, PEER_STATUS_COND_ADV_PENDING);
+
+	bgp->condition_check_period = DEFAULT_CONDITIONAL_ROUTES_POLL_TIME;
 
 	return NB_OK;
 }
 
 int instance_timers_default_originate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/default-originate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->rmap_def_originate_eval_timer = yang_dnode_get_uint16(args->dnode, NULL);
+	event_cancel(&bgp->t_rmap_def_originate_eval);
 
 	return NB_OK;
 }
 
 int instance_timers_default_originate_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/timers/default-originate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->rmap_def_originate_eval_timer = 0;
+	event_cancel(&bgp->t_rmap_def_originate_eval);
 
 	return NB_OK;
 }
