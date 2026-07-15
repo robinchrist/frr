@@ -10,6 +10,7 @@ Northbound API
    architecture
    transactional-cli
    retrofitting-configuration-commands
+   bgpd-proteus-conversion
    operational-data-rpcs-and-notifications
    advanced-topics
    yang-tools
