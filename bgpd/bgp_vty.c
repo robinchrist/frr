@@ -23166,11 +23166,66 @@ DEFPY (no_bgp_outq_limit,
 }
 
 
+/*
+ * Local node-entry commands for the mgmtd-owned interface/vrf nodes.
+ *
+ * frr-interface and frr-vrf are fully converted to mgmtd, but bgpd still
+ * owns legacy subcommands under both nodes ("mpls bgp forwarding" and
+ * friends, "rpki" inside a vrf).  bgpd must therefore be able to enter the
+ * nodes on its own vty without running lib's northbound-backed
+ * create/destroy commands: a local northbound commit would race mgmtd's
+ * concurrent backend config push for bgpd's single northbound transaction
+ * during config load.  Same pattern as the surviving legacy router_bgp
+ * DEFUN_NOSH: an idempotent get plus node entry, no northbound operation.
+ */
+DEFPY_NOSH(bgp_interface, bgp_interface_cmd,
+	   "interface IFNAME [vrf NAME$vrf_name]",
+	   "Select an interface to configure\n"
+	   "Interface's name\n" VRF_CMD_HELP_STR)
+{
+	struct interface *ifp;
+
+	if (!vrf_name)
+		vrf_name = VRF_DEFAULT_NAME;
+
+	/* get, not lookup: the config may arrive before zebra's interface
+	 * announcements, and bgp_if_new_hook sets up ifp->info on creation
+	 * either way.
+	 */
+	ifp = if_get_by_name(ifname, VRF_UNKNOWN, vrf_name);
+	VTY_PUSH_CONTEXT(INTERFACE_NODE, ifp);
+
+	return CMD_SUCCESS;
+}
+
+DEFPY_NOSH(bgp_vrf, bgp_vrf_cmd,
+	   "vrf NAME$vrf_name",
+	   "Select a VRF to configure\n"
+	   "VRF's name\n")
+{
+	struct vrf *vrf;
+
+	if (strlen(vrf_name) > VRF_NAMSIZ) {
+		vty_out(vty,
+			"%% VRF name %s invalid: length exceeds %d bytes\n",
+			vrf_name, VRF_NAMSIZ);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	vrf = vrf_get(VRF_UNKNOWN, vrf_name);
+	VTY_PUSH_CONTEXT(VRF_NODE, vrf);
+
+	return CMD_SUCCESS;
+}
+
 /* Initialization of BGP interface. */
 static void bgp_vty_if_init(void)
 {
-	/* Install interface node. */
-	if_cmd_init(config_write_interface);
+	/* Install interface node, without lib's mgmtd-owned interface
+	 * create/destroy commands.
+	 */
+	if_cmd_init_node(config_write_interface);
+	install_element(CONFIG_NODE, &bgp_interface_cmd);
 
 	/* "mpls bgp forwarding" commands. */
 	install_element(INTERFACE_NODE, &mpls_bgp_forwarding_cmd);
@@ -23184,6 +23239,11 @@ void bgp_vty_init(void)
 	cmd_variable_handler_register(bgp_var_peergroup);
 
 	cmd_init_config_callbacks(bgp_config_start, bgp_config_end);
+
+	/* Local VRF_NODE entry (the node itself is installed by
+	 * bgp_vrf_init(), which runs earlier).
+	 */
+	install_element(CONFIG_NODE, &bgp_vrf_cmd);
 
 	/* Install bgp top node. */
 	install_node(&bgp_node);

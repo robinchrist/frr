@@ -37,7 +37,9 @@ daemon_flags = {
     "lib/filter.c": "VTYSH_ACL_SHOW",
     "lib/filter_cli.c": "VTYSH_ACL_CONFIG",
     "lib/host_cli.c": "VTYSH_NON_MGMTD",
-    "lib/if.c": "VTYSH_INTERFACE",
+    # not VTYSH_INTERFACE: bgpd registers the node but not lib's mgmtd-owned
+    # interface commands (see bgpd's local interface node-entry DEFPY_NOSH)
+    "lib/if.c": "VTYSH_INTERFACE_SUBSET",
     "lib/keychain_cli.c": "VTYSH_KEYS",
     "lib/mgmt_be_client.c": "VTYSH_MGMT_BACKEND",
     "lib/mgmt_fe_client.c": "VTYSH_MGMT_FRONTEND",
@@ -50,7 +52,6 @@ daemon_flags = {
     "lib/routemap_cli.c": "VTYSH_RMAP_CONFIG",
     "lib/spf_backoff.c": "VTYSH_ISISD",
     "lib/event.c": "VTYSH_ALL",
-    "lib/vrf.c": "VTYSH_VRF",
     "lib/vty.c": "VTYSH_ALL",
 }
 
@@ -210,6 +211,16 @@ class CommandEntry:
 
         if defun_file in daemon_flags:
             return {daemon_flags[defun_file]}
+
+        if defun_file == "lib/vrf.c":
+            # the "debug vrf" commands are plain DEFUNs every daemon
+            # installs; "no vrf" is a mgmtd-owned northbound command and
+            # must not reach bgpd (which registers VRF_NODE but not lib's
+            # vrf create/destroy commands, see bgpd's local vrf
+            # node-entry DEFPY_NOSH)
+            if "debug" in self.name:
+                return {"VTYSH_VRF"}
+            return {"VTYSH_INTERFACE_SUBSET"}
 
         v6_cmd = "ipv6" in self.name
         if defun_file == "lib/plist.c":

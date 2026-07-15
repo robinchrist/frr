@@ -387,7 +387,11 @@ static int bgp_vrf_config_write(struct vty *vty)
 static void bgp_vrf_init(void)
 {
 	vrf_init(bgp_vrf_new, bgp_vrf_enable, bgp_vrf_disable, bgp_vrf_delete);
-	vrf_cmd_init(bgp_vrf_config_write);
+	/* Node only: lib's vrf create/destroy commands are mgmtd-owned and
+	 * must not run a local northbound commit in a backend daemon; bgpd's
+	 * own node-entry command lives in bgp_vty.c (bgp_vrf_cmd).
+	 */
+	vrf_cmd_init_node(bgp_vrf_config_write);
 }
 
 static void bgp_vrf_terminate(void)
