@@ -162,6 +162,7 @@ extern const char *get_afi_safi_str(afi_t afi, safi_t safi, bool for_json);
 extern int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 		       enum bgp_instance_type inst_type, const char *as_pretty,
 		       enum asnotation_mode asnotation);
+extern bool bgp_log_neighbor_changes_default(void);
 extern void bgp_config_write_update_delay(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_advertisement_delay(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_wpkt_quanta(struct vty *vty, struct bgp *bgp);

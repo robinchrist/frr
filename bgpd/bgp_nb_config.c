@@ -2,8 +2,14 @@
 #include <zebra.h>
 
 #include "lib/northbound.h"
+#include "lib/vrf.h"
+#include "lib/asn.h"
+#include "lib/log.h"
+#include "lib/yang_wrappers.h"
 
 #include "bgpd/bgpd.h"
+#include "bgpd/bgp_vty.h"
+#include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_nb.h"
 
 int process_route_map_delay_timer_modify(struct nb_cb_modify_args *args)
@@ -534,17 +540,197 @@ int process_output_queue_limit_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/*
+ * Milestone 1 slice: 'router bgp ASN [<view|vrf> NAME] [as-notation ...]',
+ * 'bgp router-id', '[no] bgp log-neighbor-changes'. The instance-type,
+ * autonomous-system and as-notation leaves below are consumed directly out
+ * of the instance subtree by instance_create()/instance_destroy() (the
+ * whole 'router bgp ...' line lands as a single YANG edit). A changed ASN
+ * on a running instance means destroy-and-recreate, not modify: a config
+ * file's 'no router bgp X' + 'router bgp Y' arrives as one batched mgmtd
+ * commit whose datastore diff collapses to an autonomous-system leaf
+ * modify (the list key is the vrf, not the ASN), and the legacy file-load
+ * semantics for that sequence are a fresh instance.
+ */
+
+/* The bgp struct is always looked up by vrf/view name, never kept as an
+ * nb_running_set_entry() pointer: in a mixed legacy/converted daemon the
+ * legacy CLI can delete and recreate the instance underneath the northbound
+ * layer (e.g. an ASN change during config replay), and a stored pointer
+ * would dangle. Lookup-by-name makes every callback converge on whatever
+ * instance currently exists.
+ */
+static struct bgp *bgp_nb_instance_lookup(const struct lyd_node *dnode)
+{
+	const struct lyd_node *instance_dnode = yang_dnode_get_parent(dnode, "instance");
+	const char *vrf = yang_dnode_get_string(instance_dnode, "vrf");
+
+	if (strmatch(vrf, VRF_DEFAULT_NAME))
+		return bgp_get_default();
+
+	return bgp_lookup_by_name(vrf);
+}
+
+static as_t bgp_nb_instance_get_asn(const struct lyd_node *instance_dnode)
+{
+	if (yang_dnode_exists(instance_dnode, "autonomous-system/plain"))
+		return yang_dnode_get_uint32(instance_dnode, "autonomous-system/plain");
+
+	return ((as_t)yang_dnode_get_uint16(instance_dnode, "autonomous-system/asdot/high") << 16) |
+	       yang_dnode_get_uint16(instance_dnode, "autonomous-system/asdot/low");
+}
+
+static void bgp_nb_instance_get_asn_pretty(const struct lyd_node *instance_dnode, as_t as,
+					   char *buf, size_t buflen)
+{
+	enum asnotation_mode mode = yang_dnode_exists(instance_dnode, "autonomous-system/plain")
+					    ? ASNOTATION_PLAIN
+					    : ASNOTATION_DOTPLUS;
+
+	asn_asn2string(&as, buf, buflen, mode);
+}
+
+static int bgp_nb_instance_apply(const struct lyd_node *instance_dnode)
+{
+	struct bgp *bgp;
+	const char *vrf;
+	const char *name;
+	enum bgp_instance_type inst_type;
+	as_t as;
+	char as_pretty[ASN_STRING_MAX_SIZE];
+	enum asnotation_mode asnotation = ASNOTATION_UNDEFINED;
+	int ret;
+
+	vrf = yang_dnode_get_string(instance_dnode, "vrf");
+	as = bgp_nb_instance_get_asn(instance_dnode);
+	bgp_nb_instance_get_asn_pretty(instance_dnode, as, as_pretty, sizeof(as_pretty));
+
+	if (strmatch(vrf, VRF_DEFAULT_NAME)) {
+		name = NULL;
+		inst_type = BGP_INSTANCE_TYPE_DEFAULT;
+	} else if (strmatch(yang_dnode_get_string(instance_dnode, "instance-type"), "view")) {
+		name = vrf;
+		inst_type = BGP_INSTANCE_TYPE_VIEW;
+	} else {
+		name = vrf;
+		inst_type = BGP_INSTANCE_TYPE_VRF;
+	}
+
+	if (yang_dnode_exists(instance_dnode, "as-notation")) {
+		const char *notation = yang_dnode_get_string(instance_dnode, "as-notation");
+
+		if (strmatch(notation, "dot+"))
+			asnotation = ASNOTATION_DOTPLUS;
+		else if (strmatch(notation, "dot"))
+			asnotation = ASNOTATION_DOT;
+		else
+			asnotation = ASNOTATION_PLAIN;
+	}
+
+	ret = bgp_get_vty(&bgp, &as, name, inst_type, as_pretty, asnotation);
+	if (ret < 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: bgp_get_vty() failed for vrf %s: %d",
+			 __func__, vrf, ret);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+/* Re-apply every configured node under a freshly recreated instance by
+ * invoking its APPLY callback against the current datastore subtree. A
+ * destroy-and-recreate triggered by an ASN change replaces the struct bgp
+ * with one carrying compiled-in defaults, but the commit's datastore diff
+ * only covers the autonomous-system leaves - the other instance leaves
+ * kept their values, so no callback fires for them and their runtime
+ * state would silently revert to the defaults. All instance callbacks
+ * look the struct up by vrf name and are idempotent, so replaying the
+ * whole subtree is safe even for leaves whose callback also runs
+ * regularly later in the same commit.
+ */
+static int bgp_nb_instance_replay(const struct lyd_node *instance_dnode)
+{
+	struct lyd_node *elem;
+	int ret = NB_OK;
+
+	LYD_TREE_DFS_BEGIN (instance_dnode, elem) {
+		if (elem != instance_dnode && elem->schema && elem->schema->priv) {
+			const struct nb_node *nb_node = elem->schema->priv;
+			char errmsg[256] = "";
+			int cbret = NB_OK;
+
+			if ((elem->schema->nodetype & (LYS_LEAF | LYS_LEAFLIST)) &&
+			    nb_node->cbs.modify) {
+				struct nb_cb_modify_args args = {
+					.event = NB_EV_APPLY,
+					.dnode = elem,
+					.errmsg = errmsg,
+					.errmsg_len = sizeof(errmsg),
+				};
+
+				cbret = nb_node->cbs.modify(&args);
+			} else if (nb_node->cbs.create) {
+				struct nb_cb_create_args args = {
+					.event = NB_EV_APPLY,
+					.dnode = elem,
+					.errmsg = errmsg,
+					.errmsg_len = sizeof(errmsg),
+				};
+
+				cbret = nb_node->cbs.create(&args);
+			}
+
+			if (cbret != NB_OK) {
+				flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+					 "%s: replay of %s failed: %d (%s)", __func__,
+					 elem->schema->name, cbret, errmsg);
+				ret = cbret;
+			}
+		}
+		LYD_TREE_DFS_END(instance_dnode, elem);
+	}
+
+	return ret;
+}
+
+/* Shared APPLY body of the autonomous-system leaf callbacks: recreate the
+ * instance when the (whole-subtree) ASN no longer matches the running bgp
+ * struct. Idempotent, since several of these leaves can change in one
+ * commit (e.g. a plain <-> asdot switch) - the first one recreates, the
+ * rest see a matching ASN.
+ */
+static int bgp_nb_instance_asn_apply(const struct lyd_node *dnode)
+{
+	const struct lyd_node *instance_dnode = yang_dnode_get_parent(dnode, "instance");
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	int ret;
+
+	if (!bgp)
+		/* recreated by the legacy CLI or created by
+		 * instance_create() later in this same commit */
+		return NB_OK;
+
+	if (bgp_nb_instance_get_asn(instance_dnode) == bgp->as)
+		return NB_OK;
+
+	bgp_delete(bgp);
+
+	ret = bgp_nb_instance_apply(instance_dnode);
+	if (ret != NB_OK)
+		return ret;
+
+	return bgp_nb_instance_replay(instance_dnode);
+}
+
 int instance_create(struct nb_cb_create_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_instance_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -552,14 +738,17 @@ int instance_create(struct nb_cb_create_args *args)
 
 int instance_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (bgp)
+			bgp_delete(bgp);
 		break;
 	}
 
@@ -568,158 +757,81 @@ int instance_destroy(struct nb_cb_destroy_args *args)
 
 int instance_instance_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/instance-type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* consumed directly by instance_create()/instance_destroy() */
 	return NB_OK;
 }
 
 int instance_autonomous_system_plain_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_instance_asn_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_autonomous_system_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* the instance 'must' forbids removing the ASN without removing the
+	 * whole instance, so this only fires alongside instance_destroy() */
 	return NB_OK;
 }
 
 int instance_autonomous_system_asdot_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_instance_asn_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_autonomous_system_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
 	return NB_OK;
 }
 
 int instance_autonomous_system_asdot_high_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/asdot/high");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_instance_asn_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_autonomous_system_asdot_low_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/autonomous-system/asdot/low");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_instance_asn_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_as_notation_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/as-notation");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* consumed directly by instance_create() */
 	return NB_OK;
 }
 
 int instance_as_notation_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/as-notation");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
 	return NB_OK;
 }
 
 int instance_router_id_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct in_addr router_id;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/router-id");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		yang_dnode_get_ipv4(&router_id, args->dnode, NULL);
+		bgp_router_id_static_set(bgp, router_id);
 		break;
 	}
 
@@ -728,14 +840,18 @@ int instance_router_id_modify(struct nb_cb_modify_args *args)
 
 int instance_router_id_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/router-id");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_router_id_static_set(bgp, (struct in_addr){ .s_addr = INADDR_ANY });
 		break;
 	}
 
@@ -888,14 +1004,21 @@ int instance_suppress_fib_pending_advertisement_delay_destroy(struct nb_cb_destr
 
 int instance_log_neighbor_changes_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/log-neighbor-changes");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
 		break;
 	}
 
@@ -904,14 +1027,21 @@ int instance_log_neighbor_changes_modify(struct nb_cb_modify_args *args)
 
 int instance_log_neighbor_changes_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/log-neighbor-changes");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_log_neighbor_changes_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_LOG_NEIGHBOR_CHANGES);
 		break;
 	}
 

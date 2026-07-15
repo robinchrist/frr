@@ -27,8 +27,10 @@
 #include "libfrr.h"
 #include "ns.h"
 #include "libagentx.h"
+#include "mgmt_be_client.h"
 
 #include "bgpd/bgpd.h"
+#include "bgpd/bgp_nb.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_mplsvpn.h"
@@ -119,6 +121,7 @@ struct zebra_privs_t bgpd_privs = {
 };
 
 static struct frr_daemon_info bgpd_di;
+static struct mgmt_be_client *bgpd_mgmt_be_client;
 
 /* SIGHUP handler. */
 void sighup(void)
@@ -135,6 +138,9 @@ FRR_NORETURN void sigint(void)
 
 	/* Disable BFD events to avoid wasting processing. */
 	bfd_protocol_integration_set_shutdown(true);
+
+	mgmt_be_client_destroy(bgpd_mgmt_be_client);
+	bgpd_mgmt_be_client = NULL;
 
 	bgp_terminate();
 
@@ -405,12 +411,20 @@ static const struct frr_yang_module_info *const bgpd_yang_modules[] = {
 	&frr_route_map_info,
 	&frr_vrf_info,
 	&frr_bgp_route_map_info,
+	&proteus_bgp_nb_info,
+	&proteus_filter_info,
+	&proteus_bgp_filter_info,
+	&proteus_bfd_info,
+	&proteus_interface_info,
+	&proteus_route_map_info,
 };
 
 /* clang-format off */
 FRR_DAEMON_INFO(bgpd, BGP,
 	.vty_port = BGP_VTY_PORT,
 	.proghelp = "Implementation of the BGP routing protocol.",
+
+	.flags = FRR_MGMTD_BACKEND,
 
 	.signals = bgp_signals,
 	.n_signals = array_size(bgp_signals),
@@ -420,6 +434,18 @@ FRR_DAEMON_INFO(bgpd, BGP,
 	.yang_modules = bgpd_yang_modules,
 	.n_yang_modules = array_size(bgpd_yang_modules),
 );
+
+static const char *const bgpd_config_xpaths[] = {
+	"/frr-host:host",
+	"/frr-logging:logging",
+	"/proteus-bgp:instance",
+	"/proteus-bgp:process",
+};
+
+struct mgmt_be_client_cbs bgpd_be_client_data = {
+	.config_xpaths = bgpd_config_xpaths,
+	.nconfig_xpaths = array_size(bgpd_config_xpaths),
+};
 /* clang-format on */
 
 #define DEPRECATED_OPTIONS ""
@@ -567,6 +593,8 @@ int main(int argc, char **argv)
 	}
 
 	bgp_if_init();
+
+	bgpd_mgmt_be_client = mgmt_be_client_create("bgpd", &bgpd_be_client_data, 0, bm->master);
 
 	frr_config_fork();
 	/* must be called after fork() */

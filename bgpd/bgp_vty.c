@@ -731,6 +731,11 @@ static const char *get_bgp_default_af_flag(afi_t afi, safi_t safi)
 	return "DEV ESCAPE";
 }
 
+bool bgp_log_neighbor_changes_default(void)
+{
+	return DFLT_BGP_LOG_NEIGHBOR_CHANGES;
+}
+
 int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 		enum bgp_instance_type inst_type, const char *as_pretty,
 		enum asnotation_mode asnotation)
