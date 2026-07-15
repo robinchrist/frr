@@ -1,0 +1,140 @@
+module proteus-interface {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/interface";
+  prefix proteus-interface;
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "Minimal interface objects. Interfaces are zebra's surface, not
+     bgpd's, and frr-proteus is BGP-only -- full interface modeling
+     (addresses, link parameters, EVPN MH ethernet-segments, ...) is
+     deliberately out of scope. This module exists primarily as a
+     leafref target so that interface references elsewhere (route-map
+     'match interface', neighbor 'update-source'/'interface') are
+     checked against a declared set of interface names instead of
+     being free-form strings.
+
+     CLI text (lib/if.c cli_show_interface/cli_show_interface_desc):
+
+       interface NAME
+        description LINE
+       exit
+
+     The optional 'interface NAME vrf VRF' form is only emitted with
+     the netns VRF backend and is not modeled.
+
+     One zebra interface knob is modeled beyond name/description:
+     'ipv6 nd ra-interval', which real-world BGP-unnumbered underlay
+     configs set on every fabric port (RAs are how unnumbered eBGP
+     learns the peer's link-local next hop):
+
+       interface NAME
+        ipv6 nd ra-interval <SECS|msec MSECS>
+       exit
+
+     (zebra/zebra_cli.c ipv6_nd_ra_interval_cmd /
+     lib_interface_zebra_ipv6_router_advertisements_max_rtr_adv_interval_cli_write).
+
+     Two interface-level knobs that ARE bgpd's own (DEFPYs in
+     bgpd/bgp_vty.c installed at INTERFACE_NODE, written back by
+     bgpd's config_write_interface_one) are also modeled:
+     'mpls bgp forwarding' and
+     'mpls bgp l3vpn-multi-domain-switching'.";
+
+  revision 2026-07-06 {
+    description
+      "Add the ipv6-nd ra-interval knob and the bgpd interface-level
+       'mpls bgp ...' flags.";
+  }
+  revision 2026-07-05 {
+    description
+      "Initial revision.";
+  }
+
+  list interface {
+    key "name";
+    description
+      "One 'interface NAME' block (lib/if.c interface_cmd:
+       'interface IFNAME [vrf NAME]').";
+
+    leaf name {
+      type string {
+        length "1..16";
+      }
+      description
+        "Interface name (IFNAME). Linux limits interface names to
+         15 characters plus NUL (IFNAMSIZ = 16); FRR's own
+         frr-interface.yang leaves the name unconstrained, but the
+         kernel bound is the real-world limit.";
+    }
+
+    leaf description {
+      type string;
+      description
+        "'description LINE' inside the interface block
+         (lib/if.c interface_desc_cmd / cli_show_interface_desc).";
+    }
+
+    leaf mpls-bgp-forwarding {
+      type boolean;
+      default "false";
+      description
+        "'mpls bgp forwarding' (mpls_bgp_forwarding_cmd in
+         bgpd/bgp_vty.c): enable MPLS forwarding for directly
+         connected eBGP peers on this interface. Only the positive
+         form is ever written back.";
+    }
+
+    leaf mpls-bgp-l3vpn-multi-domain-switching {
+      type boolean;
+      default "false";
+      description
+        "'mpls bgp l3vpn-multi-domain-switching'
+         (mpls_bgp_l3vpn_multi_domain_switching_cmd in
+         bgpd/bgp_vty.c): bind a local MPLS label to incoming L3VPN
+         updates (inter-AS option B / multi-domain). Only the
+         positive form is ever written back.";
+    }
+
+    container ipv6-nd {
+      description
+        "IPv6 neighbor-discovery / router-advertisement settings.
+         Only ra-interval is modeled (see the module
+         description).";
+
+      choice ra-interval-units {
+        description
+          "'ipv6 nd ra-interval <(1-1800)|msec (70-1800000)>'
+           (zebra/zebra_cli.c ipv6_nd_ra_interval_cmd): one
+           interval, in whole seconds or in milliseconds. The
+           cli_write emits the msec form exactly when the stored
+           interval isn't a whole second, so the two cases
+           round-trip.";
+
+        case seconds {
+          leaf ra-interval {
+            type uint16 {
+              range "1..1800";
+            }
+            units "seconds";
+            description
+              "'ipv6 nd ra-interval (1-1800)'.";
+          }
+        }
+        case milliseconds {
+          leaf ra-interval-msec {
+            type uint32 {
+              range "70..1800000";
+            }
+            units "milliseconds";
+            description
+              "'ipv6 nd ra-interval msec (70-1800000)'.";
+          }
+        }
+      }
+    }
+  }
+}

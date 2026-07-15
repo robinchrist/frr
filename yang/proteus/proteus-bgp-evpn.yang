@@ -1,0 +1,522 @@
+module proteus-bgp-evpn {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/bgp-evpn";
+  prefix proteus-bgp-evpn;
+
+  import ietf-inet-types {
+    prefix inet;
+  }
+  import ietf-yang-types {
+    prefix yang;
+  }
+  import proteus-types {
+    prefix pt;
+  }
+  import proteus-route-map {
+    prefix rmap;
+  }
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "L2VPN EVPN address-family configuration for FRR bgpd. This module
+     defines no data nodes of its own -- it only exports the groupings
+     that proteus-bgp.yang 'uses' inside its l2vpn-evpn containers, so
+     the complete configuration tree stays visible top-down in
+     proteus-bgp.yang while the EVPN field definitions live in their
+     own file (one file per address family, same split as Nokia's
+     srl_nokia-bgp / srl_nokia-bgp-evpn). Deliberately no 'augment':
+     plain import + uses keeps the tree readable in one place.
+
+     Coverage: everything bgp_config_write_evpn_info() +
+     write_vni_config() (bgpd/bgp_evpn_vty.c) and
+     bgp_config_write_network_evpn() (bgpd/bgp_route.c) emit -- i.e.
+     the whole persistable 'address-family l2vpn evpn' surface.
+     Per-neighbor EVPN settings need nothing here: proteus-bgp.yang's
+     neighbor-af grouping covers every family. Zebra-side Ethernet
+     Segment (multihoming) config -- 'evpn mh es-id' on interfaces --
+     is out of scope entirely: it is zebra's surface, not bgpd's (the
+     bgpd-side MH knobs like ead-es-frag ARE modeled below).";
+
+  revision 2026-07-05 {
+    description
+      "Initial revision (topotest-driven subset), expanded the same
+       day to the full bgp_config_write_evpn_info surface: autort,
+       mac-vrf soo, multihoming knobs, duplicate-address detection,
+       default-originate, advertise-pip, per-VNI gateway/SVI-IP
+       overrides and type-5 'network' statements.";
+  }
+
+  typedef flooding-mode {
+    type enumeration {
+      enum disable {
+        description
+          "Do not flood any BUM traffic to this VNI's remote VTEPs.";
+      }
+      enum head-end-replication {
+        description
+          "Ingress replication: flood BUM traffic to each remote VTEP
+           individually (FRR's default).";
+      }
+    }
+    description
+      "'flooding <disable|head-end-replication>'
+       (bgp_evpn_flood_control_cmd / bgp_evpn_flood_control_vni_cmd),
+       settable at the address-family level and per VNI.";
+  }
+
+  grouping vni-route-targets {
+    description
+      "Per-VNI route-target configuration (bgp_evpn_vni_rt_cmd: one
+       'route-target <import|export|both> RT' line per entry). Fully
+       qualified route targets only -- the per-VNI grammar has no
+       'auto' or wildcard form, hence no such fields here.";
+
+    container route-target-import {
+      description
+        "'route-target import <RT>' entries.";
+      uses pt:route-target-set;
+    }
+    container route-target-export {
+      description
+        "'route-target export <RT>' entries.";
+      uses pt:route-target-set;
+    }
+    container route-target-both {
+      description
+        "'route-target both <RT>' entries.";
+      uses pt:route-target-set;
+    }
+  }
+
+  grouping vrf-route-targets {
+    description
+      "Per-VRF-instance route-target configuration
+       (bgp_evpn_vrf_rt_cmd; the 'auto' sentinel comes via
+       bgp_evpn_vrf_rt_auto_cmd and is the explicit 'auto' leaf, not
+       a value). Only *import* may use the wildcard form '*:NN'
+       (BGP_VRF_RT_WILD); export is always fully qualified, and
+       'both' -- being import+export in one line -- is therefore
+       fully qualified too, hence only import has wildcard/auto
+       fields at all.";
+
+    container route-target-import {
+      description
+        "'route-target import ...' configuration.";
+      uses pt:route-target-set;
+      leaf-list wildcard {
+        type uint32;
+        description
+          "'route-target import *:NN' entries: only the local
+           administrator is given, any global administrator
+           matches.";
+      }
+      leaf auto {
+        type boolean;
+        default "false";
+        description
+          "'route-target import auto': derive the import RT from
+           AS:VNI (or per RFC 8365 with autort-rfc8365-compatible).
+           FRR stores a 'both auto' input as the import and export
+           flags and writes two lines back -- set both auto leaves
+           for that.";
+      }
+    }
+    container route-target-export {
+      description
+        "'route-target export ...' configuration.";
+      uses pt:route-target-set;
+      leaf auto {
+        type boolean;
+        default "false";
+        description
+          "'route-target export auto'.";
+      }
+    }
+    container route-target-both {
+      description
+        "'route-target both <RT>' entries.";
+      uses pt:route-target-set;
+    }
+  }
+
+  grouping advertise-unicast {
+    description
+      "'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map NAME]'
+       (bgp_evpn_advertise_type5_cmd): originate EVPN type-5 routes
+       from this VRF's unicast table. Per-VRF instance only.
+       gateway-ip and the plain form are alternatives of the same
+       command -- FRR writes exactly one of them.";
+
+    leaf enabled {
+      type boolean;
+      default "false";
+      description
+        "Emit the 'advertise ... unicast' line at all.";
+    }
+    leaf gateway-ip {
+      type boolean;
+      default "false";
+      description
+        "Advertise the gateway IP overlay index.";
+    }
+    leaf route-map {
+      type leafref {
+        path "/rmap:route-map/rmap:name";
+      }
+      description
+        "Filter/transform the advertised routes.";
+    }
+  }
+
+  grouping instance-l2vpn-evpn {
+    description
+      "Body of the instance-level 'address-family l2vpn evpn' block
+       (bgp_config_write_evpn_info in bgpd/bgp_evpn_vty.c). FRR
+       distinguishes the default instance's EVPN role
+       (advertise-all-vni, the per-VNI list, flooding, multihoming)
+       from a per-VRF instance's EVPN role (rd, route-target,
+       advertise ipv4/ipv6 unicast, advertise-pip) by which VRF the
+       enclosing 'router bgp' belongs to, not by structure -- both
+       sets of leaves coexist here and the renderer emits whichever
+       are set.";
+
+    leaf advertise-all-vni {
+      type boolean;
+      default "false";
+      description
+        "'advertise-all-vni'. Default instance only.
+         (bgp_evpn_advertise_all_vni_cmd)";
+    }
+
+    leaf autort-rfc8365-compatible {
+      type boolean;
+      default "false";
+      description
+        "'autort rfc8365-compatible': derive automatic RTs per
+         RFC 8365 (AS part from the 3-byte VNI namespace).
+         (bgp_evpn_advertise_autort_rfc8365_cmd)";
+    }
+
+    leaf advertise-default-gw {
+      type boolean;
+      default "false";
+      description
+        "'advertise-default-gw'. Default instance; can also be
+         overridden per VNI. (bgp_evpn_advertise_default_gw_cmd)";
+    }
+
+    leaf advertise-svi-ip {
+      type boolean;
+      default "false";
+      description
+        "'advertise-svi-ip'. Default instance; can also be overridden
+         per VNI. (bgp_evpn_advertise_svi_ip_cmd)";
+    }
+
+    container mac-vrf-soo {
+      description
+        "'mac-vrf soo ASN:NN_OR_IP-ADDRESS:NN': site-of-origin for
+         all MAC-VRFs, loop protection for anycast VTEPs
+         (macvrf_soo_global_cmd). A Route Origin (RFC 4360 subtype
+         0x03) -- deliberately NOT the route-target grouping, which
+         is a different extended community (subtype 0x02).";
+      presence "A MAC-VRF site-of-origin is configured.";
+      uses pt:route-origin;
+    }
+
+    leaf enable-resolve-overlay-index {
+      type boolean;
+      default "false";
+      description
+        "'enable-resolve-overlay-index'. Default instance only.
+         (bgp_evpn_enable_resolve_overlay_index_cmd)";
+    }
+
+    container multihoming {
+      description
+        "bgpd-side EVPN multihoming knobs (struct bgp_evpn_mh_info;
+         the interface/ES definitions themselves are zebra's
+         surface and out of scope).";
+
+      leaf ead-es-frag-evi-limit {
+        type uint16 {
+          range "1..1000";
+        }
+        description
+          "'ead-es-frag evi-limit (1-1000)': EVIs per EAD-per-ES
+           fragment route (bgp_evpn_ead_es_frag_evi_limit_cmd).";
+      }
+      container ead-es-route-target-export {
+        description
+          "'ead-es-route-target export RT' lines: RTs attached to
+           EAD-per-ES routes (bgp_evpn_ead_es_rt_cmd).";
+        uses pt:route-target-set;
+      }
+      leaf use-es-l3nhg {
+        type boolean;
+        description
+          "'[no] use-es-l3nhg': use L3 nexthop groups for ES-attached
+           host routes (default on; FRR writes whichever form differs
+           from it) (bgp_evpn_use_es_l3nhg_cmd).";
+      }
+      leaf disable-ead-evi-rx {
+        type boolean;
+        description
+          "'[no] disable-ead-evi-rx': don't require EAD-per-EVI
+           routes for remote ES-PE activation (default off)
+           (bgp_evpn_ead_evi_rx_disable_cmd).";
+      }
+      leaf disable-ead-evi-tx {
+        type boolean;
+        description
+          "'[no] disable-ead-evi-tx': don't advertise EAD-per-EVI
+           routes (default off) (bgp_evpn_ead_evi_tx_disable_cmd).";
+      }
+    }
+
+    container dup-addr-detection {
+      description
+        "EVPN duplicate address detection
+         (dup_addr_detection_cmd / dup_addr_detection_auto_recovery_cmd).";
+      leaf enabled {
+        type boolean;
+        description
+          "'no dup-addr-detection' when false (default on; only the
+           negative form is written).";
+      }
+      leaf max-moves {
+        type uint16 {
+          range "2..1000";
+        }
+        description
+          "'dup-addr-detection max-moves (2-1000) time (2-1800)',
+           first argument (FRR default 5). Set together with time.";
+      }
+      leaf time {
+        type uint16 {
+          range "2..1800";
+        }
+        units "seconds";
+        description
+          "Detection window (FRR default 180).";
+      }
+      leaf freeze {
+        type union {
+          type enumeration {
+            enum permanent {
+              description
+                "'dup-addr-detection freeze permanent'.";
+            }
+          }
+          type uint16 {
+            range "30..3600";
+          }
+        }
+        description
+          "'dup-addr-detection freeze <permanent|(30-3600)>':
+           freeze a detected duplicate forever or for N seconds.";
+      }
+    }
+
+    leaf flooding {
+      type flooding-mode;
+      description
+        "Address-family-level flooding control; unset means FRR's
+         own default (head-end-replication). Also settable per VNI.
+         Only 'flooding disable' is ever written back at this level.";
+    }
+
+    list vni {
+      key "vni-id";
+      description
+        "'vni N' ... 'exit-vni' sub-block (write_vni_config in
+         bgpd/bgp_evpn_vty.c). Default instance only.
+         (bgp_evpn_vni_cmd / exit_vni_cmd)";
+
+      leaf vni-id {
+        type pt:vni;
+        description
+          "VXLAN Network Identifier.";
+      }
+
+      container rd {
+        description
+          "'rd <ASN:NN|A.B.C.D:NN>' (bgp_evpn_vni_rd_cmd).";
+        presence "An RD is explicitly configured, overriding the
+                  auto-derived value.";
+        uses pt:route-distinguisher;
+      }
+
+      leaf flooding {
+        type flooding-mode;
+        description
+          "Per-VNI flooding override
+           (bgp_evpn_flood_control_vni_cmd).";
+      }
+
+      uses vni-route-targets;
+
+      leaf advertise-default-gw {
+        type boolean;
+        default "false";
+        description
+          "Per-VNI 'advertise-default-gw' override
+           (bgp_evpn_advertise_default_gw_vni_cmd).";
+      }
+      leaf advertise-svi-ip {
+        type boolean;
+        default "false";
+        description
+          "Per-VNI 'advertise-svi-ip' override
+           (bgp_evpn_advertise_svi_ip_vni_cmd).";
+      }
+      leaf advertise-subnet {
+        type boolean;
+        default "false";
+        description
+          "'advertise-subnet': advertise the VNI subnet as a type-5
+           route (bgp_evpn_advertise_vni_subnet_cmd).";
+      }
+    }
+
+    container rd {
+      description
+        "'rd <ASN:NN|A.B.C.D:NN>'. Per-VRF instance only.
+         (bgp_evpn_vrf_rd_cmd)";
+      presence "An RD is explicitly configured, overriding the
+                auto-derived value.";
+      uses pt:route-distinguisher;
+    }
+
+    uses vrf-route-targets;
+
+    container advertise-ipv4-unicast {
+      description
+        "'advertise ipv4 unicast [gateway-ip] [route-map NAME]'.
+         Per-VRF instance only.";
+      uses advertise-unicast;
+    }
+
+    container advertise-ipv6-unicast {
+      description
+        "'advertise ipv6 unicast [gateway-ip] [route-map NAME]'.
+         Per-VRF instance only.";
+      uses advertise-unicast;
+    }
+
+    container default-originate {
+      description
+        "'default-originate <ipv4|ipv6>': originate an EVPN type-5
+         default route (bgp_evpn_default_originate_cmd). Per-VRF
+         instance only.";
+      leaf ipv4 {
+        type boolean;
+        default "false";
+      }
+      leaf ipv6 {
+        type boolean;
+        default "false";
+      }
+    }
+
+    container advertise-pip {
+      description
+        "'[no] advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]':
+         primary-IP/system-IP advertisement on type-5 routes
+         (bgp_evpn_advertise_pip_ip_mac_cmd). Per-VRF instance only;
+         FRR default is on, so enabled=false renders
+         'no advertise-pip'.";
+      leaf enabled {
+        type boolean;
+      }
+      leaf ip {
+        type inet:ipv4-address-no-zone;
+        description
+          "Static PIP address.";
+      }
+      leaf mac {
+        type yang:mac-address;
+        description
+          "Static PIP router MAC.";
+      }
+    }
+
+    list network {
+      key "prefix";
+      must "rd/as2/administrator or rd/ipv4/administrator "
+         + "or rd/as4/administrator or rd/mac or rd/raw" {
+        error-message
+          "an EVPN type-5 'network' statement requires an rd
+           (mandatory token of evpnrt5_network_cmd)";
+      }
+      description
+        "EVPN type-5 static 'network' statement
+         ('network <A.B.C.D/M|X:X::X:X/M> rd RD ethtag WORD label
+         WORD esi WORD gwip <A.B.C.D|X:X::X:X> routermac WORD
+         [route-map NAME]', evpnrt5_network_cmd; written back by
+         bgp_config_write_network_evpn in bgp_route.c with every
+         field present). Rarely used -- topotest-grade EVPN setups
+         originate type-5 routes via 'advertise ... unicast'
+         instead.";
+
+      leaf prefix {
+        type union {
+          type inet:ipv4-prefix;
+          type inet:ipv6-prefix;
+        }
+        description
+          "IP prefix carried in the type-5 route.";
+      }
+      container rd {
+        description
+          "'rd ASN:NN_OR_IP-ADDRESS:NN'. Required by the 'must' on
+           the network entry ('mandatory' does not apply to presence
+           containers).";
+        presence "An RD is configured for this network entry.";
+        uses pt:route-distinguisher;
+      }
+      leaf ethtag {
+        type uint32;
+        mandatory true;
+        description
+          "'ethtag WORD': Ethernet tag (0 for type-5).";
+      }
+      leaf label {
+        type uint32 {
+          range "0..16777215";
+        }
+        mandatory true;
+        description
+          "'label WORD': MPLS label / VNI.";
+      }
+      leaf esi {
+        type pt:evpn-esi;
+        mandatory true;
+        description
+          "'esi WORD': Ethernet Segment Identifier.";
+      }
+      leaf gwip {
+        type inet:ip-address-no-zone;
+        mandatory true;
+        description
+          "'gwip <A.B.C.D|X:X::X:X>': gateway IP overlay index.";
+      }
+      leaf routermac {
+        type yang:mac-address;
+        mandatory true;
+        description
+          "'routermac WORD'.";
+      }
+      leaf route-map {
+        type leafref {
+          path "/rmap:route-map/rmap:name";
+        }
+        description
+          "Optional trailing 'route-map NAME'.";
+      }
+    }
+  }
+}

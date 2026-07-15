@@ -1,0 +1,720 @@
+module proteus-types {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/types";
+  prefix proteus-types;
+
+  import ietf-inet-types {
+    prefix inet;
+  }
+  import ietf-yang-types {
+    prefix yang;
+  }
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "Common typedefs and small shared groupings (structured route
+     targets) for the frr-proteus custom YANG models (yang/custom/*).
+
+     Standard value types come from RFC 6991 (ietf-inet-types /
+     ietf-yang-types) -- pristine copies of both modules are vendored
+     in this directory so the whole custom model set still compiles
+     with just this directory on the pyang search path, without
+     touching FRR's YANG tree. Only types RFC 6991 doesn't provide
+     (or provides with the wrong constraints) are defined here.
+
+     Conventions for the sibling modules: use the -no-zone address
+     variants (inet:ipv4-address-no-zone etc.) -- FRR CLI config text
+     never carries a %zone-id; use yang:dotted-quad where the value
+     is a 32-bit identifier in dotted notation rather than an actual
+     address (router-id, cluster-id, originator-id).";
+
+  revision 2026-07-06 {
+    description
+      "Replace hand-copied RFC 6991 patterns with imports of the real
+       ietf-inet-types / ietf-yang-types modules (vendored under
+       yang/vendor/ietf). Structure the string types: route
+       distinguishers (RFC 4364 types, incl. a blocked type-6 MAC
+       case), communities (RFC 1997 + well-known set + raw fallback),
+       large communities (RFC 8092), and a route-origin grouping pair
+       distinct from route targets (RFC 4360 subtype 0x03 vs 0x02).
+       ESI becomes a length-restricted yang:hex-string. Later the
+       same day: asdot AS numbers, structured per the
+       structured-values rule -- grouping as-number-notation, a
+       choice between the plain decimal number and an asdot
+       container of two uint16 halves (lib/asn.c parses both
+       notations everywhere an ASN is accepted).";
+  }
+  revision 2026-07-05 {
+    description
+      "Initial revision.";
+  }
+
+  typedef as-number {
+    type inet:as-number {
+      range "1..4294967295";
+    }
+    description
+      "BGP autonomous system number in plain decimal notation.
+       inet:as-number restricted to exclude 0: FRR rejects ASN 0
+       (reserved, RFC 7607). Dotted (asdot) values are STRUCTURED --
+       two uint16 halves, grouping as-number-notation below -- never
+       a pattern-checked string (structured-values rule).";
+  }
+
+  /*
+   * AS numbers with notation. FRR's ASN tokens accept plain decimal
+   * and asdot '<high>.<low>' everywhere (lib/asn.c asn_str2asn,
+   * independent of the display-only as-notation mode), so ASN-valued
+   * nodes are a choice between the plain number and the structured
+   * dotted form: two uint16 halves, ASN = high * 65536 + low
+   * ('0.<low>' is the asdot+ spelling of a 2-byte ASN; '0.0' is ASN
+   * 0 and forbidden, stated as a must). Like the route-target /
+   * route-distinguisher groupings, the parts are typed leaves, not a
+   * pattern string; the renderer joins them with a dot.
+   *
+   * The choice is deliberately NOT mandatory here: whether an ASN is
+   * required depends on the usage site (remote-as may be inherited
+   * from a peer-group), and an all-empty parent container counts as
+   * unconfigured anyway (mandatory choice inside is skipped) -- a
+   * site that requires the ASN needs a must on ITS parent, like the
+   * instance list's autonomous-system must in proteus-bgp.
+   */
+  grouping asdot-as-number {
+    description
+      "The dotted half-pair alone (container 'asdot'), reusable
+       inside choices that add further cases (e.g. remote-as's
+       internal/external/auto keywords).";
+
+    container asdot {
+      must "high != 0 or low != 0" {
+        error-message
+          "'0.0' is ASN 0, reserved (RFC 7607) and rejected by FRR.";
+      }
+      description
+        "AS number in asdot notation, rendered '<high>.<low>'.";
+      leaf high {
+        type uint16;
+        mandatory true;
+        description
+          "Upper 16 bits of the ASN.";
+      }
+      leaf low {
+        type uint16;
+        mandatory true;
+        description
+          "Lower 16 bits of the ASN.";
+      }
+    }
+  }
+
+  grouping as-number-notation {
+    description
+      "One AS number, written in plain decimal or asdot notation --
+       rendered exactly as configured (the as-notation display mode
+       formats show output only, never the config).";
+
+    choice notation {
+      description
+        "Which notation this ASN is written in.";
+
+      case plain {
+        leaf plain {
+          type as-number;
+          description
+            "Plain 32-bit decimal.";
+        }
+      }
+      case asdot {
+        uses asdot-as-number;
+      }
+    }
+  }
+
+  typedef object-name {
+    type string {
+      length "1..128";
+    }
+    description
+      "Name of a named config object (prefix-list, access-list, BGP
+       filter list, ...). The 1..128 length bound is FRR's own
+       filter-object name constraint (typedef access-list-name in
+       frr/yang/frr-filter.yang); we apply it uniformly to all named
+       objects for consistency.";
+  }
+
+  /*
+   * Route distinguishers (RFC 4364): structured per encoding type,
+   * not strings. The administrator / assigned-number field names are
+   * RFC 4364's. Type 6 (6-octet MAC, RFC 8294's route-distinguisher
+   * encoding list) is modeled for standards completeness but BLOCKED
+   * with 'must false()' because FRR's CLI cannot parse it
+   * (str2prefix_rd only takes ASN:NN / A.B.C.D:NN); drop the must
+   * when FRR learns the format. The raw case is the escape hatch for
+   * values outside every structured form.
+   */
+  grouping route-distinguisher {
+    description
+      "One route distinguisher; exactly one encoding must be chosen
+       when the enclosing node is configured (mandatory choice --
+       like the route-target grouping, an all-empty container counts
+       as unconfigured).";
+
+    choice format {
+      mandatory true;
+      description
+        "Which RFC 4364 type this RD uses. Types 0/1/2 all render as
+         '<administrator>:<assigned-number>'; the type is implicit in
+         the administrator's syntax, exactly how FRR re-parses it.";
+
+      case as2 {
+        container as2 {
+          description
+            "Type 0: 2-octet AS administrator, 4-octet assigned
+             number.";
+          leaf administrator {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte AS number (administrator subfield).";
+          }
+          leaf assigned-number {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte assigned number subfield.";
+          }
+        }
+      }
+      case ipv4 {
+        container ipv4 {
+          description
+            "Type 1: IPv4-address administrator, 2-octet assigned
+             number.";
+          leaf administrator {
+            type inet:ipv4-address-no-zone;
+            mandatory true;
+            description
+              "IPv4 address (administrator subfield).";
+          }
+          leaf assigned-number {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte assigned number subfield.";
+          }
+        }
+      }
+      case as4 {
+        container as4 {
+          description
+            "Type 2 (RFC 5668-style): 4-octet AS administrator, 2-octet
+             assigned number.";
+          leaf administrator {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte AS number (administrator subfield).";
+          }
+          leaf assigned-number {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte assigned number subfield.";
+          }
+        }
+      }
+      case mac {
+        leaf mac {
+          type yang:mac-address;
+          must "false()" {
+            error-message
+              "type-6 (MAC) route distinguishers are standard but FRR's
+               CLI cannot parse them (str2prefix_rd accepts only ASN:NN
+               / A.B.C.D:NN) -- remove this must once FRR does";
+          }
+          description
+            "Type 6: 6-octet MAC address (RFC 8294's encoding list, via
+             RFC 7432). Standard but unusable with FRR -- see the
+             blocking 'must'.";
+        }
+      }
+      case raw {
+        leaf raw {
+          type string;
+          description
+            "Fallback: the RD text emitted verbatim, for values outside
+             every structured form.";
+        }
+      }
+    }
+  }
+
+  /*
+   * BGP communities (RFC 1997), structured. The conventional layout
+   * is a 2-octet global administrator (an AS number) and a 2-octet
+   * local administrator. Well-known communities are the names FRR's
+   * own tokenizer accepts (community_gettoken in
+   * bgpd/bgp_community.c) -- note 'internet' is NOT among them
+   * anymore; upstream removed the token (FRR's frr-bgp-filter.yang
+   * still listing it is stale). The raw fallbacks exist on purpose:
+   * matching or scrubbing deliberately malformed community values
+   * (e.g. filtering the output of a buggy peer) is a legitimate
+   * use -- raw entries are emitted verbatim, unvalidated.
+   */
+
+  typedef well-known-community {
+    type enumeration {
+      enum no-export;
+      enum no-advertise;
+      enum local-AS;
+      enum no-peer;
+      enum blackhole;
+      enum graceful-shutdown;
+      enum accept-own;
+      enum accept-own-nexthop;
+      enum llgr-stale;
+      enum no-llgr;
+      enum route-filter-v4;
+      enum route-filter-v6;
+      enum route-filter-translated-v4;
+      enum route-filter-translated-v6;
+    }
+    description
+      "Well-known community names FRR accepts as input tokens and
+       re-emits on config write (community_gettoken / community_str
+       in bgpd/bgp_community.c).";
+  }
+
+  grouping community-set {
+    description
+      "A set of RFC 1997 communities: structured values, well-known
+       names, and verbatim raw fallbacks. Rendered space-separated in
+       that order.";
+
+    list member {
+      key "global-admin local-admin";
+      description
+        "One 'AA:NN' community.";
+      leaf global-admin {
+        type uint16;
+        description
+          "2-byte global administrator (conventionally an AS
+           number).";
+      }
+      leaf local-admin {
+        type uint16;
+        description
+          "2-byte local administrator.";
+      }
+    }
+    leaf-list well-known {
+      type well-known-community;
+      description
+        "Well-known communities by name.";
+    }
+    leaf-list raw {
+      type string;
+      description
+        "Fallback: tokens emitted verbatim, for values outside the
+         structured forms (including deliberately invalid ones).";
+    }
+  }
+
+  grouping large-community-set {
+    description
+      "A set of RFC 8092 large communities. Field names are RFC
+       8092's: Global Administrator, Local Data Part 1, Local Data
+       Part 2 -- rendered 'GA:LD1:LD2'.";
+
+    list member {
+      key "global-admin local-data-1 local-data-2";
+      description
+        "One 'GA:LD1:LD2' large community.";
+      leaf global-admin {
+        type uint32;
+        description
+          "4-byte Global Administrator (conventionally an AS
+           number).";
+      }
+      leaf local-data-1 {
+        type uint32;
+        description
+          "4-byte Local Data Part 1.";
+      }
+      leaf local-data-2 {
+        type uint32;
+        description
+          "4-byte Local Data Part 2.";
+      }
+    }
+    leaf-list raw {
+      type string;
+      description
+        "Fallback: tokens emitted verbatim.";
+    }
+  }
+
+  grouping community-value {
+    description
+      "Exactly one community value -- standard, well-known, or large
+       -- with a raw fallback. Empty enclosing container counts as
+       unconfigured (mandatory choice, route-target semantics).";
+
+    choice value {
+      mandatory true;
+      description
+        "Which kind of community this is.";
+
+      case community {
+        container community {
+          description
+            "One RFC 1997 'AA:NN' community.";
+          leaf global-admin {
+            type uint16;
+            mandatory true;
+          }
+          leaf local-admin {
+            type uint16;
+            mandatory true;
+          }
+        }
+      }
+      case well-known {
+        leaf well-known {
+          type well-known-community;
+          description
+            "A well-known community by name.";
+        }
+      }
+      case large-community {
+        container large-community {
+          description
+            "One RFC 8092 'GA:LD1:LD2' large community.";
+          leaf global-admin {
+            type uint32;
+            mandatory true;
+          }
+          leaf local-data-1 {
+            type uint32;
+            mandatory true;
+          }
+          leaf local-data-2 {
+            type uint32;
+            mandatory true;
+          }
+        }
+      }
+      case raw {
+        leaf raw {
+          type string;
+          description
+            "Fallback: emitted verbatim.";
+        }
+      }
+    }
+  }
+
+  typedef vni {
+    type uint32 {
+      range "1..16777215";
+    }
+    description
+      "VXLAN Network Identifier (24-bit, 0 reserved).";
+  }
+
+  /*
+   * Route targets. Structured, not strings: the global and local
+   * administrator are separate leaves with proper integer types and
+   * ranges, one shape per RFC 4360 encoding:
+   *   as2  -- global-admin uint16 (2-byte AS), local-admin uint32
+   *           (type 0; FRR text '<AS>:<NN>')
+   *   as4  -- global-admin uint32 (4-byte AS), local-admin uint16
+   *           (type 2 / RFC 5668; FRR text '<AS>:<NN>')
+   *   ipv4 -- global-admin A.B.C.D,            local-admin uint16
+   *           (type 1; FRR text '<A.B.C.D>:<NN>')
+   * The encoding choice is explicit and meaningful: '65001:100' as
+   * as2 and as4 are different communities on the wire (FRR's text
+   * parser picks as2 whenever the AS fits 16 bits).
+   *
+   * Two reusable shapes below: grouping 'route-target' for a single
+   * RT value (a mandatory choice of the three encodings), and
+   * grouping 'route-target-set' for an RT list (one keyed list per
+   * encoding -- the components are the keys, so duplicates are
+   * structurally impossible). The wildcard form '*:NN' (only the
+   * local administrator given; FRR's EVPN VRF route-target *import*
+   * only, BGP_VRF_RT_WILD) carries a single integer and is modeled
+   * at its one usage site as a plain uint32 leaf-list, not here.
+   */
+
+  grouping route-target {
+    description
+      "One fully qualified route target; exactly one encoding must be
+       chosen (mandatory choice, enforced by validate_tree).";
+
+    choice format {
+      mandatory true;
+      description
+        "Which RFC 4360 encoding this route target uses.";
+
+      case as2 {
+        container as2 {
+          description
+            "2-byte-AS encoding (type 0), rendered '<AS>:<NN>'.";
+          leaf global-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte AS number (global administrator).";
+          }
+          leaf local-admin {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte local administrator.";
+          }
+        }
+      }
+      case as4 {
+        container as4 {
+          description
+            "4-byte-AS encoding (type 2, RFC 5668), rendered
+             '<AS>:<NN>'.";
+          leaf global-admin {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte AS number (global administrator).";
+          }
+          leaf local-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte local administrator.";
+          }
+        }
+      }
+      case ipv4 {
+        container ipv4 {
+          description
+            "IPv4-address encoding (type 1), rendered '<A.B.C.D>:<NN>'.";
+          leaf global-admin {
+            type inet:ipv4-address-no-zone;
+            mandatory true;
+            description
+              "IPv4 address (global administrator).";
+          }
+          leaf local-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte local administrator.";
+          }
+        }
+      }
+    }
+  }
+
+  grouping route-target-set {
+    description
+      "A set of fully qualified route targets: one list per encoding,
+       keyed by the components themselves (so each RT can appear only
+       once and every component is range-checked as an integer).";
+
+    list as2 {
+      key "global-admin local-admin";
+      description
+        "2-byte-AS route targets (type 0), rendered '<AS>:<NN>'.";
+      leaf global-admin {
+        type uint16;
+        description
+          "2-byte AS number (global administrator).";
+      }
+      leaf local-admin {
+        type uint32;
+        description
+          "4-byte local administrator.";
+      }
+    }
+    list as4 {
+      key "global-admin local-admin";
+      description
+        "4-byte-AS route targets (type 2, RFC 5668), rendered
+         '<AS>:<NN>'.";
+      leaf global-admin {
+        type uint32;
+        description
+          "4-byte AS number (global administrator).";
+      }
+      leaf local-admin {
+        type uint16;
+        description
+          "2-byte local administrator.";
+      }
+    }
+    list ipv4 {
+      key "global-admin local-admin";
+      description
+        "IPv4-address route targets (type 1), rendered
+         '<A.B.C.D>:<NN>'.";
+      leaf global-admin {
+        type inet:ipv4-address-no-zone;
+        description
+          "IPv4 address (global administrator).";
+      }
+      leaf local-admin {
+        type uint16;
+        description
+          "2-byte local administrator.";
+      }
+    }
+  }
+
+  /*
+   * Route origins (site-of-origin). A Route Origin is an extended
+   * community of its own (RFC 4360 subtype 0x03), NOT a route target
+   * (subtype 0x02) -- the two must never share a type even though
+   * their text encodings look identical. Same three encodings as
+   * route targets: 2-octet AS (type 0x00), IPv4 (0x01), 4-octet AS
+   * (0x02, RFC 5668).
+   */
+
+  grouping route-origin {
+    description
+      "One fully qualified route origin (site-of-origin, RFC 4360
+       subtype 0x03); exactly one encoding must be chosen (mandatory
+       choice -- an all-empty enclosing container counts as
+       unconfigured).";
+
+    choice format {
+      mandatory true;
+      description
+        "Which RFC 4360 encoding this route origin uses.";
+
+      case as2 {
+        container as2 {
+          description
+            "2-byte-AS encoding (type 0x00), rendered '<AS>:<NN>'.";
+          leaf global-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte AS number (global administrator).";
+          }
+          leaf local-admin {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte local administrator.";
+          }
+        }
+      }
+      case as4 {
+        container as4 {
+          description
+            "4-byte-AS encoding (type 0x02, RFC 5668), rendered
+             '<AS>:<NN>'.";
+          leaf global-admin {
+            type uint32;
+            mandatory true;
+            description
+              "4-byte AS number (global administrator).";
+          }
+          leaf local-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte local administrator.";
+          }
+        }
+      }
+      case ipv4 {
+        container ipv4 {
+          description
+            "IPv4-address encoding (type 0x01), rendered
+             '<A.B.C.D>:<NN>'.";
+          leaf global-admin {
+            type inet:ipv4-address-no-zone;
+            mandatory true;
+            description
+              "IPv4 address (global administrator).";
+          }
+          leaf local-admin {
+            type uint16;
+            mandatory true;
+            description
+              "2-byte local administrator.";
+          }
+        }
+      }
+    }
+  }
+
+  grouping route-origin-set {
+    description
+      "A set of route origins (site-of-origin extended communities,
+       RFC 4360 subtype 0x03): one keyed list per encoding, same
+       shape as route-target-set.";
+
+    list as2 {
+      key "global-admin local-admin";
+      description
+        "2-byte-AS route origins (type 0x00), rendered '<AS>:<NN>'.";
+      leaf global-admin {
+        type uint16;
+        description
+          "2-byte AS number (global administrator).";
+      }
+      leaf local-admin {
+        type uint32;
+        description
+          "4-byte local administrator.";
+      }
+    }
+    list as4 {
+      key "global-admin local-admin";
+      description
+        "4-byte-AS route origins (type 0x02, RFC 5668), rendered
+         '<AS>:<NN>'.";
+      leaf global-admin {
+        type uint32;
+        description
+          "4-byte AS number (global administrator).";
+      }
+      leaf local-admin {
+        type uint16;
+        description
+          "2-byte local administrator.";
+      }
+    }
+    list ipv4 {
+      key "global-admin local-admin";
+      description
+        "IPv4-address route origins (type 0x01), rendered
+         '<A.B.C.D>:<NN>'.";
+      leaf global-admin {
+        type inet:ipv4-address-no-zone;
+        description
+          "IPv4 address (global administrator).";
+      }
+      leaf local-admin {
+        type uint16;
+        description
+          "2-byte local administrator.";
+      }
+    }
+  }
+
+  typedef evpn-esi {
+    type yang:hex-string {
+      length "29";
+    }
+    description
+      "A 10-byte EVPN Ethernet Segment Identifier: RFC 6991
+       yang:hex-string (colon-separated hex octets) length-restricted
+       to exactly 10 octets (29 characters), the type-0 ESI text
+       FRR's str_to_esi() parses.";
+  }
+}
