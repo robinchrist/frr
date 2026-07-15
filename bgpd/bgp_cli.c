@@ -1025,6 +1025,67 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B6: 'bgp default local-preference (0-4294967295)'.
+ * Static default-on scalar, no inheritance (YANG default 100): the "no"
+ * form (value token optional and ignored, matching the legacy DEFUN)
+ * destroys back to that default; the positive form always carries an
+ * explicit value.
+ */
+DEFPY_YANG(
+	bgp_default_local_preference, bgp_default_local_preference_cli_cmd,
+	"bgp default local-preference (0-4294967295)$local_pref",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"local preference (higher=more preferred)\n"
+	"Configure default local preference value\n")
+{
+	nb_cli_enqueue_change(vty, "./default/local-preference", NB_OP_MODIFY, local_pref_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_local_preference, no_bgp_default_local_preference_cli_cmd,
+	"no bgp default local-preference [(0-4294967295)]",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"local preference (higher=more preferred)\n"
+	"Configure default local preference value\n")
+{
+	nb_cli_enqueue_change(vty, "./default/local-preference", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * 'bgp default subgroup-pkt-queue-max (20-100)'. Static default-on scalar,
+ * no inheritance (YANG default 40), same shape as local-preference above.
+ */
+DEFPY_YANG(
+	bgp_default_subgroup_pkt_queue_max, bgp_default_subgroup_pkt_queue_max_cli_cmd,
+	"bgp default subgroup-pkt-queue-max (20-100)$max_size",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"subgroup-pkt-queue-max\n"
+	"Configure subgroup packet queue max\n")
+{
+	nb_cli_enqueue_change(vty, "./default/subgroup-pkt-queue-max", NB_OP_MODIFY, max_size_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_subgroup_pkt_queue_max, no_bgp_default_subgroup_pkt_queue_max_cli_cmd,
+	"no bgp default subgroup-pkt-queue-max [(20-100)]",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"subgroup-pkt-queue-max\n"
+	"Configure subgroup packet queue max\n")
+{
+	nb_cli_enqueue_change(vty, "./default/subgroup-pkt-queue-max", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -1383,6 +1444,28 @@ static void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct 
 		vty_out(vty, " bgp default l2vpn-evpn\n");
 }
 
+/* Static default-on scalars (batch B6): value-checked against the YANG
+ * default, matching bgp_config_write()'s "if (bgp->default_local_pref !=
+ * BGP_DEFAULT_LOCAL_PREF)" / subgroup-pkt-queue-max arms exactly.
+ */
+static void instance_default_local_preference_cli_write(struct vty *vty,
+							const struct lyd_node *dnode,
+							bool show_defaults)
+{
+	if (yang_dnode_get_uint32(dnode, NULL) != 100)
+		vty_out(vty, " bgp default local-preference %u\n",
+			yang_dnode_get_uint32(dnode, NULL));
+}
+
+static void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
+							      const struct lyd_node *dnode,
+							      bool show_defaults)
+{
+	if (yang_dnode_get_uint8(dnode, NULL) != 40)
+		vty_out(vty, " bgp default subgroup-pkt-queue-max %u\n",
+			yang_dnode_get_uint8(dnode, NULL));
+}
+
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -1654,6 +1737,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/default/local-preference",
+			.cbs = {
+				.cli_show = instance_default_local_preference_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/subgroup-pkt-queue-max",
+			.cbs = {
+				.cli_show = instance_default_subgroup_pkt_queue_max_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/route-map-delay-timer",
 			.cbs = {
 				.cli_show = process_route_map_delay_timer_cli_write,
@@ -1763,6 +1858,11 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_bestpath_bw_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_default_afi_safi_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_local_preference_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_local_preference_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_subgroup_pkt_queue_max_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_subgroup_pkt_queue_max_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

@@ -2513,9 +2513,13 @@ module proteus-bgp {
 
       leaf local-preference {
         type uint32;
+        default "100";
         description
-          "'bgp default local-preference (0-4294967295)' (FRR
-           default 100).";
+          "'bgp default local-preference (0-4294967295)'. Static
+           default-on scalar, no inheritance: the legacy 'no bgp
+           default local-preference' line deletes back to this
+           default, matching bgpd.c's bgp_default_local_preference_unset()
+           (FRR default 100).";
       }
       leaf show-hostname {
         type boolean;
@@ -2553,15 +2557,32 @@ module proteus-bgp {
         type uint8 {
           range "20..100";
         }
+        default "40";
         description
-          "'bgp default subgroup-pkt-queue-max (20-100)'.";
+          "'bgp default subgroup-pkt-queue-max (20-100)'. Static
+           default-on scalar, no inheritance: the legacy 'no bgp
+           default subgroup-pkt-queue-max' line deletes back to this
+           default (BGP_DEFAULT_SUBGROUP_PKT_QUEUE_MAX).";
       }
       leaf shutdown {
         type boolean;
         default "false";
         description
           "'bgp default shutdown': new neighbors start
-           administratively down.";
+           administratively down. NOT YET CONVERTED: the legacy
+           bgp_config_write() emits this line deliberately late
+           (after all peer/peer-group configuration, FRR issue
+           #2286) because bgp->autoshutdown only affects peers at
+           creation time and placing it early would shut down every
+           peer on every daemon-restart config replay. mgmtd's
+           cli_show output for a whole 'router bgp' block is always
+           merged ahead of bgpd's legacy output for that same block
+           (vtysh queries mgmtd before bgpd, vtysh/vtysh_config.c
+           appends by arrival order under the shared header), so a
+           converted cli_show here would unconditionally land before
+           the still-legacy peer/peer-group lines and reintroduce
+           that race. Leave unconverted until the peer/peer-group
+           config also moves to mgmtd.";
       }
     }
 

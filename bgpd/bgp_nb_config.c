@@ -1564,32 +1564,33 @@ int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'bgp default local-preference (0-4294967295)' (Tier A: static
+ * default-on scalar, no inheritance -- see the YANG leaf's "default"
+ * statement). Destroy is not registered: the northbound layer resolves a
+ * destroy on a default-bearing leaf to a modify-with-default, which
+ * dispatches back through this same .modify callback with the value
+ * already reset to 100, matching the legacy no-form's unset behavior
+ * (bgpd.c's now-retired bgp_default_local_preference_unset(), superseded
+ * by this callback). The legacy DEFUN's bgp_clear_star_soft_in() side
+ * effect (soft-reprocess inbound updates so the new default applies to
+ * already-received routes) is replicated via the vty-free
+ * bgp_nb_clear_star_soft() helper.
+ */
 int instance_default_local_preference_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/local-preference");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
-	}
-
-	return NB_OK;
-}
-
-int instance_default_local_preference_destroy(struct nb_cb_destroy_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/local-preference");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_default_local_preference_set(bgp, yang_dnode_get_uint32(args->dnode, NULL));
+		bgp_nb_clear_star_soft(bgp, BGP_CLEAR_SOFT_IN);
 		break;
 	}
 
@@ -1790,32 +1791,30 @@ int instance_default_dynamic_capability_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* 'bgp default subgroup-pkt-queue-max (20-100)' (Tier A: static
+ * default-on scalar, no inheritance). Destroy is not registered for the
+ * same reason as local-preference above: the northbound layer resolves a
+ * destroy on this default-bearing leaf to a modify-with-default (40),
+ * dispatched back through .modify, matching the legacy no-form's unset
+ * behavior (bgpd.c's now-retired bgp_default_subgroup_pkt_queue_max_unset(),
+ * superseded by this callback). No other side effect in the legacy setter
+ * (unlike local-preference, no soft-reprocess is triggered).
+ */
 int instance_default_subgroup_pkt_queue_max_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/subgroup-pkt-queue-max");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
-	}
-
-	return NB_OK;
-}
-
-int instance_default_subgroup_pkt_queue_max_destroy(struct nb_cb_destroy_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/subgroup-pkt-queue-max");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_default_subgroup_pkt_queue_max_set(bgp,
+						       yang_dnode_get_uint8(args->dnode, NULL));
 		break;
 	}
 

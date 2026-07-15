@@ -2773,13 +2773,9 @@ extern void bgp_timers_set(struct vty *vty, struct bgp *bgp, uint32_t keepalive,
 			   uint32_t connect_retry, uint32_t delayopen);
 extern void bgp_timers_unset(struct bgp *bgp);
 
-extern void bgp_default_local_preference_set(struct bgp *bgp,
-					     uint32_t local_pref);
-extern void bgp_default_local_preference_unset(struct bgp *bgp);
+extern void bgp_default_local_preference_set(struct bgp *bgp, uint32_t local_pref);
 
-extern void bgp_default_subgroup_pkt_queue_max_set(struct bgp *bgp,
-						   uint32_t queue_size);
-extern void bgp_default_subgroup_pkt_queue_max_unset(struct bgp *bgp);
+extern void bgp_default_subgroup_pkt_queue_max_set(struct bgp *bgp, uint32_t queue_size);
 
 extern void bgp_listen_limit_set(struct bgp *bgp, int listen_limit);
 extern void bgp_listen_limit_unset(struct bgp *bgp);

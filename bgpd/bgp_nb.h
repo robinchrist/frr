@@ -94,7 +94,6 @@ int instance_default_ipv6_vpn_modify(struct nb_cb_modify_args *args);
 int instance_default_ipv6_flowspec_modify(struct nb_cb_modify_args *args);
 int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args);
 int instance_default_local_preference_modify(struct nb_cb_modify_args *args);
-int instance_default_local_preference_destroy(struct nb_cb_destroy_args *args);
 int instance_default_show_hostname_modify(struct nb_cb_modify_args *args);
 int instance_default_show_hostname_destroy(struct nb_cb_destroy_args *args);
 int instance_default_show_nexthop_hostname_modify(struct nb_cb_modify_args *args);
@@ -110,7 +109,6 @@ int instance_default_link_local_capability_destroy(struct nb_cb_destroy_args *ar
 int instance_default_dynamic_capability_modify(struct nb_cb_modify_args *args);
 int instance_default_dynamic_capability_destroy(struct nb_cb_destroy_args *args);
 int instance_default_subgroup_pkt_queue_max_modify(struct nb_cb_modify_args *args);
-int instance_default_subgroup_pkt_queue_max_destroy(struct nb_cb_destroy_args *args);
 int instance_default_shutdown_modify(struct nb_cb_modify_args *args);
 int instance_client_to_client_reflection_modify(struct nb_cb_modify_args *args);
 int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args);

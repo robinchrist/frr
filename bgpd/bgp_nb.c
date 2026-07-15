@@ -345,7 +345,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/default/local-preference",
 			.cbs = {
 				.modify = instance_default_local_preference_modify,
-				.destroy = instance_default_local_preference_destroy,
 			}
 		},
 		{
@@ -394,7 +393,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/default/subgroup-pkt-queue-max",
 			.cbs = {
 				.modify = instance_default_subgroup_pkt_queue_max_modify,
-				.destroy = instance_default_subgroup_pkt_queue_max_destroy,
 			}
 		},
 		{

@@ -3895,77 +3895,6 @@ DEFUN (no_bgp_network_import_check,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_default_local_preference,
-       bgp_default_local_preference_cmd,
-       "bgp default local-preference (0-4294967295)",
-       BGP_STR
-       "Configure BGP defaults\n"
-       "local preference (higher=more preferred)\n"
-       "Configure default local preference value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-	uint32_t local_pref;
-
-	local_pref = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	bgp_default_local_preference_set(bgp, local_pref);
-	bgp_clear_star_soft_in(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_default_local_preference,
-       no_bgp_default_local_preference_cmd,
-       "no bgp default local-preference [(0-4294967295)]",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "local preference (higher=more preferred)\n"
-       "Configure default local preference value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_default_local_preference_unset(bgp);
-	bgp_clear_star_soft_in(vty, bgp->name);
-
-	return CMD_SUCCESS;
-}
-
-
-DEFUN (bgp_default_subgroup_pkt_queue_max,
-       bgp_default_subgroup_pkt_queue_max_cmd,
-       "bgp default subgroup-pkt-queue-max (20-100)",
-       BGP_STR
-       "Configure BGP defaults\n"
-       "subgroup-pkt-queue-max\n"
-       "Configure subgroup packet queue max\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-	uint32_t max_size;
-
-	max_size = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	bgp_default_subgroup_pkt_queue_max_set(bgp, max_size);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_default_subgroup_pkt_queue_max,
-       no_bgp_default_subgroup_pkt_queue_max_cmd,
-       "no bgp default subgroup-pkt-queue-max [(20-100)]",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "subgroup-pkt-queue-max\n"
-       "Configure subgroup packet queue max\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_default_subgroup_pkt_queue_max_unset(bgp);
-	return CMD_SUCCESS;
-}
-
-
 DEFUN (bgp_rr_allow_outbound_policy,
        bgp_rr_allow_outbound_policy_cmd,
        "bgp route-reflector allow-outbound-policy",
@@ -20995,10 +20924,10 @@ int bgp_config_write(struct vty *vty)
 					? ""
 					: "no ");
 
-		/* BGP default local-preference. */
-		if (bgp->default_local_pref != BGP_DEFAULT_LOCAL_PREF)
-			vty_out(vty, " bgp default local-preference %u\n",
-				bgp->default_local_pref);
+		/* BGP default local-preference: converted to northbound, see
+		 * '/proteus-bgp:instance/default/local-preference' cli_show
+		 * in bgp_cli.c.
+		 */
 
 		/* BGP default show-hostname */
 		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME)
@@ -21045,11 +20974,11 @@ int bgp_config_write(struct vty *vty)
 					? ""
 					: "no ");
 
-		/* BGP default subgroup-pkt-queue-max. */
-		if (bgp->default_subgroup_pkt_queue_max
-		    != BGP_DEFAULT_SUBGROUP_PKT_QUEUE_MAX)
-			vty_out(vty, " bgp default subgroup-pkt-queue-max %u\n",
-				bgp->default_subgroup_pkt_queue_max);
+		/* BGP default subgroup-pkt-queue-max: converted to
+		 * northbound, see
+		 * '/proteus-bgp:instance/default/subgroup-pkt-queue-max'
+		 * cli_show in bgp_cli.c.
+		 */
 
 		/* Confederation identifier*/
 		if (CHECK_FLAG(bgp->config, BGP_CONFIG_CONFEDERATION))
@@ -22003,10 +21932,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &bgp_network_import_check_cmd);
 	install_element(BGP_NODE, &no_bgp_network_import_check_cmd);
 
-	/* "bgp default local-preference" commands. */
-	install_element(BGP_NODE, &bgp_default_local_preference_cmd);
-	install_element(BGP_NODE, &no_bgp_default_local_preference_cmd);
-
 	/* bgp default show-hostname */
 	install_element(BGP_NODE, &bgp_default_show_hostname_cmd);
 	install_element(BGP_NODE, &no_bgp_default_show_hostname_cmd);
@@ -22023,10 +21948,6 @@ void bgp_vty_init(void)
 
 	/* bgp default dynamic-capability */
 	install_element(BGP_NODE, &bgp_default_dynamic_capability_cmd);
-
-	/* "bgp default subgroup-pkt-queue-max" commands. */
-	install_element(BGP_NODE, &bgp_default_subgroup_pkt_queue_max_cmd);
-	install_element(BGP_NODE, &no_bgp_default_subgroup_pkt_queue_max_cmd);
 
 	/* bgp ibgp-allow-policy-mods command */
 	install_element(BGP_NODE, &bgp_rr_allow_outbound_policy_cmd);

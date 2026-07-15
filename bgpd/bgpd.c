@@ -938,14 +938,6 @@ void bgp_default_local_preference_set(struct bgp *bgp, uint32_t local_pref)
 	bgp->default_local_pref = local_pref;
 }
 
-void bgp_default_local_preference_unset(struct bgp *bgp)
-{
-	if (!bgp)
-		return;
-
-	bgp->default_local_pref = BGP_DEFAULT_LOCAL_PREF;
-}
-
 /* Local preference configuration.  */
 void bgp_default_subgroup_pkt_queue_max_set(struct bgp *bgp,
 					    uint32_t queue_size)
@@ -954,14 +946,6 @@ void bgp_default_subgroup_pkt_queue_max_set(struct bgp *bgp,
 		return;
 
 	bgp->default_subgroup_pkt_queue_max = queue_size;
-}
-
-void bgp_default_subgroup_pkt_queue_max_unset(struct bgp *bgp)
-{
-	if (!bgp)
-		return;
-	bgp->default_subgroup_pkt_queue_max =
-		BGP_DEFAULT_SUBGROUP_PKT_QUEUE_MAX;
 }
 
 /* Listen limit configuration.  */
