@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Robin Christ, partimus GmbH */
+/* proteus-bgp northbound callback dispatch table (frr_yang_module_info).
+ * The callbacks themselves live in bgpd/proteus/bgp_nb_*.c.
+ */
 #include <zebra.h>
 
 #include "lib/northbound.h"

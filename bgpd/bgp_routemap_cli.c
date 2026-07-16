@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Robin Christ, partimus GmbH */
 /* Route map CLI (northbound commands) for bgpd's frr-bgp-route-map
  * augment of frr-route-map. Copyright (C) 1998, 1999 Kunihiro
  * Ishiguro.

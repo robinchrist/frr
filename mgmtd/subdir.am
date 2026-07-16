@@ -51,6 +51,7 @@ noinst_HEADERS += \
 	zebra/zebra_cli.h \
 	bgpd/bgp_cli.h \
 	bgpd/bgp_routemap_cli.h \
+	bgpd/proteus/bgp_cli_local.h \
 	# end
 
 sbin_PROGRAMS += mgmtd/mgmtd
@@ -122,7 +123,10 @@ nodist_mgmtd_mgmtd_SOURCES += \
 	yang/frr-bgp-route-map.yang.c \
 	# end
 mgmtd_libmgmt_be_nb_la_SOURCES += \
-	bgpd/bgp_cli.c \
+	bgpd/proteus/bgp_cli_common.c \
+	bgpd/proteus/bgp_cli_instance.c \
+	bgpd/proteus/bgp_cli_process.c \
+	bgpd/proteus/bgp_cli_neighbor.c \
 	bgpd/bgp_routemap_cli.c \
 	# end
 endif

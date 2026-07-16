@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/*
- * bgpd CLI compiled into mgmtd (zebra_cli.c / staticd pattern): the
- * milestone 1 proteus-bgp conversion slice ('router bgp', 'bgp router-id',
- * '[no] bgp log-neighbor-changes').
+/* Copyright (C) 2026 Robin Christ, partimus GmbH */
+/* 'router bgp' node entry and instance-scope CLI (DEFPYs + northbound cli_show callbacks) for the proteus-bgp conversion.
+ *
+ * Split out of bgpd/bgp_cli.c (bgpd-yang-conversion intermezzo): pure code
+ * motion for the DEFPY/cli_show bodies below. bgp_cli_init()'s body could
+ * not move verbatim -- see bgp_cli_common.c and bgp_cli_instance_init()
+ * in this file for why.
  */
 #include <zebra.h>
 #include "command.h"
@@ -14,8 +17,8 @@
 
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
-
-#include "bgpd/bgp_cli_clippy.c"
+#include "bgpd/proteus/bgp_cli_local.h"
+#include "bgpd/proteus/bgp_cli_instance_clippy.c"
 
 static struct cmd_node bgp_node = {
 	.name = "bgp",
@@ -344,27 +347,6 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/*
- * 'bgp ipv6-auto-ra' has both a PROCESS scope (CONFIG_NODE, this block)
- * and an INSTANCE scope (BGP_NODE per-VRF override, further below in the
- * B3 section): both are northbound now, the legacy per-VRF DEFPY
- * (bgp_ipv6_auto_ra_cmd in bgp_vty.c) is fully retired. The process leaf is
- * the chain root: a static default-on boolean, no inheritance, legacy
- * grammar (positive form destroys back to the true default, "no" form
- * modifies an explicit false). The instance leaf overrides it per VRF and
- * stays tri-state (no YANG default, absence = inherit the process leaf),
- * keeping the enabled|disabled scheme with deprecated bare aliases.
- */
-DEFPY_YANG(
-	bgp_process_ipv6_auto_ra, bgp_process_ipv6_auto_ra_cli_cmd,
-	"bgp ipv6-auto-ra",
-	BGP_STR
-	"Allow enabling IPv6 ND RA sending\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
 DEFPY_YANG(
 	no_bgp_process_ipv6_auto_ra, no_bgp_process_ipv6_auto_ra_cli_cmd,
 	"no bgp ipv6-auto-ra",
@@ -429,61 +411,6 @@ DEFPY_ATTR(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/*
- * Milestone 2 batch B10: 'bgp suppress-fib-pending' (process + instance
- * pair). Fresh grep of bgp_vty.c/bgpd.c confirms no mutual-exclusion guard
- * exists between the two scopes: bm_wait_for_fib_set() (process,
- * bm->wait_for_fib) and bgp_suppress_fib_pending_set() (instance,
- * BGP_FLAG_SUPPRESS_FIB_PENDING) are independent setters with no
- * cross-check against each other's state in either direction, and
- * BGP_SUPPRESS_FIB_ENABLED(bgp) (bgpd.h) simply ORs the two together at
- * every use site -- both can be configured simultaneously today with no
- * error and no precedence rule beyond that OR. Converted as-is: no new
- * guard is introduced.
- *
- * 'enabled' is a static default-off boolean with a legacy positive-only
- * emission (no <cmd> deletes back to the false default, same shape as
- * 'bgp always-compare-med'); 'advertisement-delay' is a static
- * default-on scalar (YANG default 1000 == BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY,
- * same shape as 'bgp default local-preference'). Both leaves are set/reset
- * together off the single legacy "[no] bgp suppress-fib-pending
- * [(0-10000)$delay]" grammar, same shape as 'bgp max-med administrative'.
- */
-DEFPY_YANG(
-	bgp_global_suppress_fib_pending, bgp_global_suppress_fib_pending_cli_cmd,
-	"bgp suppress-fib-pending [(0-10000)$delay]",
-	BGP_STR
-	"Advertise only routes that are programmed in kernel to peers globally\n"
-	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/enabled",
-			      NB_OP_MODIFY, "true");
-	if (delay_str)
-		nb_cli_enqueue_change(vty,
-				      "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
-				      NB_OP_MODIFY, delay_str);
-	else
-		nb_cli_enqueue_change(vty,
-				      "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
-				      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_suppress_fib_pending, no_bgp_global_suppress_fib_pending_cli_cmd,
-	"no bgp suppress-fib-pending [(0-10000)]",
-	NO_STR
-	BGP_STR
-	"Advertise only routes that are programmed in kernel to peers globally\n"
-	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/enabled",
-			      NB_OP_DESTROY, NULL);
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
-			      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
 DEFPY_YANG(
 	bgp_suppress_fib_pending, bgp_suppress_fib_pending_cli_cmd,
 	"bgp suppress-fib-pending [(0-10000)$delay]",
@@ -512,60 +439,6 @@ DEFPY_YANG(
 	nb_cli_enqueue_change(vty, "./suppress-fib-pending/enabled", NB_OP_DESTROY, NULL);
 	nb_cli_enqueue_change(vty, "./suppress-fib-pending/advertisement-delay", NB_OP_DESTROY,
 			      NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-/*
- * Milestone 2 batch B11: 'bgp update-delay'/'update-delay' and 'bgp
- * advertisement-delay'/'advertisement-delay' (process + instance pairs).
- *
- * update-delay has a strict bidirectional hard-error mutual exclusion
- * between the two scopes (bgp_global_update_delay_config_vty()/
- * bgp_update_delay_config_vty(), bgpd/bgp_vty.c): the process setter
- * refuses if any VRF has a non-default per-instance value, and the
- * instance setter refuses outright whenever the process-wide value is
- * non-default. Both directions are enforced in NB_EV_VALIDATE against the
- * live bm-> / bgp-> runtime state (bgp_nb_config.c), mirroring the legacy
- * checks exactly, not against the northbound candidate tree.
- *
- * advertisement-delay has NO such guard in legacy code -- deliberately
- * asymmetric vs. update-delay, not an oversight. This conversion does not
- * add one. Both leaves are enqueued together off a single legacy grammar,
- * same shape as the suppress-fib-pending pair above: the establish-wait
- * token is only ever a MODIFY when supplied, else DESTROY (absence means
- * "inherit the delay value", matching legacy's "!establish_wait" branch).
- */
-DEFPY_YANG(
-	bgp_global_update_delay, bgp_global_update_delay_cli_cmd,
-	"bgp update-delay (0-3600)$delay [(1-3600)$wait]",
-	BGP_STR
-	"Force initial delay for best-path and updates for all bgp instances\n"
-	"Max delay in seconds\n"
-	"Establish wait in seconds\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/delay", NB_OP_MODIFY,
-			      delay_str);
-	if (wait_str)
-		nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
-				      NB_OP_MODIFY, wait_str);
-	else
-		nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
-				      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_update_delay, no_bgp_global_update_delay_cli_cmd,
-	"no bgp update-delay [(0-3600) [(1-3600)]]",
-	NO_STR
-	BGP_STR
-	"Force initial delay for best-path and updates\n"
-	"Max delay in seconds\n"
-	"Establish wait in seconds\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/delay", NB_OP_DESTROY, NULL);
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
-			      NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -598,30 +471,6 @@ DEFPY_YANG(
 }
 
 DEFPY_YANG(
-	bgp_global_advertisement_delay, bgp_global_advertisement_delay_cli_cmd,
-	"bgp advertisement-delay (1-3600)$delay",
-	BGP_STR
-	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
-	"Delay in seconds\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/advertisement-delay", NB_OP_MODIFY,
-			      delay_str);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_advertisement_delay, no_bgp_global_advertisement_delay_cli_cmd,
-	"no bgp advertisement-delay [(1-3600)]",
-	NO_STR
-	BGP_STR
-	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
-	"Delay in seconds\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/advertisement-delay", NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
 	bgp_advertisement_delay, bgp_advertisement_delay_cli_cmd,
 	"advertisement-delay (1-3600)$delay",
 	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
@@ -639,42 +488,6 @@ DEFPY_YANG(
 	"Delay in seconds\n")
 {
 	nb_cli_enqueue_change(vty, "./advertisement-delay", NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-/*
- * Milestone 2 batch B12: 'bgp graceful-shutdown' (process + instance
- * pair). Legacy is a single dual-purpose DEFUN (bgp_graceful_shutdown_cmd /
- * no_bgp_graceful_shutdown_cmd, bgpd/bgp_vty.c) installed identically at
- * both CONFIG_NODE and BGP_NODE and branching on vty->node -- split here
- * into two independent DEFPY_YANG pairs (same "bgp graceful-shutdown"
- * grammar at both nodes, same as legacy), one per scope, each with its own
- * fixed target xpath. The strict bidirectional mutual-exclusion guard is
- * enforced in NB_EV_VALIDATE in bgp_nb_config.c, reading the live bm-> /
- * bgp-> runtime state. Both leaves carry a YANG default (false), so the
- * no-form maps to NB_OP_DESTROY same as suppress-fib-pending's 'enabled'
- * (B10) -- there is no separate no-form callback since DESTROY is
- * schema-invalid for a default-bearing leaf; northbound instead redelivers
- * it as a MODIFY of the default value to the single .modify callback.
- */
-DEFPY_YANG(
-	bgp_global_graceful_shutdown, bgp_global_graceful_shutdown_cli_cmd,
-	"bgp graceful-shutdown",
-	BGP_STR
-	"Graceful shutdown parameters\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-shutdown", NB_OP_MODIFY, "true");
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_shutdown, no_bgp_global_graceful_shutdown_cli_cmd,
-	"no bgp graceful-shutdown",
-	NO_STR
-	BGP_STR
-	"Graceful shutdown parameters\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-shutdown", NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -696,103 +509,6 @@ DEFPY_YANG(
 	"Graceful shutdown parameters\n")
 {
 	nb_cli_enqueue_change(vty, "./graceful-shutdown", NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-/*
- * Milestone 2 batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable'
- * mode (process + instance pair) and 'bgp graceful-restart preserve-fw-state'
- * (process + instance pair). Legacy is two dual-purpose DEFUN pairs
- * (bgp_graceful_restart_cmd/no_bgp_graceful_restart_cmd,
- * bgp_graceful_restart_disable_cmd/no_bgp_graceful_restart_disable_cmd) plus
- * a third (bgp_graceful_restart_preserve_fw_cmd/no_...), each installed
- * identically at both CONFIG_NODE and BGP_NODE and branching on vty->node --
- * split here into independent DEFPY_YANG pairs per scope, same grammar as
- * legacy (including the GR_CMD/NO_GR_CMD/GR_DISABLE/NO_GR_DISABLE help
- * strings from lib/command.h).
- *
- * The mode leaf has no YANG default (absence == helper mode): both the
- * restarter and disable forms map their positive form to NB_OP_MODIFY of
- * the matching enum value, and their negative form to NB_OP_DESTROY --
- * which of the two legacy 'no' commands' asymmetric FSM behavior applies is
- * resolved from the *old* enum value in NB_EV_APPLY, not from which 'no'
- * command was typed (there is only one DESTROY entry point on this leaf);
- * see the mode modify/destroy callbacks in bgp_nb_config.c.
- *
- * preserve-fw-state carries a YANG default (false, Tier A), so its no-form
- * maps to NB_OP_DESTROY exactly like graceful-shutdown (B12) -- redelivered
- * as a MODIFY of the default value to the single .modify callback, no
- * separate destroy callback exists.
- */
-DEFPY_YANG(
-	bgp_global_graceful_restart, bgp_global_graceful_restart_cli_cmd,
-	"bgp graceful-restart",
-	BGP_STR
-	GR_CMD)
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_MODIFY,
-			      "restarter");
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart, no_bgp_global_graceful_restart_cli_cmd,
-	"no bgp graceful-restart",
-	NO_STR
-	BGP_STR
-	NO_GR_CMD)
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_DESTROY,
-			      NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	bgp_global_graceful_restart_disable, bgp_global_graceful_restart_disable_cli_cmd,
-	"bgp graceful-restart-disable",
-	BGP_STR
-	GR_DISABLE)
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_MODIFY,
-			      "disable");
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_disable, no_bgp_global_graceful_restart_disable_cli_cmd,
-	"no bgp graceful-restart-disable",
-	NO_STR
-	BGP_STR
-	NO_GR_DISABLE)
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_DESTROY,
-			      NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	bgp_global_graceful_restart_preserve_fw, bgp_global_graceful_restart_preserve_fw_cli_cmd,
-	"bgp graceful-restart preserve-fw-state",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Sets F-bit indication that fib is preserved while doing Graceful Restart\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/preserve-fw-state",
-			      NB_OP_MODIFY, "true");
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_preserve_fw,
-	no_bgp_global_graceful_restart_preserve_fw_cli_cmd,
-	"no bgp graceful-restart preserve-fw-state",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Unsets F-bit indication that fib is preserved while doing Graceful Restart\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/preserve-fw-state",
-			      NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -858,133 +574,6 @@ DEFPY_YANG(
 	"Unsets F-bit indication that fib is preserved while doing Graceful Restart\n")
 {
 	nb_cli_enqueue_change(vty, "./graceful-restart/preserve-fw-state", NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-/*
- * Milestone 2 batch B14: 'bgp graceful-restart restart-time/stalepath-time/
- * select-defer-time/rib-stale-time' (process + instance pairs). Legacy is
- * three dual-purpose DEFUN pairs (restart-time, stalepath-time,
- * select-defer-time), same install-at-both-nodes-branch-on-vty->node shape
- * as the mode/preserve-fw-state family above, plus a fourth
- * (rib-stale-time) whose CONFIG_NODE half was dead code (see the
- * bgp_nb_config.c comment on process_graceful_restart_rib_stale_time_modify()
- * for the fresh-code note). None of the four leaves carries a YANG default,
- * so all eight DEFPY_YANG pairs below map their 'no' form to NB_OP_DESTROY
- * (no separate default-transition MODIFY needed, unlike preserve-fw-state).
- */
-DEFPY_YANG(
-	bgp_global_graceful_restart_restart_time, bgp_global_graceful_restart_restart_time_cli_cmd,
-	"bgp graceful-restart restart-time (0-4095)$restart_time",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to wait to delete stale routes before a BGP open message is received\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/restart-time",
-			      NB_OP_MODIFY, restart_time_str);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_restart_time,
-	no_bgp_global_graceful_restart_restart_time_cli_cmd,
-	"no bgp graceful-restart restart-time [(0-4095)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to wait to delete stale routes before a BGP open message is received\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/restart-time",
-			      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	bgp_global_graceful_restart_stalepath_time,
-	bgp_global_graceful_restart_stalepath_time_cli_cmd,
-	"bgp graceful-restart stalepath-time (1-4095)$stalepath_time",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the max time to hold onto restarting peer's stale paths\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/stalepath-time",
-			      NB_OP_MODIFY, stalepath_time_str);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_stalepath_time,
-	no_bgp_global_graceful_restart_stalepath_time_cli_cmd,
-	"no bgp graceful-restart stalepath-time [(1-4095)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the max time to hold onto restarting peer's stale paths\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/stalepath-time",
-			      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	bgp_global_graceful_restart_select_defer_time,
-	bgp_global_graceful_restart_select_defer_time_cli_cmd,
-	"bgp graceful-restart select-defer-time (0-3600)$defer_time",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to defer the BGP route selection after restart\n"
-	"Delay value (seconds, 0 - disable)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/select-defer-time",
-			      NB_OP_MODIFY, defer_time_str);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_select_defer_time,
-	no_bgp_global_graceful_restart_select_defer_time_cli_cmd,
-	"no bgp graceful-restart select-defer-time [(0-3600)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to defer the BGP route selection after restart\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/select-defer-time",
-			      NB_OP_DESTROY, NULL);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	bgp_global_graceful_restart_rib_stale_time,
-	bgp_global_graceful_restart_rib_stale_time_cli_cmd,
-	"bgp graceful-restart rib-stale-time (1-3600)$stale_time",
-	BGP_STR
-	"Graceful restart configuration parameters\n"
-	"Specify the stale route removal timer in rib\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/rib-stale-time",
-			      NB_OP_MODIFY, stale_time_str);
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG(
-	no_bgp_global_graceful_restart_rib_stale_time,
-	no_bgp_global_graceful_restart_rib_stale_time_cli_cmd,
-	"no bgp graceful-restart rib-stale-time [(1-3600)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart configuration parameters\n"
-	"Specify the stale route removal timer in rib\n"
-	"Delay value (seconds)\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/rib-stale-time",
-			      NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -2825,7 +2414,7 @@ DEFPY_ATTR(
  * (vtysh_config.c) folds this with bgpd's remaining legacy lines into one
  * "router bgp" block instead of splitting it into two.
  */
-static void instance_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+void instance_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
 	const char *vrf = yang_dnode_get_string(dnode, "vrf");
 
@@ -2849,38 +2438,38 @@ static void instance_cli_write(struct vty *vty, const struct lyd_node *dnode, bo
 	vty_out(vty, "\n");
 }
 
-static void instance_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
+void instance_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
 {
 	vty_out(vty, "exit\n");
 	vty_out(vty, "!\n");
 }
 
-static void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
 	vty_out(vty, " bgp router-id %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
-static void instance_log_neighbor_changes_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_log_neighbor_changes_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	vty_out(vty, " bgp log-neighbor-changes %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_write_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_write_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults)
 {
 	vty_out(vty, " write-quanta %u\n", yang_dnode_get_uint8(dnode, NULL));
 }
 
-static void instance_read_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_read_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults)
 {
 	vty_out(vty, " read-quanta %u\n", yang_dnode_get_uint8(dnode, NULL));
 }
 
-static void instance_coalesce_time_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_coalesce_time_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					     bool show_defaults)
 {
 	vty_out(vty, " coalesce-time %u\n", yang_dnode_get_uint32(dnode, NULL));
@@ -2895,7 +2484,7 @@ static void instance_coalesce_time_cli_write(struct vty *vty, const struct lyd_n
  * conditional-advertisement, default-originate) can trigger it too; guard
  * on keepalive/holdtime actually being present before emitting.
  */
-static void instance_timers_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_timers_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults)
 {
 	bool has_keepalive = yang_dnode_exists(dnode, "keepalive");
@@ -2911,14 +2500,14 @@ static void instance_timers_cli_write(struct vty *vty, const struct lyd_node *dn
 	vty_out(vty, " timers bgp %u %u\n", keepalive, holdtime);
 }
 
-static void instance_timers_minimum_holdtime_cli_write(struct vty *vty,
+void instance_timers_minimum_holdtime_cli_write(struct vty *vty,
 						       const struct lyd_node *dnode,
 						       bool show_defaults)
 {
 	vty_out(vty, " bgp minimum-holdtime %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_timers_conditional_advertisement_cli_write(struct vty *vty,
+void instance_timers_conditional_advertisement_cli_write(struct vty *vty,
 								const struct lyd_node *dnode,
 								bool show_defaults)
 {
@@ -2926,14 +2515,14 @@ static void instance_timers_conditional_advertisement_cli_write(struct vty *vty,
 		yang_dnode_get_uint8(dnode, NULL));
 }
 
-static void instance_timers_default_originate_cli_write(struct vty *vty,
+void instance_timers_default_originate_cli_write(struct vty *vty,
 							const struct lyd_node *dnode,
 							bool show_defaults)
 {
 	vty_out(vty, " bgp default-originate timer %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_cluster_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_cluster_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults)
 {
 	struct in_addr cluster;
@@ -2947,14 +2536,14 @@ static void instance_cluster_id_cli_write(struct vty *vty, const struct lyd_node
 	vty_out(vty, " bgp cluster-id %pI4\n", &cluster);
 }
 
-static void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " no bgp fast-external-failover\n");
 }
 
-static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults)
 {
 	vty_out(vty, " bgp ipv6-auto-ra %s\n",
@@ -2966,7 +2555,7 @@ static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_no
  * process_suppress_fib_pending_cli_write above, one leading space since
  * it's nested inside the 'router bgp' block.
  */
-static void instance_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, "enabled"))
@@ -2988,7 +2577,7 @@ static void instance_suppress_fib_pending_cli_write(struct vty *vty, const struc
  * plain presence check is sufficient and exact here), establish-wait only
  * printed when it differs from delay (absence means "inherits delay").
  */
-static void instance_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults)
 {
 	uint16_t delay;
@@ -3017,7 +2606,7 @@ static void instance_update_delay_cli_write(struct vty *vty, const struct lyd_no
  * runtime state, and there is no guard against this combination in either
  * old or new code, see the no-mutual-exclusion note above).
  */
-static void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults)
 {
 	if (yang_dnode_exists(dnode, NULL))
@@ -3032,21 +2621,21 @@ static void instance_advertisement_delay_cli_write(struct vty *vty, const struct
  * NB_EV_VALIDATE already refuses to let both be true at once, so a plain
  * value check reproduces the same emitted output).
  */
-static void instance_graceful_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_graceful_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp graceful-shutdown\n");
 }
 
-static void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp always-compare-med\n");
 }
 
-static void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
+void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults)
 {
@@ -3060,14 +2649,14 @@ static void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
 		vty_out(vty, " bgp labeled-unicast ipv6-explicit-null\n");
 }
 
-static void instance_reject_as_sets_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_reject_as_sets_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					      bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " no bgp reject-as-sets\n");
 }
 
-static void instance_client_to_client_reflection_cli_write(struct vty *vty,
+void instance_client_to_client_reflection_cli_write(struct vty *vty,
 							   const struct lyd_node *dnode,
 							   bool show_defaults)
 {
@@ -3075,7 +2664,7 @@ static void instance_client_to_client_reflection_cli_write(struct vty *vty,
 		vty_out(vty, " no bgp client-to-client reflection\n");
 }
 
-static void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
+void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
 								  const struct lyd_node *dnode,
 								  bool show_defaults)
 {
@@ -3083,7 +2672,7 @@ static void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vt
 		vty_out(vty, " bgp disable-ebgp-connected-route-check\n");
 }
 
-static void instance_bestpath_as_path_ignore_cli_write(struct vty *vty,
+void instance_bestpath_as_path_ignore_cli_write(struct vty *vty,
 						       const struct lyd_node *dnode,
 						       bool show_defaults)
 {
@@ -3091,7 +2680,7 @@ static void instance_bestpath_as_path_ignore_cli_write(struct vty *vty,
 		vty_out(vty, " bgp bestpath as-path ignore\n");
 }
 
-static void instance_bestpath_as_path_confed_cli_write(struct vty *vty,
+void instance_bestpath_as_path_confed_cli_write(struct vty *vty,
 						       const struct lyd_node *dnode,
 						       bool show_defaults)
 {
@@ -3104,7 +2693,7 @@ static void instance_bestpath_as_path_confed_cli_write(struct vty *vty,
  * either leaf's own xpath, matching bgp_config_write()'s single-line
  * emission (bgp_vty.c:21698-21707).
  */
-static void instance_bestpath_as_path_multipath_relax_cli_write(struct vty *vty,
+void instance_bestpath_as_path_multipath_relax_cli_write(struct vty *vty,
 								const struct lyd_node *dnode,
 								bool show_defaults)
 {
@@ -3117,7 +2706,7 @@ static void instance_bestpath_as_path_multipath_relax_cli_write(struct vty *vty,
 		vty_out(vty, " bgp bestpath as-path multipath-relax\n");
 }
 
-static void instance_bestpath_compare_routerid_cli_write(struct vty *vty,
+void instance_bestpath_compare_routerid_cli_write(struct vty *vty,
 							 const struct lyd_node *dnode,
 							 bool show_defaults)
 {
@@ -3125,7 +2714,7 @@ static void instance_bestpath_compare_routerid_cli_write(struct vty *vty,
 		vty_out(vty, " bgp bestpath compare-routerid\n");
 }
 
-static void instance_bestpath_use_imported_attributes_cli_write(struct vty *vty,
+void instance_bestpath_use_imported_attributes_cli_write(struct vty *vty,
 								const struct lyd_node *dnode,
 								bool show_defaults)
 {
@@ -3137,7 +2726,7 @@ static void instance_bestpath_use_imported_attributes_cli_write(struct vty *vty,
  * registered on the shared "med" container, matching bgp_config_write()'s
  * single-line emission (bgp_vty.c:21724-21733).
  */
-static void instance_bestpath_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_bestpath_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults)
 {
 	bool confed = yang_dnode_get_bool(dnode, "confed");
@@ -3154,7 +2743,7 @@ static void instance_bestpath_med_cli_write(struct vty *vty, const struct lyd_no
 	vty_out(vty, "\n");
 }
 
-static void instance_bestpath_peer_type_multipath_relax_cli_write(struct vty *vty,
+void instance_bestpath_peer_type_multipath_relax_cli_write(struct vty *vty,
 								  const struct lyd_node *dnode,
 								  bool show_defaults)
 {
@@ -3162,7 +2751,7 @@ static void instance_bestpath_peer_type_multipath_relax_cli_write(struct vty *vt
 		vty_out(vty, " bgp bestpath peer-type multipath-relax\n");
 }
 
-static void instance_bestpath_bandwidth_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_bestpath_bandwidth_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
 	vty_out(vty, " bgp bestpath bandwidth %s\n", yang_dnode_get_string(dnode, NULL));
@@ -3175,21 +2764,21 @@ static void instance_bestpath_bandwidth_cli_write(struct vty *vty, const struct 
  * matching bgp_config_write()'s "if (bgp->default_af[...])" arm for all
  * other AFI/SAFI pairs.
  */
-static void instance_default_ipv4_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv4_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " no bgp default ipv4-unicast\n");
 }
 
-static void instance_default_ipv4_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv4_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv4-multicast\n");
 }
 
-static void instance_default_ipv4_labeled_unicast_cli_write(struct vty *vty,
+void instance_default_ipv4_labeled_unicast_cli_write(struct vty *vty,
 							    const struct lyd_node *dnode,
 							    bool show_defaults)
 {
@@ -3197,35 +2786,35 @@ static void instance_default_ipv4_labeled_unicast_cli_write(struct vty *vty,
 		vty_out(vty, " bgp default ipv4-labeled-unicast\n");
 }
 
-static void instance_default_ipv4_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv4_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv4-vpn\n");
 }
 
-static void instance_default_ipv4_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv4_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv4-flowspec\n");
 }
 
-static void instance_default_ipv6_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv6_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv6-unicast\n");
 }
 
-static void instance_default_ipv6_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv6_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv6-multicast\n");
 }
 
-static void instance_default_ipv6_labeled_unicast_cli_write(struct vty *vty,
+void instance_default_ipv6_labeled_unicast_cli_write(struct vty *vty,
 							    const struct lyd_node *dnode,
 							    bool show_defaults)
 {
@@ -3233,21 +2822,21 @@ static void instance_default_ipv6_labeled_unicast_cli_write(struct vty *vty,
 		vty_out(vty, " bgp default ipv6-labeled-unicast\n");
 }
 
-static void instance_default_ipv6_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv6_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv6-vpn\n");
 }
 
-static void instance_default_ipv6_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_ipv6_flowspec_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, " bgp default ipv6-flowspec\n");
 }
 
-static void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
 	if (yang_dnode_get_bool(dnode, NULL))
@@ -3258,7 +2847,7 @@ static void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct 
  * default, matching bgp_config_write()'s "if (bgp->default_local_pref !=
  * BGP_DEFAULT_LOCAL_PREF)" / subgroup-pkt-queue-max arms exactly.
  */
-static void instance_default_local_preference_cli_write(struct vty *vty,
+void instance_default_local_preference_cli_write(struct vty *vty,
 							const struct lyd_node *dnode,
 							bool show_defaults)
 {
@@ -3267,7 +2856,7 @@ static void instance_default_local_preference_cli_write(struct vty *vty,
 			yang_dnode_get_uint32(dnode, NULL));
 }
 
-static void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
+void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
 							      const struct lyd_node *dnode,
 							      bool show_defaults)
 {
@@ -3284,7 +2873,7 @@ static void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
  * divergence from the legacy value-comparison gating, same rationale as
  * batch B2's default-less leaves.
  */
-static void instance_max_med_on_startup_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_max_med_on_startup_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
 	if (!yang_dnode_exists(dnode, "period"))
@@ -3302,7 +2891,7 @@ static void instance_max_med_on_startup_cli_write(struct vty *vty, const struct 
  * be materialized with show_defaults); 'med' is presence-based like
  * on-startup's.
  */
-static void instance_max_med_administrative_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_max_med_administrative_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults)
 {
 	if (!yang_dnode_exists(dnode, "enabled") || !yang_dnode_get_bool(dnode, "enabled"))
@@ -3314,7 +2903,7 @@ static void instance_max_med_administrative_cli_write(struct vty *vty, const str
 	vty_out(vty, "\n");
 }
 
-static void instance_confederation_identifier_cli_write(struct vty *vty,
+void instance_confederation_identifier_cli_write(struct vty *vty,
 							const struct lyd_node *dnode,
 							bool show_defaults)
 {
@@ -3351,7 +2940,7 @@ static int instance_confederation_peers_asdot_iter_cb(const struct lyd_node *dno
  * insertion-ordered instead, but that's display-only (show running-config
  * presentation), not a wire/semantic difference.
  */
-static void instance_confederation_peers_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_confederation_peers_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults)
 {
 	bool has_plain = yang_dnode_exists(dnode, "plain");
@@ -3375,7 +2964,7 @@ static void instance_confederation_peers_cli_write(struct vty *vty, const struct
  * pattern), guarded on 'idle' since the YANG 'must' guarantees all three or
  * none.
  */
-static void instance_tcp_keepalive_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_tcp_keepalive_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					     bool show_defaults)
 {
 	if (!yang_dnode_exists(dnode, "idle"))
@@ -3385,7 +2974,7 @@ static void instance_tcp_keepalive_cli_write(struct vty *vty, const struct lyd_n
 		yang_dnode_get_uint16(dnode, "interval"), yang_dnode_get_uint8(dnode, "probes"));
 }
 
-static void instance_long_lived_graceful_restart_stale_time_cli_write(struct vty *vty,
+void instance_long_lived_graceful_restart_stale_time_cli_write(struct vty *vty,
 								      const struct lyd_node *dnode,
 								      bool show_defaults)
 {
@@ -3396,7 +2985,7 @@ static void instance_long_lived_graceful_restart_stale_time_cli_write(struct vty
 /* Tri-state, presence-based (see B8 DEFPY comment above): always emits an
  * explicit enabled|disabled value, never the legacy bare/negative form.
  */
-static void instance_graceful_restart_notification_cli_write(struct vty *vty,
+void instance_graceful_restart_notification_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults)
 {
@@ -3416,7 +3005,7 @@ static void instance_graceful_restart_notification_cli_write(struct vty *vty,
  * config_write which explicitly gates on '!BM_FLAG_GR_CONFIGURED' for the
  * same reason expressed at the C-struct level instead.
  */
-static void instance_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults)
 {
 	const char *mode = yang_dnode_get_string(dnode, NULL);
@@ -3433,7 +3022,7 @@ static void instance_graceful_restart_mode_cli_write(struct vty *vty, const stru
  * process-wide flag in legacy's config_write is likewise a no-op here for
  * the same datastore-presence reason as the mode leaf above.
  */
-static void instance_graceful_restart_preserve_fw_state_cli_write(struct vty *vty,
+void instance_graceful_restart_preserve_fw_state_cli_write(struct vty *vty,
 								  const struct lyd_node *dnode,
 								  bool show_defaults)
 {
@@ -3449,14 +3038,14 @@ static void instance_graceful_restart_preserve_fw_state_cli_write(struct vty *vt
  * datastore, so these leaves are only ever present when this exact
  * per-instance command was used).
  */
-static void instance_graceful_restart_restart_time_cli_write(struct vty *vty,
+void instance_graceful_restart_restart_time_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults)
 {
 	vty_out(vty, " bgp graceful-restart restart-time %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_graceful_restart_stalepath_time_cli_write(struct vty *vty,
+void instance_graceful_restart_stalepath_time_cli_write(struct vty *vty,
 							       const struct lyd_node *dnode,
 							       bool show_defaults)
 {
@@ -3464,7 +3053,7 @@ static void instance_graceful_restart_stalepath_time_cli_write(struct vty *vty,
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_graceful_restart_select_defer_time_cli_write(struct vty *vty,
+void instance_graceful_restart_select_defer_time_cli_write(struct vty *vty,
 								  const struct lyd_node *dnode,
 								  bool show_defaults)
 {
@@ -3472,7 +3061,7 @@ static void instance_graceful_restart_select_defer_time_cli_write(struct vty *vt
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
+void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 							       const struct lyd_node *dnode,
 							       bool show_defaults)
 {
@@ -3480,28 +3069,28 @@ static void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
-static void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	vty_out(vty, " bgp ebgp-requires-policy %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_enforce_first_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_enforce_first_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
 {
 	vty_out(vty, " bgp enforce-first-as %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_suppress_duplicates_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_suppress_duplicates_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults)
 {
 	vty_out(vty, " bgp suppress-duplicates %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_hard_administrative_reset_cli_write(struct vty *vty,
+void instance_hard_administrative_reset_cli_write(struct vty *vty,
 							 const struct lyd_node *dnode,
 							 bool show_defaults)
 {
@@ -3509,35 +3098,35 @@ static void instance_hard_administrative_reset_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_deterministic_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_deterministic_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults)
 {
 	vty_out(vty, " bgp deterministic-med %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_network_import_check_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_network_import_check_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
 	vty_out(vty, " bgp network import-check %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_bestpath_aigp_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_bestpath_aigp_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					     bool show_defaults)
 {
 	vty_out(vty, " bgp bestpath aigp %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_show_hostname_cli_write(struct vty *vty, const struct lyd_node *dnode,
+void instance_default_show_hostname_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults)
 {
 	vty_out(vty, " bgp default show-hostname %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_show_nexthop_hostname_cli_write(struct vty *vty,
+void instance_default_show_nexthop_hostname_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults)
 {
@@ -3545,7 +3134,7 @@ static void instance_default_show_nexthop_hostname_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_software_version_capability_cli_write(struct vty *vty,
+void instance_default_software_version_capability_cli_write(struct vty *vty,
 								   const struct lyd_node *dnode,
 								   bool show_defaults)
 {
@@ -3553,14 +3142,14 @@ static void instance_default_software_version_capability_cli_write(struct vty *v
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_software_version_capability_latest_encoding_cli_write(
+void instance_default_software_version_capability_latest_encoding_cli_write(
 	struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
 	vty_out(vty, " bgp default software-version-capability latest-encoding %s\n",
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_link_local_capability_cli_write(struct vty *vty,
+void instance_default_link_local_capability_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults)
 {
@@ -3568,7 +3157,7 @@ static void instance_default_link_local_capability_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_default_dynamic_capability_cli_write(struct vty *vty,
+void instance_default_dynamic_capability_cli_write(struct vty *vty,
 							  const struct lyd_node *dnode,
 							  bool show_defaults)
 {
@@ -3576,7 +3165,7 @@ static void instance_default_dynamic_capability_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void instance_route_reflector_allow_outbound_policy_cli_write(struct vty *vty,
+void instance_route_reflector_allow_outbound_policy_cli_write(struct vty *vty,
 								     const struct lyd_node *dnode,
 								     bool show_defaults)
 {
@@ -3584,1248 +3173,7 @@ static void instance_route_reflector_allow_outbound_policy_cli_write(struct vty 
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						    bool show_defaults)
-{
-	vty_out(vty, "bgp route-map delay-timer %u\n", yang_dnode_get_uint16(dnode, NULL));
-}
-
-static void process_session_dscp_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					   bool show_defaults)
-{
-	vty_out(vty, "bgp session-dscp %u\n", yang_dnode_get_uint8(dnode, NULL));
-}
-
-static void process_input_queue_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						bool show_defaults)
-{
-	vty_out(vty, "bgp input-queue-limit %u\n", yang_dnode_get_uint32(dnode, NULL));
-}
-
-static void process_output_queue_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						 bool show_defaults)
-{
-	vty_out(vty, "bgp output-queue-limit %u\n", yang_dnode_get_uint32(dnode, NULL));
-}
-
-static void process_no_rib_cli_write(struct vty *vty, const struct lyd_node *dnode,
-				     bool show_defaults)
-{
-	vty_out(vty, "bgp no-rib\n");
-}
-
-static void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						    bool show_defaults)
-{
-	vty_out(vty, "bgp send-extra-data zebra\n");
-}
-
-static void process_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					   bool show_defaults)
-{
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "no bgp ipv6-auto-ra\n");
-}
-
-/* Joint emission of 'bgp suppress-fib-pending [(0-10000)]', process-wide
- * form: registered on the "suppress-fib-pending" container so 'enabled'
- * and 'advertisement-delay' land on one line (batch B10), same
- * guarded-container shape as instance_max_med_administrative_cli_write.
- * 'enabled' has a YANG default (false), so it's value-checked, not merely
- * presence-checked; 'advertisement-delay' also carries a YANG default
- * (1000) and is value-checked against it, matching bgp_config_write()'s
- * "if (bm->suppress_fib_adv_delay != BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY)"
- * arm exactly.
- */
-static void process_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						   bool show_defaults)
-{
-	if (!yang_dnode_get_bool(dnode, "enabled"))
-		return;
-
-	if (yang_dnode_get_uint16(dnode, "advertisement-delay") != 1000)
-		vty_out(vty, "bgp suppress-fib-pending %u\n",
-			yang_dnode_get_uint16(dnode, "advertisement-delay"));
-	else
-		vty_out(vty, "bgp suppress-fib-pending\n");
-}
-
-/* Joint emission of 'bgp update-delay (0-3600) [(1-3600)]', process-wide
- * form (batch B11), same presence-based shape as
- * instance_update_delay_cli_write above -- no leading space, top level.
- */
-static void process_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					   bool show_defaults)
-{
-	uint16_t delay;
-
-	if (!yang_dnode_exists(dnode, "delay"))
-		return;
-
-	delay = yang_dnode_get_uint16(dnode, "delay");
-	vty_out(vty, "bgp update-delay %u", delay);
-	if (yang_dnode_exists(dnode, "establish-wait") &&
-	    yang_dnode_get_uint16(dnode, "establish-wait") != delay)
-		vty_out(vty, " %u", yang_dnode_get_uint16(dnode, "establish-wait"));
-	vty_out(vty, "\n");
-}
-
-/* Emission of 'bgp advertisement-delay (1-3600)', process-wide form
- * (batch B11), no leading space.
- */
-static void process_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						  bool show_defaults)
-{
-	if (yang_dnode_exists(dnode, NULL))
-		vty_out(vty, "bgp advertisement-delay %u\n", yang_dnode_get_uint16(dnode, NULL));
-}
-
-/* Batch B12: 'bgp graceful-shutdown', process-wide form. Same
- * value-checked shape as instance_graceful_shutdown_cli_write above, no
- * leading space (top-level, matches legacy's "if (CHECK_FLAG(bm->flags,
- * BM_FLAG_GRACEFUL_SHUTDOWN)) vty_out(vty, \"bgp graceful-shutdown\\n\")").
- */
-static void process_graceful_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						bool show_defaults)
-{
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "bgp graceful-shutdown\n");
-}
-
-/* Batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable' mode,
- * process-wide form. Same presence-based shape as
- * instance_graceful_restart_mode_cli_write above, no leading space.
- */
-static void process_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						    bool show_defaults)
-{
-	const char *mode = yang_dnode_get_string(dnode, NULL);
-
-	if (strmatch(mode, "restarter"))
-		vty_out(vty, "bgp graceful-restart\n");
-	else if (strmatch(mode, "disable"))
-		vty_out(vty, "bgp graceful-restart-disable\n");
-}
-
-/* Batch B13: 'bgp graceful-restart preserve-fw-state', process-wide form.
- * Same value-checked shape as process_graceful_shutdown_cli_write above.
- */
-static void process_graceful_restart_preserve_fw_state_cli_write(struct vty *vty,
-								 const struct lyd_node *dnode,
-								 bool show_defaults)
-{
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "bgp graceful-restart preserve-fw-state\n");
-}
-
-/* Batch B14: 'bgp graceful-restart restart-time/stalepath-time/
- * select-defer-time/rib-stale-time', process-wide form. Same presence-based
- * shape as instance_graceful_restart_restart_time_cli_write etc. above, no
- * leading space.
- */
-static void process_graceful_restart_restart_time_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults)
-{
-	vty_out(vty, "bgp graceful-restart restart-time %u\n", yang_dnode_get_uint16(dnode, NULL));
-}
-
-static void process_graceful_restart_stalepath_time_cli_write(struct vty *vty,
-							      const struct lyd_node *dnode,
-							      bool show_defaults)
-{
-	vty_out(vty, "bgp graceful-restart stalepath-time %u\n",
-		yang_dnode_get_uint16(dnode, NULL));
-}
-
-static void process_graceful_restart_select_defer_time_cli_write(struct vty *vty,
-								 const struct lyd_node *dnode,
-								 bool show_defaults)
-{
-	vty_out(vty, "bgp graceful-restart select-defer-time %u\n",
-		yang_dnode_get_uint16(dnode, NULL));
-}
-
-static void process_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
-							      const struct lyd_node *dnode,
-							      bool show_defaults)
-{
-	vty_out(vty, "bgp graceful-restart rib-stale-time %u\n",
-		yang_dnode_get_uint16(dnode, NULL));
-}
-
-/*
- * neighbor/peer-group session lifecycle + remote-as (M4 batch B1).
- *
- * bgp_cli.c commands run in mgmtd's process (bgp_cli_init() is called from
- * mgmtd/mgmt_vty.c, never from bgpd.c) -- there is no 'struct bgp'/'struct
- * peer' here, only the candidate datastore. Every disambiguation that
- * legacy did with a runtime peer_lookup_by_conf_if()/peer_group_lookup()
- * call is done here instead with yang_dnode_exists() against the current
- * instance's dnode (see bgp_cli_instance_dnode() below); the real runtime
- * lookups/legacy setters live in bgp_nb_config.c's APPLY callbacks
- * (bgpd's own process, as the northbound backend client for
- * /proteus-bgp:*).
- */
-
-/* vty->candidate_config->dnode is the root of the WHOLE candidate data
- * tree (the first top-level sibling across every configured module), not
- * scoped to the BGP instance currently being edited. A relative "./..."
- * xpath query (yang_dnode_exists()/_existsf()/yang_dnode_iterate()) run
- * directly against it only matches if e.g. "neighbor"/"peer-group"
- * happen to be direct children of that particular top-level node, which
- * is not guaranteed (found by M4 batch B2 topotest triage: this silently
- * broke every existence check below, since 'neighbor'/'peer-group' are
- * two levels down, under the current '/proteus-bgp:instance[vrf=...]').
- * Resolve the real current-instance dnode via VTY_CURR_XPATH first,
- * mirroring what nb_cli_enqueue_change() does internally for relative
- * xpaths (lib/northbound_cli.c's create_xpath_base_abs()).
- */
-static const struct lyd_node *bgp_cli_instance_dnode(struct vty *vty)
-{
-	return yang_dnode_get(vty->candidate_config->dnode, VTY_CURR_XPATH);
-}
-
-/* Shared remote-as encoder: mirrors router_bgp_cli_cmd's plain-vs-asdot
- * split for the instance-level autonomous-system leaf. asn_str2asn()
- * (lib/asn.c) parses both notations into a single 32-bit AS; which case
- * to populate is decided purely by whether the token contained a '.', so
- * cli_show can reproduce the notation the user typed.
- */
-static void bgp_cli_enqueue_remote_as(struct vty *vty, const char *base_xpath,
-				      const char *remote_as_str)
-{
-	char *xpath_child;
-	as_t as = 0;
-
-	if (strmatch(remote_as_str, "internal") || strmatch(remote_as_str, "external") ||
-	    strmatch(remote_as_str, "auto")) {
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/type", base_xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, remote_as_str);
-		XFREE(MTYPE_TMP, xpath_child);
-		return;
-	}
-
-	asn_str2asn(remote_as_str, &as);
-
-	/*
-	 * nb_cli_enqueue_change() stores the value pointer as-is (it copies
-	 * only the xpath), and the enqueued changes are not consumed until the
-	 * caller's deferred nb_cli_apply_changes(). Any value string handed to
-	 * it must therefore stay alive past this helper's return. The keyword
-	 * and plain cases reuse remote_as_str (a DEFPY argument that lives
-	 * through apply); the asdot case must reformat, so its high/low value
-	 * buffers use static storage rather than this frame's stack (safe: FRR
-	 * executes CLI commands one at a time and apply is not reentrant).
-	 */
-	if (strchr(remote_as_str, '.')) {
-		static char highbuf[8], lowbuf[8];
-		as_t high = as >> 16, low = as & 0xffff;
-
-		snprintf(highbuf, sizeof(highbuf), "%u", high);
-		snprintf(lowbuf, sizeof(lowbuf), "%u", low);
-
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/asdot/high", base_xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, highbuf);
-		XFREE(MTYPE_TMP, xpath_child);
-
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/asdot/low", base_xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, lowbuf);
-		XFREE(MTYPE_TMP, xpath_child);
-	} else {
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/plain", base_xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, remote_as_str);
-		XFREE(MTYPE_TMP, xpath_child);
-	}
-}
-
-/* Destroy whichever remote-as case is populated. NB_OP_DESTROY on an
- * absent candidate node is a no-op (nb_candidate_edit(), lib/
- * northbound.c), so issuing all three unconditionally is safe. */
-static void bgp_cli_enqueue_remote_as_destroy(struct vty *vty, const char *base_xpath)
-{
-	char *xpath_child;
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/plain", base_xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath_child);
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/asdot", base_xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath_child);
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/remote-as/type", base_xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath_child);
-}
-
-DEFPY_YANG(
-	neighbor_remote_as, neighbor_remote_as_cli_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer remote-as <ASNUM|internal|external|auto>$remote_as",
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	"Specify a BGP neighbor\n"
-	AS_STR
-	"Internal BGP peer\n"
-	"External BGP peer\n"
-	"Automatically detect remote ASN\n")
-{
-	char *xpath;
-	union sockunion su;
-	bool is_addr = str2sockunion(peer, &su) == 0;
-	int ret;
-
-	if (is_addr) {
-		xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-		if (!yang_dnode_exists(bgp_cli_instance_dnode(vty), xpath))
-			nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	} else if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./neighbor[address='%s']",
-				      peer)) {
-		/* existing conf_if (unnumbered) neighbor */
-		xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-	} else if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./peer-group[name='%s']",
-				      peer)) {
-		xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", peer);
-	} else {
-		vty_out(vty, "%% Create the peer-group or interface first\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_cli_enqueue_remote_as(vty, xpath, remote_as);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	no_neighbor, no_neighbor_cli_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X>$peer [remote-as <ASNUM|internal|external|auto>$remote_as]",
-	NO_STR
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	"Specify a BGP neighbor\n"
-	AS_STR
-	"Internal BGP peer\n"
-	"External BGP peer\n"
-	"Automatically detect remote ASN\n")
-{
-	char *xpath;
-	int ret;
-
-	/* The 'remote-as ...' suffix is accepted but ignored, exactly like
-	 * the legacy no_neighbor() DEFUN it replaces: this always deletes
-	 * the whole neighbor, never just its remote-as. */
-	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer_str);
-	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	no_neighbor_word, no_neighbor_word_cli_cmd,
-	"no neighbor WORD$peer",
-	NO_STR
-	NEIGHBOR_STR
-	"Interface name or neighbor tag\n")
-{
-	char *xpath;
-	int ret;
-
-	if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./neighbor[address='%s']", peer)) {
-		xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-	} else if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./peer-group[name='%s']",
-				      peer)) {
-		xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", peer);
-	} else {
-		vty_out(vty, "%% Create the peer-group first\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	no_neighbor_word_remote_as, no_neighbor_word_remote_as_cli_cmd,
-	"no neighbor WORD$peer remote-as <ASNUM|internal|external|auto>",
-	NO_STR
-	NEIGHBOR_STR
-	"Interface name or neighbor tag\n"
-	"Specify a BGP neighbor\n"
-	AS_STR
-	"Internal BGP peer\n"
-	"External BGP peer\n"
-	"Automatically detect remote ASN\n")
-{
-	char *xpath;
-	int ret;
-
-	/* The parsed AS value is irrelevant: this always clears remote-as
-	 * (whichever case is set), matching legacy's
-	 * no_neighbor_interface_peer_group_remote_as() DEFUN. */
-	(void)remote_as;
-
-	if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./neighbor[address='%s']", peer)) {
-		xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-	} else if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./peer-group[name='%s']",
-				      peer)) {
-		xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", peer);
-	} else {
-		vty_out(vty, "%% Create the peer-group or interface first\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_cli_enqueue_remote_as_destroy(vty, xpath);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	neighbor_interface_config, neighbor_interface_config_cli_cmd,
-	"neighbor WORD$ifname interface [v6only]$v6only [peer-group PGNAME$pgname]",
-	NEIGHBOR_STR
-	"Interface name or neighbor tag\n"
-	"Enable BGP on interface\n"
-	"Enable BGP with v6 link-local only\n"
-	"Member of the peer-group\n"
-	"Peer-group name\n")
-{
-	char *xpath, *xpath_child;
-	int ret;
-
-	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", ifname);
-	if (!yang_dnode_exists(bgp_cli_instance_dnode(vty), xpath)) {
-		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/interface-peer", xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
-		XFREE(MTYPE_TMP, xpath_child);
-	}
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/v6only", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, v6only ? NB_OP_MODIFY : NB_OP_DESTROY,
-			      v6only ? "true" : NULL);
-	XFREE(MTYPE_TMP, xpath_child);
-
-	if (pgname) {
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/peer-group", xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, pgname);
-		XFREE(MTYPE_TMP, xpath_child);
-	}
-
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	neighbor_interface_config_remote_as, neighbor_interface_config_remote_as_cli_cmd,
-	"neighbor WORD$ifname interface [v6only]$v6only remote-as <ASNUM|internal|external|auto>$remote_as",
-	NEIGHBOR_STR
-	"Interface name or neighbor tag\n"
-	"Enable BGP on interface\n"
-	"Enable BGP with v6 link-local only\n"
-	"Specify a BGP neighbor\n"
-	AS_STR
-	"Internal BGP peer\n"
-	"External BGP peer\n"
-	"Automatically detect remote ASN\n")
-{
-	char *xpath, *xpath_child;
-	int ret;
-
-	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", ifname);
-	if (!yang_dnode_exists(bgp_cli_instance_dnode(vty), xpath)) {
-		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/interface-peer", xpath);
-		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
-		XFREE(MTYPE_TMP, xpath_child);
-	}
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/v6only", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, v6only ? NB_OP_MODIFY : NB_OP_DESTROY,
-			      v6only ? "true" : NULL);
-	XFREE(MTYPE_TMP, xpath_child);
-
-	bgp_cli_enqueue_remote_as(vty, xpath, remote_as);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	neighbor_peer_group, neighbor_peer_group_cli_cmd,
-	"neighbor WORD$name peer-group",
-	NEIGHBOR_STR
-	"Interface name or neighbor tag\n"
-	"Configure peer-group\n")
-{
-	char *xpath;
-	int ret;
-
-	xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", name);
-	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	no_neighbor_peer_group, no_neighbor_peer_group_cli_cmd,
-	"no neighbor WORD$name peer-group",
-	NO_STR
-	NEIGHBOR_STR
-	"Neighbor tag\n"
-	"Configure peer-group\n")
-{
-	char *xpath;
-	int ret;
-
-	xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", name);
-	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	neighbor_set_peer_group, neighbor_set_peer_group_cli_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer peer-group PGNAME$pgname",
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	"Member of the peer-group\n"
-	"Peer-group name\n")
-{
-	char *xpath, *xpath_child;
-	union sockunion su;
-	bool is_addr = str2sockunion(peer, &su) == 0;
-	int ret;
-
-	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-
-	if (!yang_dnode_exists(bgp_cli_instance_dnode(vty), xpath)) {
-		if (!is_addr) {
-			vty_out(vty, "%% Malformed address or name: %s\n", peer);
-			XFREE(MTYPE_TMP, xpath);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	}
-
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/peer-group", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, pgname);
-	XFREE(MTYPE_TMP, xpath_child);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-DEFPY_YANG(
-	no_neighbor_set_peer_group, no_neighbor_set_peer_group_cli_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer peer-group PGNAME$pgname",
-	NO_STR
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	"Member of the peer-group\n"
-	"Peer-group name\n")
-{
-	char *xpath;
-	int ret;
-
-	/* Destroys the WHOLE neighbor entry, exactly like legacy's
-	 * no_neighbor_set_peer_group() DEFUN (peer_delete(), not an
-	 * unbind) -- see M4 batch B1 commit message. */
-	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
-	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-	XFREE(MTYPE_TMP, xpath);
-
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	return ret;
-}
-
-/*
- * XPath: /proteus-bgp:instance/peer-group
- *
- * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
- * (bgp_vty.c) byte-for-byte: the unconditional "neighbor PGNAME
- * peer-group" declaration line (peer-groups always have
- * PEER_STATUS_GROUP set and are never themselves peer_group_active()),
- * followed by "neighbor PGNAME remote-as ..." if set.
- */
-static void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
-				 bool show_defaults)
-{
-	const char *name = yang_dnode_get_string(dnode, "name");
-
-	vty_out(vty, " neighbor %s peer-group\n", name);
-
-	if (yang_dnode_exists(dnode, "remote-as/plain"))
-		vty_out(vty, " neighbor %s remote-as %u\n", name,
-			yang_dnode_get_uint32(dnode, "remote-as/plain"));
-	else if (yang_dnode_exists(dnode, "remote-as/asdot/high"))
-		vty_out(vty, " neighbor %s remote-as %u.%u\n", name,
-			yang_dnode_get_uint16(dnode, "remote-as/asdot/high"),
-			yang_dnode_get_uint16(dnode, "remote-as/asdot/low"));
-	else if (yang_dnode_exists(dnode, "remote-as/type"))
-		vty_out(vty, " neighbor %s remote-as %s\n", name,
-			yang_dnode_get_string(dnode, "remote-as/type"));
-}
-
-/* addr == NULL renders the bare "remote-as ..." suffix used inline after
- * "neighbor IFNAME interface ..." (no leading "neighbor %s", no trailing
- * newline); addr != NULL renders a standalone "neighbor %s remote-as
- * ...\n" line. Mirrors the two rendering shapes in
- * bgp_config_write_peer_global()'s retired block. */
-static void neighbor_cli_write_remote_as(struct vty *vty, const struct lyd_node *dnode,
-					 const char *addr)
-{
-	if (yang_dnode_exists(dnode, "remote-as/plain")) {
-		uint32_t as = yang_dnode_get_uint32(dnode, "remote-as/plain");
-
-		if (addr)
-			vty_out(vty, " neighbor %s remote-as %u\n", addr, as);
-		else
-			vty_out(vty, " remote-as %u", as);
-	} else if (yang_dnode_exists(dnode, "remote-as/asdot/high")) {
-		uint16_t high = yang_dnode_get_uint16(dnode, "remote-as/asdot/high");
-		uint16_t low = yang_dnode_get_uint16(dnode, "remote-as/asdot/low");
-
-		if (addr)
-			vty_out(vty, " neighbor %s remote-as %u.%u\n", addr, high, low);
-		else
-			vty_out(vty, " remote-as %u.%u", high, low);
-	} else if (yang_dnode_exists(dnode, "remote-as/type")) {
-		const char *type = yang_dnode_get_string(dnode, "remote-as/type");
-
-		if (addr)
-			vty_out(vty, " neighbor %s remote-as %s\n", addr, type);
-		else
-			vty_out(vty, " remote-as %s", type);
-	}
-}
-
-/*
- * XPath: /proteus-bgp:instance/neighbor
- *
- * Reproduces the neighbor-only slice of bgp_config_write_peer_global()
- * byte-for-byte, including the if_pg_printed/if_ras_printed suppression
- * for the interface form's inline peer-group/remote-as token. One
- * deliberate, documented divergence from legacy for a group-member's
- * remote-as line: legacy suppresses it by comparing the member's
- * *effective* (possibly inherited) AS against the group's, which can
- * under-suppress or over-suppress in edge cases (a member override that
- * numerically matches the group's AS is silently swallowed); this
- * renders it whenever the neighbor's own remote-as leaf is present in
- * the datastore, which is exactly the northbound mirror of "this peer
- * has flags_override set" (bgpd.c) -- i.e. exactly the invariant legacy
- * intends, without the value-comparison edge case.
- */
-static void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
-{
-	const char *address = yang_dnode_get_string(dnode, "address");
-	bool is_if = yang_dnode_exists(dnode, "interface-peer") &&
-		    yang_dnode_get_bool(dnode, "interface-peer");
-	bool v6only = yang_dnode_exists(dnode, "v6only") && yang_dnode_get_bool(dnode, "v6only");
-	bool has_pg = yang_dnode_exists(dnode, "peer-group");
-	bool has_ras = yang_dnode_exists(dnode, "remote-as/plain") ||
-		      yang_dnode_exists(dnode, "remote-as/asdot/high") ||
-		      yang_dnode_exists(dnode, "remote-as/type");
-	bool if_pg_printed = false, if_ras_printed = false;
-
-	if (is_if) {
-		vty_out(vty, " neighbor %s interface%s", address, v6only ? " v6only" : "");
-
-		if (has_pg) {
-			vty_out(vty, " peer-group %s", yang_dnode_get_string(dnode, "peer-group"));
-			if_pg_printed = true;
-		} else if (has_ras) {
-			neighbor_cli_write_remote_as(vty, dnode, NULL);
-			if_ras_printed = true;
-		}
-
-		vty_out(vty, "\n");
-	}
-
-	if (has_pg && !if_pg_printed)
-		vty_out(vty, " neighbor %s peer-group %s\n", address,
-			yang_dnode_get_string(dnode, "peer-group"));
-
-	if (has_ras && !if_ras_printed)
-		neighbor_cli_write_remote_as(vty, dnode, address);
-}
-
-const struct frr_yang_module_info proteus_bgp_cli_info = {
-	.name = "proteus-bgp",
-	.ignore_cfg_cbs = true,
-	.nodes = {
-		{
-			.xpath = "/proteus-bgp:instance",
-			.cbs = {
-				.cli_show = instance_cli_write,
-				.cli_show_end = instance_cli_write_end,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/router-id",
-			.cbs = {
-				.cli_show = instance_router_id_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/log-neighbor-changes",
-			.cbs = {
-				.cli_show = instance_log_neighbor_changes_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/write-quanta",
-			.cbs = {
-				.cli_show = instance_write_quanta_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/read-quanta",
-			.cbs = {
-				.cli_show = instance_read_quanta_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/coalesce-time",
-			.cbs = {
-				.cli_show = instance_coalesce_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/timers",
-			.cbs = {
-				.cli_show = instance_timers_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/timers/minimum-holdtime",
-			.cbs = {
-				.cli_show = instance_timers_minimum_holdtime_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/timers/conditional-advertisement",
-			.cbs = {
-				.cli_show = instance_timers_conditional_advertisement_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/timers/default-originate",
-			.cbs = {
-				.cli_show = instance_timers_default_originate_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/cluster-id",
-			.cbs = {
-				.cli_show = instance_cluster_id_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/fast-external-failover",
-			.cbs = {
-				.cli_show = instance_fast_external_failover_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/ipv6-auto-ra",
-			.cbs = {
-				.cli_show = instance_ipv6_auto_ra_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/suppress-fib-pending",
-			.cbs = {
-				.cli_show = instance_suppress_fib_pending_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/update-delay",
-			.cbs = {
-				.cli_show = instance_update_delay_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/advertisement-delay",
-			.cbs = {
-				.cli_show = instance_advertisement_delay_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-shutdown",
-			.cbs = {
-				.cli_show = instance_graceful_shutdown_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/always-compare-med",
-			.cbs = {
-				.cli_show = instance_always_compare_med_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/labeled-unicast-explicit-null",
-			.cbs = {
-				.cli_show = instance_labeled_unicast_explicit_null_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/reject-as-sets",
-			.cbs = {
-				.cli_show = instance_reject_as_sets_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/client-to-client-reflection",
-			.cbs = {
-				.cli_show = instance_client_to_client_reflection_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/disable-ebgp-connected-route-check",
-			.cbs = {
-				.cli_show = instance_disable_ebgp_connected_route_check_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/as-path-ignore",
-			.cbs = {
-				.cli_show = instance_bestpath_as_path_ignore_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/as-path-confed",
-			.cbs = {
-				.cli_show = instance_bestpath_as_path_confed_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/as-path-multipath-relax",
-			.cbs = {
-				.cli_show = instance_bestpath_as_path_multipath_relax_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/compare-routerid",
-			.cbs = {
-				.cli_show = instance_bestpath_compare_routerid_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/use-imported-attributes",
-			.cbs = {
-				.cli_show = instance_bestpath_use_imported_attributes_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/med",
-			.cbs = {
-				.cli_show = instance_bestpath_med_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/peer-type-multipath-relax",
-			.cbs = {
-				.cli_show = instance_bestpath_peer_type_multipath_relax_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/bandwidth",
-			.cbs = {
-				.cli_show = instance_bestpath_bandwidth_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv4-unicast",
-			.cbs = {
-				.cli_show = instance_default_ipv4_unicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv4-multicast",
-			.cbs = {
-				.cli_show = instance_default_ipv4_multicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv4-labeled-unicast",
-			.cbs = {
-				.cli_show = instance_default_ipv4_labeled_unicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv4-vpn",
-			.cbs = {
-				.cli_show = instance_default_ipv4_vpn_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv4-flowspec",
-			.cbs = {
-				.cli_show = instance_default_ipv4_flowspec_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv6-unicast",
-			.cbs = {
-				.cli_show = instance_default_ipv6_unicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv6-multicast",
-			.cbs = {
-				.cli_show = instance_default_ipv6_multicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv6-labeled-unicast",
-			.cbs = {
-				.cli_show = instance_default_ipv6_labeled_unicast_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv6-vpn",
-			.cbs = {
-				.cli_show = instance_default_ipv6_vpn_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/ipv6-flowspec",
-			.cbs = {
-				.cli_show = instance_default_ipv6_flowspec_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/l2vpn-evpn",
-			.cbs = {
-				.cli_show = instance_default_l2vpn_evpn_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/local-preference",
-			.cbs = {
-				.cli_show = instance_default_local_preference_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/subgroup-pkt-queue-max",
-			.cbs = {
-				.cli_show = instance_default_subgroup_pkt_queue_max_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/max-med/on-startup",
-			.cbs = {
-				.cli_show = instance_max_med_on_startup_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/max-med/administrative",
-			.cbs = {
-				.cli_show = instance_max_med_administrative_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/confederation/identifier",
-			.cbs = {
-				.cli_show = instance_confederation_identifier_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/confederation/peers",
-			.cbs = {
-				.cli_show = instance_confederation_peers_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/tcp-keepalive",
-			.cbs = {
-				.cli_show = instance_tcp_keepalive_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/long-lived-graceful-restart-stale-time",
-			.cbs = {
-				.cli_show = instance_long_lived_graceful_restart_stale_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/notification",
-			.cbs = {
-				.cli_show = instance_graceful_restart_notification_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/mode",
-			.cbs = {
-				.cli_show = instance_graceful_restart_mode_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/preserve-fw-state",
-			.cbs = {
-				.cli_show = instance_graceful_restart_preserve_fw_state_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/restart-time",
-			.cbs = {
-				.cli_show = instance_graceful_restart_restart_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/stalepath-time",
-			.cbs = {
-				.cli_show = instance_graceful_restart_stalepath_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/select-defer-time",
-			.cbs = {
-				.cli_show = instance_graceful_restart_select_defer_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/rib-stale-time",
-			.cbs = {
-				.cli_show = instance_graceful_restart_rib_stale_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/ebgp-requires-policy",
-			.cbs = {
-				.cli_show = instance_ebgp_requires_policy_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/enforce-first-as",
-			.cbs = {
-				.cli_show = instance_enforce_first_as_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/suppress-duplicates",
-			.cbs = {
-				.cli_show = instance_suppress_duplicates_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/hard-administrative-reset",
-			.cbs = {
-				.cli_show = instance_hard_administrative_reset_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/deterministic-med",
-			.cbs = {
-				.cli_show = instance_deterministic_med_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/network-import-check",
-			.cbs = {
-				.cli_show = instance_network_import_check_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/bestpath/aigp",
-			.cbs = {
-				.cli_show = instance_bestpath_aigp_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/show-hostname",
-			.cbs = {
-				.cli_show = instance_default_show_hostname_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/show-nexthop-hostname",
-			.cbs = {
-				.cli_show = instance_default_show_nexthop_hostname_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/software-version-capability",
-			.cbs = {
-				.cli_show = instance_default_software_version_capability_cli_write,
-			}
-		},
-		{
-			.xpath =
-				"/proteus-bgp:instance/default/software-version-capability-latest-encoding",
-			.cbs = {
-				.cli_show =
-					instance_default_software_version_capability_latest_encoding_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/link-local-capability",
-			.cbs = {
-				.cli_show = instance_default_link_local_capability_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/default/dynamic-capability",
-			.cbs = {
-				.cli_show = instance_default_dynamic_capability_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/route-reflector-allow-outbound-policy",
-			.cbs = {
-				.cli_show = instance_route_reflector_allow_outbound_policy_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/route-map-delay-timer",
-			.cbs = {
-				.cli_show = process_route_map_delay_timer_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/session-dscp",
-			.cbs = {
-				.cli_show = process_session_dscp_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/input-queue-limit",
-			.cbs = {
-				.cli_show = process_input_queue_limit_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/output-queue-limit",
-			.cbs = {
-				.cli_show = process_output_queue_limit_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/no-rib",
-			.cbs = {
-				.cli_show = process_no_rib_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/send-extra-data-zebra",
-			.cbs = {
-				.cli_show = process_send_extra_data_zebra_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/ipv6-auto-ra",
-			.cbs = {
-				.cli_show = process_ipv6_auto_ra_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/suppress-fib-pending",
-			.cbs = {
-				.cli_show = process_suppress_fib_pending_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/update-delay",
-			.cbs = {
-				.cli_show = process_update_delay_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/advertisement-delay",
-			.cbs = {
-				.cli_show = process_advertisement_delay_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-shutdown",
-			.cbs = {
-				.cli_show = process_graceful_shutdown_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/mode",
-			.cbs = {
-				.cli_show = process_graceful_restart_mode_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/preserve-fw-state",
-			.cbs = {
-				.cli_show = process_graceful_restart_preserve_fw_state_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/restart-time",
-			.cbs = {
-				.cli_show = process_graceful_restart_restart_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/stalepath-time",
-			.cbs = {
-				.cli_show = process_graceful_restart_stalepath_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/select-defer-time",
-			.cbs = {
-				.cli_show = process_graceful_restart_select_defer_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:process/graceful-restart/rib-stale-time",
-			.cbs = {
-				.cli_show = process_graceful_restart_rib_stale_time_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/peer-group",
-			.cbs = {
-				.cli_show = peer_group_cli_write,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/neighbor",
-			.cbs = {
-				.cli_show = neighbor_cli_write,
-			}
-		},
-		{
-			.xpath = NULL,
-		},
-	}
-};
-
-void bgp_cli_init(void)
+void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
 	install_default(BGP_NODE);
@@ -5017,45 +3365,5 @@ void bgp_cli_init(void)
 	install_element(CONFIG_NODE, &no_bgp_norib_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_send_extra_data_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
-
-	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_suppress_fib_pending_cli_cmd);
-
-	install_element(CONFIG_NODE, &bgp_global_update_delay_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_update_delay_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_advertisement_delay_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_advertisement_delay_cli_cmd);
-
-	install_element(CONFIG_NODE, &bgp_global_graceful_shutdown_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_shutdown_cli_cmd);
-
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_disable_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_disable_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_preserve_fw_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_preserve_fw_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_restart_time_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_restart_time_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_stalepath_time_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_stalepath_time_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_select_defer_time_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_select_defer_time_cli_cmd);
-	install_element(CONFIG_NODE, &bgp_global_graceful_restart_rib_stale_time_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_rib_stale_time_cli_cmd);
-
-	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
-	 * peer-group" (declare/bind) commands (M4 batch B1). */
-	install_element(BGP_NODE, &neighbor_remote_as_cli_cmd);
-	install_element(BGP_NODE, &no_neighbor_cli_cmd);
-	install_element(BGP_NODE, &no_neighbor_word_cli_cmd);
-	install_element(BGP_NODE, &no_neighbor_word_remote_as_cli_cmd);
-	install_element(BGP_NODE, &neighbor_interface_config_cli_cmd);
-	install_element(BGP_NODE, &neighbor_interface_config_remote_as_cli_cmd);
-	install_element(BGP_NODE, &neighbor_peer_group_cli_cmd);
-	install_element(BGP_NODE, &no_neighbor_peer_group_cli_cmd);
-	install_element(BGP_NODE, &neighbor_set_peer_group_cli_cmd);
-	install_element(BGP_NODE, &no_neighbor_set_peer_group_cli_cmd);
 }

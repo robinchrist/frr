@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Robin Christ, partimus GmbH */
 /*
  * bgpd CLI compiled into mgmtd (zebra_cli.c / staticd pattern): the
- * milestone 1 proteus-bgp conversion slice.
+ * milestone 1 proteus-bgp conversion slice. The DEFPY bodies and cli_show
+ * callbacks this header's proteus_bgp_cli_info/bgp_cli_init() front now
+ * live in bgpd/proteus/bgp_cli_{instance,process,neighbor,common}.c.
  */
 #ifndef _FRR_BGP_CLI_H_
 #define _FRR_BGP_CLI_H_

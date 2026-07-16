@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Robin Christ, partimus GmbH */
+/* Prototypes for the proteus-bgp northbound callbacks, defined across
+ * bgpd/proteus/bgp_nb_*.c (bgpd-yang-conversion).
+ */
 #ifndef _FRR_BGP_NB_H_
 #define _FRR_BGP_NB_H_
 
