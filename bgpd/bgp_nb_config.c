@@ -61,98 +61,203 @@ int process_route_map_delay_timer_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Both leaves below drive bgp_global_update_delay_config_vty()'s core
+ * (bm->v_update_delay/v_establish_wait, mirrored into every VRF instance)
+ * from bgpd/bgp_vty.c. establish_wait == 0 is used as the "not given"
+ * sentinel, exactly like the legacy DEFPY's "$wait" token (establish-wait's
+ * YANG range starts at 1, so 0 is never a real explicit value).
+ */
+static void bgp_nb_process_update_delay_apply(uint16_t delay, uint16_t establish_wait)
+{
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	bm->v_update_delay = delay;
+	bm->v_establish_wait = establish_wait ? establish_wait : delay;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->v_update_delay = bm->v_update_delay;
+		bgp->v_establish_wait = bm->v_establish_wait;
+	}
+}
+
+/* Mirrors bgp_global_update_delay_config_vty()'s "see if update-delay is
+ * set per-vrf" guard: only checked while the global value is still at its
+ * default (a no-op re-set of an already-global config is always allowed).
+ * Read against the live bm->/bgp-> runtime state, not the candidate tree,
+ * per the milestone's cross-scope VALIDATE convention.
+ */
+static bool bgp_nb_update_delay_process_blocked_by_instance(void)
+{
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (bm->v_update_delay != BGP_UPDATE_DELAY_DEFAULT)
+		return false;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		if (bgp->v_update_delay != BGP_UPDATE_DELAY_DEFAULT)
+			return true;
+	}
+
+	return false;
+}
+
 int process_update_delay_delay_modify(struct nb_cb_modify_args *args)
 {
+	uint16_t delay, establish_wait;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/update-delay/delay");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_process_blocked_by_instance()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "global update-delay config not permitted: per-vrf update-delay configuration exists");
+			return NB_ERR_VALIDATION;
+		}
+		delay = yang_dnode_get_uint16(args->dnode, NULL);
+		establish_wait = yang_dnode_exists(args->dnode, "../establish-wait")
+					 ? yang_dnode_get_uint16(args->dnode, "../establish-wait")
+					 : 0;
+		if (establish_wait && delay < establish_wait) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "update-delay less than the establish-wait");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	delay = yang_dnode_get_uint16(args->dnode, NULL);
+	establish_wait = yang_dnode_exists(args->dnode, "../establish-wait")
+				 ? yang_dnode_get_uint16(args->dnode, "../establish-wait")
+				 : 0;
+	bgp_nb_process_update_delay_apply(delay, establish_wait);
 
 	return NB_OK;
 }
 
+/* The legacy "no bgp update-delay [...]" DEFPY (bgp_global_update_delay_
+ * deconfig_vty()) unconditionally resets both fields with no guard at all,
+ * regardless of any optional numeric arguments given -- replicated as-is.
+ */
 int process_update_delay_delay_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/update-delay/delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_process_update_delay_apply(BGP_UPDATE_DELAY_DEFAULT, 0);
 
 	return NB_OK;
 }
 
 int process_update_delay_establish_wait_modify(struct nb_cb_modify_args *args)
 {
+	uint16_t delay, establish_wait;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/update-delay/establish-wait");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_process_blocked_by_instance()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "global update-delay config not permitted: per-vrf update-delay configuration exists");
+			return NB_ERR_VALIDATION;
+		}
+		establish_wait = yang_dnode_get_uint16(args->dnode, NULL);
+		delay = yang_dnode_exists(args->dnode, "../delay")
+				? yang_dnode_get_uint16(args->dnode, "../delay")
+				: bm->v_update_delay;
+		if (delay < establish_wait) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "update-delay less than the establish-wait");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	establish_wait = yang_dnode_get_uint16(args->dnode, NULL);
+	delay = yang_dnode_exists(args->dnode, "../delay")
+			? yang_dnode_get_uint16(args->dnode, "../delay")
+			: bm->v_update_delay;
+	bgp_nb_process_update_delay_apply(delay, establish_wait);
 
 	return NB_OK;
 }
 
 int process_update_delay_establish_wait_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/update-delay/establish-wait");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_process_update_delay_apply(BGP_UPDATE_DELAY_DEFAULT, 0);
 
 	return NB_OK;
 }
 
+/* Shared by the process-wide and per-instance "no advertisement-delay"
+ * destroy callbacks: replicates no_bgp_global_advertisement_delay_cmd's /
+ * no_bgp_advertisement_delay_cmd's per-bgp body byte-for-byte, including
+ * the mid-flight timer cancellation (bgpd/bgp_vty.c).
+ */
+static void bgp_nb_advertisement_delay_reset(struct bgp *bgp)
+{
+	bgp->v_advertisement_delay = BGP_ADVERTISEMENT_DELAY_DEFAULT;
+	if (bgp->advertisement_delay_started && !bgp->advertisement_delay_over) {
+		event_cancel(&bgp->t_advertisement_delay);
+		bgp->advertisement_delay_started = 0;
+		bgp->advertisement_delay_over = 0;
+		if (!bgp_update_delay_active(bgp) && !bgp->main_zebra_update_hold) {
+			bgp->main_peers_update_hold = 0;
+			bgp_start_routeadv(bgp);
+		}
+	} else {
+		event_cancel(&bgp->t_advertisement_delay);
+		bgp->advertisement_delay_started = 0;
+		bgp->advertisement_delay_over = 0;
+	}
+}
+
+/* advertisement-delay has NO mutual-exclusion guard against the
+ * per-instance leaf anywhere in legacy code -- deliberately asymmetric vs.
+ * update-delay above, not an oversight. Do not add one here.
+ */
 int process_advertisement_delay_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	uint16_t delay;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	delay = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->v_advertisement_delay = delay;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp->v_advertisement_delay = bm->v_advertisement_delay;
 
 	return NB_OK;
 }
 
 int process_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->v_advertisement_delay = BGP_ADVERTISEMENT_DELAY_DEFAULT;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp_nb_advertisement_delay_reset(bgp);
 
 	return NB_OK;
 }
@@ -2347,98 +2452,204 @@ int instance_deterministic_med_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Mirrors bgp_update_delay_config_vty()'s/_deconfig_vty()'s guard: refuses
+ * outright whenever the process-wide value is non-default, in both
+ * directions (modify and destroy), unlike the process side's guard above
+ * which only fires while the global value is still at its own default.
+ * Read against the live bm-> runtime state per the milestone's cross-scope
+ * VALIDATE convention.
+ */
+static bool bgp_nb_update_delay_instance_blocked_by_process(void)
+{
+	return bm->v_update_delay != BGP_UPDATE_DELAY_DEFAULT;
+}
+
+/* Mirrors bgp_update_delay_config_vty()'s/_deconfig_vty()'s core
+ * (bgp->v_update_delay/v_establish_wait), same establish_wait == 0
+ * "not given" sentinel as the process-wide helper above.
+ */
+static void bgp_nb_instance_update_delay_apply(struct bgp *bgp, uint16_t delay,
+					       uint16_t establish_wait)
+{
+	bgp->v_update_delay = delay;
+	bgp->v_establish_wait = establish_wait ? establish_wait : delay;
+}
+
 int instance_update_delay_delay_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	uint16_t delay, establish_wait;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/update-delay/delay");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_instance_blocked_by_process()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "per-vrf update-delay config not permitted with global update-delay");
+			return NB_ERR_VALIDATION;
+		}
+		delay = yang_dnode_get_uint16(args->dnode, NULL);
+		establish_wait = yang_dnode_exists(args->dnode, "../establish-wait")
+					 ? yang_dnode_get_uint16(args->dnode, "../establish-wait")
+					 : 0;
+		if (establish_wait && delay < establish_wait) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "update-delay less than the establish-wait");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	delay = yang_dnode_get_uint16(args->dnode, NULL);
+	establish_wait = yang_dnode_exists(args->dnode, "../establish-wait")
+				 ? yang_dnode_get_uint16(args->dnode, "../establish-wait")
+				 : 0;
+	bgp_nb_instance_update_delay_apply(bgp, delay, establish_wait);
 
 	return NB_OK;
 }
 
+/* Unlike the process-wide no-form, bgp_update_delay_deconfig_vty() DOES
+ * guard: "If configured globally, cannot remove from one bgp instance".
+ */
 int instance_update_delay_delay_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/update-delay/delay");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_instance_blocked_by_process()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "bgp update-delay configured globally, delete per-vrf not permitted");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_nb_instance_update_delay_apply(bgp, BGP_UPDATE_DELAY_DEFAULT, 0);
 
 	return NB_OK;
 }
 
 int instance_update_delay_establish_wait_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	uint16_t delay, establish_wait;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/update-delay/establish-wait");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_instance_blocked_by_process()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "per-vrf update-delay config not permitted with global update-delay");
+			return NB_ERR_VALIDATION;
+		}
+		establish_wait = yang_dnode_get_uint16(args->dnode, NULL);
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		delay = yang_dnode_exists(args->dnode, "../delay")
+				? yang_dnode_get_uint16(args->dnode, "../delay")
+				: (bgp ? bgp->v_update_delay : 0);
+		if (delay < establish_wait) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "update-delay less than the establish-wait");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	establish_wait = yang_dnode_get_uint16(args->dnode, NULL);
+	delay = yang_dnode_exists(args->dnode, "../delay")
+			? yang_dnode_get_uint16(args->dnode, "../delay")
+			: bgp->v_update_delay;
+	bgp_nb_instance_update_delay_apply(bgp, delay, establish_wait);
 
 	return NB_OK;
 }
 
 int instance_update_delay_establish_wait_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/update-delay/establish-wait");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_update_delay_instance_blocked_by_process()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "bgp update-delay configured globally, delete per-vrf not permitted");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_nb_instance_update_delay_apply(bgp, BGP_UPDATE_DELAY_DEFAULT, 0);
 
 	return NB_OK;
 }
 
+/* advertisement-delay, per-instance form: no mutual-exclusion guard, same
+ * asymmetry note as the process-wide leaf above.
+ */
 int instance_advertisement_delay_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->v_advertisement_delay = yang_dnode_get_uint16(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_nb_advertisement_delay_reset(bgp);
 
 	return NB_OK;
 }

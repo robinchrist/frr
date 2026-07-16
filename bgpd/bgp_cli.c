@@ -516,6 +516,133 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B11: 'bgp update-delay'/'update-delay' and 'bgp
+ * advertisement-delay'/'advertisement-delay' (process + instance pairs).
+ *
+ * update-delay has a strict bidirectional hard-error mutual exclusion
+ * between the two scopes (bgp_global_update_delay_config_vty()/
+ * bgp_update_delay_config_vty(), bgpd/bgp_vty.c): the process setter
+ * refuses if any VRF has a non-default per-instance value, and the
+ * instance setter refuses outright whenever the process-wide value is
+ * non-default. Both directions are enforced in NB_EV_VALIDATE against the
+ * live bm-> / bgp-> runtime state (bgp_nb_config.c), mirroring the legacy
+ * checks exactly, not against the northbound candidate tree.
+ *
+ * advertisement-delay has NO such guard in legacy code -- deliberately
+ * asymmetric vs. update-delay, not an oversight. This conversion does not
+ * add one. Both leaves are enqueued together off a single legacy grammar,
+ * same shape as the suppress-fib-pending pair above: the establish-wait
+ * token is only ever a MODIFY when supplied, else DESTROY (absence means
+ * "inherit the delay value", matching legacy's "!establish_wait" branch).
+ */
+DEFPY_YANG(
+	bgp_global_update_delay, bgp_global_update_delay_cli_cmd,
+	"bgp update-delay (0-3600)$delay [(1-3600)$wait]",
+	BGP_STR
+	"Force initial delay for best-path and updates for all bgp instances\n"
+	"Max delay in seconds\n"
+	"Establish wait in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/delay", NB_OP_MODIFY,
+			      delay_str);
+	if (wait_str)
+		nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
+				      NB_OP_MODIFY, wait_str);
+	else
+		nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
+				      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_update_delay, no_bgp_global_update_delay_cli_cmd,
+	"no bgp update-delay [(0-3600) [(1-3600)]]",
+	NO_STR
+	BGP_STR
+	"Force initial delay for best-path and updates\n"
+	"Max delay in seconds\n"
+	"Establish wait in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/delay", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/update-delay/establish-wait",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_update_delay, bgp_update_delay_cli_cmd,
+	"update-delay (0-3600)$delay [(1-3600)$wait]",
+	"Force initial delay for best-path and updates\n"
+	"Max delay in seconds\n"
+	"Establish wait in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./update-delay/delay", NB_OP_MODIFY, delay_str);
+	if (wait_str)
+		nb_cli_enqueue_change(vty, "./update-delay/establish-wait", NB_OP_MODIFY, wait_str);
+	else
+		nb_cli_enqueue_change(vty, "./update-delay/establish-wait", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_update_delay, no_bgp_update_delay_cli_cmd,
+	"no update-delay [(0-3600) [(1-3600)]]",
+	NO_STR
+	"Force initial delay for best-path and updates\n"
+	"Max delay in seconds\n"
+	"Establish wait in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./update-delay/delay", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./update-delay/establish-wait", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_advertisement_delay, bgp_global_advertisement_delay_cli_cmd,
+	"bgp advertisement-delay (1-3600)$delay",
+	BGP_STR
+	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
+	"Delay in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/advertisement-delay", NB_OP_MODIFY,
+			      delay_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_advertisement_delay, no_bgp_global_advertisement_delay_cli_cmd,
+	"no bgp advertisement-delay [(1-3600)]",
+	NO_STR
+	BGP_STR
+	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
+	"Delay in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/advertisement-delay", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_advertisement_delay, bgp_advertisement_delay_cli_cmd,
+	"advertisement-delay (1-3600)$delay",
+	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
+	"Delay in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./advertisement-delay", NB_OP_MODIFY, delay_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_advertisement_delay, no_bgp_advertisement_delay_cli_cmd,
+	"no advertisement-delay [(1-3600)]",
+	NO_STR
+	"Hold route advertisements to peers for configured seconds after first peer establishes\n"
+	"Delay in seconds\n")
+{
+	nb_cli_enqueue_change(vty, "./advertisement-delay", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
  * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
@@ -2402,6 +2529,51 @@ static void instance_suppress_fib_pending_cli_write(struct vty *vty, const struc
 		vty_out(vty, " bgp suppress-fib-pending\n");
 }
 
+/* Joint emission of 'update-delay (0-3600) [(1-3600)]', per-instance form
+ * (batch B11), mirroring bgp_config_write_update_delay() (bgpd/bgp_vty.c)
+ * exactly: presence-based (the leaf only exists when this scope was
+ * explicitly configured -- the bidirectional VALIDATE guard makes that
+ * mutually exclusive with the process-wide leaf ever being set at the same
+ * time, so unlike legacy's "!= bm->v_update_delay" runtime comparison, a
+ * plain presence check is sufficient and exact here), establish-wait only
+ * printed when it differs from delay (absence means "inherits delay").
+ */
+static void instance_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	uint16_t delay;
+
+	if (!yang_dnode_exists(dnode, "delay"))
+		return;
+
+	delay = yang_dnode_get_uint16(dnode, "delay");
+	vty_out(vty, " update-delay %u", delay);
+	if (yang_dnode_exists(dnode, "establish-wait") &&
+	    yang_dnode_get_uint16(dnode, "establish-wait") != delay)
+		vty_out(vty, " %u", yang_dnode_get_uint16(dnode, "establish-wait"));
+	vty_out(vty, "\n");
+}
+
+/* Emission of 'advertisement-delay (1-3600)', per-instance form (batch
+ * B11). Legacy's bgp_config_write_advertisement_delay() additionally
+ * suppresses the line when the (mirrored) value equals the process-wide
+ * one -- a workaround for bgp->v_advertisement_delay being a single field
+ * shared between explicit per-instance config and process-wide mirroring.
+ * The northbound datastore tracks the two scopes as genuinely separate
+ * leaves, so presence here is unambiguous; the one behavioral difference
+ * from legacy is that an instance leaf explicitly set equal to the
+ * process-wide value is printed here where legacy would suppress it (a
+ * cosmetic difference only -- reloading either form yields the same
+ * runtime state, and there is no guard against this combination in either
+ * old or new code, see the no-mutual-exclusion note above).
+ */
+static void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, NULL))
+		vty_out(vty, " advertisement-delay %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
 static void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
@@ -2937,6 +3109,36 @@ static void process_suppress_fib_pending_cli_write(struct vty *vty, const struct
 		vty_out(vty, "bgp suppress-fib-pending\n");
 }
 
+/* Joint emission of 'bgp update-delay (0-3600) [(1-3600)]', process-wide
+ * form (batch B11), same presence-based shape as
+ * instance_update_delay_cli_write above -- no leading space, top level.
+ */
+static void process_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	uint16_t delay;
+
+	if (!yang_dnode_exists(dnode, "delay"))
+		return;
+
+	delay = yang_dnode_get_uint16(dnode, "delay");
+	vty_out(vty, "bgp update-delay %u", delay);
+	if (yang_dnode_exists(dnode, "establish-wait") &&
+	    yang_dnode_get_uint16(dnode, "establish-wait") != delay)
+		vty_out(vty, " %u", yang_dnode_get_uint16(dnode, "establish-wait"));
+	vty_out(vty, "\n");
+}
+
+/* Emission of 'bgp advertisement-delay (1-3600)', process-wide form
+ * (batch B11), no leading space.
+ */
+static void process_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, NULL))
+		vty_out(vty, "bgp advertisement-delay %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
 const struct frr_yang_module_info proteus_bgp_cli_info = {
 	.name = "proteus-bgp",
 	.ignore_cfg_cbs = true,
@@ -3024,6 +3226,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/suppress-fib-pending",
 			.cbs = {
 				.cli_show = instance_suppress_fib_pending_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/update-delay",
+			.cbs = {
+				.cli_show = instance_update_delay_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/advertisement-delay",
+			.cbs = {
+				.cli_show = instance_advertisement_delay_cli_write,
 			}
 		},
 		{
@@ -3359,6 +3573,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/update-delay",
+			.cbs = {
+				.cli_show = process_update_delay_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/advertisement-delay",
+			.cbs = {
+				.cli_show = process_advertisement_delay_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -3386,6 +3612,11 @@ void bgp_cli_init(void)
 
 	install_element(BGP_NODE, &bgp_suppress_fib_pending_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_suppress_fib_pending_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_update_delay_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_update_delay_cli_cmd);
+	install_element(BGP_NODE, &bgp_advertisement_delay_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_advertisement_delay_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
@@ -3538,4 +3769,9 @@ void bgp_cli_init(void)
 
 	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_suppress_fib_pending_cli_cmd);
+
+	install_element(CONFIG_NODE, &bgp_global_update_delay_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_update_delay_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_advertisement_delay_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_advertisement_delay_cli_cmd);
 }

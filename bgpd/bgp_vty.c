@@ -1963,282 +1963,6 @@ static int bgp_maxpaths_config_vty(struct vty *vty, int peer_type,
 	return CMD_SUCCESS;
 }
 
-static int bgp_global_update_delay_config_vty(struct vty *vty,
-					      uint16_t update_delay,
-					      uint16_t establish_wait)
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-	bool vrf_cfg = false;
-
-	/*
-	 * See if update-delay is set per-vrf and warn user to delete it
-	 * Note that we only need to check this if this is the first time
-	 * setting the global config.
-	 */
-	if (bm->v_update_delay == BGP_UPDATE_DELAY_DEFAULT) {
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			if (bgp->v_update_delay != BGP_UPDATE_DELAY_DEFAULT) {
-				vty_out(vty,
-					"%% update-delay configuration found in vrf %s\n",
-					bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT
-						? VRF_DEFAULT_NAME
-						: bgp->name);
-				vrf_cfg = true;
-			}
-		}
-	}
-
-	if (vrf_cfg) {
-		vty_out(vty,
-			"%%Failed: global update-delay config not permitted\n");
-		return CMD_WARNING;
-	}
-
-	if (!establish_wait) { /* update-delay <delay> */
-		bm->v_update_delay = update_delay;
-		bm->v_establish_wait = bm->v_update_delay;
-	} else {
-		/* update-delay <delay> <establish-wait> */
-		if (update_delay < establish_wait) {
-			vty_out(vty,
-				"%%Failed: update-delay less than the establish-wait!\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		bm->v_update_delay = update_delay;
-		bm->v_establish_wait = establish_wait;
-	}
-
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		bgp->v_update_delay = bm->v_update_delay;
-		bgp->v_establish_wait = bm->v_establish_wait;
-	}
-
-	return CMD_SUCCESS;
-}
-
-static int bgp_global_update_delay_deconfig_vty(struct vty *vty)
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-
-	bm->v_update_delay = BGP_UPDATE_DELAY_DEFAULT;
-	bm->v_establish_wait = bm->v_update_delay;
-
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		bgp->v_update_delay = bm->v_update_delay;
-		bgp->v_establish_wait = bm->v_establish_wait;
-	}
-
-	return CMD_SUCCESS;
-}
-
-static int bgp_update_delay_config_vty(struct vty *vty, uint16_t update_delay,
-				       uint16_t establish_wait)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	/* if configured globally, per-instance config is not allowed */
-	if (bm->v_update_delay) {
-		vty_out(vty,
-			"%%Failed: per-vrf update-delay config not permitted with global update-delay\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-
-	if (!establish_wait) /* update-delay <delay> */
-	{
-		bgp->v_update_delay = update_delay;
-		bgp->v_establish_wait = bgp->v_update_delay;
-		return CMD_SUCCESS;
-	}
-
-	/* update-delay <delay> <establish-wait> */
-	if (update_delay < establish_wait) {
-		vty_out(vty,
-			"%%Failed: update-delay less than the establish-wait!\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp->v_update_delay = update_delay;
-	bgp->v_establish_wait = establish_wait;
-
-	return CMD_SUCCESS;
-}
-
-static int bgp_update_delay_deconfig_vty(struct vty *vty)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	/* If configured globally, cannot remove from one bgp instance */
-	if (bm->v_update_delay) {
-		vty_out(vty,
-			"%%Failed: bgp update-delay configured globally. Delete per-vrf not permitted\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	bgp->v_update_delay = BGP_UPDATE_DELAY_DEFAULT;
-	bgp->v_establish_wait = bgp->v_update_delay;
-
-	return CMD_SUCCESS;
-}
-
-void bgp_config_write_update_delay(struct vty *vty, struct bgp *bgp)
-{
-	/* If configured globally, no need to display per-instance value */
-	if (bgp->v_update_delay != bm->v_update_delay) {
-		vty_out(vty, " update-delay %d", bgp->v_update_delay);
-		if (bgp->v_update_delay != bgp->v_establish_wait)
-			vty_out(vty, " %d", bgp->v_establish_wait);
-		vty_out(vty, "\n");
-	}
-}
-
-void bgp_config_write_advertisement_delay(struct vty *vty, struct bgp *bgp)
-{
-	if (bgp_advertisement_delay_configured(bgp) &&
-	    bgp->v_advertisement_delay != bm->v_advertisement_delay)
-		vty_out(vty, " advertisement-delay %d\n", bgp->v_advertisement_delay);
-}
-
-/* Global update-delay configuration */
-DEFPY (bgp_global_update_delay,
-       bgp_global_update_delay_cmd,
-       "bgp update-delay (0-3600)$delay [(1-3600)$wait]",
-       BGP_STR
-       "Force initial delay for best-path and updates for all bgp instances\n"
-       "Max delay in seconds\n"
-       "Establish wait in seconds\n")
-{
-	return bgp_global_update_delay_config_vty(vty, delay, wait);
-}
-
-/* Global update-delay deconfiguration */
-DEFPY (no_bgp_global_update_delay,
-       no_bgp_global_update_delay_cmd,
-       "no bgp update-delay [(0-3600) [(1-3600)]]",
-       NO_STR
-       BGP_STR
-       "Force initial delay for best-path and updates\n"
-       "Max delay in seconds\n"
-       "Establish wait in seconds\n")
-{
-	return bgp_global_update_delay_deconfig_vty(vty);
-}
-
-/* Update-delay configuration */
-
-DEFPY (bgp_update_delay,
-       bgp_update_delay_cmd,
-       "update-delay (0-3600)$delay [(1-3600)$wait]",
-       "Force initial delay for best-path and updates\n"
-       "Max delay in seconds\n"
-       "Establish wait in seconds\n")
-{
-	return bgp_update_delay_config_vty(vty, delay, wait);
-}
-
-/* Update-delay deconfiguration */
-DEFPY (no_bgp_update_delay,
-       no_bgp_update_delay_cmd,
-       "no update-delay [(0-3600) [(1-3600)]]",
-       NO_STR
-       "Force initial delay for best-path and updates\n"
-       "Max delay in seconds\n"
-       "Establish wait in seconds\n")
-{
-	return bgp_update_delay_deconfig_vty(vty);
-}
-
-/* Global advertisement-delay configuration */
-DEFPY(bgp_global_advertisement_delay, bgp_global_advertisement_delay_cmd,
-      "bgp advertisement-delay (1-3600)$delay",
-      BGP_STR
-      "Hold route advertisements to peers for configured seconds after first peer establishes\n"
-      "Delay in seconds\n")
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-
-	bm->v_advertisement_delay = delay;
-
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-		bgp->v_advertisement_delay = bm->v_advertisement_delay;
-
-	return CMD_SUCCESS;
-}
-
-/* Global advertisement-delay deconfiguration */
-DEFPY(no_bgp_global_advertisement_delay, no_bgp_global_advertisement_delay_cmd,
-      "no bgp advertisement-delay [(1-3600)]",
-      NO_STR BGP_STR
-      "Hold route advertisements to peers for configured seconds after first peer establishes\n"
-      "Delay in seconds\n")
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-
-	bm->v_advertisement_delay = BGP_ADVERTISEMENT_DELAY_DEFAULT;
-
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		bgp->v_advertisement_delay = BGP_ADVERTISEMENT_DELAY_DEFAULT;
-		if (bgp->advertisement_delay_started && !bgp->advertisement_delay_over) {
-			event_cancel(&bgp->t_advertisement_delay);
-			bgp->advertisement_delay_started = 0;
-			bgp->advertisement_delay_over = 0;
-			if (!bgp_update_delay_active(bgp) && !bgp->main_zebra_update_hold) {
-				bgp->main_peers_update_hold = 0;
-				bgp_start_routeadv(bgp);
-			}
-		} else {
-			event_cancel(&bgp->t_advertisement_delay);
-			bgp->advertisement_delay_started = 0;
-			bgp->advertisement_delay_over = 0;
-		}
-	}
-
-	return CMD_SUCCESS;
-}
-
-/* Per-instance advertisement-delay configuration */
-DEFPY(bgp_advertisement_delay, bgp_advertisement_delay_cmd, "advertisement-delay (1-3600)$delay",
-      "Hold route advertisements to peers for configured seconds after first peer establishes\n"
-      "Delay in seconds\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->v_advertisement_delay = delay;
-
-	return CMD_SUCCESS;
-}
-
-/* Per-instance advertisement-delay deconfiguration */
-DEFPY(no_bgp_advertisement_delay, no_bgp_advertisement_delay_cmd,
-      "no advertisement-delay [(1-3600)]",
-      NO_STR
-      "Hold route advertisements to peers for configured seconds after first peer establishes\n"
-      "Delay in seconds\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->v_advertisement_delay = BGP_ADVERTISEMENT_DELAY_DEFAULT;
-	if (bgp->advertisement_delay_started && !bgp->advertisement_delay_over) {
-		event_cancel(&bgp->t_advertisement_delay);
-		bgp->advertisement_delay_started = 0;
-		bgp->advertisement_delay_over = 0;
-		if (!bgp_update_delay_active(bgp) && !bgp->main_zebra_update_hold) {
-			bgp->main_peers_update_hold = 0;
-			bgp_start_routeadv(bgp);
-		}
-	} else {
-		event_cancel(&bgp->t_advertisement_delay);
-		bgp->advertisement_delay_started = 0;
-		bgp->advertisement_delay_over = 0;
-	}
-
-	return CMD_SUCCESS;
-}
-
 DEFPY (bgp_use_underlying_nexthop_weight,
        bgp_use_underlying_nexthop_weight_cmd,
        "[no] use-underlays-nexthop-weight",
@@ -20193,15 +19917,13 @@ int bgp_config_write(struct vty *vty)
 
 	vty_out(vty, "!\n");
 
-	if (bm->v_update_delay != BGP_UPDATE_DELAY_DEFAULT) {
-		vty_out(vty, "bgp update-delay %d", bm->v_update_delay);
-		if (bm->v_update_delay != bm->v_establish_wait)
-			vty_out(vty, " %d", bm->v_establish_wait);
-		vty_out(vty, "\n");
-	}
+	/* bgp update-delay: converted to northbound, see
+	 * '/proteus-bgp:process/update-delay' cli_show in bgp_cli.c.
+	 */
 
-	if (bm->v_advertisement_delay != BGP_ADVERTISEMENT_DELAY_DEFAULT)
-		vty_out(vty, "bgp advertisement-delay %d\n", bm->v_advertisement_delay);
+	/* bgp advertisement-delay: converted to northbound, see
+	 * '/proteus-bgp:process/advertisement-delay' cli_show in bgp_cli.c.
+	 */
 
 	/* bgp suppress-fib-pending: converted to northbound, see
 	 * '/proteus-bgp:process/suppress-fib-pending' cli_show in bgp_cli.c.
@@ -20317,11 +20039,14 @@ int bgp_config_write(struct vty *vty)
 		 * bgp_cli.c.
 		 */
 
-		/* BGP update-delay. */
-		bgp_config_write_update_delay(vty, bgp);
+		/* BGP update-delay: converted to northbound, see
+		 * '/proteus-bgp:instance/update-delay' cli_show in bgp_cli.c.
+		 */
 
-		/* BGP advertisement-delay. */
-		bgp_config_write_advertisement_delay(vty, bgp);
+		/* BGP advertisement-delay: converted to northbound, see
+		 * '/proteus-bgp:instance/advertisement-delay' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		/* BGP max-med on-startup/administrative: converted to
 		 * northbound, see '/proteus-bgp:instance/max-med/...'
@@ -21025,13 +20750,9 @@ void bgp_vty_init(void)
 	/* bgp ipv6-auto-ra: both process and per-VRF instance scopes are
 	 * northbound now, see bgp_cli.c */
 
-	/* global bgp update-delay command */
-	install_element(CONFIG_NODE, &bgp_global_update_delay_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_update_delay_cmd);
-
-	/* global bgp advertisement-delay command */
-	install_element(CONFIG_NODE, &bgp_global_advertisement_delay_cmd);
-	install_element(CONFIG_NODE, &no_bgp_global_advertisement_delay_cmd);
+	/* bgp update-delay / bgp advertisement-delay: both process and
+	 * per-VRF instance scopes are northbound now, see bgp_cli.c
+	 */
 
 	/* global bgp graceful-shutdown command */
 	install_element(CONFIG_NODE, &bgp_graceful_shutdown_cmd);
@@ -21073,14 +20794,6 @@ void bgp_vty_init(void)
 
 	/* "neighbor graceful-shutdown" command */
 	install_element(BGP_NODE, &neighbor_graceful_shutdown_cmd);
-
-	/* bgp update-delay command */
-	install_element(BGP_NODE, &bgp_update_delay_cmd);
-	install_element(BGP_NODE, &no_bgp_update_delay_cmd);
-
-	/* bgp advertisement-delay command */
-	install_element(BGP_NODE, &bgp_advertisement_delay_cmd);
-	install_element(BGP_NODE, &no_bgp_advertisement_delay_cmd);
 
 	install_element(BGP_NODE, &bgp_use_underlying_nexthop_weight_cmd);
 
