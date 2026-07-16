@@ -459,6 +459,384 @@ DEFPY_YANG(
 }
 
 /*
+ * Session-level scalar leaves that attach to an already-existing peer or
+ * peer-group (M4 batch B3: description, password, port, tcp-mss,
+ * source-interface, solo, passive). Unlike B1's lifecycle commands, these
+ * are pure subcommands -- they never create the underlying peer/
+ * peer-group struct themselves, so (per the coordinator brief) they don't
+ * need legacy DEFUN retention: by the time a config-file line reaches one
+ * of these, B1's still-legacy-DEFUN-backed creation commands have already
+ * built the struct directly in bgpd, independent of mgmtd's batched
+ * backend-client push. The one shared xpath-resolution helper below
+ * mirrors peer_and_group_lookup_vty()'s lookup order (bgp_vty.c,
+ * retired for these leaves) for every DEFPY_YANG in this section.
+ */
+static char *bgp_cli_peer_or_group_xpath(struct vty *vty, const char *peer)
+{
+	if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./neighbor[address='%s']", peer))
+		return asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
+	if (yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./peer-group[name='%s']", peer))
+		return asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", peer);
+
+	vty_out(vty, "%% Specify remote-as or peer-group commands first\n");
+	return NULL;
+}
+
+DEFPY_YANG(
+	neighbor_description, neighbor_description_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer description LINE...",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Neighbor specific description\n"
+	"Up to 80 characters describing this neighbor\n")
+{
+	char *xpath, *xpath_child, *desc;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	desc = argv_concat(argv, argc, 3);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/description", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, desc);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	XFREE(MTYPE_TMP, desc);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_description, no_neighbor_description_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer description",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Neighbor specific description\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/description", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Legacy accepts (and ignores) a trailing LINE... on the 'no' form too
+ * (no_neighbor_description_comment_cmd ALIAS, bgp_vty.c, retired) --
+ * reproduced as a second grammar sharing the same body rather than an
+ * optional '[LINE...]' group, which DEFPY's grammar parser rejects.
+ */
+DEFPY_YANG(
+	no_neighbor_description_comment, no_neighbor_description_comment_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer description LINE...",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Neighbor specific description\n"
+	"Up to 80 characters describing this neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/description", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_password, neighbor_password_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer password LINE$password",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set a password\n"
+	"The password\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/password", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, password);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_password, no_neighbor_password_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer password [LINE]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set a password\n"
+	"The password\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/password", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_solo, neighbor_solo_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer solo",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Solo peer - part of its own update group\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/solo", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_port, neighbor_port_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer port (0-65535)$port",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Neighbor's BGP port\n"
+	"TCP port number\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/port", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, port_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_port, no_neighbor_port_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer port [(0-65535)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Neighbor's BGP port\n"
+	"TCP port number\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/port", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* source-interface (peer->ifname): grammar deliberately restricted to a
+ * real address in the first token (NEIGHBOR_ADDR_STR, no WORD
+ * alternative), unlike every other command in this section --
+ * distinguishes it from 'neighbor WORD interface [v6only] [peer-group
+ * PGNAME]' (unnumbered peer creation, B1, neighbor_interface_config_cli_cmd)
+ * which types its first token as a bare WORD. The command parser resolves
+ * this the same way the two legacy DEFUNs it replaces always did: an
+ * input matching a real address only ever completes the address-first
+ * grammar below, never the WORD-first creation grammar. The northbound
+ * VALIDATE callback (bgp_nb_neighbor.c) additionally rejects unnumbered
+ * (interface-peer) neighbors, matching legacy's peer_interface_vty().
+ */
+DEFPY_YANG(
+	neighbor_interface, neighbor_interface_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X>$peer interface WORD$ifname",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR
+	"Interface\n"
+	"Interface name\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer_str);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/source-interface", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, ifname);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_interface, no_neighbor_interface_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X>$peer interface WORD",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR
+	"Interface\n"
+	"Interface name\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer_str);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/source-interface", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_tcp_mss, neighbor_tcp_mss_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer tcp-mss (1-65535)$tcp_mss",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"TCP max segment size\n"
+	"TCP MSS value\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, " Warning: Reset BGP session for tcp-mss value to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/tcp-mss", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, tcp_mss_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_tcp_mss, no_neighbor_tcp_mss_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer tcp-mss [(1-65535)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"TCP max segment size\n"
+	"TCP MSS value\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, " Warning: Reset BGP session for tcp-mss value to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/tcp-mss", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_passive, neighbor_passive_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer passive",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Don't send open messages to this neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/passive", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -538,6 +916,50 @@ void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *d
 		yang_dnode_get_string(pg_dnode, "name"));
 }
 
+/* description/password/solo/port/source-interface/tcp-mss/passive (M4
+ * batch B3): reproduces the corresponding slice of
+ * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these seven
+ * leaves) per-peer block, in the same relative order, for one neighbor or
+ * peer-group entry. None of these leaves fan out to group members in the
+ * datastore (legacy has no fanout for description/port/source-interface
+ * at all -- confirmed by direct inspection of
+ * peer_group2peer_config_copy(), bgpd.c -- and password/solo/tcp-mss/
+ * passive fan out only at the runtime peer-flag/flags_override level, not
+ * by writing the member's own leaf), so a plain per-entry
+ * yang_dnode_exists()/get_*() read on this dnode is exactly the
+ * northbound mirror of legacy's peergroup_flag_check()-gated emission:
+ * only the entry that owns its own explicit configuration ever has the
+ * leaf present/non-default here.
+ */
+static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node *dnode,
+					  const char *addr)
+{
+	if (yang_dnode_exists(dnode, "description"))
+		vty_out(vty, " neighbor %s description %s\n", addr,
+			yang_dnode_get_string(dnode, "description"));
+
+	if (yang_dnode_exists(dnode, "password"))
+		vty_out(vty, " neighbor %s password %s\n", addr,
+			yang_dnode_get_string(dnode, "password"));
+
+	if (yang_dnode_exists(dnode, "solo") && yang_dnode_get_bool(dnode, "solo"))
+		vty_out(vty, " neighbor %s solo\n", addr);
+
+	if (yang_dnode_exists(dnode, "port"))
+		vty_out(vty, " neighbor %s port %u\n", addr, yang_dnode_get_uint16(dnode, "port"));
+
+	if (yang_dnode_exists(dnode, "source-interface"))
+		vty_out(vty, " neighbor %s interface %s\n", addr,
+			yang_dnode_get_string(dnode, "source-interface"));
+
+	if (yang_dnode_exists(dnode, "tcp-mss"))
+		vty_out(vty, " neighbor %s tcp-mss %u\n", addr,
+			yang_dnode_get_uint16(dnode, "tcp-mss"));
+
+	if (yang_dnode_exists(dnode, "passive") && yang_dnode_get_bool(dnode, "passive"))
+		vty_out(vty, " neighbor %s passive\n", addr);
+}
+
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				 bool show_defaults)
 {
@@ -555,6 +977,8 @@ void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
 	else if (yang_dnode_exists(dnode, "remote-as/type"))
 		vty_out(vty, " neighbor %s remote-as %s\n", name,
 			yang_dnode_get_string(dnode, "remote-as/type"));
+
+	bgp_cli_write_session_scalars(vty, dnode, name);
 }
 
 /* addr == NULL renders the bare "remote-as ..." suffix used inline after
@@ -638,6 +1062,8 @@ void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
 
 	if (has_ras && !if_ras_printed)
 		neighbor_cli_write_remote_as(vty, dnode, address);
+
+	bgp_cli_write_session_scalars(vty, dnode, address);
 }
 
 void bgp_cli_neighbor_init(void)
@@ -659,4 +1085,19 @@ void bgp_cli_neighbor_init(void)
 	 * batch B2). */
 	install_element(BGP_NODE, &bgp_listen_range_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_listen_range_cli_cmd);
+
+	/* description, password, port, tcp-mss, source-interface, solo,
+	 * passive (M4 batch B3). */
+	install_element(BGP_NODE, &neighbor_description_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_description_cli_cmd);
+	install_element(BGP_NODE, &neighbor_password_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_password_cli_cmd);
+	install_element(BGP_NODE, &neighbor_solo_cli_cmd);
+	install_element(BGP_NODE, &neighbor_port_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_port_cli_cmd);
+	install_element(BGP_NODE, &neighbor_interface_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_interface_cli_cmd);
+	install_element(BGP_NODE, &neighbor_tcp_mss_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_tcp_mss_cli_cmd);
+	install_element(BGP_NODE, &neighbor_passive_cli_cmd);
 }

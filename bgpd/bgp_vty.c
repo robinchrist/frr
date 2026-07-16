@@ -931,48 +931,10 @@ bool peer_address_self_check(struct bgp *bgp, union sockunion *su)
 	return false;
 }
 
-/* Utility function for looking up peer from VTY.  */
-/* This is used only for configuration, so disallow if attempted on
- * a dynamic neighbor.
+/* peer_lookup_vty(): only ever used by the now-converted 'neighbor X
+ * interface IFNAME' (source-interface) DEFUN (retired, M4 batch B3) --
+ * removed along with it, no remaining callers.
  */
-static struct peer *peer_lookup_vty(struct vty *vty, const char *ip_str)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	int ret;
-	union sockunion su;
-	struct peer *peer;
-
-	if (!bgp) {
-		return NULL;
-	}
-
-	ret = str2sockunion(ip_str, &su);
-	if (ret < 0) {
-		peer = peer_lookup_by_conf_if(bgp, ip_str);
-		if (!peer) {
-			if ((peer = peer_lookup_by_hostname(bgp, ip_str))
-			    == NULL) {
-				vty_out(vty,
-					"%% Malformed address or name: %s\n",
-					ip_str);
-				return NULL;
-			}
-		}
-	} else {
-		peer = peer_lookup(bgp, &su);
-		if (!peer) {
-			vty_out(vty,
-				"%% Specify remote-as or peer-group commands first\n");
-			return NULL;
-		}
-		if (peer_dynamic_neighbor(peer)) {
-			vty_out(vty,
-				"%% Operation not allowed on a dynamic neighbor\n");
-			return NULL;
-		}
-	}
-	return peer;
-}
 
 /* Utility function for looking up peer or peer group.  */
 /* This is used only for configuration, so disallow if attempted on
@@ -3202,87 +3164,12 @@ DEFUN (no_neighbor_local_as,
 }
 
 
-DEFUN (neighbor_solo,
-       neighbor_solo_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> solo",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Solo peer - part of its own update group\n")
-{
-	int idx_peer = 1;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = update_group_adjust_soloness(peer, 1);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_neighbor_solo,
-       no_neighbor_solo_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> solo",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Solo peer - part of its own update group\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = update_group_adjust_soloness(peer, 0);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (neighbor_password,
-       neighbor_password_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> password LINE",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Set a password\n"
-       "The password\n")
-{
-	int idx_peer = 1;
-	int idx_line = 3;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_password_set(peer, argv[idx_line]->arg);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_neighbor_password,
-       no_neighbor_password_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> password [LINE]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Set a password\n"
-       "The password\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_password_unset(peer);
-	return bgp_vty_return(vty, ret);
-}
-
+/* neighbor solo, neighbor password: converted to northbound, see
+ * 'neighbor_solo_cli_cmd'/'neighbor_password_cli_cmd' in bgp_cli.c (M4
+ * batch B3). Legacy DEFUN retention (like B1's lifecycle commands) is
+ * not needed here -- these are pure subcommands on an already-existing
+ * peer/peer-group, not creation commands.
+ */
 DEFUN (neighbor_activate,
        neighbor_activate_cmd,
        "neighbor <A.B.C.D|X:X::X:X|WORD> activate",
@@ -3458,29 +3345,9 @@ ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
 	     "Member of the peer-group\n"
 	     "Peer-group name\n")
 
-/* neighbor passive. */
-DEFUN (neighbor_passive,
-       neighbor_passive_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> passive",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Don't send open messages to this neighbor\n")
-{
-	int idx_peer = 1;
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg, PEER_FLAG_PASSIVE);
-}
-
-DEFUN (no_neighbor_passive,
-       no_neighbor_passive_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> passive",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Don't send open messages to this neighbor\n")
-{
-	int idx_peer = 2;
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg, PEER_FLAG_PASSIVE);
-}
+/* neighbor passive: converted to northbound, see 'neighbor_passive_cli_cmd'
+ * in bgp_cli.c (M4 batch B3).
+ */
 
 /* neighbor shutdown. */
 DEFUN (neighbor_shutdown_msg,
@@ -5205,57 +5072,9 @@ DEFUN (no_neighbor_enforce_first_as,
 }
 
 
-DEFUN (neighbor_description,
-       neighbor_description_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> description LINE...",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Neighbor specific description\n"
-       "Up to 80 characters describing this neighbor\n")
-{
-	int idx_peer = 1;
-	int idx_line = 3;
-	struct peer *peer;
-	char *str;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	str = argv_concat(argv, argc, idx_line);
-
-	peer_description_set(peer, str);
-
-	XFREE(MTYPE_TMP, str);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_neighbor_description,
-       no_neighbor_description_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> description",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Neighbor specific description\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	peer_description_unset(peer);
-
-	return CMD_SUCCESS;
-}
-
-ALIAS(no_neighbor_description, no_neighbor_description_comment_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> description LINE...",
-      NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-      "Neighbor specific description\n"
-      "Up to 80 characters describing this neighbor\n")
+/* neighbor description: converted to northbound, see
+ * 'neighbor_description_cli_cmd' in bgp_cli.c (M4 batch B3).
+ */
 
 /* Neighbor update-source. */
 static int peer_update_source_vty(struct vty *vty, const char *peer_str,
@@ -5413,58 +5232,9 @@ ALIAS_HIDDEN(
 	"route-map name\n")
 
 
-/* Set neighbor's BGP port.  */
-static int peer_port_vty(struct vty *vty, const char *ip_str, int afi,
-			 const char *port_str)
-{
-	struct peer *peer;
-	uint16_t port;
-	struct servent *sp;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!port_str) {
-		sp = getservbyname("bgp", "tcp");
-		port = (sp == NULL) ? BGP_PORT_DEFAULT : ntohs(sp->s_port);
-	} else {
-		port = strtoul(port_str, NULL, 10);
-	}
-
-	peer_port_set(peer, port);
-
-	return CMD_SUCCESS;
-}
-
-/* Set specified peer's BGP port.  */
-DEFUN (neighbor_port,
-       neighbor_port_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> port (0-65535)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Neighbor's BGP port\n"
-       "TCP port number\n")
-{
-	int idx_ip = 1;
-	int idx_number = 3;
-	return peer_port_vty(vty, argv[idx_ip]->arg, AFI_IP,
-			     argv[idx_number]->arg);
-}
-
-DEFUN (no_neighbor_port,
-       no_neighbor_port_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> port [(0-65535)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Neighbor's BGP port\n"
-       "TCP port number\n")
-{
-	int idx_ip = 2;
-	return peer_port_vty(vty, argv[idx_ip]->arg, AFI_IP, NULL);
-}
-
+/* neighbor port: converted to northbound, see 'neighbor_port_cli_cmd' in
+ * bgp_cli.c (M4 batch B3).
+ */
 
 /* neighbor weight. */
 static int peer_weight_set_vty(struct vty *vty, const char *ip_str, afi_t afi,
@@ -5817,53 +5587,9 @@ DEFUN (no_neighbor_advertise_interval,
 }
 
 
-/* neighbor interface */
-static int peer_interface_vty(struct vty *vty, const char *ip_str,
-			      const char *str)
-{
-	struct peer *peer;
-
-	peer = peer_lookup_vty(vty, ip_str);
-	if (!peer || peer->conf_if) {
-		vty_out(vty, "%% BGP invalid peer %s\n", ip_str);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (str)
-		peer_interface_set(peer, str);
-	else
-		peer_interface_unset(peer);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (neighbor_interface,
-       neighbor_interface_cmd,
-       "neighbor <A.B.C.D|X:X::X:X> interface WORD",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR
-       "Interface\n"
-       "Interface name\n")
-{
-	int idx_ip = 1;
-	int idx_word = 3;
-
-	return peer_interface_vty(vty, argv[idx_ip]->arg, argv[idx_word]->arg);
-}
-
-DEFUN (no_neighbor_interface,
-       no_neighbor_interface_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X> interface WORD",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR
-       "Interface\n"
-       "Interface name\n")
-{
-	int idx_peer = 2;
-
-	return peer_interface_vty(vty, argv[idx_peer]->arg, NULL);
-}
+/* neighbor interface (source-interface): converted to northbound, see
+ * 'neighbor_interface_cli_cmd' in bgp_cli.c (M4 batch B3).
+ */
 
 DEFUN (neighbor_distribute_list,
        neighbor_distribute_list_cmd,
@@ -17572,54 +17298,9 @@ DEFUN (no_bgp_redistribute_ipv6,
 	return CMD_SUCCESS;
 }
 
-/* Neighbor update tcp-mss. */
-static int peer_tcp_mss_vty(struct vty *vty, const char *peer_str,
-			    const char *tcp_mss_str)
-{
-	struct peer *peer;
-	uint32_t tcp_mss_val = 0;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (tcp_mss_str) {
-		tcp_mss_val = strtoul(tcp_mss_str, NULL, 10);
-		peer_tcp_mss_set(peer, tcp_mss_val);
-	} else {
-		peer_tcp_mss_unset(peer);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(neighbor_tcp_mss, neighbor_tcp_mss_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> tcp-mss (1-65535)",
-      NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-      "TCP max segment size\n"
-      "TCP MSS value\n")
-{
-	int peer_index = 1;
-	int mss_index = 3;
-
-	vty_out(vty,
-		" Warning: Reset BGP session for tcp-mss value to take effect\n");
-	return peer_tcp_mss_vty(vty, argv[peer_index]->arg,
-				argv[mss_index]->arg);
-}
-
-DEFUN(no_neighbor_tcp_mss, no_neighbor_tcp_mss_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> tcp-mss [(1-65535)]",
-      NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-      "TCP max segment size\n"
-      "TCP MSS value\n")
-{
-	int peer_index = 2;
-
-	vty_out(vty,
-		" Warning: Reset BGP session for tcp-mss value to take effect\n");
-	return peer_tcp_mss_vty(vty, argv[peer_index]->arg, NULL);
-}
+/* neighbor tcp-mss: converted to northbound, see
+ * 'neighbor_tcp_mss_cli_cmd' in bgp_cli.c (M4 batch B3).
+ */
 
 DEFPY(neighbor_ip_transparent,
       neighbor_ip_transparent_cmd,
@@ -18297,8 +17978,10 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 
 	/* interface-peer/v6only: converted,
 	 * see peer_group_cli_write()/neighbor_cli_write() in bgp_cli.c
-	 * (M4 batch B1). g_peer is still needed below (ebgp-multihop/GTSM
-	 * comparison, still legacy). */
+	 * (M4 batch B1). description/password/solo/port/source-interface/
+	 * tcp-mss/passive: converted, see bgp_cli_write_session_scalars()
+	 * in bgp_cli.c (M4 batch B3). g_peer is still needed below
+	 * (ebgp-multihop/GTSM comparison, still legacy). */
 	if (peer_group_active(peer))
 		g_peer = peer->group->conf;
 
@@ -18313,11 +17996,6 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		if (peergroup_flag_check(peer, PEER_FLAG_DUAL_AS))
 			vty_out(vty, " dual-as");
 		vty_out(vty, "\n");
-	}
-
-	/* description */
-	if (peer->desc) {
-		vty_out(vty, " neighbor %s description %s\n", addr, peer->desc);
 	}
 
 	/* shutdown */
@@ -18336,33 +18014,6 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	/* bfd */
 	if (peer->bfd_config)
 		bgp_bfd_peer_config_write(vty, peer, addr);
-
-	/* password */
-	if (peergroup_flag_check(peer, PEER_FLAG_PASSWORD))
-		vty_out(vty, " neighbor %s password %s\n", addr,
-			peer->password);
-
-	/* neighbor solo */
-	if (peergroup_flag_check(peer, PEER_FLAG_LONESOUL))
-		vty_out(vty, " neighbor %s solo\n", addr);
-
-	/* BGP port */
-	if (peer->port != BGP_PORT_DEFAULT) {
-		vty_out(vty, " neighbor %s port %d\n", addr, peer->port);
-	}
-
-	/* Local interface name */
-	if (peer->ifname) {
-		vty_out(vty, " neighbor %s interface %s\n", addr, peer->ifname);
-	}
-
-	/* TCP max segment size */
-	if (peergroup_flag_check(peer, PEER_FLAG_TCP_MSS))
-		vty_out(vty, " neighbor %s tcp-mss %d\n", addr, peer->tcp_mss);
-
-	/* passive */
-	if (peergroup_flag_check(peer, PEER_FLAG_PASSIVE))
-		vty_out(vty, " neighbor %s passive\n", addr);
 
 	/*
 	 * ebgp-multihop. Serialize from peer->cfg_ttl (the operator-configured
@@ -20040,14 +19691,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_local_as_no_prepend_replace_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_local_as_cmd);
 
-	/* "neighbor solo" commands. */
-	install_element(BGP_NODE, &neighbor_solo_cmd);
-	install_element(BGP_NODE, &no_neighbor_solo_cmd);
-
-	/* "neighbor password" commands. */
-	install_element(BGP_NODE, &neighbor_password_cmd);
-	install_element(BGP_NODE, &no_neighbor_password_cmd);
-
 	/* "neighbor activate" commands. */
 	install_element(BGP_NODE, &neighbor_activate_hidden_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_activate_cmd);
@@ -20639,11 +20282,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE,
 			&no_neighbor_path_attribute_treat_as_withdraw_cmd);
 
-	/* "neighbor passive" commands. */
-	install_element(BGP_NODE, &neighbor_passive_cmd);
-	install_element(BGP_NODE, &no_neighbor_passive_cmd);
-
-
 	/* "neighbor shutdown" commands. */
 	install_element(BGP_NODE, &neighbor_shutdown_cmd);
 	install_element(BGP_NODE, &no_neighbor_shutdown_cmd);
@@ -20721,11 +20359,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_enforce_first_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_enforce_first_as_cmd);
 
-	/* "neighbor description" commands. */
-	install_element(BGP_NODE, &neighbor_description_cmd);
-	install_element(BGP_NODE, &no_neighbor_description_cmd);
-	install_element(BGP_NODE, &no_neighbor_description_comment_cmd);
-
 	/* "neighbor update-source" commands. "*/
 	install_element(BGP_NODE, &neighbor_update_source_cmd);
 	install_element(BGP_NODE, &no_neighbor_update_source_cmd);
@@ -20752,10 +20385,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &neighbor_default_originate_cmd);
 	install_element(BGP_IPV6L_NODE, &neighbor_default_originate_rmap_cmd);
 	install_element(BGP_IPV6L_NODE, &no_neighbor_default_originate_cmd);
-
-	/* "neighbor port" commands. */
-	install_element(BGP_NODE, &neighbor_port_cmd);
-	install_element(BGP_NODE, &no_neighbor_port_cmd);
 
 	/* "neighbor weight" commands. */
 	install_element(BGP_NODE, &neighbor_weight_hidden_cmd);
@@ -20805,10 +20434,6 @@ void bgp_vty_init(void)
 	/* "neighbor advertisement-interval" commands. */
 	install_element(BGP_NODE, &neighbor_advertise_interval_cmd);
 	install_element(BGP_NODE, &no_neighbor_advertise_interval_cmd);
-
-	/* "neighbor interface" commands. */
-	install_element(BGP_NODE, &neighbor_interface_cmd);
-	install_element(BGP_NODE, &no_neighbor_interface_cmd);
 
 	/* "neighbor distribute" commands. */
 	install_element(BGP_NODE, &neighbor_distribute_list_hidden_cmd);
@@ -21323,10 +20948,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6_NODE, &af_no_route_map_vpn_imexport_cmd);
 	install_element(BGP_IPV4_NODE, &af_no_import_vrf_route_map_cmd);
 	install_element(BGP_IPV6_NODE, &af_no_import_vrf_route_map_cmd);
-
-	/* tcp-mss command */
-	install_element(BGP_NODE, &neighbor_tcp_mss_cmd);
-	install_element(BGP_NODE, &no_neighbor_tcp_mss_cmd);
 
 	install_element(BGP_NODE, &neighbor_ip_transparent_cmd);
 

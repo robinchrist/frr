@@ -348,32 +348,32 @@ int instance_peer_group_local_as_dual_as_modify(struct nb_cb_modify_args *args)
 
 int instance_peer_group_description_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/description");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_description_set(group->conf, yang_dnode_get_string(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_peer_group_description_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/description");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_description_unset(group->conf);
 
 	return NB_OK;
 }
@@ -442,16 +442,41 @@ int instance_peer_group_bfd_profile_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for why
+ * the bounds check happens at VALIDATE rather than relying on
+ * peer_password_set()'s own PEER_PASSWORD_MINLEN/MAXLEN check.
+ */
 int instance_peer_group_password_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+	const char *password;
+	size_t len;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/password");
-		return NB_ERR_VALIDATION;
+		password = yang_dnode_get_string(args->dnode, NULL);
+		len = strlen(password);
+		if (len < PEER_PASSWORD_MINLEN || len > PEER_PASSWORD_MAXLEN) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Invalid value: password must be %d-%d characters",
+				 PEER_PASSWORD_MINLEN, PEER_PASSWORD_MAXLEN);
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		if (peer_password_set(group->conf, yang_dnode_get_string(args->dnode, NULL)) !=
+		    BGP_SUCCESS) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_password_set() failed",
+				 __func__);
+			return NB_ERR_RESOURCE;
+		}
 		break;
 	}
 
@@ -460,79 +485,86 @@ int instance_peer_group_password_modify(struct nb_cb_modify_args *args)
 
 int instance_peer_group_password_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/password");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_password_unset(group->conf);
 
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for why
+ * update_group_adjust_soloness() (bgp_updgrp.c), not a bare
+ * peer_flag_set()/unset(), is the correct entry point -- it already
+ * detects group->conf via PEER_STATUS_GROUP and fans out to every current
+ * member itself.
+ */
 int instance_peer_group_solo_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/solo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	update_group_adjust_soloness(group->conf, yang_dnode_get_bool(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_peer_group_port_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/port");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_port_set(group->conf, yang_dnode_get_uint16(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_peer_group_port_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/port");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_port_unset(group->conf);
 
 	return NB_OK;
 }
 
+/* Legacy's peer_interface_vty() (bgp_vty.c, retired) resolves its target
+ * with peer_lookup_vty(), which never matches a peer-group name -- there
+ * is no legacy 'neighbor GROUP interface IFNAME' at all. Reject
+ * unconditionally rather than inventing group-level semantics that never
+ * existed.
+ */
 int instance_peer_group_source_interface_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/source-interface");
+	if (args->event == NB_EV_VALIDATE) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "source-interface is not supported on peer-groups; bgpd has no 'neighbor GROUP interface IFNAME'");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
 
 	return NB_OK;
@@ -540,64 +572,56 @@ int instance_peer_group_source_interface_modify(struct nb_cb_modify_args *args)
 
 int instance_peer_group_source_interface_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/source-interface");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
 	return NB_OK;
 }
 
 int instance_peer_group_tcp_mss_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/tcp-mss");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_tcp_mss_set(group->conf, yang_dnode_get_uint16(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_peer_group_tcp_mss_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/tcp-mss");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_tcp_mss_unset(group->conf);
 
 	return NB_OK;
 }
 
 int instance_peer_group_passive_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/passive");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_PASSIVE);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_PASSIVE);
 
 	return NB_OK;
 }
