@@ -144,6 +144,7 @@ FRR_CFG_DEFAULT_ULONG(BGP_CONNECT_RETRY,
 
 extern void bgp_clear_soft_in(struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_initiate_graceful_shut_unshut(struct vty *vty, struct bgp *bgp);
+extern int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on, bool disable);
 
 /* Peer show flags */
 /* Value of 0 means show all information */

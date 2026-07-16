@@ -700,6 +700,168 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable'
+ * mode (process + instance pair) and 'bgp graceful-restart preserve-fw-state'
+ * (process + instance pair). Legacy is two dual-purpose DEFUN pairs
+ * (bgp_graceful_restart_cmd/no_bgp_graceful_restart_cmd,
+ * bgp_graceful_restart_disable_cmd/no_bgp_graceful_restart_disable_cmd) plus
+ * a third (bgp_graceful_restart_preserve_fw_cmd/no_...), each installed
+ * identically at both CONFIG_NODE and BGP_NODE and branching on vty->node --
+ * split here into independent DEFPY_YANG pairs per scope, same grammar as
+ * legacy (including the GR_CMD/NO_GR_CMD/GR_DISABLE/NO_GR_DISABLE help
+ * strings from lib/command.h).
+ *
+ * The mode leaf has no YANG default (absence == helper mode): both the
+ * restarter and disable forms map their positive form to NB_OP_MODIFY of
+ * the matching enum value, and their negative form to NB_OP_DESTROY --
+ * which of the two legacy 'no' commands' asymmetric FSM behavior applies is
+ * resolved from the *old* enum value in NB_EV_APPLY, not from which 'no'
+ * command was typed (there is only one DESTROY entry point on this leaf);
+ * see the mode modify/destroy callbacks in bgp_nb_config.c.
+ *
+ * preserve-fw-state carries a YANG default (false, Tier A), so its no-form
+ * maps to NB_OP_DESTROY exactly like graceful-shutdown (B12) -- redelivered
+ * as a MODIFY of the default value to the single .modify callback, no
+ * separate destroy callback exists.
+ */
+DEFPY_YANG(
+	bgp_global_graceful_restart, bgp_global_graceful_restart_cli_cmd,
+	"bgp graceful-restart",
+	BGP_STR
+	GR_CMD)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_MODIFY,
+			      "restarter");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart, no_bgp_global_graceful_restart_cli_cmd,
+	"no bgp graceful-restart",
+	NO_STR
+	BGP_STR
+	NO_GR_CMD)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_graceful_restart_disable, bgp_global_graceful_restart_disable_cli_cmd,
+	"bgp graceful-restart-disable",
+	BGP_STR
+	GR_DISABLE)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_MODIFY,
+			      "disable");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_disable, no_bgp_global_graceful_restart_disable_cli_cmd,
+	"no bgp graceful-restart-disable",
+	NO_STR
+	BGP_STR
+	NO_GR_DISABLE)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/mode", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_graceful_restart_preserve_fw, bgp_global_graceful_restart_preserve_fw_cli_cmd,
+	"bgp graceful-restart preserve-fw-state",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Sets F-bit indication that fib is preserved while doing Graceful Restart\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/preserve-fw-state",
+			      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_preserve_fw,
+	no_bgp_global_graceful_restart_preserve_fw_cli_cmd,
+	"no bgp graceful-restart preserve-fw-state",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Unsets F-bit indication that fib is preserved while doing Graceful Restart\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/preserve-fw-state",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart, bgp_graceful_restart_cli_cmd,
+	"bgp graceful-restart",
+	BGP_STR
+	GR_CMD)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/mode", NB_OP_MODIFY, "restarter");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart, no_bgp_graceful_restart_cli_cmd,
+	"no bgp graceful-restart",
+	NO_STR
+	BGP_STR
+	NO_GR_CMD)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/mode", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_disable, bgp_graceful_restart_disable_cli_cmd,
+	"bgp graceful-restart-disable",
+	BGP_STR
+	GR_DISABLE)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/mode", NB_OP_MODIFY, "disable");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_disable, no_bgp_graceful_restart_disable_cli_cmd,
+	"no bgp graceful-restart-disable",
+	NO_STR
+	BGP_STR
+	NO_GR_DISABLE)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/mode", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_preserve_fw, bgp_graceful_restart_preserve_fw_cli_cmd,
+	"bgp graceful-restart preserve-fw-state",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Sets F-bit indication that fib is preserved while doing Graceful Restart\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/preserve-fw-state", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_preserve_fw, no_bgp_graceful_restart_preserve_fw_cli_cmd,
+	"no bgp graceful-restart preserve-fw-state",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Unsets F-bit indication that fib is preserved while doing Graceful Restart\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/preserve-fw-state", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
  * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
@@ -3011,6 +3173,43 @@ static void instance_graceful_restart_notification_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+/* Batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable' mode,
+ * per-instance form. No YANG default (absence == helper mode, nothing
+ * emitted -- matches legacy's config_write, which prints neither line when
+ * bgp_global_gr_mode_get(bgp) == GLOBAL_HELPER); presence-based otherwise.
+ * The leaf is only ever present in the datastore when a user configured
+ * this exact per-instance command (process-wide mode changes mirror onto
+ * bgp->global_gr_present_state directly, bypassing the northbound
+ * datastore, so they never create this leaf) -- which is also why no extra
+ * gating against the process-wide flags is needed here, unlike legacy's
+ * config_write which explicitly gates on '!BM_FLAG_GR_CONFIGURED' for the
+ * same reason expressed at the C-struct level instead.
+ */
+static void instance_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	const char *mode = yang_dnode_get_string(dnode, NULL);
+
+	if (strmatch(mode, "restarter"))
+		vty_out(vty, " bgp graceful-restart\n");
+	else if (strmatch(mode, "disable"))
+		vty_out(vty, " bgp graceful-restart-disable\n");
+}
+
+/* Batch B13: 'bgp graceful-restart preserve-fw-state', per-instance form.
+ * Static default-off boolean, legacy positive-only emission, same shape as
+ * instance_graceful_shutdown_cli_write (B12) -- the gate against the
+ * process-wide flag in legacy's config_write is likewise a no-op here for
+ * the same datastore-presence reason as the mode leaf above.
+ */
+static void instance_graceful_restart_preserve_fw_state_cli_write(struct vty *vty,
+								  const struct lyd_node *dnode,
+								  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp graceful-restart preserve-fw-state\n");
+}
+
 static void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -3221,6 +3420,32 @@ static void process_graceful_shutdown_cli_write(struct vty *vty, const struct ly
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "bgp graceful-shutdown\n");
+}
+
+/* Batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable' mode,
+ * process-wide form. Same presence-based shape as
+ * instance_graceful_restart_mode_cli_write above, no leading space.
+ */
+static void process_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	const char *mode = yang_dnode_get_string(dnode, NULL);
+
+	if (strmatch(mode, "restarter"))
+		vty_out(vty, "bgp graceful-restart\n");
+	else if (strmatch(mode, "disable"))
+		vty_out(vty, "bgp graceful-restart-disable\n");
+}
+
+/* Batch B13: 'bgp graceful-restart preserve-fw-state', process-wide form.
+ * Same value-checked shape as process_graceful_shutdown_cli_write above.
+ */
+static void process_graceful_restart_preserve_fw_state_cli_write(struct vty *vty,
+								 const struct lyd_node *dnode,
+								 bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "bgp graceful-restart preserve-fw-state\n");
 }
 
 const struct frr_yang_module_info proteus_bgp_cli_info = {
@@ -3529,6 +3754,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/mode",
+			.cbs = {
+				.cli_show = instance_graceful_restart_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/preserve-fw-state",
+			.cbs = {
+				.cli_show = instance_graceful_restart_preserve_fw_state_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/ebgp-requires-policy",
 			.cbs = {
 				.cli_show = instance_ebgp_requires_policy_cli_write,
@@ -3681,6 +3918,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/graceful-restart/mode",
+			.cbs = {
+				.cli_show = process_graceful_restart_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/graceful-restart/preserve-fw-state",
+			.cbs = {
+				.cli_show = process_graceful_restart_preserve_fw_state_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -3716,6 +3965,13 @@ void bgp_cli_init(void)
 
 	install_element(BGP_NODE, &bgp_graceful_shutdown_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_shutdown_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_graceful_restart_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_disable_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_preserve_fw_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_preserve_fw_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
@@ -3876,4 +4132,11 @@ void bgp_cli_init(void)
 
 	install_element(CONFIG_NODE, &bgp_global_graceful_shutdown_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_graceful_shutdown_cli_cmd);
+
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_disable_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_disable_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_preserve_fw_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_preserve_fw_cli_cmd);
 }

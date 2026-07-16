@@ -303,49 +303,153 @@ int process_suppress_fib_pending_advertisement_delay_modify(struct nb_cb_modify_
 	return NB_OK;
 }
 
+/* Milestone 2 batch B13: 'bgp graceful-restart'/'bgp graceful-restart-disable'
+ * mode (process + instance pair), and 'bgp graceful-restart preserve-fw-state'
+ * (process + instance pair). Legacy is two dual-purpose DEFUN pairs
+ * (bgp_graceful_restart_cmd/no_bgp_graceful_restart_cmd,
+ * bgp_graceful_restart_disable_cmd/no_bgp_graceful_restart_disable_cmd,
+ * bgpd/bgp_vty.c) branching on vty->node, both feeding
+ * bgp_inst_gr_config_vty() (still bgpd/bgp_vty.c, exposed via bgp_vty.h) --
+ * that function drives one of four commands (GLOBAL_GR_CMD/NO_GLOBAL_GR_CMD/
+ * GLOBAL_DISABLE_CMD/NO_GLOBAL_DISABLE_CMD) through struct bgp's own
+ * GLOBAL_GR_FSM (bgp_global_gr_init(), bgpd.c) to update
+ * bgp->global_gr_present_state (GLOBAL_HELPER/GLOBAL_GR/GLOBAL_DISABLE). The
+ * FSM already treats a redundant re-application of the current state as
+ * BGP_GR_NO_OPERATION (bgp_gr_update_all(), bgp_fsm.c), so no extra
+ * transition guard is needed here for idempotency across
+ * bgp_nb_instance_replay() -- unlike B12's graceful-shutdown, which had to
+ * add one by hand.
+ *
+ * The YANG mode leaf has no default (absence == helper mode); MODIFY
+ * carries "restarter"/"disable", DESTROY returns to helper. DESTROY can't
+ * tell which of the two legacy 'no' forms a user "meant" from the new value
+ * alone (there isn't one), so it reads the *old* value straight off
+ * args->dnode -- valid at NB_EV_APPLY for a leaf being destroyed, same as
+ * instance_confederation_peers_plain_destroy() above -- and feeds the
+ * matching command. This reproduces the FSM's own asymmetric behavior
+ * exactly: e.g. legacy "no bgp graceful-restart" is a no-op while in
+ * GLOBAL_DISABLE, because NO_GLOBAL_GR_CMD only has a defined transition out
+ * of GLOBAL_GR.
+ */
+
+/* Mirrors bgp_global_gr_config_vty()'s "see if GR is set per-vrf and warn
+ * user to delete" guard: only checked while bm is unconfigured
+ * (BM_FLAG_GR_CONFIGURED, a compound of BM_FLAG_GR_RESTARTER|
+ * BM_FLAG_GR_DISABLED, clear). Once bm is configured this always returns
+ * false, matching legacy exactly -- the guard in bgp_global_gr_config_vty()
+ * is unreachable once bm holds either flag, both because the check itself
+ * is skipped and because the leading "already at target" no-op return in
+ * legacy also intercepts every no-op re-application before the guard would
+ * run. There is no equivalent guard on the per-instance DEFUN branches
+ * (bgp_graceful_restart_cmd's/bgp_graceful_restart_disable_cmd's per-instance
+ * halves never check bm->flags at all) -- do not add one to the instance
+ * callbacks below.
+ */
+static bool bgp_nb_gr_process_blocked_by_instance(void)
+{
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (CHECK_FLAG(bm->flags, BM_FLAG_GR_CONFIGURED))
+		return false;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		if (bgp_global_gr_mode_get(bgp) != GLOBAL_HELPER)
+			return true;
+	}
+
+	return false;
+}
+
 int process_graceful_restart_mode_modify(struct nb_cb_modify_args *args)
 {
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	bool disable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/mode");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_gr_process_blocked_by_instance()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "global graceful-restart config not permitted: per-vrf graceful-restart configuration exists");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
 
+	disable = strmatch(yang_dnode_get_string(args->dnode, NULL), "disable");
+
+	if (disable) {
+		SET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
+		UNSET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
+	} else {
+		SET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
+		UNSET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
+	}
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp_inst_gr_config_vty(NULL, bgp, true, disable);
+
 	return NB_OK;
 }
 
+/* No VALIDATE guard here: as established above, the per-vrf-conflict guard
+ * is only ever reachable on a real transition into the "configured" state,
+ * which DESTROY (a transition back towards helper) never is.
+ */
 int process_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	bool disable;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	disable = strmatch(yang_dnode_get_string(args->dnode, NULL), "disable");
+
+	if (disable)
+		UNSET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
+	else
+		UNSET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp_inst_gr_config_vty(NULL, bgp, false, disable);
 
 	return NB_OK;
 }
 
+/* Tier A default-off boolean, same shape as B12's graceful-shutdown: no
+ * mutual-exclusion guard exists in legacy for preserve-fw-state at either
+ * scope, and SET_FLAG/UNSET_FLAG are naturally idempotent, so no transition
+ * guard is needed either.
+ */
 int process_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/preserve-fw-state");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	bool new_val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	new_val = yang_dnode_get_bool(args->dnode, NULL);
+
+	if (new_val)
+		SET_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD);
+	else
+		UNSET_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD);
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		if (new_val)
+			SET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
 	}
 
 	return NB_OK;
@@ -3079,17 +3183,43 @@ int instance_long_lived_graceful_restart_stale_time_destroy(struct nb_cb_destroy
 	return NB_OK;
 }
 
+/* No VALIDATE guard against bm->flags here -- see the block comment above
+ * process_graceful_restart_mode_modify(): the per-instance halves of
+ * bgp_graceful_restart_cmd/bgp_graceful_restart_disable_cmd never check
+ * bm->flags before calling bgp_inst_gr_config_vty(), so neither does this.
+ */
 int instance_graceful_restart_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+	bool disable;
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	disable = strmatch(yang_dnode_get_string(args->dnode, NULL), "disable");
+
+	ret = bgp_inst_gr_config_vty(NULL, bgp, true, disable);
+
+	/* bgp_graceful_restart_disable_cmd's per-instance branch additionally
+	 * force-unsets the RESTART and LLGR capabilities on every peer on a
+	 * successful transition into disable mode -- unique to this one
+	 * transition, no other mode change (process-wide, or the
+	 * 'restarter' value at either scope) does this in legacy.
+	 */
+	if (disable && ret == BGP_GR_SUCCESS) {
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_UNSET);
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_LLGR, CAPABILITY_ACTION_UNSET);
+		}
 	}
 
 	return NB_OK;
@@ -3097,16 +3227,20 @@ int instance_graceful_restart_mode_modify(struct nb_cb_modify_args *args)
 
 int instance_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	bool disable;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	/* Old value, same as process_graceful_restart_mode_destroy() above. */
+	disable = strmatch(yang_dnode_get_string(args->dnode, NULL), "disable");
+
+	bgp_inst_gr_config_vty(NULL, bgp, false, disable);
 
 	return NB_OK;
 }
@@ -3173,16 +3307,19 @@ int instance_graceful_restart_notification_destroy(struct nb_cb_destroy_args *ar
 
 int instance_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/preserve-fw-state");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		SET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
+	else
+		UNSET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
 
 	return NB_OK;
 }

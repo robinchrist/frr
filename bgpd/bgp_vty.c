@@ -2126,8 +2126,19 @@ DEFPY (bgp_af_nexthop_prefer_global,
 	return CMD_SUCCESS;
 }
 
-static int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on,
-				  bool disable)
+/* Feeds one of the four GLOBAL_GR_CMD/NO_GLOBAL_GR_CMD/GLOBAL_DISABLE_CMD/
+ * NO_GLOBAL_DISABLE_CMD commands through struct bgp's own GLOBAL_GR_FSM
+ * (bgp_global_gr_init(), bgpd.c) via bgp_gr_update_all() -- the FSM itself
+ * is idempotent (a redundant re-application of the current state is
+ * BGP_GR_NO_OPERATION, no-op). Exposed (no longer static) via bgp_vty.h for
+ * the northbound '/proteus-bgp:process/graceful-restart/mode' and
+ * '/proteus-bgp:instance/graceful-restart/mode' callbacks in
+ * bgp_nb_config.c, which replace bgp_global_gr_config_vty() (deleted) and
+ * the per-instance branches of the four now-retired dual-purpose DEFUNs as
+ * this function's only remaining callers; it now always runs with a NULL
+ * vty (there is no vty_out() in this function itself).
+ */
+int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on, bool disable)
 {
 	int ret = BGP_GR_FAILURE;
 
@@ -2155,125 +2166,17 @@ static int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on,
 	return ret;
 }
 
-static int bgp_global_gr_config_vty(struct vty *vty, bool on, bool disable)
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-	bool vrf_cfg = false;
-	int ret = BGP_GR_FAILURE;
-
-	if (disable) {
-		if ((on && CHECK_FLAG(bm->flags, BM_FLAG_GR_DISABLED)) ||
-		    (!on && !CHECK_FLAG(bm->flags, BM_FLAG_GR_DISABLED)))
-			return CMD_SUCCESS;
-	} else {
-		if ((on && CHECK_FLAG(bm->flags, BM_FLAG_GR_RESTARTER)) ||
-		    (!on && !CHECK_FLAG(bm->flags, BM_FLAG_GR_RESTARTER)))
-			return CMD_SUCCESS;
-	}
-
-	/* See if GR is set per-vrf and warn user to delete */
-	if (!CHECK_FLAG(bm->flags, BM_FLAG_GR_CONFIGURED)) {
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			enum global_mode gr_mode = bgp_global_gr_mode_get(bgp);
-
-			if (gr_mode != GLOBAL_HELPER) {
-				vty_out(vty,
-					"%% graceful-restart configuration found in %s, mode %d\n",
-					bgp->name_pretty, gr_mode);
-				vrf_cfg = true;
-			}
-		}
-	}
-
-	if (vrf_cfg) {
-		vty_out(vty,
-			"%%Failed: global graceful-restart not permitted with per-vrf configuration\n");
-		return CMD_WARNING;
-	}
-
-	/* Set flag globally */
-	if (on) {
-		if (disable) {
-			UNSET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
-			SET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
-		} else {
-			SET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
-			UNSET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
-		}
-	} else {
-		if (disable)
-			UNSET_FLAG(bm->flags, BM_FLAG_GR_DISABLED);
-		else
-			UNSET_FLAG(bm->flags, BM_FLAG_GR_RESTARTER);
-	}
-
-	/* Initiate processing for all BGP instances. */
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		ret = bgp_inst_gr_config_vty(vty, bgp, on, disable);
-		if (ret != BGP_GR_SUCCESS)
-			vty_out(vty,
-				"%% Applying global graceful-restart %s config to vrf %s failed, error %d\n",
-				(disable) ? "disable" : "",
-				bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT
-					? "Default"
-					: bgp->name,
-				ret);
-	}
-
-	vty_out(vty,
-		"Graceful restart configuration changed, reset all peers to take effect\n");
-	return bgp_vty_return(vty, ret);
-}
-
-/* "bgp graceful-restart mode" configuration. */
-DEFUN (bgp_graceful_restart,
-	bgp_graceful_restart_cmd,
-	"bgp graceful-restart",
-	BGP_STR
-	GR_CMD
-      )
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_gr_config_vty(vty, true, false);
-
-	int ret = BGP_GR_FAILURE;
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	ret = bgp_inst_gr_config_vty(vty, bgp, true, false);
-	if (ret == BGP_GR_SUCCESS) {
-		vty_out(vty,
-			"Graceful restart configuration changed, reset all peers to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_graceful_restart,
-	no_bgp_graceful_restart_cmd,
-	"no bgp graceful-restart",
-	NO_STR
-	BGP_STR
-	NO_GR_CMD
-      )
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_gr_config_vty(vty, false, false);
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int ret = BGP_GR_FAILURE;
-
-	ret = bgp_inst_gr_config_vty(vty, bgp, false, false);
-	if (ret == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp,
-								      bgp->peer,
-								      ret);
-		vty_out(vty,
-			"Graceful restart configuration changed, reset all peers to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
-}
+/* "bgp graceful-restart"/"bgp graceful-restart-disable" mode (process +
+ * instance pair) and "bgp graceful-restart preserve-fw-state": converted to
+ * northbound, see '/proteus-bgp:process/graceful-restart/{mode,
+ * preserve-fw-state}' and '/proteus-bgp:instance/graceful-restart/{mode,
+ * preserve-fw-state}' callbacks in bgp_nb_config.c. bgp_global_gr_config_vty()
+ * (the former process-wide setter) is deleted; its per-vrf mutual-exclusion
+ * check and bm->flags update are reimplemented directly in
+ * process_graceful_restart_mode_modify()/_destroy(), and its mirror loop
+ * calling bgp_inst_gr_config_vty() per instance is preserved as-is (that
+ * function stays, exposed via bgp_vty.h, see above).
+ */
 
 DEFUN (bgp_graceful_restart_stalepath_time,
 	bgp_graceful_restart_stalepath_time_cmd,
@@ -2515,103 +2418,6 @@ DEFUN (no_bgp_graceful_restart_select_defer_time,
 	}
 
 	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_graceful_restart_preserve_fw,
-	bgp_graceful_restart_preserve_fw_cmd,
-	"bgp graceful-restart preserve-fw-state",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Sets F-bit indication that fib is preserved while doing Graceful Restart\n")
-{
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		SET_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD);
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-			SET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		SET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_restart_preserve_fw,
-	no_bgp_graceful_restart_preserve_fw_cmd,
-	"no bgp graceful-restart preserve-fw-state",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Unsets F-bit indication that fib is preserved while doing Graceful Restart\n")
-{
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		UNSET_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD);
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-			UNSET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		UNSET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_graceful_restart_disable,
-	bgp_graceful_restart_disable_cmd,
-	"bgp graceful-restart-disable",
-	BGP_STR
-	GR_DISABLE)
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_gr_config_vty(vty, true, true);
-
-	int ret = BGP_GR_FAILURE;
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	ret = bgp_inst_gr_config_vty(vty, bgp, true, true);
-	if (ret == BGP_GR_SUCCESS) {
-		vty_out(vty,
-			"Graceful restart configuration changed, reset all peers to take effect\n");
-
-		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_UNSET);
-			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-					    CAPABILITY_CODE_LLGR, CAPABILITY_ACTION_UNSET);
-		}
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_graceful_restart_disable,
-	no_bgp_graceful_restart_disable_cmd,
-	"no bgp graceful-restart-disable",
-	NO_STR
-	BGP_STR
-	NO_GR_DISABLE
-      )
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_gr_config_vty(vty, false, true);
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int ret = BGP_GR_FAILURE;
-
-	ret = bgp_inst_gr_config_vty(vty, bgp, false, true);
-	if (ret == BGP_GR_SUCCESS) {
-		vty_out(vty,
-			"Graceful restart configuration changed, reset all peers to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
 }
 
 DEFUN (bgp_neighbor_graceful_restart_set,
@@ -19837,13 +19643,15 @@ int bgp_config_write(struct vty *vty)
 		vty_out(vty, "bgp graceful-restart select-defer-time %u\n",
 			bm->select_defer_time);
 
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GR_RESTARTER))
-		vty_out(vty, "bgp graceful-restart\n");
-	else if (CHECK_FLAG(bm->flags, BM_FLAG_GR_DISABLED))
-		vty_out(vty, "bgp graceful-restart-disable\n");
+	/* bgp graceful-restart mode ('bgp graceful-restart' /
+	 * 'bgp graceful-restart-disable'): converted to northbound, see
+	 * '/proteus-bgp:process/graceful-restart/mode' cli_show in bgp_cli.c.
+	 */
 
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD))
-		vty_out(vty, "bgp graceful-restart preserve-fw-state\n");
+	/* bgp graceful-restart preserve-fw-state: converted to northbound,
+	 * see '/proteus-bgp:process/graceful-restart/preserve-fw-state'
+	 * cli_show in bgp_cli.c.
+	 */
 
 	if (bm->rib_stale_time != BGP_DEFAULT_RIB_STALE_TIME)
 		vty_out(vty, "bgp graceful-restart rib-stale-time %u\n",
@@ -19978,18 +19786,18 @@ int bgp_config_write(struct vty *vty)
 					" bgp graceful-restart select-defer-time %u\n",
 					bgp->select_defer_time);
 
-		if (!CHECK_FLAG(bm->flags, BM_FLAG_GR_CONFIGURED)) {
-			if (bgp_global_gr_mode_get(bgp) == GLOBAL_GR)
-				vty_out(vty, " bgp graceful-restart\n");
+		/* bgp graceful-restart mode ('bgp graceful-restart' /
+		 * 'bgp graceful-restart-disable'), per-instance form:
+		 * converted to northbound, see
+		 * '/proteus-bgp:instance/graceful-restart/mode' cli_show in
+		 * bgp_cli.c.
+		 */
 
-			if (bgp_global_gr_mode_get(bgp) == GLOBAL_DISABLE)
-				vty_out(vty, " bgp graceful-restart-disable\n");
-		}
-
-		if (!CHECK_FLAG(bm->flags, BM_FLAG_GR_PRESERVE_FWD))
-			if (CHECK_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD))
-				vty_out(vty,
-					" bgp graceful-restart preserve-fw-state\n");
+		/* bgp graceful-restart preserve-fw-state, per-instance form:
+		 * converted to northbound, see
+		 * '/proteus-bgp:instance/graceful-restart/preserve-fw-state'
+		 * cli_show in bgp_cli.c.
+		 */
 
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR))
 			vty_out(vty, " bgp graceful-restart disable-eor\n");
@@ -20653,10 +20461,10 @@ void bgp_vty_init(void)
 	 */
 
 	/* BGP-wide graceful-restart commands. */
-	install_element(CONFIG_NODE, &bgp_graceful_restart_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_restart_cmd);
-	install_element(CONFIG_NODE, &bgp_graceful_restart_disable_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_restart_disable_cmd);
+	/* bgp graceful-restart mode ('bgp graceful-restart' /
+	 * 'bgp graceful-restart-disable') and preserve-fw-state: both process
+	 * and per-VRF instance scopes are northbound now, see bgp_cli.c
+	 */
 	install_element(CONFIG_NODE, &bgp_graceful_restart_stalepath_time_cmd);
 	install_element(CONFIG_NODE,
 			&no_bgp_graceful_restart_stalepath_time_cmd);
@@ -20664,10 +20472,7 @@ void bgp_vty_init(void)
 	install_element(CONFIG_NODE, &no_bgp_graceful_restart_restart_time_cmd);
 	install_element(CONFIG_NODE,
 			&bgp_graceful_restart_select_defer_time_cmd);
-	install_element(CONFIG_NODE,
-			&no_bgp_graceful_restart_select_defer_time_cmd);
-	install_element(CONFIG_NODE, &bgp_graceful_restart_preserve_fw_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_restart_preserve_fw_cmd);
+	install_element(CONFIG_NODE, &no_bgp_graceful_restart_select_defer_time_cmd);
 	install_element(CONFIG_NODE, &bgp_graceful_restart_rib_stale_time_cmd);
 	install_element(CONFIG_NODE,
 			&no_bgp_graceful_restart_rib_stale_time_cmd);
@@ -20724,13 +20529,9 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
 	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
 
-	/* "bgp graceful-restart" command */
-	install_element(BGP_NODE, &bgp_graceful_restart_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_cmd);
-
-	/* "bgp graceful-restart-disable" command */
-	install_element(BGP_NODE, &bgp_graceful_restart_disable_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_cmd);
+	/* bgp graceful-restart mode ('bgp graceful-restart' /
+	 * 'bgp graceful-restart-disable'): northbound now, see bgp_cli.c
+	 */
 
 	/* "neighbor a:b:c:d graceful-restart" command */
 	install_element(BGP_NODE, &bgp_neighbor_graceful_restart_set_cmd);
@@ -20755,8 +20556,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &bgp_graceful_restart_select_defer_time_cmd);
 	install_element(BGP_NODE,
 			&no_bgp_graceful_restart_select_defer_time_cmd);
-	install_element(BGP_NODE, &bgp_graceful_restart_preserve_fw_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_preserve_fw_cmd);
+	/* bgp graceful-restart preserve-fw-state: northbound now, see
+	 * bgp_cli.c
+	 */
 
 	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
