@@ -862,6 +862,237 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B14: 'bgp graceful-restart restart-time/stalepath-time/
+ * select-defer-time/rib-stale-time' (process + instance pairs). Legacy is
+ * three dual-purpose DEFUN pairs (restart-time, stalepath-time,
+ * select-defer-time), same install-at-both-nodes-branch-on-vty->node shape
+ * as the mode/preserve-fw-state family above, plus a fourth
+ * (rib-stale-time) whose CONFIG_NODE half was dead code (see the
+ * bgp_nb_config.c comment on process_graceful_restart_rib_stale_time_modify()
+ * for the fresh-code note). None of the four leaves carries a YANG default,
+ * so all eight DEFPY_YANG pairs below map their 'no' form to NB_OP_DESTROY
+ * (no separate default-transition MODIFY needed, unlike preserve-fw-state).
+ */
+DEFPY_YANG(
+	bgp_global_graceful_restart_restart_time, bgp_global_graceful_restart_restart_time_cli_cmd,
+	"bgp graceful-restart restart-time (0-4095)$restart_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to wait to delete stale routes before a BGP open message is received\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/restart-time",
+			      NB_OP_MODIFY, restart_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_restart_time,
+	no_bgp_global_graceful_restart_restart_time_cli_cmd,
+	"no bgp graceful-restart restart-time [(0-4095)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to wait to delete stale routes before a BGP open message is received\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/restart-time",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_graceful_restart_stalepath_time,
+	bgp_global_graceful_restart_stalepath_time_cli_cmd,
+	"bgp graceful-restart stalepath-time (1-4095)$stalepath_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the max time to hold onto restarting peer's stale paths\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/stalepath-time",
+			      NB_OP_MODIFY, stalepath_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_stalepath_time,
+	no_bgp_global_graceful_restart_stalepath_time_cli_cmd,
+	"no bgp graceful-restart stalepath-time [(1-4095)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the max time to hold onto restarting peer's stale paths\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/stalepath-time",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_graceful_restart_select_defer_time,
+	bgp_global_graceful_restart_select_defer_time_cli_cmd,
+	"bgp graceful-restart select-defer-time (0-3600)$defer_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to defer the BGP route selection after restart\n"
+	"Delay value (seconds, 0 - disable)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/select-defer-time",
+			      NB_OP_MODIFY, defer_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_select_defer_time,
+	no_bgp_global_graceful_restart_select_defer_time_cli_cmd,
+	"no bgp graceful-restart select-defer-time [(0-3600)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to defer the BGP route selection after restart\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/select-defer-time",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_global_graceful_restart_rib_stale_time,
+	bgp_global_graceful_restart_rib_stale_time_cli_cmd,
+	"bgp graceful-restart rib-stale-time (1-3600)$stale_time",
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Specify the stale route removal timer in rib\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/rib-stale-time",
+			      NB_OP_MODIFY, stale_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_restart_rib_stale_time,
+	no_bgp_global_graceful_restart_rib_stale_time_cli_cmd,
+	"no bgp graceful-restart rib-stale-time [(1-3600)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Specify the stale route removal timer in rib\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-restart/rib-stale-time",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_restart_time, bgp_graceful_restart_restart_time_cli_cmd,
+	"bgp graceful-restart restart-time (0-4095)$restart_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to wait to delete stale routes before a BGP open message is received\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/restart-time", NB_OP_MODIFY,
+			      restart_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_restart_time, no_bgp_graceful_restart_restart_time_cli_cmd,
+	"no bgp graceful-restart restart-time [(0-4095)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to wait to delete stale routes before a BGP open message is received\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/restart-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_stalepath_time, bgp_graceful_restart_stalepath_time_cli_cmd,
+	"bgp graceful-restart stalepath-time (1-4095)$stalepath_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the max time to hold onto restarting peer's stale paths\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/stalepath-time", NB_OP_MODIFY,
+			      stalepath_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_stalepath_time, no_bgp_graceful_restart_stalepath_time_cli_cmd,
+	"no bgp graceful-restart stalepath-time [(1-4095)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the max time to hold onto restarting peer's stale paths\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/stalepath-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_select_defer_time, bgp_graceful_restart_select_defer_time_cli_cmd,
+	"bgp graceful-restart select-defer-time (0-3600)$defer_time",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to defer the BGP route selection after restart\n"
+	"Delay value (seconds, 0 - disable)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/select-defer-time", NB_OP_MODIFY,
+			      defer_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_select_defer_time, no_bgp_graceful_restart_select_defer_time_cli_cmd,
+	"no bgp graceful-restart select-defer-time [(0-3600)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Set the time to defer the BGP route selection after restart\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/select-defer-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_restart_rib_stale_time, bgp_graceful_restart_rib_stale_time_cli_cmd,
+	"bgp graceful-restart rib-stale-time (1-3600)$stale_time",
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Specify the stale route removal timer in rib\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/rib-stale-time", NB_OP_MODIFY,
+			      stale_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_rib_stale_time, no_bgp_graceful_restart_rib_stale_time_cli_cmd,
+	"no bgp graceful-restart rib-stale-time [(1-3600)]",
+	NO_STR
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Specify the stale route removal timer in rib\n"
+	"Delay value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/rib-stale-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
  * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
@@ -3210,6 +3441,45 @@ static void instance_graceful_restart_preserve_fw_state_cli_write(struct vty *vt
 		vty_out(vty, " bgp graceful-restart preserve-fw-state\n");
 }
 
+/* Batch B14: 'bgp graceful-restart restart-time/stalepath-time/
+ * select-defer-time/rib-stale-time', per-instance form. None of the four
+ * carry a YANG default, so each is presence-based -- same no-gating
+ * reasoning as the mode/preserve-fw-state leaves above (the process-wide
+ * mirror loop writes struct bgp fields directly, bypassing the northbound
+ * datastore, so these leaves are only ever present when this exact
+ * per-instance command was used).
+ */
+static void instance_graceful_restart_restart_time_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, " bgp graceful-restart restart-time %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void instance_graceful_restart_stalepath_time_cli_write(struct vty *vty,
+							       const struct lyd_node *dnode,
+							       bool show_defaults)
+{
+	vty_out(vty, " bgp graceful-restart stalepath-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void instance_graceful_restart_select_defer_time_cli_write(struct vty *vty,
+								  const struct lyd_node *dnode,
+								  bool show_defaults)
+{
+	vty_out(vty, " bgp graceful-restart select-defer-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
+							       const struct lyd_node *dnode,
+							       bool show_defaults)
+{
+	vty_out(vty, " bgp graceful-restart rib-stale-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
 static void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -3446,6 +3716,42 @@ static void process_graceful_restart_preserve_fw_state_cli_write(struct vty *vty
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "bgp graceful-restart preserve-fw-state\n");
+}
+
+/* Batch B14: 'bgp graceful-restart restart-time/stalepath-time/
+ * select-defer-time/rib-stale-time', process-wide form. Same presence-based
+ * shape as instance_graceful_restart_restart_time_cli_write etc. above, no
+ * leading space.
+ */
+static void process_graceful_restart_restart_time_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	vty_out(vty, "bgp graceful-restart restart-time %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void process_graceful_restart_stalepath_time_cli_write(struct vty *vty,
+							      const struct lyd_node *dnode,
+							      bool show_defaults)
+{
+	vty_out(vty, "bgp graceful-restart stalepath-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void process_graceful_restart_select_defer_time_cli_write(struct vty *vty,
+								 const struct lyd_node *dnode,
+								 bool show_defaults)
+{
+	vty_out(vty, "bgp graceful-restart select-defer-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
+static void process_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
+							      const struct lyd_node *dnode,
+							      bool show_defaults)
+{
+	vty_out(vty, "bgp graceful-restart rib-stale-time %u\n",
+		yang_dnode_get_uint16(dnode, NULL));
 }
 
 const struct frr_yang_module_info proteus_bgp_cli_info = {
@@ -3766,6 +4072,30 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/restart-time",
+			.cbs = {
+				.cli_show = instance_graceful_restart_restart_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/stalepath-time",
+			.cbs = {
+				.cli_show = instance_graceful_restart_stalepath_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/select-defer-time",
+			.cbs = {
+				.cli_show = instance_graceful_restart_select_defer_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/rib-stale-time",
+			.cbs = {
+				.cli_show = instance_graceful_restart_rib_stale_time_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/ebgp-requires-policy",
 			.cbs = {
 				.cli_show = instance_ebgp_requires_policy_cli_write,
@@ -3930,6 +4260,30 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/graceful-restart/restart-time",
+			.cbs = {
+				.cli_show = process_graceful_restart_restart_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/graceful-restart/stalepath-time",
+			.cbs = {
+				.cli_show = process_graceful_restart_stalepath_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/graceful-restart/select-defer-time",
+			.cbs = {
+				.cli_show = process_graceful_restart_select_defer_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/graceful-restart/rib-stale-time",
+			.cbs = {
+				.cli_show = process_graceful_restart_rib_stale_time_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -3972,6 +4326,14 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_cli_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_preserve_fw_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_preserve_fw_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_restart_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_restart_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_stalepath_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_stalepath_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_select_defer_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_select_defer_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_rib_stale_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_rib_stale_time_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
@@ -4139,4 +4501,12 @@ void bgp_cli_init(void)
 	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_disable_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_global_graceful_restart_preserve_fw_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_preserve_fw_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_restart_time_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_restart_time_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_stalepath_time_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_stalepath_time_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_select_defer_time_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_select_defer_time_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_global_graceful_restart_rib_stale_time_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_restart_rib_stale_time_cli_cmd);
 }

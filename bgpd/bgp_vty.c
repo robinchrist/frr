@@ -2178,247 +2178,15 @@ int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on, bool disab
  * function stays, exposed via bgp_vty.h, see above).
  */
 
-DEFUN (bgp_graceful_restart_stalepath_time,
-	bgp_graceful_restart_stalepath_time_cmd,
-	"bgp graceful-restart stalepath-time (1-4095)",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the max time to hold onto restarting peer's stale paths\n"
-	"Delay value (seconds)\n")
-{
-	int idx_number = 3;
-	uint32_t stalepath;
-
-	stalepath = strtoul(argv[idx_number]->arg, NULL, 10);
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		bm->stalepath_time = stalepath;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-			bgp->stalepath_time = stalepath;
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->stalepath_time = stalepath;
-	}
-	return CMD_SUCCESS;
-}
-
-/*
- * Reset the BGP session since there's a change
- * in GR capability
+/* "bgp graceful-restart restart-time/stalepath-time/select-defer-time"
+ * (process + instance pairs): converted to northbound, see
+ * '/proteus-bgp:process/graceful-restart/{restart-time,stalepath-time,
+ * select-defer-time}' and '/proteus-bgp:instance/graceful-restart/{...}'
+ * callbacks in bgp_nb_config.c (milestone 2 batch B14).
+ * bgp_update_graceful_restart_capability() (the capability-renegotiation
+ * helper the restart-time DEFUNs used) moved there too, as
+ * bgp_nb_update_graceful_restart_capability().
  */
-static void bgp_update_graceful_restart_capability(struct peer *peer)
-{
-	enum peer_mode peer_gr_mode;
-	enum global_mode global_gr_mode;
-
-	global_gr_mode = bgp_global_gr_mode_get(peer->bgp);
-
-	peer_gr_mode = bgp_peer_gr_mode_get(peer);
-
-	/*
-	 * Skip if peer is not in graceful restart mode
-	 */
-	if (!((peer_gr_mode == PEER_GR) ||
-	      (peer_gr_mode == PEER_GLOBAL_INHERIT && global_gr_mode == GLOBAL_GR)))
-		return;
-
-	if (BGP_DEBUG(graceful_restart, GRACEFUL_RESTART))
-		zlog_debug("Resetting session for %s: Peer GR mode %s, Global GR mode %s",
-			   peer->host, print_peer_gr_mode(peer_gr_mode),
-			   print_global_gr_mode(global_gr_mode));
-
-	/*
-	 * Reset the session so that the updated capability can be
-	 * exchanged again
-	 */
-	if (BGP_IS_VALID_STATE_FOR_NOTIF(peer->connection->status)) {
-		peer_set_last_reset(peer, PEER_DOWN_CAPABILITY_CHANGE);
-		bgp_notify_send(peer->connection, BGP_NOTIFY_CEASE, BGP_NOTIFY_CEASE_CONFIG_CHANGE);
-	}
-}
-
-DEFUN (bgp_graceful_restart_restart_time,
-	bgp_graceful_restart_restart_time_cmd,
-	"bgp graceful-restart restart-time (0-4095)",
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to wait to delete stale routes before a BGP open message is received\n"
-	"Delay value (seconds)\n")
-{
-	int idx_number = 3;
-	uint32_t restart;
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	restart = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	if (vty->node == CONFIG_NODE) {
-		struct bgp *bgp;
-
-		bm->restart_time = restart;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			bgp->restart_time = restart;
-			for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-				if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
-				    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
-					bgp_update_graceful_restart_capability(peer);
-				else
-					bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-							    CAPABILITY_CODE_RESTART,
-							    CAPABILITY_ACTION_SET);
-			}
-		}
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->restart_time = restart;
-		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-			if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
-			    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
-				bgp_update_graceful_restart_capability(peer);
-			else
-				bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-						    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
-		}
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_graceful_restart_select_defer_time,
-       bgp_graceful_restart_select_defer_time_cmd,
-       "bgp graceful-restart select-defer-time (0-3600)",
-       BGP_STR
-       "Graceful restart capability parameters\n"
-       "Set the time to defer the BGP route selection after restart\n"
-       "Delay value (seconds, 0 - disable)\n")
-{
-	int idx_number = 3;
-	uint32_t defer_time;
-
-	defer_time = strtoul(argv[idx_number]->arg, NULL, 10);
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		bm->select_defer_time = defer_time;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			bgp->select_defer_time = defer_time;
-			if (defer_time == 0)
-				SET_FLAG(bgp->flags,
-					 BGP_FLAG_SELECT_DEFER_DISABLE);
-			else
-				UNSET_FLAG(bgp->flags,
-					   BGP_FLAG_SELECT_DEFER_DISABLE);
-		}
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->select_defer_time = defer_time;
-		if (defer_time == 0)
-			SET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
-		else
-			UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_restart_stalepath_time,
-	no_bgp_graceful_restart_stalepath_time_cmd,
-	"no bgp graceful-restart stalepath-time [(1-4095)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the max time to hold onto restarting peer's stale paths\n"
-	"Delay value (seconds)\n")
-{
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		bm->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-			bgp->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_restart_restart_time,
-	no_bgp_graceful_restart_restart_time_cmd,
-	"no bgp graceful-restart restart-time [(0-4095)]",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Set the time to wait to delete stale routes before a BGP open message is received\n"
-	"Delay value (seconds)\n")
-{
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	if (vty->node == CONFIG_NODE) {
-		struct bgp *bgp;
-
-		bm->restart_time = BGP_DEFAULT_RESTART_TIME;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			bgp->restart_time = BGP_DEFAULT_RESTART_TIME;
-
-			for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-				if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
-				    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
-					bgp_update_graceful_restart_capability(peer);
-				else
-					bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-							    CAPABILITY_CODE_RESTART,
-							    CAPABILITY_ACTION_UNSET);
-			}
-		}
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->restart_time = BGP_DEFAULT_RESTART_TIME;
-
-		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-			if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
-			    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
-				bgp_update_graceful_restart_capability(peer);
-			else
-				bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-						    CAPABILITY_CODE_RESTART,
-						    CAPABILITY_ACTION_UNSET);
-		}
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_restart_select_defer_time,
-       no_bgp_graceful_restart_select_defer_time_cmd,
-       "no bgp graceful-restart select-defer-time [(0-3600)]",
-       NO_STR
-       BGP_STR
-       "Graceful restart capability parameters\n"
-       "Set the time to defer the BGP route selection after restart\n"
-       "Delay value (seconds)\n")
-{
-	if (vty->node == CONFIG_NODE) {
-		struct listnode *node, *nnode;
-		struct bgp *bgp;
-
-		bm->select_defer_time = BGP_DEFAULT_SELECT_DEFERRAL_TIME;
-		for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-			bgp->select_defer_time =
-				BGP_DEFAULT_SELECT_DEFERRAL_TIME;
-			UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
-		}
-	} else {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		bgp->select_defer_time = BGP_DEFAULT_SELECT_DEFERRAL_TIME;
-		UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
-	}
-
-	return CMD_SUCCESS;
-}
 
 DEFUN (bgp_neighbor_graceful_restart_set,
 	bgp_neighbor_graceful_restart_set_cmd,
@@ -2694,45 +2462,14 @@ DEFUN_HIDDEN (no_bgp_graceful_restart_disable_eor,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_graceful_restart_rib_stale_time,
-       bgp_graceful_restart_rib_stale_time_cmd,
-       "bgp graceful-restart rib-stale-time (1-3600)",
-       BGP_STR
-       "Graceful restart configuration parameters\n"
-       "Specify the stale route removal timer in rib\n"
-       "Delay value (seconds)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-	uint32_t stale_time;
-
-	stale_time = strtoul(argv[idx_number]->arg, NULL, 10);
-	bgp->rib_stale_time = stale_time;
-	/* Send the stale timer update message to RIB */
-	if (bgp_zebra_stale_timer_update(bgp))
-		return CMD_WARNING;
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_restart_rib_stale_time,
-       no_bgp_graceful_restart_rib_stale_time_cmd,
-       "no bgp graceful-restart rib-stale-time [(1-3600)]",
-       NO_STR
-       BGP_STR
-       "Graceful restart configuration parameters\n"
-       "Specify the stale route removal timer in rib\n"
-       "Delay value (seconds)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->rib_stale_time = BGP_DEFAULT_RIB_STALE_TIME;
-	/* Send the stale timer update message to RIB */
-	if (bgp_zebra_stale_timer_update(bgp))
-		return CMD_WARNING;
-
-	return CMD_SUCCESS;
-}
+/* "bgp graceful-restart rib-stale-time" (process + instance pair): converted
+ * to northbound, see '/proteus-bgp:process/graceful-restart/rib-stale-time'
+ * and '/proteus-bgp:instance/graceful-restart/rib-stale-time' callbacks in
+ * bgp_nb_config.c (milestone 2 batch B14). The legacy CONFIG_NODE
+ * install_element below was always dead code -- this DEFUN unconditionally
+ * did VTY_DECLVAR_CONTEXT(bgp, bgp), which fails outside BGP_NODE, so
+ * bm->rib_stale_time was never actually written by any legacy code path.
+ */
 
 /* Graceful-shutdown side effect on every peer in the instance: converted
  * to northbound, see '/proteus-bgp:process/graceful-shutdown' and
@@ -19631,31 +19368,16 @@ int bgp_config_write(struct vty *vty)
 	 * '/proteus-bgp:process/suppress-fib-pending' cli_show in bgp_cli.c.
 	 */
 
-	if (bm->stalepath_time != BGP_DEFAULT_STALEPATH_TIME)
-		vty_out(vty, "bgp graceful-restart stalepath-time %u\n",
-			bm->stalepath_time);
-
-	if (bm->restart_time != BGP_DEFAULT_RESTART_TIME)
-		vty_out(vty, "bgp graceful-restart restart-time %u\n",
-			bm->restart_time);
-
-	if (bm->select_defer_time != BGP_DEFAULT_SELECT_DEFERRAL_TIME)
-		vty_out(vty, "bgp graceful-restart select-defer-time %u\n",
-			bm->select_defer_time);
-
 	/* bgp graceful-restart mode ('bgp graceful-restart' /
 	 * 'bgp graceful-restart-disable'): converted to northbound, see
 	 * '/proteus-bgp:process/graceful-restart/mode' cli_show in bgp_cli.c.
 	 */
 
-	/* bgp graceful-restart preserve-fw-state: converted to northbound,
-	 * see '/proteus-bgp:process/graceful-restart/preserve-fw-state'
-	 * cli_show in bgp_cli.c.
+	/* bgp graceful-restart preserve-fw-state/restart-time/
+	 * stalepath-time/select-defer-time/rib-stale-time: converted to
+	 * northbound, see the '/proteus-bgp:process/graceful-restart'
+	 * container's leaves' cli_show in bgp_cli.c.
 	 */
-
-	if (bm->rib_stale_time != BGP_DEFAULT_RIB_STALE_TIME)
-		vty_out(vty, "bgp graceful-restart rib-stale-time %u\n",
-			bm->rib_stale_time);
 
 	/* BGP graceful-shutdown: converted to northbound, see
 	 * '/proteus-bgp:process/graceful-shutdown' cli_show in bgp_cli.c.
@@ -19764,28 +19486,6 @@ int bgp_config_write(struct vty *vty)
 		 */
 
 		/* BGP per-instance graceful-restart. */
-		/* BGP-wide settings and per-instance settings are mutually
-		 * exclusive.
-		 */
-		if (bm->stalepath_time == BGP_DEFAULT_STALEPATH_TIME)
-			if (bgp->stalepath_time != BGP_DEFAULT_STALEPATH_TIME)
-				vty_out(vty,
-					" bgp graceful-restart stalepath-time %u\n",
-					bgp->stalepath_time);
-
-		if (bm->restart_time == BGP_DEFAULT_RESTART_TIME)
-			if (bgp->restart_time != BGP_DEFAULT_RESTART_TIME)
-				vty_out(vty,
-					" bgp graceful-restart restart-time %u\n",
-					bgp->restart_time);
-
-		if (bm->select_defer_time == BGP_DEFAULT_SELECT_DEFERRAL_TIME)
-			if (bgp->select_defer_time !=
-			    BGP_DEFAULT_SELECT_DEFERRAL_TIME)
-				vty_out(vty,
-					" bgp graceful-restart select-defer-time %u\n",
-					bgp->select_defer_time);
-
 		/* bgp graceful-restart mode ('bgp graceful-restart' /
 		 * 'bgp graceful-restart-disable'), per-instance form:
 		 * converted to northbound, see
@@ -19793,10 +19493,11 @@ int bgp_config_write(struct vty *vty)
 		 * bgp_cli.c.
 		 */
 
-		/* bgp graceful-restart preserve-fw-state, per-instance form:
-		 * converted to northbound, see
-		 * '/proteus-bgp:instance/graceful-restart/preserve-fw-state'
-		 * cli_show in bgp_cli.c.
+		/* bgp graceful-restart preserve-fw-state/restart-time/
+		 * stalepath-time/select-defer-time/rib-stale-time,
+		 * per-instance form: converted to northbound, see the
+		 * '/proteus-bgp:instance/graceful-restart' container's
+		 * leaves' cli_show in bgp_cli.c.
 		 */
 
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR))
@@ -19806,12 +19507,6 @@ int bgp_config_write(struct vty *vty)
 		 * '/proteus-bgp:instance/tcp-keepalive' cli_show in
 		 * bgp_cli.c.
 		 */
-
-		if (bm->rib_stale_time == BGP_DEFAULT_RIB_STALE_TIME)
-			if (bgp->rib_stale_time != BGP_DEFAULT_RIB_STALE_TIME)
-				vty_out(vty,
-					" bgp graceful-restart rib-stale-time %u\n",
-					bgp->rib_stale_time);
 
 		/* BGP bestpath method: route-reflector-allow-outbound-policy
 		 * and aigp converted to northbound, see
@@ -20465,17 +20160,10 @@ void bgp_vty_init(void)
 	 * 'bgp graceful-restart-disable') and preserve-fw-state: both process
 	 * and per-VRF instance scopes are northbound now, see bgp_cli.c
 	 */
-	install_element(CONFIG_NODE, &bgp_graceful_restart_stalepath_time_cmd);
-	install_element(CONFIG_NODE,
-			&no_bgp_graceful_restart_stalepath_time_cmd);
-	install_element(CONFIG_NODE, &bgp_graceful_restart_restart_time_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_restart_restart_time_cmd);
-	install_element(CONFIG_NODE,
-			&bgp_graceful_restart_select_defer_time_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_restart_select_defer_time_cmd);
-	install_element(CONFIG_NODE, &bgp_graceful_restart_rib_stale_time_cmd);
-	install_element(CONFIG_NODE,
-			&no_bgp_graceful_restart_rib_stale_time_cmd);
+	/* bgp graceful-restart restart-time/stalepath-time/select-defer-time/
+	 * rib-stale-time: both process and per-VRF instance scopes are
+	 * northbound now, see bgp_cli.c
+	 */
 
 	/* "router bgp" commands. */
 	install_element(CONFIG_NODE, &router_bgp_cmd);
@@ -20549,21 +20237,13 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE,
 			&no_bgp_neighbor_graceful_restart_helper_set_cmd);
 
-	install_element(BGP_NODE, &bgp_graceful_restart_stalepath_time_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_stalepath_time_cmd);
-	install_element(BGP_NODE, &bgp_graceful_restart_restart_time_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_restart_time_cmd);
-	install_element(BGP_NODE, &bgp_graceful_restart_select_defer_time_cmd);
-	install_element(BGP_NODE,
-			&no_bgp_graceful_restart_select_defer_time_cmd);
-	/* bgp graceful-restart preserve-fw-state: northbound now, see
-	 * bgp_cli.c
+	/* bgp graceful-restart restart-time/stalepath-time/select-defer-time
+	 * and preserve-fw-state: northbound now, see bgp_cli.c
 	 */
 
 	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
-	install_element(BGP_NODE, &bgp_graceful_restart_rib_stale_time_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_rib_stale_time_cmd);
+	/* bgp graceful-restart rib-stale-time: northbound now, see bgp_cli.c */
 
 	/* "bgp listen limit" commands. */
 	install_element(BGP_NODE, &bgp_listen_limit_cmd);

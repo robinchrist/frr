@@ -455,17 +455,85 @@ int process_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args *
 	return NB_OK;
 }
 
+/* Milestone 2 batch B14: 'bgp graceful-restart restart-time/stalepath-time/
+ * select-defer-time/rib-stale-time' (process + instance pairs). Legacy is
+ * three dual-purpose DEFUN pairs (restart-time, stalepath-time,
+ * select-defer-time) branching on vty->node, same shape as B12/B13, plus a
+ * fourth (rib-stale-time) whose process-side (CONFIG_NODE) half is dead code
+ * -- bgp_graceful_restart_rib_stale_time_cmd always does
+ * VTY_DECLVAR_CONTEXT(bgp, bgp) with no vty->node branch, so the CONFIG_NODE
+ * install_element never successfully executes its body and no legacy code
+ * path ever writes bm->rib_stale_time, even though bgp_config_write() reads
+ * it. process_graceful_restart_rib_stale_time_modify/_destroy() below are
+ * therefore fresh, correct code (mirroring into every instance + the zebra
+ * stale-timer notification the instance-side setter performs), not a port
+ * of the non-functional legacy body -- pre-existing bgpd bug, worth a
+ * separate upstream report, independent of this conversion.
+ *
+ * None of the four have a YANG default (no-default leaves get modify+destroy
+ * per the batch's transition-guard rule), and none of the four legacy DEFUNs
+ * carry a mutual-exclusion guard beyond bgp_config_write()'s own emission
+ * gating (see the cli_show comments in bgp_cli.c) -- unlike 'mode' (B13),
+ * there is no runtime rejection to replicate here, only value + side-effect
+ * mirroring.
+ */
+
+/* Moved here (was static in bgp_vty.c, inside the now-retired
+ * bgp_graceful_restart_restart_time_cmd/no_... DEFUN pair): resets the BGP
+ * session so the updated restart-time capability gets re-exchanged. Both the
+ * process-wide and per-instance restart-time callbacks below need it.
+ */
+static void bgp_nb_update_graceful_restart_capability(struct peer *peer)
+{
+	enum peer_mode peer_gr_mode;
+	enum global_mode global_gr_mode;
+
+	global_gr_mode = bgp_global_gr_mode_get(peer->bgp);
+
+	peer_gr_mode = bgp_peer_gr_mode_get(peer);
+
+	/* Skip if peer is not in graceful restart mode */
+	if (!((peer_gr_mode == PEER_GR) ||
+	      (peer_gr_mode == PEER_GLOBAL_INHERIT && global_gr_mode == GLOBAL_GR)))
+		return;
+
+	if (BGP_DEBUG(graceful_restart, GRACEFUL_RESTART))
+		zlog_debug("Resetting session for %s: Peer GR mode %s, Global GR mode %s",
+			   peer->host, print_peer_gr_mode(peer_gr_mode),
+			   print_global_gr_mode(global_gr_mode));
+
+	/* Reset the session so that the updated capability can be
+	 * exchanged again
+	 */
+	if (BGP_IS_VALID_STATE_FOR_NOTIF(peer->connection->status)) {
+		peer_set_last_reset(peer, PEER_DOWN_CAPABILITY_CHANGE);
+		bgp_notify_send(peer->connection, BGP_NOTIFY_CEASE, BGP_NOTIFY_CEASE_CONFIG_CHANGE);
+	}
+}
+
 int process_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/restart-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode, *pnode, *pnnode;
+	struct bgp *bgp;
+	struct peer *peer;
+	uint16_t restart;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	restart = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->restart_time = restart;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->restart_time = restart;
+		for (ALL_LIST_ELEMENTS(bgp->peer, pnode, pnnode, peer)) {
+			if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
+			    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
+				bgp_nb_update_graceful_restart_capability(peer);
+			else
+				bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+						    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
+		}
 	}
 
 	return NB_OK;
@@ -473,15 +541,26 @@ int process_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args)
 
 int process_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/restart-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode, *pnode, *pnnode;
+	struct bgp *bgp;
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->restart_time = BGP_DEFAULT_RESTART_TIME;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->restart_time = BGP_DEFAULT_RESTART_TIME;
+		for (ALL_LIST_ELEMENTS(bgp->peer, pnode, pnnode, peer)) {
+			if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
+			    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
+				bgp_nb_update_graceful_restart_capability(peer);
+			else
+				bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+						    CAPABILITY_CODE_RESTART,
+						    CAPABILITY_ACTION_UNSET);
+		}
 	}
 
 	return NB_OK;
@@ -489,47 +568,53 @@ int process_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *arg
 
 int process_graceful_restart_stalepath_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/stalepath-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	uint16_t stalepath;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	stalepath = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->stalepath_time = stalepath;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp->stalepath_time = stalepath;
 
 	return NB_OK;
 }
 
 int process_graceful_restart_stalepath_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/stalepath-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
 
 	return NB_OK;
 }
 
 int process_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/select-defer-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	uint16_t defer_time;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	defer_time = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->select_defer_time = defer_time;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->select_defer_time = defer_time;
+		if (defer_time == 0)
+			SET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
 	}
 
 	return NB_OK;
@@ -537,31 +622,40 @@ int process_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args *
 
 int process_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/select-defer-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->select_defer_time = BGP_DEFAULT_SELECT_DEFERRAL_TIME;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->select_defer_time = BGP_DEFAULT_SELECT_DEFERRAL_TIME;
+		UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
 	}
 
 	return NB_OK;
 }
 
+/* Fresh code, see the batch-level comment above: mirrors the value (and the
+ * bgp_zebra_stale_timer_update() notification the working instance-side
+ * setter performs) into every existing VRF instance, matching the mirror
+ * shape of restart-time/stalepath-time/select-defer-time above.
+ */
 int process_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/rib-stale-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	uint16_t stale_time;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	stale_time = yang_dnode_get_uint16(args->dnode, NULL);
+	bm->rib_stale_time = stale_time;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->rib_stale_time = stale_time;
+		bgp_zebra_stale_timer_update(bgp);
 	}
 
 	return NB_OK;
@@ -569,15 +663,16 @@ int process_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *arg
 
 int process_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-restart/rib-stale-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bm->rib_stale_time = BGP_DEFAULT_RIB_STALE_TIME;
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		bgp->rib_stale_time = BGP_DEFAULT_RIB_STALE_TIME;
+		bgp_zebra_stale_timer_update(bgp);
 	}
 
 	return NB_OK;
@@ -3326,15 +3421,28 @@ int instance_graceful_restart_preserve_fw_state_modify(struct nb_cb_modify_args 
 
 int instance_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/restart-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+	uint16_t restart;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	restart = yang_dnode_get_uint16(args->dnode, NULL);
+	bgp->restart_time = restart;
+
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
+		if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
+		    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
+			bgp_nb_update_graceful_restart_capability(peer);
+		else
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
 	}
 
 	return NB_OK;
@@ -3342,15 +3450,26 @@ int instance_graceful_restart_restart_time_modify(struct nb_cb_modify_args *args
 
 int instance_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/restart-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->restart_time = BGP_DEFAULT_RESTART_TIME;
+
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
+		if (!CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV) ||
+		    !CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_ADV))
+			bgp_nb_update_graceful_restart_capability(peer);
+		else
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_UNSET);
 	}
 
 	return NB_OK;
@@ -3358,96 +3477,108 @@ int instance_graceful_restart_restart_time_destroy(struct nb_cb_destroy_args *ar
 
 int instance_graceful_restart_stalepath_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/stalepath-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->stalepath_time = yang_dnode_get_uint16(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_graceful_restart_stalepath_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/stalepath-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->stalepath_time = BGP_DEFAULT_STALEPATH_TIME;
 
 	return NB_OK;
 }
 
 int instance_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/select-defer-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	uint16_t defer_time;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	defer_time = yang_dnode_get_uint16(args->dnode, NULL);
+	bgp->select_defer_time = defer_time;
+	if (defer_time == 0)
+		SET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
+	else
+		UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
 
 	return NB_OK;
 }
 
 int instance_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/select-defer-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->select_defer_time = BGP_DEFAULT_SELECT_DEFERRAL_TIME;
+	UNSET_FLAG(bgp->flags, BGP_FLAG_SELECT_DEFER_DISABLE);
 
 	return NB_OK;
 }
 
+/* Legacy instance-side setter works fine today (only the process-side twin
+ * is dead code, see the batch-level comment above) -- ported faithfully.
+ */
 int instance_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/rib-stale-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->rib_stale_time = yang_dnode_get_uint16(args->dnode, NULL);
+	bgp_zebra_stale_timer_update(bgp);
 
 	return NB_OK;
 }
 
 int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/rib-stale-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->rib_stale_time = BGP_DEFAULT_RIB_STALE_TIME;
+	bgp_zebra_stale_timer_update(bgp);
 
 	return NB_OK;
 }
