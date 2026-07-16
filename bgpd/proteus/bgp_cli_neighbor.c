@@ -1123,6 +1123,246 @@ DEFPY_YANG(
 }
 
 /*
+ * timers (+ connect, + delayopen), advertisement-interval (M4 batch B5):
+ * numeric session-tuning leaves shared between neighbor/peer-group via the
+ * neighbor-session-parameters grouping. Pure subcommands like B3/B4's, so
+ * no legacy DEFUN retention (same rationale as
+ * bgp_cli_peer_or_group_xpath()'s doc comment above).
+ */
+
+/* 'neighbor X timers (0-65535) (0-65535)' enqueues both leaves in one CLI
+ * line, matching the joint keepalive+holdtime grammar (there is no way to
+ * set one without the other); 'no neighbor X timers [K H]' destroys both
+ * regardless of whether trailing values were given, matching legacy's
+ * no_neighbor_timers DEFUN (the optional K/H tokens are accepted and
+ * ignored, same as legacy).
+ */
+DEFPY_YANG(
+	neighbor_timers, neighbor_timers_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers (0-65535)$keepalive (0-65535)$holdtime",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"Keepalive interval\n"
+	"Holdtime\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/keepalive", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, keepalive_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/holdtime", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, holdtime_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_timers, no_neighbor_timers_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers [(0-65535) (0-65535)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"Keepalive interval\n"
+	"Holdtime\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/keepalive", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/holdtime", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_timers_connect, neighbor_timers_connect_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers connect (1-65535)$connect",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"BGP connect timer\n"
+	"Connect timer\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/connect", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, connect_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_timers_connect, no_neighbor_timers_connect_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers connect [(1-65535)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"BGP connect timer\n"
+	"Connect timer\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/connect", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_timers_delayopen, neighbor_timers_delayopen_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers delayopen (1-240)$delayopen",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"RFC 4271 DelayOpenTimer\n"
+	"DelayOpenTime timer interval\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/delayopen", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, delayopen_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Legacy's no-form grammar oddly ranges its optional value token as
+ * "(0-65535)" (no_neighbor_timers_delayopen DEFPY, bgp_vty.c, retired)
+ * even though the set-form is "(1-240)" -- the value is ignored either
+ * way (always a full unset), so the wider range is reproduced verbatim
+ * for grammar/help-string fidelity without giving it any semantic
+ * meaning here either.
+ */
+DEFPY_YANG(
+	no_neighbor_timers_delayopen, no_neighbor_timers_delayopen_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer timers delayopen [(0-65535)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP per neighbor timers\n"
+	"RFC 4271 DelayOpenTimer\n"
+	"DelayOpenTime timer interval\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/timers/delayopen", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_advertisement_interval, neighbor_advertisement_interval_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer advertisement-interval (0-600)$interval",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Minimum interval between sending BGP routing updates\n"
+	"time in seconds\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/advertisement-interval", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, interval_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_advertisement_interval, no_neighbor_advertisement_interval_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer advertisement-interval [(0-600)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Minimum interval between sending BGP routing updates\n"
+	"time in seconds\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/advertisement-interval", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -1216,9 +1456,14 @@ void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *d
  * northbound mirror of legacy's peergroup_flag_check()-gated emission:
  * only the entry that owns its own explicit configuration ever has the
  * leaf present/non-default here.
+ *
+ * 'not_group_member' is true for a peer-group entry (never itself bound to
+ * another group) and for a neighbor entry with no 'peer-group' leaf --
+ * i.e. it is the northbound mirror of legacy's !peer_group_active(peer),
+ * needed below for the 'timers connect'/'timers delayopen' SAVE_ idiom.
  */
 static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node *dnode,
-					  const char *addr)
+					  const char *addr, bool not_group_member)
 {
 	if (yang_dnode_exists(dnode, "description"))
 		vty_out(vty, " neighbor %s description %s\n", addr,
@@ -1284,6 +1529,60 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 
 	if (yang_dnode_exists(dnode, "oad") && yang_dnode_get_bool(dnode, "oad"))
 		vty_out(vty, " neighbor %s oad\n", addr);
+
+	/* advertisement-interval, timers (+ connect, + delayopen) (M4 batch
+	 * B5): reproduces bgp_config_write_peer_global()'s (bgp_vty.c,
+	 * retired for these leaves) advertisement-interval-through-
+	 * timers-delayopen block, in the same relative order.
+	 *
+	 * 'timers connect'/'timers delayopen' each carry a legacy special
+	 * case: even when the leaf itself is absent (no explicit "neighbor X
+	 * timers connect/delayopen" was ever configured for this entry),
+	 * legacy still emits a synthetic line carrying the *default* value
+	 * whenever that default no longer matches what a reload under this
+	 * config's declared "frr version"/profile would reconstruct --
+	 * otherwise the explicit value in effect right now would silently
+	 * turn into a different one after a config save/reload cycle across
+	 * a version or profile change ("there is no 'timers bgp connect'
+	 * command, so we need to save this per-peer", per the retired
+	 * comment). DFLT_BGP_CONNECT_RETRY/SAVE_BGP_CONNECT_RETRY
+	 * (bgp_vty.h's FRR_CFG_DEFAULT_ULONG(BGP_CONNECT_RETRY, ...)) are
+	 * global, not per-'struct bgp', so this reads them directly rather
+	 * than through any per-instance/per-peer runtime state -- there is
+	 * no YANG leaf modeling an instance-level 'default connect-retry'
+	 * (M2 never added one), so bgp->default_connect_retry is always
+	 * exactly DFLT_BGP_CONNECT_RETRY in the northbound-converted world,
+	 * making this global comparison the exact equivalent of legacy's
+	 * per-peer 'peer->bgp->default_connect_retry != SAVE_BGP_CONNECT_RETRY'
+	 * check. delayopen has no FRR_CFG_DEFAULT_ULONG profile/version
+	 * variant (BGP_DEFAULT_DELAYOPEN is a plain, non-switchable macro)
+	 * and, likewise, no YANG-modeled instance-level default -- so
+	 * bgp->default_delayopen is always exactly BGP_DEFAULT_DELAYOPEN
+	 * here, meaning legacy's analogous
+	 * 'peer->bgp->default_delayopen != BGP_DEFAULT_DELAYOPEN' check can
+	 * never be true and that branch never fires; correctly reproduced
+	 * by simply not implementing it (dead code preserved as a no-op,
+	 * not a gap).
+	 */
+	if (yang_dnode_exists(dnode, "advertisement-interval"))
+		vty_out(vty, " neighbor %s advertisement-interval %u\n", addr,
+			yang_dnode_get_uint16(dnode, "advertisement-interval"));
+
+	if (yang_dnode_exists(dnode, "timers/keepalive") &&
+	    yang_dnode_exists(dnode, "timers/holdtime"))
+		vty_out(vty, " neighbor %s timers %u %u\n", addr,
+			yang_dnode_get_uint16(dnode, "timers/keepalive"),
+			yang_dnode_get_uint16(dnode, "timers/holdtime"));
+
+	if (yang_dnode_exists(dnode, "timers/connect"))
+		vty_out(vty, " neighbor %s timers connect %u\n", addr,
+			yang_dnode_get_uint16(dnode, "timers/connect"));
+	else if (not_group_member && DFLT_BGP_CONNECT_RETRY != SAVE_BGP_CONNECT_RETRY)
+		vty_out(vty, " neighbor %s timers connect %lu\n", addr, DFLT_BGP_CONNECT_RETRY);
+
+	if (yang_dnode_exists(dnode, "timers/delayopen"))
+		vty_out(vty, " neighbor %s timers delayopen %u\n", addr,
+			yang_dnode_get_uint8(dnode, "timers/delayopen"));
 }
 
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -1304,7 +1603,12 @@ void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
 		vty_out(vty, " neighbor %s remote-as %s\n", name,
 			yang_dnode_get_string(dnode, "remote-as/type"));
 
-	bgp_cli_write_session_scalars(vty, dnode, name);
+	/* A peer-group entry is never itself bound to another peer-group
+	 * (!peer_group_active(group->conf) is unconditionally true, see
+	 * bgpd.h's peer_group_active()), so it always qualifies for the
+	 * 'timers connect' SAVE_ idiom's not-a-group-member gate.
+	 */
+	bgp_cli_write_session_scalars(vty, dnode, name, true);
 }
 
 /* addr == NULL renders the bare "remote-as ..." suffix used inline after
@@ -1389,7 +1693,11 @@ void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
 	if (has_ras && !if_ras_printed)
 		neighbor_cli_write_remote_as(vty, dnode, address);
 
-	bgp_cli_write_session_scalars(vty, dnode, address);
+	/* has_pg mirrors legacy's !peer_group_active(peer): a neighbor bound
+	 * to a peer-group inherits from it and never itself qualifies for
+	 * the 'timers connect' SAVE_ idiom (see bgp_cli_write_session_scalars()).
+	 */
+	bgp_cli_write_session_scalars(vty, dnode, address, !has_pg);
 }
 
 void bgp_cli_neighbor_init(void)
@@ -1438,4 +1746,15 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_graceful_shutdown_cli_cmd);
 	install_element(BGP_NODE, &neighbor_aigp_cli_cmd);
 	install_element(BGP_NODE, &neighbor_oad_cli_cmd);
+
+	/* timers (+ connect, + delayopen), advertisement-interval (M4
+	 * batch B5). */
+	install_element(BGP_NODE, &neighbor_timers_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_timers_cli_cmd);
+	install_element(BGP_NODE, &neighbor_timers_connect_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_timers_connect_cli_cmd);
+	install_element(BGP_NODE, &neighbor_timers_delayopen_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_timers_delayopen_cli_cmd);
+	install_element(BGP_NODE, &neighbor_advertisement_interval_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_advertisement_interval_cli_cmd);
 }

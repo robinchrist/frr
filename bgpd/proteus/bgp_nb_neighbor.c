@@ -1080,162 +1080,205 @@ int instance_neighbor_ip_transparent_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X advertisement-interval (0-600)' (M4 batch B5): unlike every
+ * other destroy-to-default leaf converted so far in this series, the
+ * unset value is NOT a fixed YANG default -- peer_advertise_interval_unset()
+ * (bgpd.c) re-derives it from the peer's *current* sort (eBGP 30s / iBGP
+ * 5s via BGP_DEFAULT_EBGP_ROUTEADV/BGP_DEFAULT_IBGP_ROUTEADV), matching
+ * peer_new()'s own initializer. Routing straight through the existing
+ * setter/unsetter reproduces this for free: peer->v_routeadv (the live
+ * timer) is sort-dependent whenever the leaf is absent, in both legacy and
+ * here, and stays that way even across a later 'remote-as' re-type that
+ * changes peer->sort (neither legacy nor this callback re-evaluates
+ * v_routeadv on a sort change by itself -- peer_remote_as_set() below
+ * already re-triggers advertisement-interval's own unset path via its
+ * existing peer_update_af_peer_type()-adjacent machinery in legacy, and
+ * the northbound equivalent doesn't need any B5-specific change since
+ * 'address' is immutable and 'remote-as' modify/destroy is B1's own
+ * callback, not this one's concern).
+ */
 int instance_neighbor_advertisement_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/advertisement-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_advertise_interval_set(peer, yang_dnode_get_uint16(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_neighbor_advertisement_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/advertisement-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_advertise_interval_unset(peer);
 
 	return NB_OK;
 }
 
+/* 'neighbor X timers (0-65535) (0-65535)' (keepalive+holdtime, M4 batch
+ * B5): both leaves converge on the same peer_timers_set() call (mirrors
+ * the joint DEFPY grammar), so either leaf's modify applies both values --
+ * matching M2's instance-level 'timers bgp' joint-emission precedent
+ * (instance_timers_keepalive_modify()/_holdtime_modify(),
+ * bgp_nb_instance.c). destroy is likewise joint: either leaf's destroy
+ * calls peer_timers_unset(), which clears/inherits both at once, same as
+ * legacy's 'no neighbor X timers' (no per-leaf granularity exists in
+ * either grammar).
+ */
 int instance_neighbor_timers_keepalive_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/keepalive");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+	const struct lyd_node *timers_dnode;
+	uint16_t keepalive, holdtime;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	timers_dnode = yang_dnode_get_parent(args->dnode, "timers");
+	keepalive = yang_dnode_get_uint16(args->dnode, NULL);
+	holdtime = yang_dnode_exists(timers_dnode, "holdtime")
+			   ? yang_dnode_get_uint16(timers_dnode, "holdtime")
+			   : peer->holdtime;
+
+	peer_timers_set(peer, keepalive, holdtime);
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_keepalive_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/keepalive");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_unset(peer);
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_holdtime_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/holdtime");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+	const struct lyd_node *timers_dnode;
+	uint16_t keepalive, holdtime;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	timers_dnode = yang_dnode_get_parent(args->dnode, "timers");
+	holdtime = yang_dnode_get_uint16(args->dnode, NULL);
+	keepalive = yang_dnode_exists(timers_dnode, "keepalive")
+			    ? yang_dnode_get_uint16(timers_dnode, "keepalive")
+			    : peer->keepalive;
+
+	peer_timers_set(peer, keepalive, holdtime);
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_holdtime_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/holdtime");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_unset(peer);
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_connect_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/connect");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_connect_set(peer, yang_dnode_get_uint16(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_connect_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/connect");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_connect_unset(peer);
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_delayopen_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/delayopen");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_delayopen_set(peer, yang_dnode_get_uint8(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_neighbor_timers_delayopen_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/timers/delayopen");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_timers_delayopen_unset(peer);
 
 	return NB_OK;
 }

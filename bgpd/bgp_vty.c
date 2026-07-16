@@ -5206,230 +5206,10 @@ DEFUN (no_neighbor_strict_capability,
 				   PEER_FLAG_STRICT_CAP_MATCH);
 }
 
-static int peer_timers_set_vty(struct vty *vty, const char *ip_str,
-			       const char *keep_str, const char *hold_str)
-{
-	int ret;
-	struct peer *peer;
-	uint32_t keepalive;
-	uint32_t holdtime;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	keepalive = strtoul(keep_str, NULL, 10);
-	holdtime = strtoul(hold_str, NULL, 10);
-
-	ret = peer_timers_set(peer, keepalive, holdtime);
-
-	return bgp_vty_return(vty, ret);
-}
-
-static int peer_timers_unset_vty(struct vty *vty, const char *ip_str)
-{
-	int ret;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_timers_unset(peer);
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (neighbor_timers,
-       neighbor_timers_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> timers (0-65535) (0-65535)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "Keepalive interval\n"
-       "Holdtime\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	int idx_number_2 = 4;
-	return peer_timers_set_vty(vty, argv[idx_peer]->arg,
-				   argv[idx_number]->arg,
-				   argv[idx_number_2]->arg);
-}
-
-DEFUN (no_neighbor_timers,
-       no_neighbor_timers_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> timers [(0-65535) (0-65535)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "Keepalive interval\n"
-       "Holdtime\n")
-{
-	int idx_peer = 2;
-	return peer_timers_unset_vty(vty, argv[idx_peer]->arg);
-}
-
-
-static int peer_timers_connect_set_vty(struct vty *vty, const char *ip_str,
-				       const char *time_str)
-{
-	int ret;
-	struct peer *peer;
-	uint32_t connect;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	connect = strtoul(time_str, NULL, 10);
-
-	ret = peer_timers_connect_set(peer, connect);
-
-	return bgp_vty_return(vty, ret);
-}
-
-static int peer_timers_connect_unset_vty(struct vty *vty, const char *ip_str)
-{
-	int ret;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_timers_connect_unset(peer);
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (neighbor_timers_connect,
-       neighbor_timers_connect_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> timers connect (1-65535)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "BGP connect timer\n"
-       "Connect timer\n")
-{
-	int idx_peer = 1;
-	int idx_number = 4;
-	return peer_timers_connect_set_vty(vty, argv[idx_peer]->arg,
-					   argv[idx_number]->arg);
-}
-
-DEFUN (no_neighbor_timers_connect,
-       no_neighbor_timers_connect_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> timers connect [(1-65535)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "BGP connect timer\n"
-       "Connect timer\n")
-{
-	int idx_peer = 2;
-	return peer_timers_connect_unset_vty(vty, argv[idx_peer]->arg);
-}
-
-DEFPY (neighbor_timers_delayopen,
-       neighbor_timers_delayopen_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor timers delayopen (1-240)$interval",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "RFC 4271 DelayOpenTimer\n"
-       "DelayOpenTime timer interval\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!interval) {
-		if (peer_timers_delayopen_unset(peer))
-			return CMD_WARNING_CONFIG_FAILED;
-	} else {
-		if (peer_timers_delayopen_set(peer, interval))
-			return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_neighbor_timers_delayopen,
-       no_neighbor_timers_delayopen_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor timers delayopen [(0-65535)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP per neighbor timers\n"
-       "RFC 4271 DelayOpenTimer\n"
-       "DelayOpenTime timer interval\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (peer_timers_delayopen_unset(peer))
-		return CMD_WARNING_CONFIG_FAILED;
-
-	return CMD_SUCCESS;
-}
-
-static int peer_advertise_interval_vty(struct vty *vty, const char *ip_str,
-				       const char *time_str, int set)
-{
-	int ret;
-	struct peer *peer;
-	uint32_t routeadv = 0;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (time_str)
-		routeadv = strtoul(time_str, NULL, 10);
-
-	if (set)
-		ret = peer_advertise_interval_set(peer, routeadv);
-	else
-		ret = peer_advertise_interval_unset(peer);
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (neighbor_advertise_interval,
-       neighbor_advertise_interval_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> advertisement-interval (0-600)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Minimum interval between sending BGP routing updates\n"
-       "time in seconds\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	return peer_advertise_interval_vty(vty, argv[idx_peer]->arg,
-					   argv[idx_number]->arg, 1);
-}
-
-DEFUN (no_neighbor_advertise_interval,
-       no_neighbor_advertise_interval_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> advertisement-interval [(0-600)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Minimum interval between sending BGP routing updates\n"
-       "time in seconds\n")
-{
-	int idx_peer = 2;
-	return peer_advertise_interval_vty(vty, argv[idx_peer]->arg, NULL, 0);
-}
-
+/* timers (+ connect, + delayopen), advertisement-interval: converted to
+ * northbound, see bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4
+ * batch B5).
+ */
 
 /* neighbor interface (source-interface): converted to northbound, see
  * 'neighbor_interface_cli_cmd' in bgp_cli.c (M4 batch B3).
@@ -17947,40 +17727,10 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID))
 		vty_out(vty, " neighbor %s remote-link-id %u\n", addr, peer->ls_remote_link_id);
 
-	/* advertisement-interval */
-	if (peergroup_flag_check(peer, PEER_FLAG_ROUTEADV))
-		vty_out(vty, " neighbor %s advertisement-interval %u\n", addr,
-			peer->routeadv);
-
-	/* timers */
-	if (peergroup_flag_check(peer, PEER_FLAG_TIMER))
-		vty_out(vty, " neighbor %s timers %u %u\n", addr,
-			peer->keepalive, peer->holdtime);
-
-	/* timers connect */
-	if (peergroup_flag_check(peer, PEER_FLAG_TIMER_CONNECT))
-		vty_out(vty, " neighbor %s timers connect %u\n", addr,
-			peer->connect);
-	/* need special-case handling for changed default values due to
-	 * config profile / version (because there is no "timers bgp connect"
-	 * command, we need to save this per-peer :/)
+	/* advertisement-interval, timers (+ connect, + delayopen): converted
+	 * to northbound, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B5).
 	 */
-	else if (!peer_group_active(peer) && !peer->connect &&
-		 peer->bgp->default_connect_retry != SAVE_BGP_CONNECT_RETRY)
-		vty_out(vty, " neighbor %s timers connect %u\n", addr,
-			peer->bgp->default_connect_retry);
-
-	/* timers delayopen */
-	if (peergroup_flag_check(peer, PEER_FLAG_TIMER_DELAYOPEN))
-		vty_out(vty, " neighbor %s timers delayopen %u\n", addr,
-			peer->delayopen);
-	/* Save config even though flag is not set if default values have been
-	 * changed
-	 */
-	else if (!peer_group_active(peer) && !peer->delayopen
-		 && peer->bgp->default_delayopen != BGP_DEFAULT_DELAYOPEN)
-		vty_out(vty, " neighbor %s timers delayopen %u\n", addr,
-			peer->bgp->default_delayopen);
 
 	/* capability software-version */
 	if (CHECK_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY)) {
@@ -20241,21 +19991,11 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_strict_capability_cmd);
 	install_element(BGP_NODE, &no_neighbor_strict_capability_cmd);
 
-	/* "neighbor timers" commands. */
-	install_element(BGP_NODE, &neighbor_timers_cmd);
-	install_element(BGP_NODE, &no_neighbor_timers_cmd);
-
-	/* "neighbor timers connect" commands. */
-	install_element(BGP_NODE, &neighbor_timers_connect_cmd);
-	install_element(BGP_NODE, &no_neighbor_timers_connect_cmd);
-
-	/* "neighbor timers delayopen" commands. */
-	install_element(BGP_NODE, &neighbor_timers_delayopen_cmd);
-	install_element(BGP_NODE, &no_neighbor_timers_delayopen_cmd);
-
-	/* "neighbor advertisement-interval" commands. */
-	install_element(BGP_NODE, &neighbor_advertise_interval_cmd);
-	install_element(BGP_NODE, &no_neighbor_advertise_interval_cmd);
+	/* "neighbor timers"/"neighbor timers connect"/"neighbor timers
+	 * delayopen"/"neighbor advertisement-interval" commands: converted
+	 * to northbound (M4 batch B5), see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c).
+	 */
 
 	/* "neighbor distribute" commands. */
 	install_element(BGP_NODE, &neighbor_distribute_list_hidden_cmd);
