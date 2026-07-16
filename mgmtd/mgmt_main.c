@@ -185,6 +185,24 @@ const struct frr_yang_module_info proteus_route_map_cli_info = {
 	.ignore_cfg_cbs = true,
 	.nodes = { { .xpath = NULL } },
 };
+
+/*
+ * bgp_routemap_cli.c enqueues changes against frr-bgp-route-map
+ * augment xpaths (bgpd-proteus-conversion M3, batch B-RM3); mgmtd
+ * needs the schema loaded to resolve them, same reason as
+ * zebra_route_map_info above, but must not link the real callback
+ * table (frr_bgp_route_map_info, bgp_routemap_nb.c) -- that pulls in
+ * bgp_routemap_nb_config.c's ~3700 lines of runtime apply logic,
+ * which stays bgpd-only. bgpd isn't yet subscribed to
+ * /frr-route-map:lib as a backend xpath (that's a follow-up batch),
+ * so config entered through mgmtd's copy of this CLI doesn't reach
+ * bgpd yet; this stub only unblocks the interim dual installation.
+ */
+const struct frr_yang_module_info frr_bgp_route_map_cli_info = {
+	.name = "frr-bgp-route-map",
+	.ignore_cfg_cbs = true,
+	.nodes = { { .xpath = NULL } },
+};
 #endif
 
 #ifdef HAVE_MGMTD_TESTC
@@ -239,6 +257,7 @@ static const struct frr_yang_module_info *const mgmt_yang_modules[] = {
 	&proteus_bfd_cli_info,
 	&proteus_interface_cli_info,
 	&proteus_route_map_cli_info,
+	&frr_bgp_route_map_cli_info,
 #endif
 #ifdef HAVE_MGMTD_TESTC
 	&frr_test_config_info,

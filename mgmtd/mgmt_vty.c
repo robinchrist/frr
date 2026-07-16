@@ -29,6 +29,7 @@
 #include "staticd/static_vty.h"
 #include "zebra/zebra_cli.h"
 #include "bgpd/bgp_cli.h"
+#include "bgpd/bgp_routemap_cli.h"
 
 DEFPY(show_mgmt_be_adapter,
       show_mgmt_be_adapter_cmd,
@@ -649,6 +650,7 @@ void mgmt_vty_init(void)
 #endif
 #ifdef HAVE_BGPD
 	bgp_cli_init();
+	bgp_routemap_cli_init();
 #endif
 	install_node(&mgmtd_node);
 
