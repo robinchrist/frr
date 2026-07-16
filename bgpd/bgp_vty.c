@@ -1867,93 +1867,6 @@ DEFPY (bgp_suppress_fib_pending,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_confederation_identifier,
-       bgp_confederation_identifier_cmd,
-       "bgp confederation identifier ASNUM",
-       BGP_STR
-       "AS confederation parameters\n"
-       "Set routing domain confederation AS\n"
-       AS_STR)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-	as_t as = 0;
-
-	if (!asn_str2asn(argv[idx_number]->arg, &as)) {
-		vty_out(vty, "%% BGP: No such AS %s\n", argv[idx_number]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_confederation_id_set(bgp, as, argv[idx_number]->arg);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_confederation_identifier,
-       no_bgp_confederation_identifier_cmd,
-       "no bgp confederation identifier [ASNUM]",
-       NO_STR
-       BGP_STR
-       "AS confederation parameters\n"
-       "Set routing domain confederation AS\n"
-       AS_STR)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_confederation_id_unset(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_confederation_peers,
-       bgp_confederation_peers_cmd,
-       "bgp confederation peers ASNUM...",
-       BGP_STR
-       "AS confederation parameters\n"
-       "Peer ASs in BGP confederation\n"
-       AS_STR)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_asn = 3;
-	as_t as = 0;
-	int i;
-
-	for (i = idx_asn; i < argc; i++) {
-		if (!asn_str2asn(argv[i]->arg, &as)) {
-			vty_out(vty, "%% Invalid confed peer AS value: %s\n",
-				argv[i]->arg);
-			continue;
-		}
-
-		bgp_confederation_peers_add(bgp, as, argv[i]->arg);
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_confederation_peers,
-       no_bgp_confederation_peers_cmd,
-       "no bgp confederation peers ASNUM...",
-       NO_STR
-       BGP_STR
-       "AS confederation parameters\n"
-       "Peer ASs in BGP confederation\n"
-       AS_STR)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_asn = 4;
-	as_t as = 0;
-	int i;
-
-	for (i = idx_asn; i < argc; i++) {
-		if (!asn_str2asn(argv[i]->arg, &as)) {
-			vty_out(vty, "%% Invalid confed peer AS value: %s\n",
-				argv[i]->arg);
-			continue;
-		}
-		bgp_confederation_peers_remove(bgp, as);
-	}
-	return CMD_SUCCESS;
-}
-
 /**
  * Central routine for maximum-paths configuration.
  * @peer_type: BGP_PEER_EBGP or BGP_PEER_IBGP
@@ -2007,109 +1920,6 @@ static int bgp_maxpaths_config_vty(struct vty *vty, int peer_type,
 	}
 
 	bgp_recalculate_all_bestpaths(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_maxmed_admin,
-       bgp_maxmed_admin_cmd,
-       "bgp max-med administrative ",
-       BGP_STR
-       "Advertise routes with max-med\n"
-       "Administratively applied, for an indefinite period\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp->v_maxmed_admin = 1;
-	bgp->maxmed_admin_value = BGP_MAXMED_VALUE_DEFAULT;
-
-	bgp_maxmed_update(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_maxmed_admin_medv,
-       bgp_maxmed_admin_medv_cmd,
-       "bgp max-med administrative (0-4294967295)",
-       BGP_STR
-       "Advertise routes with max-med\n"
-       "Administratively applied, for an indefinite period\n"
-       "Max MED value to be used\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-
-	bgp->v_maxmed_admin = 1;
-	bgp->maxmed_admin_value = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	bgp_maxmed_update(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_maxmed_admin,
-       no_bgp_maxmed_admin_cmd,
-       "no bgp max-med administrative [(0-4294967295)]",
-       NO_STR
-       BGP_STR
-       "Advertise routes with max-med\n"
-       "Administratively applied, for an indefinite period\n"
-       "Max MED value to be used\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp->v_maxmed_admin = BGP_MAXMED_ADMIN_UNCONFIGURED;
-	bgp->maxmed_admin_value = BGP_MAXMED_VALUE_DEFAULT;
-	bgp_maxmed_update(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_maxmed_onstartup,
-       bgp_maxmed_onstartup_cmd,
-       "bgp max-med on-startup (5-86400) [(0-4294967295)]",
-       BGP_STR
-       "Advertise routes with max-med\n"
-       "Effective on a startup\n"
-       "Time (seconds) period for max-med\n"
-       "Max MED value to be used\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx = 0;
-
-	if (argv_find(argv, argc, "(5-86400)", &idx))
-		bgp->v_maxmed_onstartup = strtoul(argv[idx]->arg, NULL, 10);
-	if (argv_find(argv, argc, "(0-4294967295)", &idx))
-		bgp->maxmed_onstartup_value = strtoul(argv[idx]->arg, NULL, 10);
-	else
-		bgp->maxmed_onstartup_value = BGP_MAXMED_VALUE_DEFAULT;
-
-	bgp_maxmed_update(bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_maxmed_onstartup,
-       no_bgp_maxmed_onstartup_cmd,
-       "no bgp max-med on-startup [(5-86400) [(0-4294967295)]]",
-       NO_STR
-       BGP_STR
-       "Advertise routes with max-med\n"
-       "Effective on a startup\n"
-       "Time (seconds) period for max-med\n"
-       "Max MED value to be used\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	/* Cancel max-med onstartup if its on */
-	if (event_is_scheduled(bgp->t_maxmed_onstartup)) {
-		event_cancel(&bgp->t_maxmed_onstartup);
-		bgp->maxmed_onstartup_over = 1;
-	}
-
-	bgp->v_maxmed_onstartup = BGP_MAXMED_ONSTARTUP_UNCONFIGURED;
-	bgp->maxmed_onstartup_value = BGP_MAXMED_VALUE_DEFAULT;
-
-	bgp_maxmed_update(bgp);
 
 	return CMD_SUCCESS;
 }
@@ -2390,16 +2200,6 @@ DEFPY(no_bgp_advertisement_delay, no_bgp_advertisement_delay_cmd,
 	return CMD_SUCCESS;
 }
 
-/* BGP TCP keepalive */
-static void bgp_config_tcp_keepalive(struct vty *vty, struct bgp *bgp)
-{
-	if (bgp->tcp_keepalive_idle) {
-		vty_out(vty, " bgp tcp-keepalive %u %u %u\n",
-			bgp->tcp_keepalive_idle, bgp->tcp_keepalive_intvl,
-			bgp->tcp_keepalive_probes);
-	}
-}
-
 DEFPY (bgp_use_underlying_nexthop_weight,
        bgp_use_underlying_nexthop_weight_cmd,
        "[no] use-underlays-nexthop-weight",
@@ -2562,39 +2362,6 @@ DEFPY (bgp_af_nexthop_prefer_global,
 
 	return CMD_SUCCESS;
 }
-
-DEFPY(bgp_tcp_keepalive, bgp_tcp_keepalive_cmd,
-      "bgp tcp-keepalive (1-65535)$idle (1-65535)$intvl (1-30)$probes",
-      BGP_STR
-      "TCP keepalive parameters\n"
-      "TCP keepalive idle time (seconds)\n"
-      "TCP keepalive interval (seconds)\n"
-      "TCP keepalive maximum probes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_tcp_keepalive_set(bgp, (uint16_t)idle, (uint16_t)intvl,
-			      (uint16_t)probes);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_bgp_tcp_keepalive, no_bgp_tcp_keepalive_cmd,
-      "no bgp tcp-keepalive [(1-65535) (1-65535) (1-30)]",
-      NO_STR
-      BGP_STR
-      "TCP keepalive parameters\n"
-      "TCP keepalive idle time (seconds)\n"
-      "TCP keepalive interval (seconds)\n"
-      "TCP keepalive maximum probes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_tcp_keepalive_unset(bgp);
-
-	return CMD_SUCCESS;
-}
-
 
 DEFUN(bgp_ebgp_requires_policy, bgp_ebgp_requires_policy_cmd,
       "bgp ebgp-requires-policy",
@@ -20980,23 +20747,10 @@ int bgp_config_write(struct vty *vty)
 		 * cli_show in bgp_cli.c.
 		 */
 
-		/* Confederation identifier*/
-		if (CHECK_FLAG(bgp->config, BGP_CONFIG_CONFEDERATION))
-			vty_out(vty, " bgp confederation identifier %s\n",
-				bgp->confed_id_pretty);
-
-		/* Confederation peer */
-		if (bgp->confed_peers_cnt > 0) {
-			int i;
-
-			vty_out(vty, " bgp confederation peers");
-
-			for (i = 0; i < bgp->confed_peers_cnt; i++)
-				vty_out(vty, " %s",
-					bgp->confed_peers[i].as_pretty);
-
-			vty_out(vty, "\n");
-		}
+		/* BGP confederation identifier/peers: converted to
+		 * northbound, see '/proteus-bgp:instance/confederation/...'
+		 * cli_show in bgp_cli.c.
+		 */
 
 		/* BGP deterministic-med. */
 		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED)
@@ -21013,22 +20767,10 @@ int bgp_config_write(struct vty *vty)
 		/* BGP advertisement-delay. */
 		bgp_config_write_advertisement_delay(vty, bgp);
 
-		if (bgp->v_maxmed_onstartup
-		    != BGP_MAXMED_ONSTARTUP_UNCONFIGURED) {
-			vty_out(vty, " bgp max-med on-startup %u",
-				bgp->v_maxmed_onstartup);
-			if (bgp->maxmed_onstartup_value
-			    != BGP_MAXMED_VALUE_DEFAULT)
-				vty_out(vty, " %u",
-					bgp->maxmed_onstartup_value);
-			vty_out(vty, "\n");
-		}
-		if (bgp->v_maxmed_admin != BGP_MAXMED_ADMIN_UNCONFIGURED) {
-			vty_out(vty, " bgp max-med administrative");
-			if (bgp->maxmed_admin_value != BGP_MAXMED_VALUE_DEFAULT)
-				vty_out(vty, " %u", bgp->maxmed_admin_value);
-			vty_out(vty, "\n");
-		}
+		/* BGP max-med on-startup/administrative: converted to
+		 * northbound, see '/proteus-bgp:instance/max-med/...'
+		 * cli_show in bgp_cli.c.
+		 */
 
 		/* BGP per-instance graceful-shutdown */
 		/* BGP-wide settings and per-instance settings are mutually
@@ -21091,8 +20833,10 @@ int bgp_config_write(struct vty *vty)
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR))
 			vty_out(vty, " bgp graceful-restart disable-eor\n");
 
-		/* BGP TCP keepalive */
-		bgp_config_tcp_keepalive(vty, bgp);
+		/* BGP TCP keepalive: converted to northbound, see
+		 * '/proteus-bgp:instance/tcp-keepalive' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		if (bm->rib_stale_time == BGP_DEFAULT_RIB_STALE_TIME)
 			if (bgp->rib_stale_time != BGP_DEFAULT_RIB_STALE_TIME)
@@ -21786,21 +21530,6 @@ void bgp_vty_init(void)
 
 	/* "bgp suppress-fib-pending" command */
 	install_element(BGP_NODE, &bgp_suppress_fib_pending_cmd);
-
-	/* "bgp confederation" commands. */
-	install_element(BGP_NODE, &bgp_confederation_identifier_cmd);
-	install_element(BGP_NODE, &no_bgp_confederation_identifier_cmd);
-
-	/* "bgp confederation peers" commands. */
-	install_element(BGP_NODE, &bgp_confederation_peers_cmd);
-	install_element(BGP_NODE, &no_bgp_confederation_peers_cmd);
-
-	/* bgp max-med command */
-	install_element(BGP_NODE, &bgp_maxmed_admin_cmd);
-	install_element(BGP_NODE, &no_bgp_maxmed_admin_cmd);
-	install_element(BGP_NODE, &bgp_maxmed_admin_medv_cmd);
-	install_element(BGP_NODE, &bgp_maxmed_onstartup_cmd);
-	install_element(BGP_NODE, &no_bgp_maxmed_onstartup_cmd);
 
 	/* "neighbor role" commands. */
 	install_element(BGP_NODE, &neighbor_role_cmd);
@@ -23220,10 +22949,6 @@ void bgp_vty_init(void)
 	/* ttl_security commands */
 	install_element(BGP_NODE, &neighbor_ttl_security_cmd);
 	install_element(BGP_NODE, &no_neighbor_ttl_security_cmd);
-
-	/* "bgp tcp-keepalive" commands */
-	install_element(BGP_NODE, &bgp_tcp_keepalive_cmd);
-	install_element(BGP_NODE, &no_bgp_tcp_keepalive_cmd);
 
 	/* "show [ip] bgp memory" commands. */
 	install_element(VIEW_NODE, &show_bgp_memory_cmd);

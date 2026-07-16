@@ -1086,6 +1086,229 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B7: max-med, confederation, tcp-keepalive. All
+ * installed at BGP_NODE, relative "./..." xpaths against the pushed
+ * instance xpath.
+ */
+
+DEFPY_YANG(
+	bgp_maxmed_onstartup, bgp_maxmed_onstartup_cli_cmd,
+	"bgp max-med on-startup (5-86400)$period [(0-4294967295)$med]",
+	BGP_STR
+	"Advertise routes with max-med\n"
+	"Effective on a startup\n"
+	"Time (seconds) period for max-med\n"
+	"Max MED value to be used\n")
+{
+	nb_cli_enqueue_change(vty, "./max-med/on-startup/period", NB_OP_MODIFY, period_str);
+	if (med_str)
+		nb_cli_enqueue_change(vty, "./max-med/on-startup/med", NB_OP_MODIFY, med_str);
+	else
+		nb_cli_enqueue_change(vty, "./max-med/on-startup/med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_maxmed_onstartup, no_bgp_maxmed_onstartup_cli_cmd,
+	"no bgp max-med on-startup [(5-86400) [(0-4294967295)]]",
+	NO_STR
+	BGP_STR
+	"Advertise routes with max-med\n"
+	"Effective on a startup\n"
+	"Time (seconds) period for max-med\n"
+	"Max MED value to be used\n")
+{
+	nb_cli_enqueue_change(vty, "./max-med/on-startup/period", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./max-med/on-startup/med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_maxmed_admin, bgp_maxmed_admin_cli_cmd,
+	"bgp max-med administrative [(0-4294967295)$med]",
+	BGP_STR
+	"Advertise routes with max-med\n"
+	"Administratively applied, for an indefinite period\n"
+	"Max MED value to be used\n")
+{
+	nb_cli_enqueue_change(vty, "./max-med/administrative/enabled", NB_OP_MODIFY, "true");
+	if (med_str)
+		nb_cli_enqueue_change(vty, "./max-med/administrative/med", NB_OP_MODIFY, med_str);
+	else
+		nb_cli_enqueue_change(vty, "./max-med/administrative/med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_maxmed_admin, no_bgp_maxmed_admin_cli_cmd,
+	"no bgp max-med administrative [(0-4294967295)]",
+	NO_STR
+	BGP_STR
+	"Advertise routes with max-med\n"
+	"Administratively applied, for an indefinite period\n"
+	"Max MED value to be used\n")
+{
+	nb_cli_enqueue_change(vty, "./max-med/administrative/enabled", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./max-med/administrative/med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_confederation_identifier, bgp_confederation_identifier_cli_cmd,
+	"bgp confederation identifier ASNUM$asnum",
+	BGP_STR
+	"AS confederation parameters\n"
+	"Set routing domain confederation AS\n"
+	AS_STR)
+{
+	char highbuf[8], lowbuf[8];
+
+	if (strchr(asnum_str, '.')) {
+		as_t asn = 0;
+		as_t high, low;
+
+		if (!asn_str2asn(asnum_str, &asn)) {
+			vty_out(vty, "%% BGP: No such AS %s\n", asnum_str);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		high = asn >> 16;
+		low = asn & 0xffff;
+		snprintf(highbuf, sizeof(highbuf), "%u", high);
+		snprintf(lowbuf, sizeof(lowbuf), "%u", low);
+
+		nb_cli_enqueue_change(vty, "./confederation/identifier/asdot/high", NB_OP_MODIFY,
+				      highbuf);
+		nb_cli_enqueue_change(vty, "./confederation/identifier/asdot/low", NB_OP_MODIFY,
+				      lowbuf);
+	} else {
+		as_t asn = 0;
+
+		if (!asn_str2asn(asnum_str, &asn)) {
+			vty_out(vty, "%% BGP: No such AS %s\n", asnum_str);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+
+		nb_cli_enqueue_change(vty, "./confederation/identifier/plain", NB_OP_MODIFY,
+				      asnum_str);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_confederation_identifier, no_bgp_confederation_identifier_cli_cmd,
+	"no bgp confederation identifier [ASNUM]",
+	NO_STR
+	BGP_STR
+	"AS confederation parameters\n"
+	"Set routing domain confederation AS\n"
+	AS_STR)
+{
+	nb_cli_enqueue_change(vty, "./confederation/identifier/plain", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./confederation/identifier/asdot", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_confederation_peers, bgp_confederation_peers_cli_cmd,
+	"bgp confederation peers ASNUM...",
+	BGP_STR
+	"AS confederation parameters\n"
+	"Peer ASs in BGP confederation\n"
+	AS_STR)
+{
+	int i;
+
+	for (i = 3; i < argc; i++) {
+		const char *as_str = argv[i]->arg;
+		char xpath[XPATH_MAXLEN];
+		as_t as = 0;
+
+		if (!asn_str2asn(as_str, &as)) {
+			vty_out(vty, "%% Invalid confed peer AS value: %s\n", as_str);
+			continue;
+		}
+
+		if (strchr(as_str, '.')) {
+			as_t high = as >> 16, low = as & 0xffff;
+
+			snprintf(xpath, sizeof(xpath),
+				 "./confederation/peers/asdot[high='%u'][low='%u']", high, low);
+		} else {
+			snprintf(xpath, sizeof(xpath), "./confederation/peers/plain[.='%s']",
+				 as_str);
+		}
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_confederation_peers, no_bgp_confederation_peers_cli_cmd,
+	"no bgp confederation peers ASNUM...",
+	NO_STR
+	BGP_STR
+	"AS confederation parameters\n"
+	"Peer ASs in BGP confederation\n"
+	AS_STR)
+{
+	int i;
+
+	for (i = 4; i < argc; i++) {
+		const char *as_str = argv[i]->arg;
+		char xpath[XPATH_MAXLEN];
+		as_t as = 0;
+
+		if (!asn_str2asn(as_str, &as)) {
+			vty_out(vty, "%% Invalid confed peer AS value: %s\n", as_str);
+			continue;
+		}
+
+		if (strchr(as_str, '.')) {
+			as_t high = as >> 16, low = as & 0xffff;
+
+			snprintf(xpath, sizeof(xpath),
+				 "./confederation/peers/asdot[high='%u'][low='%u']", high, low);
+		} else {
+			snprintf(xpath, sizeof(xpath), "./confederation/peers/plain[.='%s']",
+				 as_str);
+		}
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_tcp_keepalive, bgp_tcp_keepalive_cli_cmd,
+	"bgp tcp-keepalive (1-65535)$idle (1-65535)$intvl (1-30)$probes",
+	BGP_STR
+	"TCP keepalive parameters\n"
+	"TCP keepalive idle time (seconds)\n"
+	"TCP keepalive interval (seconds)\n"
+	"TCP keepalive maximum probes\n")
+{
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/idle", NB_OP_MODIFY, idle_str);
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/interval", NB_OP_MODIFY, intvl_str);
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/probes", NB_OP_MODIFY, probes_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_tcp_keepalive, no_bgp_tcp_keepalive_cli_cmd,
+	"no bgp tcp-keepalive [(1-65535) (1-65535) (1-30)]",
+	NO_STR
+	BGP_STR
+	"TCP keepalive parameters\n"
+	"TCP keepalive idle time (seconds)\n"
+	"TCP keepalive interval (seconds)\n"
+	"TCP keepalive maximum probes\n")
+{
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/idle", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/interval", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./tcp-keepalive/probes", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -1466,6 +1689,115 @@ static void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
 			yang_dnode_get_uint8(dnode, NULL));
 }
 
+/* Joint emission of 'bgp max-med on-startup <period> [<med>]': registered
+ * on the "on-startup" container, guarded on 'period' being present (the
+ * CLI always sets/destroys 'period' and 'med' together, mirroring the
+ * legacy DEFUN). 'med' is a no-default leaf, so its presence alone gates
+ * whether the value suffix is printed - an intentional presence-based
+ * divergence from the legacy value-comparison gating, same rationale as
+ * batch B2's default-less leaves.
+ */
+static void instance_max_med_on_startup_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults)
+{
+	if (!yang_dnode_exists(dnode, "period"))
+		return;
+
+	vty_out(vty, " bgp max-med on-startup %u", yang_dnode_get_uint32(dnode, "period"));
+	if (yang_dnode_exists(dnode, "med"))
+		vty_out(vty, " %u", yang_dnode_get_uint32(dnode, "med"));
+	vty_out(vty, "\n");
+}
+
+/* Joint emission of 'bgp max-med administrative [<med>]': registered on
+ * the "administrative" container. 'enabled' has a YANG default (false),
+ * so it must be value-checked rather than merely presence-checked (it can
+ * be materialized with show_defaults); 'med' is presence-based like
+ * on-startup's.
+ */
+static void instance_max_med_administrative_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						      bool show_defaults)
+{
+	if (!yang_dnode_exists(dnode, "enabled") || !yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	vty_out(vty, " bgp max-med administrative");
+	if (yang_dnode_exists(dnode, "med"))
+		vty_out(vty, " %u", yang_dnode_get_uint32(dnode, "med"));
+	vty_out(vty, "\n");
+}
+
+static void instance_confederation_identifier_cli_write(struct vty *vty,
+							const struct lyd_node *dnode,
+							bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "plain"))
+		vty_out(vty, " bgp confederation identifier %u\n",
+			yang_dnode_get_uint32(dnode, "plain"));
+	else if (yang_dnode_exists(dnode, "asdot"))
+		vty_out(vty, " bgp confederation identifier %u.%u\n",
+			yang_dnode_get_uint16(dnode, "asdot/high"),
+			yang_dnode_get_uint16(dnode, "asdot/low"));
+}
+
+static int instance_confederation_peers_plain_iter_cb(const struct lyd_node *dnode, void *arg)
+{
+	struct vty *vty = arg;
+
+	vty_out(vty, " %s", yang_dnode_get_string(dnode, "."));
+	return YANG_ITER_CONTINUE;
+}
+
+static int instance_confederation_peers_asdot_iter_cb(const struct lyd_node *dnode, void *arg)
+{
+	struct vty *vty = arg;
+
+	vty_out(vty, " %u.%u", yang_dnode_get_uint16(dnode, "high"),
+		yang_dnode_get_uint16(dnode, "low"));
+	return YANG_ITER_CONTINUE;
+}
+
+/* Joint emission of 'bgp confederation peers ASN...': registered on the
+ * "peers" container so both collections land on one line. Emits the
+ * plain leaf-list first, then the asdot list, per the YANG description's
+ * documented order - legacy's single flat confed_peers[] array is
+ * insertion-ordered instead, but that's display-only (show running-config
+ * presentation), not a wire/semantic difference.
+ */
+static void instance_confederation_peers_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	bool has_plain = yang_dnode_exists(dnode, "plain");
+	bool has_asdot = yang_dnode_exists(dnode, "asdot");
+
+	if (!has_plain && !has_asdot)
+		return;
+
+	vty_out(vty, " bgp confederation peers");
+	if (has_plain)
+		yang_dnode_iterate(instance_confederation_peers_plain_iter_cb, vty, dnode,
+				   "./plain");
+	if (has_asdot)
+		yang_dnode_iterate(instance_confederation_peers_asdot_iter_cb, vty, dnode,
+				   "./asdot");
+	vty_out(vty, "\n");
+}
+
+/* Joint emission of 'bgp tcp-keepalive <idle> <interval> <probes>':
+ * registered on the "tcp-keepalive" container (B2 instance_timers_cli_write
+ * pattern), guarded on 'idle' since the YANG 'must' guarantees all three or
+ * none.
+ */
+static void instance_tcp_keepalive_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	if (!yang_dnode_exists(dnode, "idle"))
+		return;
+
+	vty_out(vty, " bgp tcp-keepalive %u %u %u\n", yang_dnode_get_uint16(dnode, "idle"),
+		yang_dnode_get_uint16(dnode, "interval"), yang_dnode_get_uint8(dnode, "probes"));
+}
+
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -1749,6 +2081,36 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/max-med/on-startup",
+			.cbs = {
+				.cli_show = instance_max_med_on_startup_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/max-med/administrative",
+			.cbs = {
+				.cli_show = instance_max_med_administrative_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/confederation/identifier",
+			.cbs = {
+				.cli_show = instance_confederation_identifier_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/confederation/peers",
+			.cbs = {
+				.cli_show = instance_confederation_peers_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/tcp-keepalive",
+			.cbs = {
+				.cli_show = instance_tcp_keepalive_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/route-map-delay-timer",
 			.cbs = {
 				.cli_show = process_route_map_delay_timer_cli_write,
@@ -1863,6 +2225,17 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_default_local_preference_cli_cmd);
 	install_element(BGP_NODE, &bgp_default_subgroup_pkt_queue_max_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_default_subgroup_pkt_queue_max_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_maxmed_onstartup_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_maxmed_onstartup_cli_cmd);
+	install_element(BGP_NODE, &bgp_maxmed_admin_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_maxmed_admin_cli_cmd);
+	install_element(BGP_NODE, &bgp_confederation_identifier_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_confederation_identifier_cli_cmd);
+	install_element(BGP_NODE, &bgp_confederation_peers_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_confederation_peers_cli_cmd);
+	install_element(BGP_NODE, &bgp_tcp_keepalive_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_tcp_keepalive_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

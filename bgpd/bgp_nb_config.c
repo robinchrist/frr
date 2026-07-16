@@ -17,6 +17,7 @@
 #include "bgpd/bgp_updgrp.h"
 #include "bgpd/bgp_conditional_adv.h"
 #include "bgpd/bgp_zebra.h"
+#include "bgpd/bgp_fsm.h"
 
 /* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
  * from, so unlike the instance-scoped callbacks below there is no
@@ -1888,162 +1889,193 @@ int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args 
 	return NB_OK;
 }
 
+/* Shared APPLY body of the confederation/identifier leaf callbacks: reads
+ * whichever of plain/asdot is present under the "identifier" container and
+ * calls bgp_confederation_id_set(). Idempotent (bgp_confederation_id_set()
+ * itself no-ops when the AS/pretty-string pair is unchanged), so it's safe
+ * to call from every one of plain/asdot-create/high/low's modify paths -
+ * same "recompute from current subtree" shape as
+ * bgp_nb_instance_asn_apply(). The reconstructed pretty string is always
+ * the canonical decimal or "<high>.<low>" spelling, matching
+ * instance_cli_write()'s autonomous-system rendering in bgp_cli.c (the
+ * legacy pretty string is never a distinct user-typed spelling once
+ * asn_str2asn() has parsed it).
+ *
+ * Destroys of 'plain'/'asdot' unconditionally unset the confederation ID;
+ * this is safe even for a notation switch (plain -> asdot or vice versa)
+ * because northbound always processes all destroys in a commit before any
+ * create/modify (lib/northbound.c nb_config_cb_compare(), "to correctly
+ * process the change of a case inside a choice") - the destroy's unset is
+ * immediately superseded by the new case's modify/create.
+ */
+static void bgp_nb_instance_confederation_identifier_apply(const struct lyd_node *dnode)
+{
+	const struct lyd_node *identifier_dnode = yang_dnode_get_parent(dnode, "identifier");
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	as_t as;
+	char as_str[16];
+
+	if (!bgp)
+		return;
+
+	if (yang_dnode_exists(identifier_dnode, "plain")) {
+		as = yang_dnode_get_uint32(identifier_dnode, "plain");
+		snprintf(as_str, sizeof(as_str), "%u", as);
+	} else if (yang_dnode_exists(identifier_dnode, "asdot")) {
+		as_t high = yang_dnode_get_uint16(identifier_dnode, "asdot/high");
+		as_t low = yang_dnode_get_uint16(identifier_dnode, "asdot/low");
+
+		as = (high << 16) | low;
+		snprintf(as_str, sizeof(as_str), "%u.%u", high, low);
+	} else {
+		return;
+	}
+
+	bgp_confederation_id_set(bgp, as, as_str);
+}
+
 int instance_confederation_identifier_plain_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_instance_confederation_identifier_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_confederation_identifier_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_confederation_id_unset(bgp);
 
 	return NB_OK;
 }
 
 int instance_confederation_identifier_asdot_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_instance_confederation_identifier_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_confederation_identifier_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_confederation_id_unset(bgp);
 
 	return NB_OK;
 }
 
 int instance_confederation_identifier_asdot_high_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/asdot/high");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_instance_confederation_identifier_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_confederation_identifier_asdot_low_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/identifier/asdot/low");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_instance_confederation_identifier_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_confederation_peers_plain_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/peers/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	as_t as;
+	char as_str[16];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	as = yang_dnode_get_uint32(args->dnode, NULL);
+	snprintf(as_str, sizeof(as_str), "%u", as);
+
+	bgp_confederation_peers_add(bgp, as, as_str);
 
 	return NB_OK;
 }
 
 int instance_confederation_peers_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/peers/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	as_t as;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	as = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_confederation_peers_remove(bgp, as);
 
 	return NB_OK;
 }
 
 int instance_confederation_peers_asdot_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/peers/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	as_t high, low, as;
+	char as_str[16];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	high = yang_dnode_get_uint16(args->dnode, "high");
+	low = yang_dnode_get_uint16(args->dnode, "low");
+	as = (high << 16) | low;
+	snprintf(as_str, sizeof(as_str), "%u.%u", high, low);
+
+	bgp_confederation_peers_add(bgp, as, as_str);
 
 	return NB_OK;
 }
 
 int instance_confederation_peers_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/confederation/peers/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	as_t high, low, as;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	high = yang_dnode_get_uint16(args->dnode, "high");
+	low = yang_dnode_get_uint16(args->dnode, "low");
+	as = (high << 16) | low;
+	bgp_confederation_peers_remove(bgp, as);
 
 	return NB_OK;
 }
@@ -2176,114 +2208,143 @@ int instance_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* on-startup/period's modify only needs to set v_maxmed_onstartup: the CLI
+ * (bgp_maxmed_onstartup_cli_cmd, bgp_cli.c) always enqueues a MODIFY or a
+ * DESTROY on 'med' alongside every 'period' change, so maxmed_onstartup_value
+ * is kept correct independently and doesn't need a sibling read here (unlike
+ * B2's keepalive/holdtime pair, whose single legacy setter needs both values
+ * on every call).
+ */
 int instance_max_med_on_startup_period_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/on-startup/period");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->v_maxmed_onstartup = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
+/* Full 'no bgp max-med on-startup' behavior: cancel the timer if still
+ * pending and reset both fields, mirroring no_bgp_maxmed_onstartup_cmd.
+ */
 int instance_max_med_on_startup_period_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/on-startup/period");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (event_is_scheduled(bgp->t_maxmed_onstartup)) {
+		event_cancel(&bgp->t_maxmed_onstartup);
+		bgp->maxmed_onstartup_over = 1;
 	}
+
+	bgp->v_maxmed_onstartup = BGP_MAXMED_ONSTARTUP_UNCONFIGURED;
+	bgp->maxmed_onstartup_value = BGP_MAXMED_VALUE_DEFAULT;
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
 int instance_max_med_on_startup_med_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/on-startup/med");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->maxmed_onstartup_value = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
 int instance_max_med_on_startup_med_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/on-startup/med");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->maxmed_onstartup_value = BGP_MAXMED_VALUE_DEFAULT;
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
+/* No .destroy is registered for this leaf (YANG default "false"): a 'no
+ * bgp max-med administrative' DESTROY resolves to a MODIFY with the default
+ * value, same mechanism as the Tier A booleans (lib/northbound.c
+ * nb_config_diff: a default-bearing leaf never truly disappears from the
+ * tree once auto-defaulted, so the diff is a value replace, not a delete).
+ */
 int instance_max_med_administrative_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/administrative/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->v_maxmed_admin = yang_dnode_get_bool(args->dnode, NULL);
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
 int instance_max_med_administrative_med_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/administrative/med");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->maxmed_admin_value = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
 
 int instance_max_med_administrative_med_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/max-med/administrative/med");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->maxmed_admin_value = BGP_MAXMED_VALUE_DEFAULT;
+	bgp_maxmed_update(bgp);
 
 	return NB_OK;
 }
@@ -2644,98 +2705,142 @@ int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *
 	return NB_OK;
 }
 
+/* The YANG 'must' requires idle/interval/probes together or not at all, and
+ * the CLI (bgp_tcp_keepalive_cli_cmd, bgp_cli.c) always modifies all three
+ * in one transaction, but northbound only invokes a leaf's callback when its
+ * own value actually changed - so each modify reads its unchanged siblings
+ * via a relative "../<leaf>" xpath (falling back to the instance's current
+ * field when a sibling was never configured), same shape as B2's
+ * instance_timers_keepalive_modify()/_holdtime_modify(), and all three
+ * converge on the same bgp_tcp_keepalive_set() call the legacy DEFPY used.
+ */
 int instance_tcp_keepalive_idle_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/idle");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	uint16_t idle, interval;
+	uint8_t probes;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	idle = yang_dnode_get_uint16(args->dnode, NULL);
+	interval = yang_dnode_exists(args->dnode, "../interval")
+			   ? yang_dnode_get_uint16(args->dnode, "../interval")
+			   : bgp->tcp_keepalive_intvl;
+	probes = yang_dnode_exists(args->dnode, "../probes")
+			 ? yang_dnode_get_uint8(args->dnode, "../probes")
+			 : bgp->tcp_keepalive_probes;
+
+	bgp_tcp_keepalive_set(bgp, idle, interval, probes);
 
 	return NB_OK;
 }
 
+/* Destroy on any one of the three leaves resets all three, matching the
+ * YANG 'must' (all-or-nothing) and no_bgp_tcp_keepalive_cmd's
+ * bgp_tcp_keepalive_unset(). Idempotent, so it's harmless if the CLI's
+ * paired DESTROYs on the other two leaves fire the same reset again.
+ */
 int instance_tcp_keepalive_idle_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/idle");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_tcp_keepalive_unset(bgp);
 
 	return NB_OK;
 }
 
 int instance_tcp_keepalive_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	uint16_t idle, interval;
+	uint8_t probes;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	interval = yang_dnode_get_uint16(args->dnode, NULL);
+	idle = yang_dnode_exists(args->dnode, "../idle")
+		       ? yang_dnode_get_uint16(args->dnode, "../idle")
+		       : bgp->tcp_keepalive_idle;
+	probes = yang_dnode_exists(args->dnode, "../probes")
+			 ? yang_dnode_get_uint8(args->dnode, "../probes")
+			 : bgp->tcp_keepalive_probes;
+
+	bgp_tcp_keepalive_set(bgp, idle, interval, probes);
 
 	return NB_OK;
 }
 
 int instance_tcp_keepalive_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_tcp_keepalive_unset(bgp);
 
 	return NB_OK;
 }
 
 int instance_tcp_keepalive_probes_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/probes");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	uint16_t idle, interval;
+	uint8_t probes;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	probes = yang_dnode_get_uint8(args->dnode, NULL);
+	idle = yang_dnode_exists(args->dnode, "../idle")
+		       ? yang_dnode_get_uint16(args->dnode, "../idle")
+		       : bgp->tcp_keepalive_idle;
+	interval = yang_dnode_exists(args->dnode, "../interval")
+			   ? yang_dnode_get_uint16(args->dnode, "../interval")
+			   : bgp->tcp_keepalive_intvl;
+
+	bgp_tcp_keepalive_set(bgp, idle, interval, probes);
 
 	return NB_OK;
 }
 
 int instance_tcp_keepalive_probes_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/tcp-keepalive/probes");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_tcp_keepalive_unset(bgp);
 
 	return NB_OK;
 }
