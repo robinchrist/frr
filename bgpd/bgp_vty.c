@@ -2343,56 +2343,39 @@ static void bgp_peer_announce_routes(struct peer *peer)
 	}
 }
 
-/*
- * Function to perform a soft reset of BGP neighborship on a peer or peer group
+/* Function to perform a soft reset of BGP neighborship on a peer or peer
+ * group -- converted to northbound, see
+ * instance_{neighbor,peer_group}_graceful_shutdown_modify()
+ * (bgp_nb_instance_gr.c, M4 batch B4), the only remaining caller. Exposed
+ * (no longer static, no longer vty/peer_str-driven) via bgp_vty.h: the
+ * caller already resolved 'peer' via the northbound datastore, so the
+ * original bgp_clear()-based re-lookup-by-string is replaced by a direct
+ * bgp_peer_clear() walk of 'peer' (or, for a peer-group's group->conf,
+ * every current group member) -- same two primitives bgp_clear() itself
+ * used for its clear_peer/clear_group sorts, minus the string lookup this
+ * caller doesn't need.
  */
-static int bgp_peer_soft_reset(struct vty *vty, const char *peer_str, struct peer *peer, enum clear_sort sort)
+int bgp_peer_soft_reset(struct peer *peer, bool is_group)
 {
 	struct listnode *node, *nnode;
-	struct peer_group *group;
+	struct peer *member;
 
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_clear(vty, bgp, AFI_UNSPEC, SAFI_UNSPEC, sort, BGP_CLEAR_SOFT_IN, peer_str);
-
-	if (sort == clear_group) {
-		group = peer->group;
-		for (ALL_LIST_ELEMENTS(group->peer, node, nnode, peer))
-			bgp_peer_announce_routes(peer);
+	if (is_group) {
+		for (ALL_LIST_ELEMENTS(peer->group->peer, node, nnode, member))
+			bgp_peer_clear(member, AFI_UNSPEC, SAFI_UNSPEC, &nnode, BGP_CLEAR_SOFT_IN);
+		for (ALL_LIST_ELEMENTS(peer->group->peer, node, nnode, member))
+			bgp_peer_announce_routes(member);
 	} else {
+		bgp_peer_clear(peer, AFI_UNSPEC, SAFI_UNSPEC, NULL, BGP_CLEAR_SOFT_IN);
 		bgp_peer_announce_routes(peer);
 	}
 	return CMD_SUCCESS;
 }
 
-DEFPY (neighbor_graceful_shutdown,
-       neighbor_graceful_shutdown_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor_str graceful-shutdown",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Graceful shutdown\n")
-{
-	int ret;
-	struct peer *peer = NULL;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		ret = peer_flag_unset_vty(vty, neighbor_str, PEER_FLAG_GRACEFUL_SHUTDOWN);
-	else
-		ret = peer_flag_set_vty(vty, neighbor_str, PEER_FLAG_GRACEFUL_SHUTDOWN);
-
-	if (ret == 0) {
-		if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP))
-			ret = bgp_peer_soft_reset(vty, neighbor_str, peer, clear_peer);
-		else
-			ret = bgp_peer_soft_reset(vty, neighbor_str, peer, clear_group);
-	}
-	return ret;
-}
+/* neighbor graceful-shutdown: converted to northbound, see
+ * 'neighbor_graceful_shutdown_cli_cmd' in bgp_cli_neighbor.c (M4 batch
+ * B4).
+ */
 
 DEFUN_HIDDEN (bgp_graceful_restart_disable_eor,
               bgp_graceful_restart_disable_eor_cmd,
@@ -3349,116 +3332,11 @@ ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
  * in bgp_cli.c (M4 batch B3).
  */
 
-/* neighbor shutdown. */
-DEFUN (neighbor_shutdown_msg,
-       neighbor_shutdown_msg_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown message MSG...",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Administratively shut down this neighbor\n"
-       "Add a shutdown message (RFC 8203)\n"
-       "Shutdown message\n")
-{
-	int idx_peer = 1;
-
-	if (argc >= 5) {
-		struct peer *peer =
-			peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-		char *message;
-
-		if (!peer)
-			return CMD_WARNING_CONFIG_FAILED;
-		message = argv_concat(argv, argc, 4);
-		peer_tx_shutdown_message_set(peer, message);
-		XFREE(MTYPE_TMP, message);
-	}
-
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg, PEER_FLAG_SHUTDOWN);
-}
-
-ALIAS(neighbor_shutdown_msg, neighbor_shutdown_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown",
-      NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-      "Administratively shut down this neighbor\n")
-
-DEFUN (no_neighbor_shutdown_msg,
-       no_neighbor_shutdown_msg_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown message MSG...",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Administratively shut down this neighbor\n"
-       "Remove a shutdown message (RFC 8203)\n"
-       "Shutdown message\n")
-{
-	int idx_peer = 2;
-
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_SHUTDOWN);
-}
-
-ALIAS(no_neighbor_shutdown_msg, no_neighbor_shutdown_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown",
-      NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-      "Administratively shut down this neighbor\n")
-
-DEFUN(neighbor_shutdown_rtt,
-      neighbor_shutdown_rtt_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> shutdown rtt (1-65535) [count (1-255)]",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Administratively shut down this neighbor\n"
-      "Shutdown if round-trip-time is higher than expected\n"
-      "Round-trip-time in milliseconds\n"
-      "Specify the number of keepalives before shutdown\n"
-      "The number of keepalives with higher RTT to shutdown\n")
-{
-	int idx_peer = 1;
-	int idx_rtt = 4;
-	int idx_count = 0;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	peer->rtt_expected = strtol(argv[idx_rtt]->arg, NULL, 10);
-
-	if (argv_find(argv, argc, "count", &idx_count))
-		peer->rtt_keepalive_conf =
-			strtol(argv[idx_count + 1]->arg, NULL, 10);
-
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_RTT_SHUTDOWN);
-}
-
-DEFUN(no_neighbor_shutdown_rtt,
-      no_neighbor_shutdown_rtt_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> shutdown rtt [(1-65535) [count (1-255)]]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Administratively shut down this neighbor\n"
-      "Shutdown if round-trip-time is higher than expected\n"
-      "Round-trip-time in milliseconds\n"
-      "Specify the number of keepalives before shutdown\n"
-      "The number of keepalives with higher RTT to shutdown\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	peer->rtt_expected = 0;
-	peer->rtt_keepalive_conf = 1;
-
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_RTT_SHUTDOWN);
-}
+/* neighbor shutdown (+ message, + rtt): converted to northbound, see
+ * 'neighbor_shutdown_cli_cmd'/'neighbor_shutdown_message_cli_cmd'/
+ * 'neighbor_shutdown_rtt_cli_cmd' and their 'no' forms in bgp_cli_neighbor.c
+ * (M4 batch B4).
+ */
 
 /* neighbor capability dynamic. */
 DEFUN (neighbor_capability_dynamic,
@@ -4786,25 +4664,9 @@ DEFUN (no_neighbor_ebgp_multihop,
 	return peer_ebgp_multihop_unset_vty(vty, argv[idx_peer]->arg);
 }
 
-DEFPY (neighbor_aigp,
-       neighbor_aigp_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor aigp",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Enable send and receive of the AIGP attribute per neighbor\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		return peer_flag_unset_vty(vty, neighbor, PEER_FLAG_AIGP);
-	else
-		return peer_flag_set_vty(vty, neighbor, PEER_FLAG_AIGP);
-}
+/* neighbor aigp: converted to northbound, see 'neighbor_aigp_cli_cmd' in
+ * bgp_cli_neighbor.c (M4 batch B4).
+ */
 
 static uint8_t get_role_by_name(const char *role_str)
 {
@@ -4903,27 +4765,9 @@ DEFPY(no_neighbor_role,
 	return ret;
 }
 
-DEFPY (neighbor_oad,
-       neighbor_oad_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor oad",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Set peering session type to EBGP-OAD\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		peer->sub_sort = 0;
-	else if (peer->sort == BGP_PEER_EBGP)
-		peer->sub_sort = BGP_PEER_EBGP_OAD;
-
-	return CMD_SUCCESS;
-}
+/* neighbor oad: converted to northbound, see 'neighbor_oad_cli_cmd' in
+ * bgp_cli_neighbor.c (M4 batch B4).
+ */
 
 /* disable-connected-check */
 DEFUN (neighbor_disable_connected_check,
@@ -17998,18 +17842,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "\n");
 	}
 
-	/* shutdown */
-	if (peergroup_flag_check(peer, PEER_FLAG_SHUTDOWN)) {
-		if (peer->tx_shutdown_message)
-			vty_out(vty, " neighbor %s shutdown message %s\n", addr,
-				peer->tx_shutdown_message);
-		else
-			vty_out(vty, " neighbor %s shutdown\n", addr);
-	}
-
-	if (peergroup_flag_check(peer, PEER_FLAG_RTT_SHUTDOWN))
-		vty_out(vty, " neighbor %s shutdown rtt %u count %u\n", addr,
-			peer->rtt_expected, peer->rtt_keepalive_conf);
+	/* shutdown (+ message, + rtt): converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
+	 */
 
 	/* bfd */
 	if (peer->bfd_config)
@@ -18036,13 +17871,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		}
 	}
 
-	/* aigp */
-	if (peergroup_flag_check(peer, PEER_FLAG_AIGP))
-		vty_out(vty, " neighbor %s aigp\n", addr);
-
-	/* graceful-shutdown */
-	if (peergroup_flag_check(peer, PEER_FLAG_GRACEFUL_SHUTDOWN))
-		vty_out(vty, " neighbor %s graceful-shutdown\n", addr);
+	/* aigp, graceful-shutdown: converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
+	 */
 
 	/* role */
 	if (peergroup_flag_check(peer, PEER_FLAG_ROLE) &&
@@ -18053,8 +17884,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 				? " strict-mode"
 				: "");
 
-	if (peer->sub_sort == BGP_PEER_EBGP_OAD)
-		vty_out(vty, " neighbor %s oad\n", addr);
+	/* oad: converted to northbound, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B4).
+	 */
 
 	/* ttl-security hops */
 	if (peer->gtsm_hops != BGP_GTSM_HOPS_DISABLED) {
@@ -19585,14 +19417,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_role_strict_cmd);
 	install_element(BGP_NODE, &no_neighbor_role_cmd);
 
-	/* "neighbor oad" commands. */
-	install_element(BGP_NODE, &neighbor_oad_cmd);
-
-	/* "neighbor aigp" commands. */
-	install_element(BGP_NODE, &neighbor_aigp_cmd);
-
-	/* "neighbor graceful-shutdown" command */
-	install_element(BGP_NODE, &neighbor_graceful_shutdown_cmd);
+	/* "neighbor oad"/"neighbor aigp"/"neighbor graceful-shutdown"
+	 * commands: converted to northbound, see bgp_cli_neighbor_init()
+	 * (M4 batch B4). */
 
 	install_element(BGP_NODE, &bgp_use_underlying_nexthop_weight_cmd);
 
@@ -20282,13 +20109,8 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE,
 			&no_neighbor_path_attribute_treat_as_withdraw_cmd);
 
-	/* "neighbor shutdown" commands. */
-	install_element(BGP_NODE, &neighbor_shutdown_cmd);
-	install_element(BGP_NODE, &no_neighbor_shutdown_cmd);
-	install_element(BGP_NODE, &neighbor_shutdown_msg_cmd);
-	install_element(BGP_NODE, &no_neighbor_shutdown_msg_cmd);
-	install_element(BGP_NODE, &neighbor_shutdown_rtt_cmd);
-	install_element(BGP_NODE, &no_neighbor_shutdown_rtt_cmd);
+	/* "neighbor shutdown" (+ message, + rtt) commands: converted to
+	 * northbound, see bgp_cli_neighbor_init() (M4 batch B4). */
 
 	/* "neighbor capability extended-nexthop" commands.*/
 	install_element(BGP_NODE, &neighbor_capability_enhe_cmd);

@@ -694,130 +694,182 @@ int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *
 	return NB_OK;
 }
 
+/* 'neighbor X shutdown [message MSG...]' / 'neighbor X shutdown rtt
+ * (1-65535) [count (1-255)]' (bgp_vty.c, retired -- see
+ * bgp_cli_neighbor.c's neighbor_shutdown*_cli_cmd family, M4 batch B4):
+ * 'enabled' maps to PEER_FLAG_SHUTDOWN, gating both the CLI-emission and
+ * the CEASE-notification effect of 'message' but NOT its storage --
+ * peer_tx_shutdown_message_set()/_unset() run unconditionally from
+ * message's own modify/destroy callbacks below, matching the inventory's
+ * "message/rtt args are stored on the peer regardless" framing. This is
+ * a deliberate decoupling from one legacy quirk: peer_flag_modify_vty()
+ * (bgp_vty.c) always cleared tx_shutdown_message as a side effect of
+ * *any* PEER_FLAG_SHUTDOWN unset, even a bare 'no neighbor X shutdown'
+ * with no 'message' keyword at all, because legacy had no way to
+ * independently manage a pending message without the flag. The new
+ * grammar's 'no' forms (bgp_cli_neighbor.c) reproduce that same
+ * composite effect at the CLI layer instead, by enqueueing DESTROY on
+ * both 'enabled' and 'message' together -- so this callback itself stays
+ * a pure mirror of its own leaf, and a bypass via direct northbound edit
+ * (skipping the CLI's paired destroy) is the one case where the two
+ * diverge, which is the intended, documented, decoupled behavior.
+ *
+ * 'rtt/threshold' is a second, wholly independent flag
+ * (PEER_FLAG_RTT_SHUTDOWN) in legacy -- the YANG model has no separate
+ * boolean for it, so this callback treats the leaf's own presence as
+ * that flag's mirror (matching legacy's 'shutdown rtt N' also implicitly
+ * setting PEER_FLAG_RTT_SHUTDOWN). 'rtt/count' is independent again, same
+ * shape as 'message': stored via its own modify/destroy regardless of
+ * 'rtt/threshold', defaulting to 1 (peer_new()'s rtt_keepalive_conf
+ * initializer) when destroyed or never set, matching legacy's
+ * unconditional inclusion of 'count %u' in the config-write line.
+ */
 int instance_peer_group_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_SHUTDOWN);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_message_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/message");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_tx_shutdown_message_set(group->conf, yang_dnode_get_string(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_message_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/message");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_tx_shutdown_message_unset(group->conf);
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/rtt/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->rtt_expected = yang_dnode_get_uint16(args->dnode, NULL);
+	peer_flag_set(group->conf, PEER_FLAG_RTT_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/rtt/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->rtt_expected = 0;
+	peer_flag_unset(group->conf, PEER_FLAG_RTT_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/rtt/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->rtt_keepalive_conf = yang_dnode_get_uint8(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_peer_group_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/shutdown/rtt/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->rtt_keepalive_conf = 1;
 
 	return NB_OK;
 }
 
+/* 'neighbor X graceful-shutdown' (RFC 8326 per-peer, bgp_vty.c, retired --
+ * see bgp_cli_neighbor.c's neighbor_graceful_shutdown_cli_cmd, M4 batch
+ * B4). Legacy always follows the PEER_FLAG_GRACEFUL_SHUTDOWN flag
+ * transition with an immediate soft reset (clear the session's inbound
+ * routes and re-announce outbound so the GSHUT community change takes
+ * effect right away) -- reproduced via bgp_peer_soft_reset() (bgp_vty.c,
+ * exposed via bgp_vty.h for this caller), which fans out to every current
+ * group member when 'peer' is a peer-group's group->conf (detected via
+ * PEER_STATUS_GROUP, exactly like legacy's own
+ * '!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)' branch) -- so the same
+ * modify body serves both scopes below.
+ */
 int instance_peer_group_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/graceful-shutdown");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_GRACEFUL_SHUTDOWN);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_GRACEFUL_SHUTDOWN);
+
+	bgp_peer_soft_reset(group->conf, CHECK_FLAG(group->conf->sflags, PEER_STATUS_GROUP));
 
 	return NB_OK;
 }
@@ -854,130 +906,147 @@ int instance_peer_group_graceful_restart_mode_destroy(struct nb_cb_destroy_args 
 	return NB_OK;
 }
 
+/* See the peer-group-scope callback's comment above for the
+ * enabled/message/rtt gating design shared by both scopes.
+ */
 int instance_neighbor_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_SHUTDOWN);
+	else
+		peer_flag_unset(peer, PEER_FLAG_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_message_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/message");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_tx_shutdown_message_set(peer, yang_dnode_get_string(args->dnode, NULL));
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_message_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/message");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_tx_shutdown_message_unset(peer);
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/rtt/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->rtt_expected = yang_dnode_get_uint16(args->dnode, NULL);
+	peer_flag_set(peer, PEER_FLAG_RTT_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/rtt/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->rtt_expected = 0;
+	peer_flag_unset(peer, PEER_FLAG_RTT_SHUTDOWN);
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/rtt/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->rtt_keepalive_conf = yang_dnode_get_uint8(args->dnode, NULL);
 
 	return NB_OK;
 }
 
 int instance_neighbor_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/shutdown/rtt/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->rtt_keepalive_conf = 1;
 
 	return NB_OK;
 }
 
+/* See the peer-group-scope callback's comment above for why
+ * bgp_peer_soft_reset() (bgp_vty.h) is the correct post-flag-transition
+ * side effect here.
+ */
 int instance_neighbor_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/graceful-shutdown");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_GRACEFUL_SHUTDOWN);
+	else
+		peer_flag_unset(peer, PEER_FLAG_GRACEFUL_SHUTDOWN);
+
+	bgp_peer_soft_reset(peer, CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP));
 
 	return NB_OK;
 }

@@ -837,6 +837,292 @@ DEFPY_YANG(
 }
 
 /*
+ * shutdown (+ message, + rtt), graceful-shutdown, aigp, oad (M4 batch B4):
+ * session-admin-control leaves shared between neighbor/peer-group via the
+ * neighbor-session-parameters grouping. Pure subcommands like B3's, so no
+ * legacy DEFUN retention (same rationale as bgp_cli_peer_or_group_xpath()'s
+ * doc comment above).
+ */
+
+DEFPY_YANG(
+	neighbor_shutdown, neighbor_shutdown_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_shutdown_message, neighbor_shutdown_message_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown message LINE...",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n"
+	"Add a shutdown message (RFC 8203)\n"
+	"Shutdown message\n")
+{
+	char *xpath, *xpath_child, *msg;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	msg = argv_concat(argv, argc, 4);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, msg);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	XFREE(MTYPE_TMP, msg);
+
+	return ret;
+}
+
+/* Both 'no' forms below destroy 'enabled' *and* 'message' together --
+ * reproducing peer_flag_modify_vty()'s (bgp_vty.c, retired) legacy side
+ * effect of always clearing tx_shutdown_message whenever
+ * PEER_FLAG_SHUTDOWN is unset, regardless of which 'no' grammar was used.
+ * See the northbound callback's comment (bgp_nb_instance_gr.c) for why
+ * that composite destroy lives here at the CLI layer instead of inside
+ * the 'enabled' callback.
+ */
+DEFPY_YANG(
+	no_neighbor_shutdown, no_neighbor_shutdown_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Legacy accepts (and ignores) a trailing MSG... on the 'no' form too
+ * (no_neighbor_shutdown_msg_cmd's own grammar, bgp_vty.c, retired) --
+ * reproduced as a second grammar sharing the same body, same shape as
+ * B3's no_neighbor_description_comment.
+ */
+DEFPY_YANG(
+	no_neighbor_shutdown_message, no_neighbor_shutdown_message_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown message LINE...",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n"
+	"Remove a shutdown message (RFC 8203)\n"
+	"Shutdown message\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_shutdown_rtt, neighbor_shutdown_rtt_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown rtt (1-65535)$rtt [count (1-255)$cnt]",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n"
+	"Shutdown if round-trip-time is higher than expected\n"
+	"Round-trip-time in milliseconds\n"
+	"Specify the number of keepalives before shutdown\n"
+	"The number of keepalives with higher RTT to shutdown\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/threshold", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, rtt_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	if (cnt_str) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/count", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, cnt_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Destroys both 'rtt/threshold' and 'rtt/count' together, matching
+ * legacy's no_neighbor_shutdown_rtt (bgp_vty.c, retired), which always
+ * resets both peer->rtt_expected and peer->rtt_keepalive_conf regardless
+ * of whether count was ever set independently.
+ */
+DEFPY_YANG(
+	no_neighbor_shutdown_rtt, no_neighbor_shutdown_rtt_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer shutdown rtt [(1-65535) [count (1-255)]]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Administratively shut down this neighbor\n"
+	"Shutdown if round-trip-time is higher than expected\n"
+	"Round-trip-time in milliseconds\n"
+	"Specify the number of keepalives before shutdown\n"
+	"The number of keepalives with higher RTT to shutdown\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/threshold", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/count", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_graceful_shutdown, neighbor_graceful_shutdown_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-shutdown",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Graceful shutdown\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-shutdown", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_aigp, neighbor_aigp_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer aigp",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable send and receive of the AIGP attribute per neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/aigp", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_oad, neighbor_oad_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer oad",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set peering session type to EBGP-OAD\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/oad", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -958,6 +1244,46 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 
 	if (yang_dnode_exists(dnode, "passive") && yang_dnode_get_bool(dnode, "passive"))
 		vty_out(vty, " neighbor %s passive\n", addr);
+
+	/* shutdown (+ message, + rtt), graceful-shutdown, aigp, oad (M4
+	 * batch B4): reproduces bgp_config_write_peer_global()'s (bgp_vty.c,
+	 * retired for these leaves) shutdown-through-oad block, in the same
+	 * relative order. 'message'/'rtt/count' are stored
+	 * unconditionally in the datastore (see the northbound callbacks'
+	 * comment, bgp_nb_instance_gr.c) but emission stays gated on their
+	 * own governing presence exactly like legacy: 'enabled' gates the
+	 * message line (peergroup_flag_check(peer, PEER_FLAG_SHUTDOWN) in
+	 * legacy), while 'rtt/threshold's mere presence gates the rtt line
+	 * (mirroring the wholly separate PEER_FLAG_RTT_SHUTDOWN) --
+	 * reproducing legacy's "if (peer->tx_shutdown_message) ... else
+	 * ..." branch and its unconditional "count %u" (falling back to the
+	 * peer_new() default of 1 when 'rtt/count' itself is absent).
+	 */
+	if (yang_dnode_exists(dnode, "shutdown/enabled") &&
+	    yang_dnode_get_bool(dnode, "shutdown/enabled")) {
+		if (yang_dnode_exists(dnode, "shutdown/message"))
+			vty_out(vty, " neighbor %s shutdown message %s\n", addr,
+				yang_dnode_get_string(dnode, "shutdown/message"));
+		else
+			vty_out(vty, " neighbor %s shutdown\n", addr);
+	}
+
+	if (yang_dnode_exists(dnode, "shutdown/rtt/threshold"))
+		vty_out(vty, " neighbor %s shutdown rtt %u count %u\n", addr,
+			yang_dnode_get_uint16(dnode, "shutdown/rtt/threshold"),
+			yang_dnode_exists(dnode, "shutdown/rtt/count")
+				? yang_dnode_get_uint8(dnode, "shutdown/rtt/count")
+				: 1);
+
+	if (yang_dnode_exists(dnode, "aigp") && yang_dnode_get_bool(dnode, "aigp"))
+		vty_out(vty, " neighbor %s aigp\n", addr);
+
+	if (yang_dnode_exists(dnode, "graceful-shutdown") &&
+	    yang_dnode_get_bool(dnode, "graceful-shutdown"))
+		vty_out(vty, " neighbor %s graceful-shutdown\n", addr);
+
+	if (yang_dnode_exists(dnode, "oad") && yang_dnode_get_bool(dnode, "oad"))
+		vty_out(vty, " neighbor %s oad\n", addr);
 }
 
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -1100,4 +1426,16 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_tcp_mss_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_tcp_mss_cli_cmd);
 	install_element(BGP_NODE, &neighbor_passive_cli_cmd);
+
+	/* shutdown (+ message, + rtt), graceful-shutdown, aigp, oad (M4
+	 * batch B4). */
+	install_element(BGP_NODE, &neighbor_shutdown_cli_cmd);
+	install_element(BGP_NODE, &neighbor_shutdown_message_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_shutdown_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_shutdown_message_cli_cmd);
+	install_element(BGP_NODE, &neighbor_shutdown_rtt_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_shutdown_rtt_cli_cmd);
+	install_element(BGP_NODE, &neighbor_graceful_shutdown_cli_cmd);
+	install_element(BGP_NODE, &neighbor_aigp_cli_cmd);
+	install_element(BGP_NODE, &neighbor_oad_cli_cmd);
 }

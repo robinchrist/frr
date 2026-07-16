@@ -660,16 +660,19 @@ int instance_peer_group_ebgp_multihop_destroy(struct nb_cb_destroy_args *args)
 
 int instance_peer_group_aigp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/aigp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_AIGP);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_AIGP);
 
 	return NB_OK;
 }
@@ -722,16 +725,34 @@ int instance_peer_group_local_role_strict_mode_modify(struct nb_cb_modify_args *
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for why
+ * the VALIDATE-time rejection is a deliberate improvement over legacy's
+ * silent no-op on a non-eBGP-sorted peer-group.
+ */
 int instance_peer_group_oad_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/oad");
-		return NB_ERR_VALIDATION;
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (group && yang_dnode_get_bool(args->dnode, NULL) &&
+		    group->conf->sort != BGP_PEER_EBGP) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "oad is only valid for eBGP neighbors");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		group->conf->sub_sort = yang_dnode_get_bool(args->dnode, NULL) ? BGP_PEER_EBGP_OAD
+									       : 0;
 		break;
 	}
 

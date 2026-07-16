@@ -850,16 +850,19 @@ int instance_neighbor_ebgp_multihop_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_aigp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/aigp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_AIGP);
+	else
+		peer_flag_unset(peer, PEER_FLAG_AIGP);
 
 	return NB_OK;
 }
@@ -912,16 +915,37 @@ int instance_neighbor_local_role_strict_mode_modify(struct nb_cb_modify_args *ar
 	return NB_OK;
 }
 
+/* 'neighbor X oad' (bgp_vty.c, retired): legacy silently no-ops (leaves
+ * peer->sub_sort untouched) when the peer isn't eBGP-sorted rather than
+ * rejecting -- the inventory calls this out as a cross-leaf dependency
+ * worth encoding properly, so this VALIDATE rejects instead of silently
+ * accepting a no-op, a deliberate improvement over the legacy silent
+ * failure. The 'no' form (destroy-to-default MODIFY carrying "false") is
+ * unconditional in both legacy and here, matching peer->sub_sort = 0
+ * regardless of sort.
+ */
 int instance_neighbor_oad_modify(struct nb_cb_modify_args *args)
 {
+	struct peer *peer;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/oad");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (peer && yang_dnode_get_bool(args->dnode, NULL) && peer->sort != BGP_PEER_EBGP) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "oad is only valid for eBGP neighbors");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		peer->sub_sort = yang_dnode_get_bool(args->dnode, NULL) ? BGP_PEER_EBGP_OAD : 0;
 		break;
 	}
 
