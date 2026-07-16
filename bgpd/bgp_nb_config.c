@@ -1090,6 +1090,253 @@ static int bgp_nb_instance_asn_apply(const struct lyd_node *dnode)
 	return bgp_nb_instance_replay(instance_dnode);
 }
 
+/* Peer-group and neighbor list entries are looked up by key exactly like
+ * bgp_nb_instance_lookup() above, never cached: remote-as/peer-group-bind
+ * mutate the peer/peer-group struct in place (peer_remote_as()/
+ * peer_group_bind(), bgpd.c), but a legacy CLI 'no neighbor ...'/'no
+ * neighbor WORD peer-group' can still delete the struct underneath a
+ * later leaf callback in the same commit.
+ */
+static struct peer_group *bgp_nb_peer_group_lookup(const struct lyd_node *dnode)
+{
+	const struct lyd_node *pg_dnode = yang_dnode_get_parent(dnode, "peer-group");
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+
+	if (!bgp || !pg_dnode)
+		return NULL;
+
+	return peer_group_lookup(bgp, yang_dnode_get_string(pg_dnode, "name"));
+}
+
+static struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode)
+{
+	const struct lyd_node *nbr_dnode = yang_dnode_get_parent(dnode, "neighbor");
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const char *address;
+	union sockunion su;
+
+	if (!bgp || !nbr_dnode)
+		return NULL;
+
+	address = yang_dnode_get_string(nbr_dnode, "address");
+
+	if (yang_dnode_exists(nbr_dnode, "interface-peer") &&
+	    yang_dnode_get_bool(nbr_dnode, "interface-peer"))
+		return peer_lookup_by_conf_if(bgp, address);
+
+	if (str2sockunion(address, &su) < 0)
+		return NULL;
+
+	return peer_lookup(bgp, &su);
+}
+
+/* Shared remote-as reader for both peer-group and neighbor (both use the
+ * same 'remote-as' container from the shared neighbor-session-parameters
+ * grouping). Mirrors bgp_nb_instance_get_asn()'s plain/asdot handling and
+ * adds the relationship-keyword case. session_dnode is the peer-group or
+ * neighbor list entry itself (remote-as is a direct child). Returns false
+ * if remote-as is entirely absent (a neighbor inheriting from its
+ * peer-group, or a peer-group with none configured yet).
+ */
+static bool bgp_nb_get_remote_as(const struct lyd_node *session_dnode, as_t *as,
+				  enum peer_asn_type *as_type, const char **as_str,
+				  char *as_str_buf, size_t as_str_buf_len)
+{
+	if (yang_dnode_exists(session_dnode, "remote-as/plain")) {
+		*as = yang_dnode_get_uint32(session_dnode, "remote-as/plain");
+		*as_type = AS_SPECIFIED;
+		snprintf(as_str_buf, as_str_buf_len, "%u", *as);
+		*as_str = as_str_buf;
+		return true;
+	}
+
+	if (yang_dnode_exists(session_dnode, "remote-as/asdot/high")) {
+		as_t high = yang_dnode_get_uint16(session_dnode, "remote-as/asdot/high");
+		as_t low = yang_dnode_get_uint16(session_dnode, "remote-as/asdot/low");
+
+		*as = (high << 16) | low;
+		*as_type = AS_SPECIFIED;
+		snprintf(as_str_buf, as_str_buf_len, "%u.%u", high, low);
+		*as_str = as_str_buf;
+		return true;
+	}
+
+	if (yang_dnode_exists(session_dnode, "remote-as/type")) {
+		const char *type = yang_dnode_get_string(session_dnode, "remote-as/type");
+
+		*as = 0;
+		*as_str = NULL;
+		if (strmatch(type, "internal"))
+			*as_type = AS_INTERNAL;
+		else if (strmatch(type, "external"))
+			*as_type = AS_EXTERNAL;
+		else
+			*as_type = AS_AUTO;
+		return true;
+	}
+
+	*as = 0;
+	*as_type = AS_UNSPECIFIED;
+	*as_str = NULL;
+	return false;
+}
+
+/* Shared APPLY body for the peer-group remote-as leaves: recompute the
+ * whole remote-as container (not just the leaf that fired) and call the
+ * legacy setter, mirroring bgp_nb_instance_asn_apply()'s "reread the
+ * container, not the trigger leaf" pattern. peer_group_remote_as() is a
+ * no-op if the value already matches (bgpd.c:3486-3487), so this converges
+ * safely even though several remote-as leaves can be present in one
+ * commit and each calls this.
+ */
+static int bgp_nb_peer_group_remote_as_apply(const struct lyd_node *dnode)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const struct lyd_node *pg_dnode;
+	const char *name;
+	as_t as;
+	enum peer_asn_type as_type;
+	const char *as_str;
+	char as_buf[ASN_STRING_MAX_SIZE];
+	int ret;
+
+	if (!bgp)
+		return NB_OK;
+
+	pg_dnode = yang_dnode_get_parent(dnode, "peer-group");
+	name = yang_dnode_get_string(pg_dnode, "name");
+
+	if (!bgp_nb_get_remote_as(pg_dnode, &as, &as_type, &as_str, as_buf, sizeof(as_buf)))
+		return NB_OK;
+
+	ret = peer_group_remote_as(bgp, name, &as, as_type, as_str);
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_group_remote_as() failed for %s: %d", __func__, name, ret);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_peer_group_remote_as_delete_apply(const struct lyd_node *dnode)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const struct lyd_node *pg_dnode;
+	struct peer_group *group;
+
+	if (!bgp)
+		return NB_OK;
+
+	pg_dnode = yang_dnode_get_parent(dnode, "peer-group");
+	group = peer_group_lookup(bgp, yang_dnode_get_string(pg_dnode, "name"));
+	if (!group)
+		return NB_OK;
+
+	peer_group_remote_as_delete(group);
+
+	return NB_OK;
+}
+
+/* Shared APPLY body for the neighbor remote-as leaves. Same "reread the
+ * whole container" discipline as above; peer_remote_as() creates the peer
+ * on first use (addressed form) or mutates it in place, and is a no-op
+ * when the value already matches (bgpd.c:2417-2418), so repeated firing
+ * within one commit converges safely. Never called for a neighbor whose
+ * remote-as comes solely from an inherited peer-group -- there is no
+ * remote-as leaf present in that case, so bgp_nb_get_remote_as() returns
+ * false and this is a no-op.
+ */
+static int bgp_nb_neighbor_remote_as_apply(const struct lyd_node *dnode)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const struct lyd_node *nbr_dnode;
+	const char *address;
+	union sockunion su;
+	union sockunion *su_ptr = NULL;
+	const char *conf_if = NULL;
+	as_t as;
+	enum peer_asn_type as_type;
+	const char *as_str;
+	char as_buf[ASN_STRING_MAX_SIZE];
+	int ret;
+
+	if (!bgp)
+		return NB_OK;
+
+	nbr_dnode = yang_dnode_get_parent(dnode, "neighbor");
+	address = yang_dnode_get_string(nbr_dnode, "address");
+
+	if (yang_dnode_exists(nbr_dnode, "interface-peer") &&
+	    yang_dnode_get_bool(nbr_dnode, "interface-peer")) {
+		conf_if = address;
+	} else {
+		if (str2sockunion(address, &su) < 0)
+			return NB_OK;
+		su_ptr = &su;
+	}
+
+	if (!bgp_nb_get_remote_as(nbr_dnode, &as, &as_type, &as_str, as_buf, sizeof(as_buf)))
+		return NB_OK;
+
+	ret = peer_remote_as(bgp, su_ptr, conf_if, &as, as_type, as_str);
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_remote_as() failed for %s: %d", __func__, address, ret);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+/* Only the interface-peer (WORD/conf_if) form has a legacy equivalent for
+ * clearing remote-as without deleting the neighbor
+ * (no_neighbor_interface_peer_group_remote_as, bgp_vty.c, now converted
+ * here): peer_as_change(peer, 0, AS_UNSPECIFIED, NULL) resets to
+ * unspecified in place. An addressed neighbor's remote-as destroy leaf
+ * callback rejects at VALIDATE instead (see
+ * instance_neighbor_remote_as_plain_destroy() and siblings) since legacy
+ * has no partial-unset there -- this helper is therefore only ever
+ * reached for conf_if peers.
+ */
+static int bgp_nb_neighbor_remote_as_destroy_apply(const struct lyd_node *dnode)
+{
+	struct peer *peer = bgp_nb_neighbor_lookup(dnode);
+
+	if (!peer)
+		return NB_OK;
+
+	peer_as_change(peer, 0, AS_UNSPECIFIED, NULL);
+
+	return NB_OK;
+}
+
+/* Shared VALIDATE guard for the neighbor remote-as leaves' destroy
+ * callbacks: addressed neighbors have no legacy "clear remote-as, keep
+ * the neighbor" operation (the grammar accepts a 'remote-as ...' suffix
+ * on 'no neighbor <addr>' but the DEFUN body ignored it and always
+ * deleted the whole peer -- see bgp_vty.c's now-removed no_neighbor()).
+ * Only conf_if (interface) neighbors have a real equivalent
+ * (no_neighbor_interface_peer_group_remote_as). This callback never fires
+ * as part of a whole-neighbor-entry destroy cascade: nb_config_diff_deleted()
+ * (lib/northbound.c) only recurses into child destroy callbacks when
+ * F_NB_CB_DESTROY_RECURSE is set, which the neighbor list node does not
+ * set, so rejecting here cannot block 'no neighbor <addr>'.
+ */
+static int bgp_nb_neighbor_remote_as_destroy_validate(const struct lyd_node *dnode,
+						       char *errmsg, size_t errmsg_len)
+{
+	const struct lyd_node *nbr_dnode = yang_dnode_get_parent(dnode, "neighbor");
+
+	if (yang_dnode_exists(nbr_dnode, "interface-peer") &&
+	    yang_dnode_get_bool(nbr_dnode, "interface-peer"))
+		return NB_OK;
+
+	snprintf(errmsg, errmsg_len,
+		 "removing remote-as from an addressed neighbor requires deleting the neighbor; bgpd has no partial unset");
+	return NB_ERR_VALIDATION;
+}
+
 int instance_create(struct nb_cb_create_args *args)
 {
 	switch (args->event) {
@@ -4383,14 +4630,35 @@ int instance_timers_default_originate_destroy(struct nb_cb_destroy_args *args)
 
 int instance_peer_group_create(struct nb_cb_create_args *args)
 {
+	struct bgp *bgp;
+	const char *name;
+	struct peer_group *group;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group");
-		return NB_ERR_VALIDATION;
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		name = yang_dnode_get_string(args->dnode, "name");
+		if (peer_lookup_by_conf_if(bgp, name)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Name conflict with interface: %s", name);
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		name = yang_dnode_get_string(args->dnode, "name");
+		group = peer_group_get(bgp, name);
+		if (!group)
+			return NB_ERR_RESOURCE;
 		break;
 	}
 
@@ -4399,14 +4667,47 @@ int instance_peer_group_create(struct nb_cb_create_args *args)
 
 int instance_peer_group_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	struct peer_group *group;
+
 	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group");
-		return NB_ERR_VALIDATION;
+	case NB_EV_VALIDATE: {
+		afi_t afi;
+
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		for (afi = AFI_IP; afi < AFI_MAX; afi++) {
+			if (listcount(group->listen_range[afi])) {
+				snprintf(args->errmsg, args->errmsg_len,
+					 "Peer-group %s is attached to %d listen-range(s), delete them first",
+					 group->name, listcount(group->listen_range[afi]));
+				return NB_ERR_VALIDATION;
+			}
+		}
+		break;
+	}
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		/* peer_group_delete() deletes every member peer (and its
+		 * doppelganger), it does not demote them to standalone
+		 * peers -- there is no legacy unbind primitive (bgpd.c).
+		 * Their northbound 'neighbor' list entries are left as-is
+		 * in the running datastore by this callback; reconciling
+		 * them is out of scope for this batch (see commit message).
+		 */
+		peer_group_notify_unconfig(group);
+		peer_group_delete(group);
+		if (bgp)
+			bgp_may_stop_listening(bgp, NULL);
 		break;
 	}
 
@@ -4415,128 +4716,64 @@ int instance_peer_group_destroy(struct nb_cb_destroy_args *args)
 
 int instance_peer_group_remote_as_plain_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_delete_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_asdot_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_delete_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_asdot_high_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/asdot/high");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_asdot_low_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/asdot/low");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_remote_as_type_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/remote-as/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_remote_as_delete_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -20892,14 +21129,58 @@ int instance_peer_group_afi_safis_l2vpn_evpn_filters_conditional_advertisement_c
 
 int instance_neighbor_create(struct nb_cb_create_args *args)
 {
+	struct bgp *bgp;
+	struct peer *peer;
+	const char *address;
+	bool is_if;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		address = yang_dnode_get_string(args->dnode, "address");
+		is_if = yang_dnode_exists(args->dnode, "interface-peer") &&
+			yang_dnode_get_bool(args->dnode, "interface-peer");
+
+		if (!is_if)
+			/* Addressed neighbors have no legacy "create a bare
+			 * neighbor" primitive: peer_remote_as() (via the
+			 * remote-as leaf callback) or peer_group_bind() (via
+			 * the peer-group leaf callback) -- whichever sibling
+			 * leaf is present in this same commit, matching the
+			 * neighbor list's YANG 'must' -- does the real
+			 * peer_create(). Mirrors legacy, which likewise has
+			 * no standalone "create bare addressed neighbor"
+			 * command. */
+			break;
+
+		peer = peer_lookup_by_conf_if(bgp, address);
+		if (peer)
+			break; /* idempotent: replay or already applied */
+
+		peer = peer_create(NULL, address, bgp, bgp->as, 0, AS_UNSPECIFIED, NULL, true,
+				   NULL, CONNECTION_OUTGOING);
+		if (!peer)
+			return NB_ERR_RESOURCE;
+
+		/* Unnumbered peers unconditionally get capability
+		 * extended-nexthop forced on, locked via flags_invert +
+		 * flags_override (peer_conf_interface_get(), bgp_vty.c,
+		 * now converted here). */
+		SET_FLAG(peer->flags, PEER_FLAG_CAPABILITY_ENHE);
+		SET_FLAG(peer->flags_invert, PEER_FLAG_CAPABILITY_ENHE);
+		SET_FLAG(peer->flags_override, PEER_FLAG_CAPABILITY_ENHE);
+
+		if (peer->ifp)
+			bgp_zebra_initiate_radv(bgp, peer);
+
+		bgp_need_listening(bgp, NULL);
 		break;
 	}
 
@@ -20908,62 +21189,163 @@ int instance_neighbor_create(struct nb_cb_create_args *args)
 
 int instance_neighbor_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+	struct peer *peer;
+	struct peer *other;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (peer_dynamic_neighbor(peer))
+		/* dynamic peers never have a northbound neighbor list entry
+		 * (PEER_FLAG_CONFIG_NODE is never set for them); defensive
+		 * only. */
+		return NB_OK;
+
+	other = peer->doppelganger;
+
+	if (peer->conf_if) {
+		if (peer->ifp)
+			bgp_zebra_terminate_radv(peer->bgp, peer);
+	} else if (CHECK_FLAG(peer->flags, PEER_FLAG_CAPABILITY_ENHE)) {
+		bgp_zebra_terminate_radv(peer->bgp, peer);
 	}
+
+	peer_notify_unconfig(peer->connection);
+	peer_delete(peer);
+	if (other && other->connection->status != Deleted) {
+		peer_notify_unconfig(other->connection);
+		peer_delete(other);
+	}
+
+	if (bgp)
+		bgp_may_stop_listening(bgp, NULL);
 
 	return NB_OK;
 }
 
 int instance_neighbor_interface_peer_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/interface-peer");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* consumed directly by instance_neighbor_create(): interface-peer is
+	 * immutable after creation, there is no legacy operation that
+	 * converts an existing addressed neighbor to/from unnumbered. */
 	return NB_OK;
 }
 
 int instance_neighbor_v6only_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/v6only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+	bool v6only;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	v6only = yang_dnode_get_bool(args->dnode, NULL);
+
+	if (v6only == !!CHECK_FLAG(peer->flags, PEER_FLAG_IFPEER_V6ONLY))
+		return NB_OK;
+
+	if (v6only)
+		peer_flag_set(peer, PEER_FLAG_IFPEER_V6ONLY);
+	else
+		peer_flag_unset(peer, PEER_FLAG_IFPEER_V6ONLY);
+
+	peer_set_last_reset(peer, PEER_DOWN_V6ONLY_CHANGE);
+	if (!peer_notify_config_change(peer->connection))
+		bgp_session_reset(peer);
 
 	return NB_OK;
 }
 
+/* 'neighbor X peer-group PGNAME': bind. Coordinator-approved design (no
+ * legacy unbind primitive exists, see peer_group_delete()/no_neighbor_*
+ * in bgpd.c/bgp_vty.c):
+ *  - MODIFY to a group different from the one currently bound rejects at
+ *    VALIDATE, mirroring BGP_ERR_PEER_GROUP_CANT_CHANGE.
+ *  - MODIFY to the same group is a no-op (peer_group_bind() itself
+ *    returns 0 early for this case).
+ *  - MODIFY when unbound (including the neighbor's first-ever commit,
+ *    when instance_neighbor_create() deliberately did not create an
+ *    addressed peer) binds, creating the peer if necessary.
+ *  - DESTROY of this leaf alone (not the whole neighbor entry) always
+ *    rejects at VALIDATE: bgpd has no unbind. This cannot block 'no
+ *    neighbor X peer-group PGNAME' (which destroys the whole neighbor
+ *    entry, see bgp_cli.c) because nb_config_diff_deleted()
+ *    (lib/northbound.c) does not recurse into child destroy callbacks
+ *    unless F_NB_CB_DESTROY_RECURSE is set, which this node does not
+ *    set.
+ */
 int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct peer *peer;
+	struct peer_group *group;
+	const char *name;
+	as_t as = 0;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/peer-group");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer || !peer_group_active(peer))
+			break;
+
+		name = yang_dnode_get_string(args->dnode, NULL);
+		if (strcmp(peer->group->name, name) != 0) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Cannot change peer-group from %s to %s; deconfigure first",
+				 peer->group->name, name);
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		name = yang_dnode_get_string(args->dnode, NULL);
+		group = peer_group_lookup(bgp, name);
+		if (!group)
+			break; /* leafref integrity already enforced */
+
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (peer) {
+			ret = peer_group_bind(bgp, NULL, peer, group, &as);
+		} else {
+			const struct lyd_node *nbr_dnode =
+				yang_dnode_get_parent(args->dnode, "neighbor");
+			union sockunion su;
+			const char *address = yang_dnode_get_string(nbr_dnode, "address");
+
+			if (yang_dnode_exists(nbr_dnode, "interface-peer") &&
+			    yang_dnode_get_bool(nbr_dnode, "interface-peer"))
+				/* conf_if peers are always created by
+				 * instance_neighbor_create(); unreachable. */
+				break;
+
+			if (str2sockunion(address, &su) < 0)
+				break;
+
+			ret = peer_group_bind(bgp, &su, NULL, group, &as);
+		}
+
+		if (ret) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_group_bind() failed for %s: %d", __func__, name, ret);
+			return NB_ERR_RESOURCE;
+		}
 		break;
 	}
 
@@ -20972,15 +21354,10 @@ int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_peer_group_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/peer-group");
+	if (args->event == NB_EV_VALIDATE) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "removing peer-group membership requires deleting the neighbor; bgpd has no unbind");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
 
 	return NB_OK;
@@ -20988,16 +21365,8 @@ int instance_neighbor_peer_group_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_remote_as_plain_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -21006,13 +21375,13 @@ int instance_neighbor_remote_as_plain_destroy(struct nb_cb_destroy_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/plain");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_neighbor_remote_as_destroy_validate(args->dnode, args->errmsg,
+								  args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_remote_as_destroy_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -21020,16 +21389,8 @@ int instance_neighbor_remote_as_plain_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_remote_as_asdot_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -21038,13 +21399,13 @@ int instance_neighbor_remote_as_asdot_destroy(struct nb_cb_destroy_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/asdot");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_neighbor_remote_as_destroy_validate(args->dnode, args->errmsg,
+								  args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_remote_as_destroy_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -21052,48 +21413,24 @@ int instance_neighbor_remote_as_asdot_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_remote_as_asdot_high_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/asdot/high");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_remote_as_asdot_low_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/asdot/low");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_remote_as_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_remote_as_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -21102,13 +21439,13 @@ int instance_neighbor_remote_as_type_destroy(struct nb_cb_destroy_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/remote-as/type");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_neighbor_remote_as_destroy_validate(args->dnode, args->errmsg,
+								  args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_remote_as_destroy_apply(args->dnode);
 	}
 
 	return NB_OK;

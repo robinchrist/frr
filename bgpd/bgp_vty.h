@@ -186,6 +186,15 @@ extern bool bgp_config_inprocess(void);
 extern struct peer *peer_and_group_lookup_vty(struct vty *vty,
 					      const char *peer_str);
 
+/* Exported for bgp_cli.c's M4 neighbor/peer-group DEFPY_YANG commands,
+ * which need the same self-peer rejection and listen-socket bookkeeping
+ * as the legacy DEFUNs they replace. vty is accepted but unused by the
+ * bodies of the listening helpers; callers with no vty (northbound APPLY
+ * context) may pass NULL. */
+extern bool peer_address_self_check(struct bgp *bgp, union sockunion *su);
+extern void bgp_need_listening(struct bgp *bgp, struct vty *vty);
+extern void bgp_may_stop_listening(struct bgp *bgp, struct vty *vty);
+
 extern afi_t bgp_vty_afi_from_str(const char *afi_str);
 
 extern safi_t bgp_vty_safi_from_str(const char *safi_str);

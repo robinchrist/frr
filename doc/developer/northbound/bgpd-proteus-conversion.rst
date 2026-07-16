@@ -86,6 +86,47 @@ instance exists for legacy subcommands to attach to mid-load;
 creating the same instance is safe. vtysh's ``router_bgp`` DEFUNSH
 routes to both ``VTYSH_BGPD`` and ``VTYSH_MGMTD``.
 
+**Legacy neighbor/peer-group lifecycle DEFUNs stay.** Same reasoning as
+``router_bgp`` above, one level down: ``neighbor <addr|WORD>
+remote-as ...`` (all forms), ``neighbor WORD interface ...`` (all
+forms), ``neighbor WORD peer-group`` (create), ``neighbor <addr|WORD>
+peer-group PGNAME`` (bind), and their ``no`` forms stay in
+``bgp_vty.c`` even though ``instance_neighbor_create()`` /
+``instance_peer_group_create()`` and the ``remote-as``/peer-group-bind
+leaf callbacks in ``bgp_nb_config.c`` (M4 batch B1) are the real
+northbound implementation -- config_write for these lines is mgmtd-only
+(``peer_group_cli_write()``/``neighbor_cli_write()`` in
+``bgp_cli.c``). Without the legacy DEFUNs, a peer or peer-group
+created only through mgmtd's batched, end-of-file-triggered backend
+push does not exist yet when a legacy line later in the same file
+(e.g. ``neighbor X timers 3 10``, still unconverted) tries to
+configure it, and bgpd rejects it ("Specify remote-as or peer-group
+commands first"), aborting the rest of the block.
+
+vtysh dual-routes each of these exactly like ``router_bgp``: defining
+the same CLI grammar in both ``bgp_vty.c`` (picked up under
+``VTYSH_BGPD``) and ``bgp_cli.c`` (``VTYSH_MGMTD``) makes
+``python/xref2vtysh.py`` merge the two ``CommandEntry`` objects (same
+normalized command string, in the same CLI node) into one dual-daemon
+install rather than erroring on a duplicate -- this is the general
+mechanism the ``router_bgp`` DEFUNSH double-definition relies on too,
+just automated instead of hand-written in ``vtysh.c``. For interactive
+use, ``vtysh_client[]`` lists ``mgmtd`` before ``bgpd``, so mgmtd's
+northbound callback typically applies first and bgpd's legacy DEFUN
+runs against an already-converged (or, for destroy, already-absent)
+target. Every legacy setter here (``peer_remote_as()``,
+``peer_group_remote_as()``, ``peer_group_bind()``, ``peer_group_get()``,
+``peer_create()`` via the interface path) is idempotent by
+construction, so creates/modifies converge regardless of ordering; the
+``no ...`` DEFUNs additionally had to be changed to tolerate "peer or
+peer-group already gone" as a silent no-op instead of the pre-B1
+``CMD_WARNING_CONFIG_FAILED``, since that is now the common case rather
+than a user error. The hidden address-family-context aliases for
+``neighbor ... peer-group PGNAME`` are not reinstalled (pure CLI
+convenience, no functional loss); reconciling a peer-group member's
+stale northbound ``neighbor`` list entry after ``peer_group_delete()``
+remains a known gap, per the M4 batch B1 commit message.
+
 **mgmtd log noise.** Split-config mode logs errors for legacy
 ``bgpd.conf`` lines mgmtd doesn't recognize. This is cosmetic and
 expected during the transition; it does not indicate a conversion bug.
