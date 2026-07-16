@@ -13,6 +13,7 @@
 #include "lib/log.h"
 #include "lib/yang_wrappers.h"
 #include "lib/frrevent.h"
+#include "lib/prefix.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
@@ -1170,16 +1171,60 @@ int instance_neighbor_enforce_first_as_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X update-source <A.B.C.D|X:X::X:X|WORD>' (peer->update_source /
+ * peer->update_if, M4 batch B7). Legacy's peer_update_source_vty()
+ * (bgp_vty.c, retired) tries str2sockunion() first (peer_update_source_
+ * addr_set()); on failure it tries str2prefix() to distinguish an
+ * address-with-mask (rejected: "Invalid update-source, remove prefix
+ * length") from a plain interface name (peer_update_source_if_set()).
+ * The YANG leaf is `union { inet:ip-address-no-zone; string }`
+ * (proteus-bgp.yang) -- both union branches carry the same string form
+ * legacy parsed, so the identical two-step str2sockunion()/str2prefix()
+ * dispatch runs again here: at VALIDATE to reject the ambiguous
+ * CIDR-looking form, and at APPLY to pick the setter. Legacy also
+ * silently no-ops (bare CMD_WARNING, no message) for unnumbered
+ * (peer->conf_if) peers -- reproduced as the same sibling-leaf VALIDATE
+ * check instance_neighbor_source_interface_modify() above uses, reading
+ * the candidate config's own 'interface-peer' leaf rather than the live
+ * peer struct so same-commit ordering is safe.
+ */
 int instance_neighbor_update_source_modify(struct nb_cb_modify_args *args)
 {
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+	const char *source_str;
+	union sockunion su;
+	struct prefix p;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/update-source");
-		return NB_ERR_VALIDATION;
+		nbr_dnode = yang_dnode_get_parent(args->dnode, "neighbor");
+		if (yang_dnode_exists(nbr_dnode, "interface-peer") &&
+		    yang_dnode_get_bool(nbr_dnode, "interface-peer")) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "update-source is not supported for unnumbered (interface) neighbors");
+			return NB_ERR_VALIDATION;
+		}
+		source_str = yang_dnode_get_string(args->dnode, NULL);
+		if (str2sockunion(source_str, &su) != 0 && str2prefix(source_str, &p)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Invalid update-source, remove prefix length");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		source_str = yang_dnode_get_string(args->dnode, NULL);
+		if (str2sockunion(source_str, &su) == 0)
+			peer_update_source_addr_set(peer, &su);
+		else
+			peer_update_source_if_set(peer, source_str);
 		break;
 	}
 
@@ -1188,30 +1233,65 @@ int instance_neighbor_update_source_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_update_source_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/update-source");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer_update_source_unset(peer);
 
 	return NB_OK;
 }
 
+/* 'neighbor X ip-transparent' (PEER_FLAG_IP_TRANSPARENT, M4 batch B7).
+ * Legacy's DEFPY (neighbor_ip_transparent, bgp_vty.c, retired) rejects the
+ * positive form unless update-source is already configured
+ * (peergroup_flag_check(peer, PEER_FLAG_UPDATE_SOURCE)) -- checking
+ * flags_override when the peer is an active group member, i.e. whether
+ * update-source is explicit on *this* peer/peer-group's own config, not
+ * merely inherited from a bound peer-group. The northbound-native
+ * equivalent is whether 'update-source' is present on this same list
+ * entry's own dnode: our model only carries what was typed directly on
+ * this neighbor/peer-group, since inheritance from a bound peer-group is
+ * a runtime bgpd mechanism (PEER_ATTR_INHERIT), not reflected in the
+ * candidate config tree -- so dnode presence here is the exact mirror of
+ * legacy's flags_override bit. Only the positive ('true') direction is
+ * checked, matching legacy's '!no && ...' guard. Tier A (default
+ * "false", positive-only boolean): only .modify is registered, so both
+ * the positive and 'no' CLI forms dispatch here (see neighbor_disable_
+ * connected_check_modify() above for the same shape).
+ */
 int instance_neighbor_ip_transparent_modify(struct nb_cb_modify_args *args)
 {
+	struct peer *peer;
+	const struct lyd_node *nbr_dnode;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/ip-transparent");
-		return NB_ERR_VALIDATION;
+		if (yang_dnode_get_bool(args->dnode, NULL)) {
+			nbr_dnode = yang_dnode_get_parent(args->dnode, "neighbor");
+			if (!yang_dnode_exists(nbr_dnode, "update-source")) {
+				snprintf(args->errmsg, args->errmsg_len, "Missing update-source");
+				return NB_ERR_VALIDATION;
+			}
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			peer_flag_set(peer, PEER_FLAG_IP_TRANSPARENT);
+		else
+			peer_flag_unset(peer, PEER_FLAG_IP_TRANSPARENT);
 		break;
 	}
 

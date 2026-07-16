@@ -756,6 +756,87 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* update-source, ip-transparent (M4 batch B7). */
+DEFPY_YANG(
+	neighbor_update_source, neighbor_update_source_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer update-source <A.B.C.D|X:X::X:X|WORD>$source",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Source of routing updates\n"
+	"IPv4 address\n"
+	"IPv6 address\n"
+	"Interface name (requires zebra to be running)\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/update-source", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, source);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_update_source, no_neighbor_update_source_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer update-source [<A.B.C.D|X:X::X:X|WORD>]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Source of routing updates\n"
+	"IPv4 address\n"
+	"IPv6 address\n"
+	"Interface name (requires zebra to be running)\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/update-source", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_ip_transparent, neighbor_ip_transparent_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer ip-transparent",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable IP_TRANSPARENT on the BGP TCP socket\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ip-transparent", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
 DEFPY_YANG(
 	neighbor_tcp_mss, neighbor_tcp_mss_cli_cmd,
 	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer tcp-mss (1-65535)$tcp_mss",
@@ -1676,6 +1757,27 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	    yang_dnode_get_bool(dnode, "disable-connected-check"))
 		vty_out(vty, " neighbor %s disable-connected-check\n", addr);
 
+	/* update-source, ip-transparent (M4 batch B7): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these
+	 * two leaves) update-source-through-ip-transparent block, in the
+	 * same relative order (right before the still-legacy enforce-
+	 * first-as/BGP-LS block, which sit in between in bgp_vty.c but are
+	 * unconverted and thus not reproduced here). Gated on this entry's
+	 * own leaf presence, the same "presence is exactly legacy's
+	 * ownership flag" principle used throughout this function --
+	 * update-source's union value renders identically via its string
+	 * form regardless of which union branch (address vs interface
+	 * name) matched, so a plain %s suffices where legacy needed a
+	 * peer->update_source vs. peer->update_if branch.
+	 */
+	if (yang_dnode_exists(dnode, "update-source"))
+		vty_out(vty, " neighbor %s update-source %s\n", addr,
+			yang_dnode_get_string(dnode, "update-source"));
+
+	if (yang_dnode_exists(dnode, "ip-transparent") &&
+	    yang_dnode_get_bool(dnode, "ip-transparent"))
+		vty_out(vty, " neighbor %s ip-transparent\n", addr);
+
 	/* advertisement-interval, timers (+ connect, + delayopen) (M4 batch
 	 * B5): reproduces bgp_config_write_peer_global()'s (bgp_vty.c,
 	 * retired for these leaves) advertisement-interval-through-
@@ -1898,6 +2000,11 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_ebgp_multihop_cli_cmd);
 	install_element(BGP_NODE, &neighbor_ttl_security_cli_cmd);
 	install_element(BGP_NODE, &neighbor_disable_connected_check_cli_cmd);
+
+	/* update-source, ip-transparent (M4 batch B7). */
+	install_element(BGP_NODE, &neighbor_update_source_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_update_source_cli_cmd);
+	install_element(BGP_NODE, &neighbor_ip_transparent_cli_cmd);
 
 	/* timers (+ connect, + delayopen), advertisement-interval (M4
 	 * batch B5). */

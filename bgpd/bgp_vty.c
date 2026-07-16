@@ -4811,69 +4811,9 @@ DEFUN (no_neighbor_enforce_first_as,
  * 'neighbor_description_cli_cmd' in bgp_cli.c (M4 batch B3).
  */
 
-/* Neighbor update-source. */
-static int peer_update_source_vty(struct vty *vty, const char *peer_str,
-				  const char *source_str)
-{
-	struct peer *peer;
-	struct prefix p;
-	union sockunion su;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (peer->conf_if)
-		return CMD_WARNING;
-
-	if (source_str) {
-		if (str2sockunion(source_str, &su) == 0)
-			peer_update_source_addr_set(peer, &su);
-		else {
-			if (str2prefix(source_str, &p)) {
-				vty_out(vty,
-					"%% Invalid update-source, remove prefix length \n");
-				return CMD_WARNING_CONFIG_FAILED;
-			} else
-				peer_update_source_if_set(peer, source_str);
-		}
-	} else
-		peer_update_source_unset(peer);
-
-	return CMD_SUCCESS;
-}
-
-#define BGP_UPDATE_SOURCE_HELP_STR                                             \
-	"IPv4 address\n"                                                       \
-	"IPv6 address\n"                                                       \
-	"Interface name (requires zebra to be running)\n"
-
-DEFUN (neighbor_update_source,
-       neighbor_update_source_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> update-source <A.B.C.D|X:X::X:X|WORD>",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Source of routing updates\n"
-       BGP_UPDATE_SOURCE_HELP_STR)
-{
-	int idx_peer = 1;
-	int idx_peer_2 = 3;
-	return peer_update_source_vty(vty, argv[idx_peer]->arg,
-				      argv[idx_peer_2]->arg);
-}
-
-DEFUN (no_neighbor_update_source,
-       no_neighbor_update_source_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> update-source [<A.B.C.D|X:X::X:X|WORD>]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Source of routing updates\n"
-       BGP_UPDATE_SOURCE_HELP_STR)
-{
-	int idx_peer = 2;
-	return peer_update_source_vty(vty, argv[idx_peer]->arg, NULL);
-}
+/* neighbor update-source: converted to northbound, see
+ * 'neighbor_update_source_cli_cmd' in bgp_cli_neighbor.c (M4 batch B7).
+ */
 
 static int peer_default_originate_set_vty(struct vty *vty, const char *peer_str,
 					  afi_t afi, safi_t safi,
@@ -16767,33 +16707,9 @@ DEFUN (no_bgp_redistribute_ipv6,
  * 'neighbor_tcp_mss_cli_cmd' in bgp_cli.c (M4 batch B3).
  */
 
-DEFPY(neighbor_ip_transparent,
-      neighbor_ip_transparent_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor ip-transparent",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Enable IP_TRANSPARENT on the BGP TCP socket\n")
-{
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!no && !peergroup_flag_check(peer, PEER_FLAG_UPDATE_SOURCE)) {
-		vty_out(vty, "%% Missing update-source\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (no)
-		ret = peer_flag_unset_vty(vty, neighbor, PEER_FLAG_IP_TRANSPARENT);
-	else
-		ret = peer_flag_set_vty(vty, neighbor, PEER_FLAG_IP_TRANSPARENT);
-
-	return bgp_vty_return(vty, ret);
-}
+/* neighbor ip-transparent: converted to northbound, see
+ * 'neighbor_ip_transparent_cli_cmd' in bgp_cli_neighbor.c (M4 batch B7).
+ */
 
 DEFPY(bgp_retain_route_target, bgp_retain_route_target_cmd,
       "[no$no] bgp retain route-target all",
@@ -17525,19 +17441,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 			vty_out(vty, " neighbor %s enforce-first-as\n", addr);
 	}
 
-	/* update-source */
-	if (peergroup_flag_check(peer, PEER_FLAG_UPDATE_SOURCE)) {
-		if (peer->update_source)
-			vty_out(vty, " neighbor %s update-source %pSU\n", addr,
-				peer->update_source);
-		else if (peer->update_if)
-			vty_out(vty, " neighbor %s update-source %s\n", addr,
-				peer->update_if);
-	}
-
-	/* ip-transparent on/off */
-	if (peergroup_flag_check(peer, PEER_FLAG_IP_TRANSPARENT))
-		vty_out(vty, " neighbor %s ip-transparent\n", addr);
+	/* update-source, ip-transparent: converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B7).
+	 */
 
 	/* BGP-LS link identifiers */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID))
@@ -19747,9 +19653,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_enforce_first_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_enforce_first_as_cmd);
 
-	/* "neighbor update-source" commands. "*/
-	install_element(BGP_NODE, &neighbor_update_source_cmd);
-	install_element(BGP_NODE, &no_neighbor_update_source_cmd);
+	/* "neighbor update-source" commands: converted to northbound,
+	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).
+	 */
 
 	/* "neighbor default-originate" commands. */
 	install_element(BGP_NODE, &neighbor_default_originate_hidden_cmd);
@@ -20328,7 +20234,9 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV4_NODE, &af_no_import_vrf_route_map_cmd);
 	install_element(BGP_IPV6_NODE, &af_no_import_vrf_route_map_cmd);
 
-	install_element(BGP_NODE, &neighbor_ip_transparent_cmd);
+	/* "neighbor ip-transparent" command: converted to northbound,
+	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).
+	 */
 
 	/* srv6 commands */
 	install_element(VIEW_NODE, &show_bgp_srv6_cmd);

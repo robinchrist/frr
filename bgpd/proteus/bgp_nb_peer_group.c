@@ -911,16 +911,41 @@ int instance_peer_group_enforce_first_as_destroy(struct nb_cb_destroy_args *args
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for the
+ * str2sockunion()/str2prefix() dispatch this mirrors -- group->conf is the
+ * peer-group's own 'struct peer *' (same idiom as password/tcp-mss above),
+ * and there is no 'interface-peer' sibling at peer-group scope so that
+ * VALIDATE guard is skipped (unnumbered peer-groups don't exist).
+ */
 int instance_peer_group_update_source_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+	const char *source_str;
+	union sockunion su;
+	struct prefix p;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/update-source");
-		return NB_ERR_VALIDATION;
+		source_str = yang_dnode_get_string(args->dnode, NULL);
+		if (str2sockunion(source_str, &su) != 0 && str2prefix(source_str, &p)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Invalid update-source, remove prefix length");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		source_str = yang_dnode_get_string(args->dnode, NULL);
+		if (str2sockunion(source_str, &su) == 0)
+			peer_update_source_addr_set(group->conf, &su);
+		else
+			peer_update_source_if_set(group->conf, source_str);
 		break;
 	}
 
@@ -929,30 +954,51 @@ int instance_peer_group_update_source_modify(struct nb_cb_modify_args *args)
 
 int instance_peer_group_update_source_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/update-source");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	peer_update_source_unset(group->conf);
 
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for the
+ * "Missing update-source" dependency this mirrors on group->conf's own
+ * dnode.
+ */
 int instance_peer_group_ip_transparent_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+	const struct lyd_node *pg_dnode;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/ip-transparent");
-		return NB_ERR_VALIDATION;
+		if (yang_dnode_get_bool(args->dnode, NULL)) {
+			pg_dnode = yang_dnode_get_parent(args->dnode, "peer-group");
+			if (!yang_dnode_exists(pg_dnode, "update-source")) {
+				snprintf(args->errmsg, args->errmsg_len, "Missing update-source");
+				return NB_ERR_VALIDATION;
+			}
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			peer_flag_set(group->conf, PEER_FLAG_IP_TRANSPARENT);
+		else
+			peer_flag_unset(group->conf, PEER_FLAG_IP_TRANSPARENT);
 		break;
 	}
 
