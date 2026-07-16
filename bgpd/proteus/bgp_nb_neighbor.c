@@ -383,17 +383,28 @@ int instance_neighbor_remote_as_type_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/*
+ * local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9): the
+ * plain/asdot ASN sub-choice shares bgp_nb_neighbor_local_as_apply()'s
+ * "reread the whole container" APPLY and bgp_nb_local_as_validate()'s
+ * same-as-BGP-AS VALIDATE guard (bgp_nb_util.c) across all four leaves
+ * that can change the ASN; no-prepend/replace-as/dual-as are Tier A
+ * (YANG default "false", modify-only, chosen because unlike the ASN they
+ * have a genuine static default and no inheritance) but still route
+ * through the same shared APPLY, since legacy's peer_local_as_set()
+ * (bgpd.c) takes the ASN and all three modifiers together as one call --
+ * there is no narrower legacy setter for a modifier alone.
+ */
 int instance_neighbor_local_as_plain_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/plain");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -401,16 +412,8 @@ int instance_neighbor_local_as_plain_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_local_as_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_local_as_destroy_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -419,13 +422,12 @@ int instance_neighbor_local_as_asdot_create(struct nb_cb_create_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/asdot");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -433,16 +435,8 @@ int instance_neighbor_local_as_asdot_create(struct nb_cb_create_args *args)
 
 int instance_neighbor_local_as_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_local_as_destroy_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -451,13 +445,12 @@ int instance_neighbor_local_as_asdot_high_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/asdot/high");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -467,13 +460,12 @@ int instance_neighbor_local_as_asdot_low_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/asdot/low");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -481,48 +473,24 @@ int instance_neighbor_local_as_asdot_low_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_local_as_no_prepend_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/no-prepend");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_local_as_replace_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/replace-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_local_as_dual_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-as/dual-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_local_as_apply(args->dnode);
 
 	return NB_OK;
 }

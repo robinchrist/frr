@@ -506,6 +506,202 @@ struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode)
 	return peer_lookup(bgp, &su);
 }
 
+/* Shared local-as reader for both peer-group and neighbor (both use the
+ * same 'local-as' container from the shared neighbor-session-parameters
+ * grouping, M4 batch B9). Mirrors bgp_nb_get_remote_as()'s plain/asdot
+ * handling, minus the relationship-keyword case (local-as has no
+ * internal/external/auto form). local_as_dnode is the 'local-as' container
+ * itself -- any of its descendants can resolve it via
+ * yang_dnode_get_parent(dnode, "local-as"). no_prepend/replace_as/dual_as
+ * are optional out-params (pass NULL to skip): all three carry a YANG
+ * default of "false" and so are always materialized once the container
+ * exists, same reasoning as bgp_nb_default_af_safi_conflict_validate()'s
+ * comment on always-materialized default leaves. Returns false if no ASN
+ * is configured at all (the container is present with none of its choice
+ * cases populated -- unreachable via the CLI, whose ASNUM token is
+ * mandatory in every local-as grammar, but checked for northbound-client
+ * parity, matching bgp_nb_get_remote_as()'s own defensive false return).
+ */
+bool bgp_nb_get_local_as(const struct lyd_node *local_as_dnode, as_t *as, const char **as_str,
+			 char *as_str_buf, size_t as_str_buf_len, bool *no_prepend,
+			 bool *replace_as, bool *dual_as)
+{
+	if (no_prepend)
+		*no_prepend = yang_dnode_get_bool(local_as_dnode, "no-prepend");
+	if (replace_as)
+		*replace_as = yang_dnode_get_bool(local_as_dnode, "replace-as");
+	if (dual_as)
+		*dual_as = yang_dnode_get_bool(local_as_dnode, "dual-as");
+
+	if (yang_dnode_exists(local_as_dnode, "plain")) {
+		*as = yang_dnode_get_uint32(local_as_dnode, "plain");
+		snprintf(as_str_buf, as_str_buf_len, "%u", *as);
+		*as_str = as_str_buf;
+		return true;
+	}
+
+	if (yang_dnode_exists(local_as_dnode, "asdot/high")) {
+		as_t high = yang_dnode_get_uint16(local_as_dnode, "asdot/high");
+		as_t low = yang_dnode_get_uint16(local_as_dnode, "asdot/low");
+
+		*as = (high << 16) | low;
+		snprintf(as_str_buf, as_str_buf_len, "%u.%u", high, low);
+		*as_str = as_str_buf;
+		return true;
+	}
+
+	*as = 0;
+	*as_str = NULL;
+	return false;
+}
+
+/* Legacy neighbor_local_as/neighbor_local_as_no_prepend/
+ * neighbor_local_as_no_prepend_replace_as (bgp_vty.c, retired) all funnel
+ * into peer_local_as_set(), whose only config-time rejection is
+ * BGP_ERR_CANNOT_HAVE_LOCAL_AS_SAME_AS when the requested local-as equals
+ * the instance's own AS (bgpd.c:7576-7577, "if (bgp->as == as) return
+ * BGP_ERR_CANNOT_HAVE_LOCAL_AS_SAME_AS"). Note there is no legacy check
+ * against remote-as: peer_local_as_set() never compares 'as' to
+ * peer->as/change_local_as's own remote-as sibling -- a local-as equal to
+ * the peer's remote-as is accepted and simply makes the session look
+ * iBGP (see the local_as == peer->as tests in peer_sort(), bgpd.c:1199/
+ * 1228/1278). Mirrored here at NB_EV_VALIDATE, reading runtime bgp->as
+ * (the established pattern, e.g. ttl-security-hops' ebgp-multihop
+ * cross-check in bgp_nb_neighbor.c), so a bad local-as is rejected before
+ * anything applies rather than surfacing as a silently-ignored setter
+ * failure at APPLY. dnode is any descendant of the 'local-as' container
+ * (the leaf that fired VALIDATE).
+ */
+int bgp_nb_local_as_validate(const struct lyd_node *dnode, char *errmsg, size_t errmsg_len)
+{
+	const struct lyd_node *local_as_dnode = yang_dnode_get_parent(dnode, "local-as");
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	as_t as;
+	const char *as_str;
+	char as_buf[ASN_STRING_MAX_SIZE];
+
+	if (!bgp)
+		return NB_OK;
+
+	if (!bgp_nb_get_local_as(local_as_dnode, &as, &as_str, as_buf, sizeof(as_buf), NULL, NULL,
+				 NULL))
+		return NB_OK;
+
+	if (bgp->as == as) {
+		snprintf(errmsg, errmsg_len, "Cannot have local-as same as BGP AS number");
+		return NB_ERR_VALIDATION;
+	}
+
+	return NB_OK;
+}
+
+/* Shared APPLY for the neighbor local-as leaves (plain/asdot ASN and the
+ * no-prepend/replace-as/dual-as modifiers): recompute the whole local-as
+ * container and call peer_local_as_set(), the same "reread the container,
+ * not the trigger leaf" discipline as bgp_nb_neighbor_remote_as_apply() --
+ * peer_local_as_set() is itself a no-op when nothing actually changed
+ * (bgpd.c:7589-7592), so it's safe to call from every one of plain/
+ * asdot-create/asdot-high/asdot-low/no-prepend/replace-as/dual-as's
+ * modify path. A peer with no ASN configured is a no-op (see
+ * bgp_nb_get_local_as()'s doc comment).
+ */
+int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode)
+{
+	struct peer *peer = bgp_nb_neighbor_lookup(dnode);
+	const struct lyd_node *local_as_dnode;
+	as_t as;
+	const char *as_str;
+	char as_buf[ASN_STRING_MAX_SIZE];
+	bool no_prepend, replace_as, dual_as;
+	int ret;
+
+	if (!peer)
+		return NB_OK;
+
+	local_as_dnode = yang_dnode_get_parent(dnode, "local-as");
+	if (!bgp_nb_get_local_as(local_as_dnode, &as, &as_str, as_buf, sizeof(as_buf), &no_prepend,
+				 &replace_as, &dual_as))
+		return NB_OK;
+
+	ret = peer_local_as_set(peer, as, no_prepend, replace_as, dual_as, as_str);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_local_as_set() failed",
+			 __func__);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+/* Destroy of local-as/plain or local-as/asdot unconditionally unsets
+ * local-as. Safe even for a notation switch (plain -> asdot or vice
+ * versa) because northbound always processes all destroys in a commit
+ * before any create/modify (lib/northbound.c nb_config_cb_compare(), "to
+ * correctly process the change of a case inside a choice") -- the
+ * destroy's unset is immediately superseded by the new case's create/
+ * modify, the same reasoning already documented for the confederation-
+ * identifier leaves above.
+ */
+int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode)
+{
+	struct peer *peer = bgp_nb_neighbor_lookup(dnode);
+
+	if (!peer)
+		return NB_OK;
+
+	peer_local_as_unset(peer);
+
+	return NB_OK;
+}
+
+/* Peer-group-scope counterparts of the two helpers above: same shared
+ * "reread the container"/"unconditional unset" logic, calling the legacy
+ * setters on group->conf (which already carries PEER_STATUS_GROUP and so
+ * takes the fan-out-to-members branch inside peer_local_as_set()/_unset()
+ * itself), mirroring peer_and_group_lookup_vty() resolving a peer-group
+ * name to group->conf in the retired DEFUNs -- same pattern already used
+ * for ebgp-multihop/ttl-security-hops (bgp_nb_peer_group.c).
+ */
+int bgp_nb_peer_group_local_as_apply(const struct lyd_node *dnode)
+{
+	struct peer_group *group = bgp_nb_peer_group_lookup(dnode);
+	const struct lyd_node *local_as_dnode;
+	as_t as;
+	const char *as_str;
+	char as_buf[ASN_STRING_MAX_SIZE];
+	bool no_prepend, replace_as, dual_as;
+	int ret;
+
+	if (!group)
+		return NB_OK;
+
+	local_as_dnode = yang_dnode_get_parent(dnode, "local-as");
+	if (!bgp_nb_get_local_as(local_as_dnode, &as, &as_str, as_buf, sizeof(as_buf), &no_prepend,
+				 &replace_as, &dual_as))
+		return NB_OK;
+
+	ret = peer_local_as_set(group->conf, as, no_prepend, replace_as, dual_as, as_str);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_local_as_set() failed",
+			 __func__);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_local_as_destroy_apply(const struct lyd_node *dnode)
+{
+	struct peer_group *group = bgp_nb_peer_group_lookup(dnode);
+
+	if (!group)
+		return NB_OK;
+
+	peer_local_as_unset(group->conf);
+
+	return NB_OK;
+}
+
 /* Shared remote-as reader for both peer-group and neighbor (both use the
  * same 'remote-as' container from the shared neighbor-session-parameters
  * grouping). Mirrors bgp_nb_instance_get_asn()'s plain/asdot handling and

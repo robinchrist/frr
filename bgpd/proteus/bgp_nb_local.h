@@ -21,6 +21,9 @@ void bgp_nb_clear_star_soft(struct bgp *bgp, enum bgp_clear_type stype);
 int bgp_nb_default_af_safi_conflict_validate(struct nb_cb_modify_args *args,
 						    const char *sibling_relpath,
 						    bool sibling_absent_default);
+bool bgp_nb_get_local_as(const struct lyd_node *local_as_dnode, as_t *as, const char **as_str,
+			 char *as_str_buf, size_t as_str_buf_len, bool *no_prepend,
+			 bool *replace_as, bool *dual_as);
 bool bgp_nb_get_remote_as(const struct lyd_node *session_dnode, as_t *as,
 				  enum peer_asn_type *as_type, const char **as_str,
 				  char *as_str_buf, size_t as_str_buf_len);
@@ -37,12 +40,17 @@ struct bgp *bgp_nb_instance_lookup(const struct lyd_node *dnode);
 int bgp_nb_instance_replay(const struct lyd_node *instance_dnode);
 void bgp_nb_instance_update_delay_apply(struct bgp *bgp, uint16_t delay,
 					       uint16_t establish_wait);
+int bgp_nb_local_as_validate(const struct lyd_node *dnode, char *errmsg, size_t errmsg_len);
 struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode);
+int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
+int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_validate(const struct lyd_node *dnode,
 						       char *errmsg, size_t errmsg_len);
 struct peer_group *bgp_nb_peer_group_lookup(const struct lyd_node *dnode);
+int bgp_nb_peer_group_local_as_apply(const struct lyd_node *dnode);
+int bgp_nb_peer_group_local_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_remote_as_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_remote_as_delete_apply(const struct lyd_node *dnode);
 void bgp_nb_process_update_delay_apply(uint16_t delay, uint16_t establish_wait);

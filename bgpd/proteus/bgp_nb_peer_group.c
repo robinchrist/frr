@@ -202,17 +202,21 @@ int instance_peer_group_remote_as_type_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c, M4 batch
+ * B9) for the full rationale; peer-group scope calls the same shared
+ * bgp_nb_peer_group_local_as_apply()/_destroy_apply() helpers
+ * (bgp_nb_util.c) on group->conf.
+ */
 int instance_peer_group_local_as_plain_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/plain");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -220,16 +224,8 @@ int instance_peer_group_local_as_plain_modify(struct nb_cb_modify_args *args)
 
 int instance_peer_group_local_as_plain_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/plain");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_local_as_destroy_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -238,13 +234,12 @@ int instance_peer_group_local_as_asdot_create(struct nb_cb_create_args *args)
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/asdot");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -252,16 +247,8 @@ int instance_peer_group_local_as_asdot_create(struct nb_cb_create_args *args)
 
 int instance_peer_group_local_as_asdot_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/asdot");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_local_as_destroy_apply(args->dnode);
 
 	return NB_OK;
 }
@@ -270,13 +257,12 @@ int instance_peer_group_local_as_asdot_high_modify(struct nb_cb_modify_args *arg
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/asdot/high");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -286,13 +272,12 @@ int instance_peer_group_local_as_asdot_low_modify(struct nb_cb_modify_args *args
 {
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/asdot/low");
-		return NB_ERR_VALIDATION;
+		return bgp_nb_local_as_validate(args->dnode, args->errmsg, args->errmsg_len);
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 	}
 
 	return NB_OK;
@@ -300,48 +285,24 @@ int instance_peer_group_local_as_asdot_low_modify(struct nb_cb_modify_args *args
 
 int instance_peer_group_local_as_no_prepend_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/no-prepend");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_local_as_replace_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/replace-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_local_as_dual_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-as/dual-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_local_as_apply(args->dnode);
 
 	return NB_OK;
 }

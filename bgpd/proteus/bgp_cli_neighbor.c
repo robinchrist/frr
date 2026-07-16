@@ -2303,6 +2303,153 @@ DEFPY_YANG(
 }
 
 /*
+ * local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9): shares
+ * bgp_cli_peer_or_group_xpath() like B3/B4/B5/B6/B7's pure subcommands (no
+ * legacy DEFUN retention -- same rationale as that helper's doc comment).
+ * Legacy's three positive DEFUNs (neighbor_local_as/_no_prepend/
+ * _no_prepend_replace_as, bgp_vty.c, retired) collapse into one
+ * nested-optional grammar, the same shape already used for 'shutdown rtt
+ * [(1-65535) [count (1-255)]]' (M4 batch B4): 'replace-as' is only
+ * reachable after 'no-prepend', and 'dual-as' only after 'replace-as',
+ * exactly mirroring which token combinations legacy registered a command
+ * for.
+ */
+static void bgp_cli_enqueue_local_as(struct vty *vty, const char *base_xpath, const char *asnum_str,
+				     bool no_prepend, bool replace_as, bool dual_as)
+{
+	char *xpath_child;
+
+	/*
+	 * Same value-pointer-lifetime discipline as bgp_cli_enqueue_remote_as()
+	 * above: the asdot high/low buffers must outlive this helper's return
+	 * (until the caller's deferred nb_cli_apply_changes()), so they use
+	 * static storage rather than this frame's stack.
+	 */
+	if (strchr(asnum_str, '.')) {
+		static char highbuf[8], lowbuf[8];
+		as_t as = 0, high, low;
+
+		asn_str2asn(asnum_str, &as);
+		high = as >> 16;
+		low = as & 0xffff;
+
+		snprintf(highbuf, sizeof(highbuf), "%u", high);
+		snprintf(lowbuf, sizeof(lowbuf), "%u", low);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/asdot/high", base_xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, highbuf);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/asdot/low", base_xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, lowbuf);
+		XFREE(MTYPE_TMP, xpath_child);
+	} else {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/plain", base_xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, asnum_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	/*
+	 * Legacy's positive DEFUNs always pass explicit 0/1 for all three
+	 * modifiers (bgp_vty.c's neighbor_local_as/_no_prepend/
+	 * _no_prepend_replace_as each hard-code the trailing
+	 * peer_local_as_set() arguments), never leaving a previously
+	 * configured modifier in place -- re-issuing a bare 'neighbor X
+	 * local-as ASNUM' resets no-prepend/replace-as/dual-as back to false.
+	 * Mirrored here by unconditionally enqueueing all three every time,
+	 * matching the Tier A boolean convention used throughout this file
+	 * (e.g. neighbor_oad_cli_cmd) of NB_OP_MODIFY "true"/"false" rather
+	 * than destroy.
+	 */
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/no-prepend", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no_prepend ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/replace-as", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, replace_as ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/dual-as", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, dual_as ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+}
+
+DEFPY_YANG(
+	neighbor_local_as, neighbor_local_as_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-as ASNUM$asnum [no-prepend$no_prepend [replace-as$replace_as [dual-as$dual_as]]]",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Specify a local-as number\n"
+	"AS number expressed in dotted or plain format used as local AS\n"
+	"Do not prepend local-as to updates from ebgp peers\n"
+	"Do not prepend local-as to updates from ibgp peers\n"
+	"Allow peering with a global AS number or local-as number\n")
+{
+	char *xpath;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_cli_enqueue_local_as(vty, xpath, asnum_str, !!no_prepend, !!replace_as, !!dual_as);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_local_as, no_neighbor_local_as_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-as [ASNUM [no-prepend [replace-as] [dual-as]]]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Specify a local-as number\n"
+	"AS number expressed in dotted or plain format used as local AS\n"
+	"Do not prepend local-as to updates from ebgp peers\n"
+	"Do not prepend local-as to updates from ibgp peers\n"
+	"Allow peering with a global AS number or local-as number\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Trailing ASNUM/no-prepend/replace-as/dual-as tokens are accepted
+	 * but ignored, exactly like legacy's no_neighbor_local_as() DEFUN
+	 * (bgp_vty.c, retired): this always fully unsets local-as. */
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/plain", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/asdot", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/no-prepend", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/replace-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-as/dual-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -2511,6 +2658,40 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "disable-connected-check") &&
 	    yang_dnode_get_bool(dnode, "disable-connected-check"))
 		vty_out(vty, " neighbor %s disable-connected-check\n", addr);
+
+	/* local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9):
+	 * reproduces bgp_config_write_peer_global()'s (bgp_vty.c, retired)
+	 * local-as block, gated on this entry's own local-as/plain-or-asdot
+	 * presence -- the same "presence is exactly legacy's ownership
+	 * flag" principle used throughout this function -- rather than
+	 * legacy's peergroup_flag_check(peer, PEER_FLAG_LOCAL_AS) runtime
+	 * check. Renders the canonical plain/asdot notation reconstructed
+	 * from the stored structured value, the same convention already
+	 * used for the instance-level autonomous-system and confederation
+	 * identifier leaves, rather than preserving peer->change_local_as_pretty's
+	 * literal typed string.
+	 */
+	if (yang_dnode_exists(dnode, "local-as/plain") ||
+	    yang_dnode_exists(dnode, "local-as/asdot")) {
+		if (yang_dnode_exists(dnode, "local-as/plain"))
+			vty_out(vty, " neighbor %s local-as %u", addr,
+				yang_dnode_get_uint32(dnode, "local-as/plain"));
+		else
+			vty_out(vty, " neighbor %s local-as %u.%u", addr,
+				yang_dnode_get_uint16(dnode, "local-as/asdot/high"),
+				yang_dnode_get_uint16(dnode, "local-as/asdot/low"));
+
+		if (yang_dnode_exists(dnode, "local-as/no-prepend") &&
+		    yang_dnode_get_bool(dnode, "local-as/no-prepend"))
+			vty_out(vty, " no-prepend");
+		if (yang_dnode_exists(dnode, "local-as/replace-as") &&
+		    yang_dnode_get_bool(dnode, "local-as/replace-as"))
+			vty_out(vty, " replace-as");
+		if (yang_dnode_exists(dnode, "local-as/dual-as") &&
+		    yang_dnode_get_bool(dnode, "local-as/dual-as"))
+			vty_out(vty, " dual-as");
+		vty_out(vty, "\n");
+	}
 
 	/* update-source, ip-transparent (M4 batch B7): reproduces
 	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these
@@ -2815,6 +2996,10 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_update_source_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_update_source_cli_cmd);
 	install_element(BGP_NODE, &neighbor_ip_transparent_cli_cmd);
+
+	/* local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9). */
+	install_element(BGP_NODE, &neighbor_local_as_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_local_as_cli_cmd);
 
 	/* capabilities container (M4 batch B8). */
 	install_element(BGP_NODE, &neighbor_capability_dynamic_cli_cmd);

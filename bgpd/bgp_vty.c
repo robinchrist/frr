@@ -3034,118 +3034,12 @@ DEFUN (no_neighbor_peer_group,
 	return CMD_SUCCESS;
 }
 
-DEFUN (neighbor_local_as,
-       neighbor_local_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Specify a local-as number\n"
-       "AS number expressed in dotted or plain format used as local AS\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	struct peer *peer;
-	int ret;
-	as_t as = 0;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!asn_str2asn(argv[idx_number]->arg, &as)) {
-		vty_out(vty, "%% Invalid neighbor local-as value: %s\n",
-			argv[idx_number]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = peer_local_as_set(peer, as, 0, 0, 0, argv[idx_number]->arg);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (neighbor_local_as_no_prepend,
-       neighbor_local_as_no_prepend_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM no-prepend",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Specify a local-as number\n"
-       "AS number expressed in dotted or plain format used as local AS\n"
-       "Do not prepend local-as to updates from ebgp peers\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	struct peer *peer;
-	int ret;
-	as_t as = 0;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!asn_str2asn(argv[idx_number]->arg, &as)) {
-		vty_out(vty, "%% Invalid neighbor local-as value: %s\n",
-			argv[idx_number]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = peer_local_as_set(peer, as, 1, 0, 0, argv[idx_number]->arg);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFPY (neighbor_local_as_no_prepend_replace_as,
-       neighbor_local_as_no_prepend_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> local-as ASNUM no-prepend replace-as [dual-as$dual_as]",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Specify a local-as number\n"
-       "AS number expressed in dotted or plain format used as local AS\n"
-       "Do not prepend local-as to updates from ebgp peers\n"
-       "Do not prepend local-as to updates from ibgp peers\n"
-       "Allow peering with a global AS number or local-as number\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	struct peer *peer;
-	int ret;
-	as_t as = 0;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!asn_str2asn(argv[idx_number]->arg, &as)) {
-		vty_out(vty, "%% Invalid neighbor local-as value: %s\n",
-			argv[idx_number]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = peer_local_as_set(peer, as, 1, 1, dual_as, argv[idx_number]->arg);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_neighbor_local_as,
-       no_neighbor_local_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> local-as [ASNUM [no-prepend [replace-as] [dual-as]]]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Specify a local-as number\n"
-       "AS number expressed in dotted or plain format used as local AS\n"
-       "Do not prepend local-as to updates from ebgp peers\n"
-       "Do not prepend local-as to updates from ibgp peers\n"
-       "Allow peering with a global AS number or local-as number\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_local_as_unset(peer);
-	return bgp_vty_return(vty, ret);
-}
-
+/* neighbor local-as (+ no-prepend, + replace-as, + dual-as): converted to
+ * northbound, see 'neighbor_local_as_cli_cmd'/'no_neighbor_local_as_cli_cmd'
+ * in bgp_cli_neighbor.c (M4 batch B9). Legacy DEFUN retention (like B1's
+ * lifecycle commands) is not needed here -- these are pure subcommands on
+ * an already-existing peer/peer-group, not creation commands.
+ */
 
 /* neighbor solo, neighbor password: converted to northbound, see
  * 'neighbor_solo_cli_cmd'/'neighbor_password_cli_cmd' in bgp_cli.c (M4
@@ -17092,20 +16986,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * (formerly g_peer here) is no longer needed now that
 	 * ttl-security-hops' emission gate is leaf-presence-based rather
 	 * than a peer/group gtsm_hops value comparison (see that function's
-	 * comment for why). */
-
-	/* local-as */
-	if (peergroup_flag_check(peer, PEER_FLAG_LOCAL_AS)) {
-		vty_out(vty, " neighbor %s local-as %s", addr,
-			peer->change_local_as_pretty);
-		if (peergroup_flag_check(peer, PEER_FLAG_LOCAL_AS_NO_PREPEND))
-			vty_out(vty, " no-prepend");
-		if (peergroup_flag_check(peer, PEER_FLAG_LOCAL_AS_REPLACE_AS))
-			vty_out(vty, " replace-as");
-		if (peergroup_flag_check(peer, PEER_FLAG_DUAL_AS))
-			vty_out(vty, " dual-as");
-		vty_out(vty, "\n");
-	}
+	 * comment for why). local-as (+ no-prepend, + replace-as, +
+	 * dual-as): converted, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B9). */
 
 	/* shutdown (+ message, + rtt): converted to northbound, see
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
@@ -18640,12 +18523,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_neighbor_word_cmd);
 	install_element(BGP_NODE, &no_neighbor_interface_peer_group_remote_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_peer_group_cmd);
-
-	/* "neighbor local-as" commands. */
-	install_element(BGP_NODE, &neighbor_local_as_cmd);
-	install_element(BGP_NODE, &neighbor_local_as_no_prepend_cmd);
-	install_element(BGP_NODE, &neighbor_local_as_no_prepend_replace_as_cmd);
-	install_element(BGP_NODE, &no_neighbor_local_as_cmd);
 
 	/* "neighbor activate" commands. */
 	install_element(BGP_NODE, &neighbor_activate_hidden_cmd);
