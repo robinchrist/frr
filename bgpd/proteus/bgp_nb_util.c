@@ -13,9 +13,11 @@
 #include "lib/log.h"
 #include "lib/yang_wrappers.h"
 #include "lib/frrevent.h"
+#include "lib/bfd.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
+#include "bgpd/bgp_bfd.h"
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_nb.h"
 #include "bgpd/bgp_io.h"
@@ -504,6 +506,82 @@ struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode)
 		return NULL;
 
 	return peer_lookup(bgp, &su);
+}
+
+/* Shared "reread the whole bfd container and reconfigure" apply for both
+ * neighbor and peer-group (both share the 'bfd' container from the
+ * neighbor-session-parameters grouping, M4 batch B10). The datastore is
+ * authoritative, so every one of the six bfd_config-data leaves (enabled,
+ * detect-multiplier, min-rx, min-tx, check-control-plane-failure, profile)
+ * routes its modify/destroy here and recomputes the full session config,
+ * the same "reread the container, not the trigger leaf" discipline as
+ * bgp_nb_{neighbor,peer_group}_local_as_apply() -- which makes the callback
+ * order within a commit and the presence-vs-default state of any sibling
+ * leaf irrelevant. Mirrors legacy neighbor_bfd/neighbor_bfd_param/
+ * neighbor_bfd_check_controlplane_failure/neighbor_bfd_profile plus their
+ * 'no' forms (bgpd/bgp_bfd.c, retired): each of those first calls
+ * bgp_{peer,group}_configure_bfd() then sets the relevant bfd_config
+ * field(s) and calls bgp_peer_config_apply(). 'conf' is the real peer for
+ * neighbor scope and group->conf for peer-group scope (the latter carries
+ * PEER_STATUS_GROUP, so bgp_group_configure_bfd()/bgp_peer_config_apply()
+ * fan out to members internally, exactly as peer_and_group_lookup_vty()
+ * resolved a group name to group->conf in the retired DEFUNs).
+ *
+ * A datastore 'enabled' of false maps to bgp_peer_remove_bfd_config(),
+ * which is legacy 'no neighbor X bfd's bgp_group_remove_bfd()/
+ * bgp_peer_remove_bfd() dispatch -- it frees (or, for a group member,
+ * resets and re-inherits) the session, replicating the teardown side
+ * effect. The strict flag (PEER_FLAG_BFD_STRICT) and its hold-time live
+ * outside bfd_config's data path and are handled by the dedicated
+ * strict/strict-hold-time callbacks, not here.
+ */
+static int bgp_nb_bfd_apply(struct peer *conf, const struct lyd_node *bfd_dnode, bool is_group)
+{
+	if (!yang_dnode_get_bool(bfd_dnode, "enabled")) {
+		bgp_peer_remove_bfd_config(conf);
+		return NB_OK;
+	}
+
+	if (is_group)
+		bgp_group_configure_bfd(conf);
+	else
+		bgp_peer_configure_bfd(conf, true);
+
+	conf->bfd_config->detection_multiplier = yang_dnode_get_uint8(bfd_dnode,
+								      "detect-multiplier");
+	conf->bfd_config->min_rx = yang_dnode_get_uint32(bfd_dnode, "min-rx");
+	conf->bfd_config->min_tx = yang_dnode_get_uint32(bfd_dnode, "min-tx");
+	conf->bfd_config->cbit = yang_dnode_get_bool(bfd_dnode, "check-control-plane-failure");
+
+	if (yang_dnode_exists(bfd_dnode, "profile"))
+		strlcpy(conf->bfd_config->profile, yang_dnode_get_string(bfd_dnode, "profile"),
+			sizeof(conf->bfd_config->profile));
+	else
+		conf->bfd_config->profile[0] = 0;
+
+	bgp_peer_config_apply(conf, conf->group);
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode)
+{
+	struct peer *peer = bgp_nb_neighbor_lookup(dnode);
+
+	if (!peer)
+		return NB_OK;
+
+	return bgp_nb_bfd_apply(peer, yang_dnode_get_parent(dnode, "bfd"), false);
+}
+
+int bgp_nb_peer_group_bfd_apply(const struct lyd_node *dnode)
+{
+	struct peer_group *group = bgp_nb_peer_group_lookup(dnode);
+
+	if (!group)
+		return NB_OK;
+
+	return bgp_nb_bfd_apply(group->conf, yang_dnode_get_parent(dnode, "bfd"), true);
 }
 
 /* Shared local-as reader for both peer-group and neighbor (both use the

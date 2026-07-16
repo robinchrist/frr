@@ -28,7 +28,10 @@
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
+#include "bgpd/bgp_bfd.h"
 #include "bgpd/proteus/bgp_nb_local.h"
+
+#include "lib/bfd.h"
 
 
 int instance_peer_group_create(struct nb_cb_create_args *args)
@@ -339,66 +342,120 @@ int instance_peer_group_description_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* See the neighbor-scope bfd callbacks' comments (bgp_nb_neighbor.c, M4
+ * batch B10) for the full rationale; peer-group scope calls the same shared
+ * bgp_nb_peer_group_bfd_apply() (bgp_nb_util.c) on group->conf for the six
+ * bfd_config-data leaves, and the group configure/apply helpers on
+ * group->conf for strict-hold-time (both fan out to members internally).
+ */
 int instance_peer_group_bfd_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/bfd/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_detect_multiplier_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_min_rx_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_min_tx_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_bfd_check_control_plane_failure_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/bfd/check-control-plane-failure");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_bfd_profile_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/bfd/profile");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_peer_group_bfd_profile_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/bfd/profile");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_peer_group_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_strict_modify(struct nb_cb_modify_args *args)
+{
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_BFD_STRICT);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_BFD_STRICT);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_strict_hold_time_modify(struct nb_cb_modify_args *args)
+{
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp_group_configure_bfd(group->conf);
+	event_cancel(&group->conf->bfd_config->t_hold_timer);
+	group->conf->bfd_config->hold_time = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_peer_config_apply(group->conf, group->conf->group);
+
+	return NB_OK;
+}
+
+int instance_peer_group_bfd_strict_hold_time_destroy(struct nb_cb_destroy_args *args)
+{
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group || !group->conf->bfd_config)
+		return NB_OK;
+
+	event_cancel(&group->conf->bfd_config->t_hold_timer);
+	group->conf->bfd_config->hold_time = BFD_DEF_STRICT_HOLD_TIME;
+	bgp_peer_config_apply(group->conf, group->conf->group);
 
 	return NB_OK;
 }

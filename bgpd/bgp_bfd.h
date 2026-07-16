@@ -14,8 +14,6 @@
 
 extern void bgp_bfd_init(struct event_loop *tm);
 
-extern void bgp_bfd_peer_config_write(struct vty *vty, struct peer *peer, const char *addr);
-
 /**
  * Show BFD information helper.
  *
@@ -48,6 +46,12 @@ extern void bgp_peer_config_apply(struct peer *p, struct peer_group *pg);
  * immediately applied.
  */
 extern void bgp_peer_configure_bfd(struct peer *p, bool manual);
+
+/**
+ * Allocates and configures BFD for a peer group and all its members. Must
+ * only be called on a group (asserts PEER_STATUS_GROUP).
+ */
+extern void bgp_group_configure_bfd(struct peer *p);
 
 /**
  * Removes BFD configuration from either peer or peer group.

@@ -16994,9 +16994,10 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
 	 */
 
-	/* bfd */
-	if (peer->bfd_config)
-		bgp_bfd_peer_config_write(vty, peer, addr);
+	/* bfd (+ inline timers, check-control-plane-failure, profile, strict,
+	 * strict hold-time): converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B10).
+	 */
 
 	/* ebgp-multihop: converted to northbound, see
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B6).

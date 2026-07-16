@@ -28,7 +28,10 @@
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
+#include "bgpd/bgp_bfd.h"
 #include "bgpd/proteus/bgp_nb_local.h"
+
+#include "lib/bfd.h"
 
 
 int instance_neighbor_create(struct nb_cb_create_args *args)
@@ -527,66 +530,138 @@ int instance_neighbor_description_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/*
+ * bfd container (M4 batch B10): the six bfd_config-data leaves (enabled,
+ * detect-multiplier, min-rx, min-tx, check-control-plane-failure, profile)
+ * all route their modify/destroy through the shared
+ * bgp_nb_neighbor_bfd_apply() (bgp_nb_util.c), which rereads the whole
+ * container and reconfigures the BFD session -- see that helper's comment
+ * for the full rationale. strict/strict-hold-time (below) are handled
+ * separately because they drive PEER_FLAG_BFD_STRICT / bfd_config->hold_time
+ * rather than the session's timer/profile data path.
+ */
 int instance_neighbor_bfd_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/bfd/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_neighbor_bfd_detect_multiplier_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_neighbor_bfd_min_rx_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+int instance_neighbor_bfd_min_tx_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_bfd_check_control_plane_failure_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/bfd/check-control-plane-failure");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_bfd_profile_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/bfd/profile");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
 
 	return NB_OK;
 }
 
 int instance_neighbor_bfd_profile_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/bfd/profile");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		return bgp_nb_neighbor_bfd_apply(args->dnode);
+
+	return NB_OK;
+}
+
+/* 'neighbor X bfd strict' (bgpd/bgp_bfd.c neighbor_bfd_strict, retired):
+ * a bare PEER_FLAG_BFD_STRICT set/unset, no bfd_config touch -- matching
+ * legacy exactly (the flag lives on peer->flags, independent of the BFD
+ * session's data). The strict-hold-time callback owns bfd_config->hold_time
+ * only; it deliberately does not also toggle the flag, so the flag has a
+ * single owner and no strict-vs-strict-hold-time apply-order dependency
+ * within a commit.
+ */
+int instance_neighbor_bfd_strict_modify(struct nb_cb_modify_args *args)
+{
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_BFD_STRICT);
+	else
+		peer_flag_unset(peer, PEER_FLAG_BFD_STRICT);
+
+	return NB_OK;
+}
+
+/* 'neighbor X bfd strict hold-time N' (bgpd/bgp_bfd.c
+ * neighbor_bfd_strict_hold_time, retired): configures bfd (so bfd_config
+ * exists regardless of the enabled leaf's own apply order), cancels any
+ * pending hold timer, and stores hold_time. The strict flag itself is set
+ * by the co-enqueued strict leaf (see the strict callback's comment).
+ */
+int instance_neighbor_bfd_strict_hold_time_modify(struct nb_cb_modify_args *args)
+{
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	bgp_peer_configure_bfd(peer, true);
+	event_cancel(&peer->bfd_config->t_hold_timer);
+	peer->bfd_config->hold_time = yang_dnode_get_uint32(args->dnode, NULL);
+	bgp_peer_config_apply(peer, peer->group);
+
+	return NB_OK;
+}
+
+int instance_neighbor_bfd_strict_hold_time_destroy(struct nb_cb_destroy_args *args)
+{
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer || !peer->bfd_config)
+		return NB_OK;
+
+	event_cancel(&peer->bfd_config->t_hold_timer);
+	peer->bfd_config->hold_time = BFD_DEF_STRICT_HOLD_TIME;
+	bgp_peer_config_apply(peer, peer->group);
 
 	return NB_OK;
 }

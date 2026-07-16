@@ -14,6 +14,7 @@
 #include "vty.h"
 #include "vrf.h"
 #include "asn.h"
+#include "bfd.h"
 
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
@@ -2450,6 +2451,345 @@ DEFPY_YANG(
 }
 
 /*
+ * bfd container (M4 batch B10): shares bgp_cli_peer_or_group_xpath() like
+ * the other pure subcommands in this section. Legacy's BFD commands lived
+ * in bgpd/bgp_bfd.c (neighbor_bfd, neighbor_bfd_param, neighbor_bfd_strict,
+ * neighbor_bfd_strict_hold_time, neighbor_bfd_check_controlplane_failure,
+ * no_neighbor_bfd, neighbor_bfd_profile/no_neighbor_bfd_profile), all
+ * retired. Their build split (HAVE_BFDD) is reproduced here: the inline
+ * detect-multiplier/min-rx/min-tx form of 'neighbor X bfd' is a hidden
+ * command with a separate BFD daemon present and a visible one without it,
+ * and the 'bfd profile' commands exist only with a BFD daemon present --
+ * matching bgp_bfd_init()'s conditional install_element()s exactly.
+ *
+ * 'neighbor X bfd', its inline-timer variant, 'bfd check-control-plane-
+ * failure', and 'bfd strict hold-time N' each enable BFD (legacy's
+ * bgp_{peer,group}_configure_bfd() marking bfd_config->manual), so they
+ * co-enqueue bfd/enabled=true; the emission gate for the enable line is
+ * exactly that leaf. 'bfd strict' alone does not (legacy's
+ * neighbor_bfd_strict is a bare flag toggle) and only sets bfd/strict.
+ */
+static void bgp_cli_bfd_enqueue_disable(struct vty *vty, const char *base_xpath)
+{
+	char *xpath_child;
+
+	/* 'no neighbor X bfd' frees the whole bfd_config in legacy
+	 * (bgp_peer_remove_bfd()/bgp_group_remove_bfd(), resetting the timers,
+	 * control-plane-failure bit, profile and strict hold-time back to
+	 * their defaults) while leaving the PEER_FLAG_BFD_STRICT flag itself
+	 * untouched -- reproduced here by resetting every bfd_config-data
+	 * leaf to its default and leaving bfd/strict alone.
+	 */
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/detect-multiplier", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "3");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/min-rx", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "300");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/min-tx", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "300");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/check-control-plane-failure", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/profile", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict-hold-time", base_xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+}
+
+DEFPY_YANG(
+	neighbor_bfd, neighbor_bfd_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enables BFD support\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Legacy hid this inline-timer form in builds with a separate BFD daemon
+ * (neighbor_bfd_param's DEFUN_HIDDEN vs DEFUN split, bgpd/bgp_bfd.c). The
+ * two full macro invocations below reproduce that, sharing one body -- the
+ * CPP branch sits between complete DEFPY_YANG[_HIDDEN](...) headers so it
+ * never splits a macro argument list (which clippy cannot parse).
+ */
+#if HAVE_BFDD > 0
+DEFPY_YANG_HIDDEN(
+	neighbor_bfd_param, neighbor_bfd_param_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd (2-255)$multiplier (50-60000)$rx (50-60000)$tx",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enables BFD support\n"
+	"Detect Multiplier\n"
+	"Required min receive interval\n"
+	"Desired min transmit interval\n")
+#else
+DEFPY_YANG(
+	neighbor_bfd_param, neighbor_bfd_param_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd (2-255)$multiplier (50-60000)$rx (50-60000)$tx",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enables BFD support\n"
+	"Detect Multiplier\n"
+	"Required min receive interval\n"
+	"Desired min transmit interval\n")
+#endif
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/detect-multiplier", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, multiplier_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/min-rx", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, rx_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/min-tx", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, tx_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+#if HAVE_BFDD > 0
+DEFPY_YANG(
+	no_neighbor_bfd, no_neighbor_bfd_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disables BFD support\n")
+#else
+DEFPY_YANG(
+	no_neighbor_bfd, no_neighbor_bfd_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd [(2-255) (50-60000) (50-60000)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disables BFD support\n"
+	"Detect Multiplier\n"
+	"Required min receive interval\n"
+	"Desired min transmit interval\n")
+#endif
+{
+	char *xpath;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_cli_bfd_enqueue_disable(vty, xpath);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_bfd_check_controlplane_failure, neighbor_bfd_check_controlplane_failure_cli_cmd,
+	"[no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd check-control-plane-failure",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BFD support\n"
+	"Link dataplane status with BGP controlplane\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (!no) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/check-control-plane-failure", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_bfd_strict, neighbor_bfd_strict_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd strict",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BFD support\n"
+	"Strict mode\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_bfd_strict_hold_time, neighbor_bfd_strict_hold_time_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd strict hold-time ![(1-4294967295)$hold_time]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BFD support\n"
+	"Strict mode\n"
+	"BFD Hold time in seconds\n"
+	"Seconds to wait before declaring BFD session down\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (no) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict-hold-time", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	} else {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/strict-hold-time", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, hold_time_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+#if HAVE_BFDD > 0
+DEFPY_YANG(
+	neighbor_bfd_profile, neighbor_bfd_profile_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd profile BFDPROF$profile",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BFD integration\n"
+	BFD_PROFILE_STR
+	BFD_PROFILE_NAME_STR)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/enabled", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/profile", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, profile);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_bfd_profile, no_neighbor_bfd_profile_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer bfd profile [BFDPROF]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BFD integration\n"
+	BFD_PROFILE_STR
+	BFD_PROFILE_NAME_STR)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/bfd/profile", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+#endif /* HAVE_BFDD */
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -2606,6 +2946,52 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 			yang_dnode_exists(dnode, "shutdown/rtt/count")
 				? yang_dnode_get_uint8(dnode, "shutdown/rtt/count")
 				: 1);
+
+	/* bfd (+ inline timers, check-control-plane-failure, profile, strict,
+	 * strict hold-time) (M4 batch B10): reproduces bgp_bfd_peer_config_write()
+	 * (bgpd/bgp_bfd.c, retired). The enable line is gated on this entry's
+	 * own bfd/enabled leaf -- the northbound mirror of legacy's
+	 * '(!group && bfd_config->manual) || group' gate (bfd_config->manual
+	 * being the explicit-configured marker, set true by every enabling
+	 * command; a peer-group's own conf always renders it). The bare form
+	 * carries the inline detect-multiplier/min-rx/min-tx triple only in
+	 * builds without a separate BFD daemon -- the one HAVE_BFDD split in
+	 * this function, matching the legacy config-writer's own #if exactly
+	 * (the build-conditional belongs here in the C writer, never in the
+	 * YANG, which models every leaf unconditionally). profile/check-
+	 * control-plane-failure/strict lines are each gated on their own leaf,
+	 * as in legacy; strict renders bare unless its hold-time diverges from
+	 * the default, exactly like legacy's hold_time != BFD_DEF_STRICT_HOLD_TIME
+	 * branch.
+	 */
+	if (yang_dnode_get_bool(dnode, "bfd/enabled")) {
+#if HAVE_BFDD > 0
+		vty_out(vty, " neighbor %s bfd\n", addr);
+#else
+		vty_out(vty, " neighbor %s bfd %u %u %u\n", addr,
+			yang_dnode_get_uint8(dnode, "bfd/detect-multiplier"),
+			yang_dnode_get_uint32(dnode, "bfd/min-rx"),
+			yang_dnode_get_uint32(dnode, "bfd/min-tx"));
+#endif /* HAVE_BFDD */
+	}
+
+	if (yang_dnode_exists(dnode, "bfd/profile"))
+		vty_out(vty, " neighbor %s bfd profile %s\n", addr,
+			yang_dnode_get_string(dnode, "bfd/profile"));
+
+	if (yang_dnode_get_bool(dnode, "bfd/check-control-plane-failure"))
+		vty_out(vty, " neighbor %s bfd check-control-plane-failure\n", addr);
+
+	if (yang_dnode_get_bool(dnode, "bfd/strict")) {
+		uint32_t hold_time = yang_dnode_exists(dnode, "bfd/strict-hold-time")
+					     ? yang_dnode_get_uint32(dnode, "bfd/strict-hold-time")
+					     : BFD_DEF_STRICT_HOLD_TIME;
+
+		if (hold_time != BFD_DEF_STRICT_HOLD_TIME)
+			vty_out(vty, " neighbor %s bfd strict hold-time %u\n", addr, hold_time);
+		else
+			vty_out(vty, " neighbor %s bfd strict\n", addr);
+	}
 
 	/* ebgp-multihop (M4 batch B6): reproduces bgp_config_write_peer_global()'s
 	 * (bgp_vty.c, retired) ebgp-multihop block, gated purely on this entry's
@@ -3000,6 +3386,18 @@ void bgp_cli_neighbor_init(void)
 	/* local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9). */
 	install_element(BGP_NODE, &neighbor_local_as_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_local_as_cli_cmd);
+
+	/* bfd container (M4 batch B10). */
+	install_element(BGP_NODE, &neighbor_bfd_cli_cmd);
+	install_element(BGP_NODE, &neighbor_bfd_param_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_bfd_cli_cmd);
+	install_element(BGP_NODE, &neighbor_bfd_check_controlplane_failure_cli_cmd);
+	install_element(BGP_NODE, &neighbor_bfd_strict_cli_cmd);
+	install_element(BGP_NODE, &neighbor_bfd_strict_hold_time_cli_cmd);
+#if HAVE_BFDD > 0
+	install_element(BGP_NODE, &neighbor_bfd_profile_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_bfd_profile_cli_cmd);
+#endif /* HAVE_BFDD */
 
 	/* capabilities container (M4 batch B8). */
 	install_element(BGP_NODE, &neighbor_capability_dynamic_cli_cmd);

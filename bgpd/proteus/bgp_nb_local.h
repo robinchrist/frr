@@ -42,6 +42,7 @@ void bgp_nb_instance_update_delay_apply(struct bgp *bgp, uint16_t delay,
 					       uint16_t establish_wait);
 int bgp_nb_local_as_validate(const struct lyd_node *dnode, char *errmsg, size_t errmsg_len);
 struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode);
+int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_apply(const struct lyd_node *dnode);
@@ -49,6 +50,7 @@ int bgp_nb_neighbor_remote_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_validate(const struct lyd_node *dnode,
 						       char *errmsg, size_t errmsg_len);
 struct peer_group *bgp_nb_peer_group_lookup(const struct lyd_node *dnode);
+int bgp_nb_peer_group_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_local_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_remote_as_apply(const struct lyd_node *dnode);

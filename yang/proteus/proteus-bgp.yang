@@ -248,13 +248,39 @@ module proteus-bgp {
 
     container bfd {
       description
-        "BFD liveness tracking for the session
-         (bgp_bfd_peer_config_write in bgpd/bgp_bfd.c).";
+        "BFD liveness tracking for the session.";
       leaf enabled {
         type boolean;
         default "false";
         description
           "'neighbor X bfd'.";
+      }
+      leaf detect-multiplier {
+        type uint8 {
+          range "2..255";
+        }
+        default "3";
+        description
+          "'neighbor X bfd (2-255) (50-60000) (50-60000)': detection
+           multiplier for the session.";
+      }
+      leaf min-rx {
+        type uint32 {
+          range "50..60000";
+        }
+        default "300";
+        description
+          "'neighbor X bfd (2-255) (50-60000) (50-60000)': required
+           minimum receive interval, in milliseconds.";
+      }
+      leaf min-tx {
+        type uint32 {
+          range "50..60000";
+        }
+        default "300";
+        description
+          "'neighbor X bfd (2-255) (50-60000) (50-60000)': desired
+           minimum transmit interval, in milliseconds.";
       }
       leaf check-control-plane-failure {
         type boolean;
@@ -265,11 +291,38 @@ module proteus-bgp {
            the session.";
       }
       leaf profile {
-        type leafref {
-          path "/bfd:profile/bfd:name";
+        /* LIMITATION: this is intentionally a plain string and NOT a
+           leafref to /bfd:profile/bfd:name. BFD profiles are configured
+           in the separate BFD subsystem and are not present in this
+           datastore, so a leafref's require-instance check can never be
+           satisfied here and would reject every valid profile name. The
+           trade-off is that referential integrity is lost: a name that
+           does not match any configured BFD profile is accepted at
+           validation time (matching the legacy behaviour, which stored
+           the name verbatim without checking it exists). */
+        type string;
+        description
+          "'neighbor X bfd profile BFDPROF': name of the BFD profile to
+           apply to the session. The profile is defined separately in
+           the BFD configuration; its existence is NOT validated here
+           (see the LIMITATION comment on this leaf), so a name with no
+           matching BFD profile is accepted.";
+      }
+      leaf strict {
+        type boolean;
+        default "false";
+        description
+          "'neighbor X bfd strict': keep the session from coming up
+           until the BFD session is up.";
+      }
+      leaf strict-hold-time {
+        type uint32 {
+          range "1..4294967295";
         }
         description
-          "'neighbor X bfd profile BFDPROF'.";
+          "'neighbor X bfd strict hold-time (1-4294967295)': seconds to
+           wait for the BFD session to come up, in strict mode, before
+           declaring it down.";
       }
     }
 

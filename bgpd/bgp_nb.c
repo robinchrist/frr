@@ -855,6 +855,24 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/peer-group/bfd/detect-multiplier",
+			.cbs = {
+				.modify = instance_peer_group_bfd_detect_multiplier_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/bfd/min-rx",
+			.cbs = {
+				.modify = instance_peer_group_bfd_min_rx_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/bfd/min-tx",
+			.cbs = {
+				.modify = instance_peer_group_bfd_min_tx_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/peer-group/bfd/check-control-plane-failure",
 			.cbs = {
 				.modify = instance_peer_group_bfd_check_control_plane_failure_modify,
@@ -865,6 +883,19 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_peer_group_bfd_profile_modify,
 				.destroy = instance_peer_group_bfd_profile_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/bfd/strict",
+			.cbs = {
+				.modify = instance_peer_group_bfd_strict_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/bfd/strict-hold-time",
+			.cbs = {
+				.modify = instance_peer_group_bfd_strict_hold_time_modify,
+				.destroy = instance_peer_group_bfd_strict_hold_time_destroy,
 			}
 		},
 		{
@@ -4962,6 +4993,24 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/neighbor/bfd/detect-multiplier",
+			.cbs = {
+				.modify = instance_neighbor_bfd_detect_multiplier_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/bfd/min-rx",
+			.cbs = {
+				.modify = instance_neighbor_bfd_min_rx_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/bfd/min-tx",
+			.cbs = {
+				.modify = instance_neighbor_bfd_min_tx_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/neighbor/bfd/check-control-plane-failure",
 			.cbs = {
 				.modify = instance_neighbor_bfd_check_control_plane_failure_modify,
@@ -4972,6 +5021,19 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_neighbor_bfd_profile_modify,
 				.destroy = instance_neighbor_bfd_profile_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/bfd/strict",
+			.cbs = {
+				.modify = instance_neighbor_bfd_strict_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/bfd/strict-hold-time",
+			.cbs = {
+				.modify = instance_neighbor_bfd_strict_hold_time_modify,
+				.destroy = instance_neighbor_bfd_strict_hold_time_destroy,
 			}
 		},
 		{
