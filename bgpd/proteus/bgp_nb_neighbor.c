@@ -178,7 +178,15 @@ int instance_neighbor_v6only_modify(struct nb_cb_modify_args *args)
  *    returns 0 early for this case).
  *  - MODIFY when unbound (including the neighbor's first-ever commit,
  *    when instance_neighbor_create() deliberately did not create an
- *    addressed peer) binds, creating the peer if necessary.
+ *    addressed peer) binds, creating the peer if necessary. A first-time
+ *    bind that would mix ebgp-multihop and ttl-security across the peer
+ *    and its target group (M4 batch B6: both are northbound-modeled now,
+ *    reachable independently before any bind) is rejected here too,
+ *    mirroring peer_group_bind()'s (bgpd.c) own guard -- NB_EV_APPLY
+ *    cannot fail a commit once the datastore write has already gone
+ *    through (it can only flog_err/NB_ERR_RESOURCE after the fact), so the
+ *    APPLY-side peer_group_bind() call below returning that same error
+ *    code is a defensive backstop, not the real gate.
  *  - DESTROY of this leaf alone (not the whole neighbor entry) always
  *    rejects at VALIDATE: bgpd has no unbind. This cannot block 'no
  *    neighbor X peer-group PGNAME' (which destroys the whole neighbor
@@ -199,14 +207,34 @@ int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args)
 	switch (args->event) {
 	case NB_EV_VALIDATE:
 		peer = bgp_nb_neighbor_lookup(args->dnode);
-		if (!peer || !peer_group_active(peer))
+		if (!peer)
 			break;
 
 		name = yang_dnode_get_string(args->dnode, NULL);
-		if (strcmp(peer->group->name, name) != 0) {
+
+		if (peer_group_active(peer)) {
+			if (strcmp(peer->group->name, name) != 0) {
+				snprintf(args->errmsg, args->errmsg_len,
+					 "Cannot change peer-group from %s to %s; deconfigure first",
+					 peer->group->name, name);
+				return NB_ERR_VALIDATION;
+			}
+			break;
+		}
+
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+
+		group = peer_group_lookup(bgp, name);
+		if (!group)
+			break; /* leafref integrity already enforced */
+
+		if ((CHECK_FLAG(peer->flags, PEER_FLAG_EBGP_MULTIHOP) &&
+		     group->conf->gtsm_hops != BGP_GTSM_HOPS_DISABLED) ||
+		    (peer->gtsm_hops != BGP_GTSM_HOPS_DISABLED && group->conf->cfg_ttl != 0)) {
 			snprintf(args->errmsg, args->errmsg_len,
-				 "Cannot change peer-group from %s to %s; deconfigure first",
-				 peer->group->name, name);
+				 "ebgp-multihop and ttl-security cannot be configured together");
 			return NB_ERR_VALIDATION;
 		}
 		break;
@@ -816,16 +844,61 @@ int instance_neighbor_passive_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X ebgp-multihop [(1-255)]' (M4 batch B6): routes straight
+ * through peer_ebgp_multihop_set(peer, ttl, true) -- record_cfg=true, same
+ * as peer_ebgp_multihop_set_vty() (bgp_vty.c, retired), which just records
+ * cfg_ttl and lets peer_cfg_ttl_set() (bgpd.c) do the actual propagation/
+ * session-reset work. peer_ebgp_multihop_set_vty() additionally rejected
+ * a directly connected (conf_if) peer up front with
+ * BGP_ERR_INVALID_FOR_DIRECT_PEER and pre-checked peer_gtsm_configured()
+ * to reject the mutual exclusion with ttl-security-hops before ever
+ * calling the setter (peer_ebgp_multihop_set() itself skips that check on
+ * its record_cfg=true/bare-form paths, so the vty-layer guard is the only
+ * thing that actually enforces it for this direction) -- both replicated
+ * here at NB_EV_VALIDATE so a rejected 'ebgp-multihop' never partially
+ * applies. The YANG 'must "not(../ebgp-multihop)"' on ttl-security-hops
+ * only catches same-entry co-configuration in one edit; it does not see a
+ * peer-group's ttl-security-hops conflicting with a member's own
+ * ebgp-multihop or vice versa, which is exactly what peer_gtsm_configured()
+ * (group/member-aware) catches.
+ */
 int instance_neighbor_ebgp_multihop_modify(struct nb_cb_modify_args *args)
 {
+	struct peer *peer;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/ebgp-multihop");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		if (peer->conf_if) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Operation not allowed on a directly connected neighbor");
+			return NB_ERR_VALIDATION;
+		}
+
+		if (peer_gtsm_configured(peer)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "ebgp-multihop and ttl-security cannot be configured together");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		ret = peer_ebgp_multihop_set(peer, yang_dnode_get_uint8(args->dnode, NULL), true);
+		if (ret != BGP_SUCCESS) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_ebgp_multihop_set() failed", __func__);
+			return NB_ERR_RESOURCE;
+		}
 		break;
 	}
 
@@ -834,15 +907,21 @@ int instance_neighbor_ebgp_multihop_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_ebgp_multihop_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/ebgp-multihop");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer *peer;
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	ret = peer_ebgp_multihop_unset(peer, true);
+	if (ret != BGP_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_ebgp_multihop_unset() failed",
+			 __func__);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
@@ -952,16 +1031,66 @@ int instance_neighbor_oad_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X ttl-security hops (1-254)' (M4 batch B6): routes straight
+ * through peer_ttl_security_hops_set()/_unset() (bgpd.c), which already
+ * contain all the fan-out/session-reset logic
+ * neighbor_ttl_security_cmd/no_neighbor_ttl_security_cmd (bgp_vty.c,
+ * retired) relied on. Two legacy vty-layer guards are replicated at
+ * NB_EV_VALIDATE, in the same order the retired DEFUN ran them:
+ *
+ *  - the directly-connected (conf_if) hop-count cap
+ *    ('%s is directly connected peer, hops cannot exceed 1', a plain
+ *    vty_out + CMD_WARNING_CONFIG_FAILED in the retired DEFUN, not a
+ *    bgp_vty_return() error code -- BGP_GTSM_HOPS_CONNECTED is 1);
+ *  - the ebgp-multihop mutual exclusion, which in legacy is actually
+ *    enforced *inside* peer_ttl_security_hops_set() itself via the
+ *    (now-exported) peer_ebgp_multihop_cfg() -- mirrored here up front so
+ *    a rejected 'ttl-security hops' never partially applies, matching the
+ *    ebgp-multihop callback's own peer_gtsm_configured() guard
+ *    (bgp_nb_neighbor.c, this batch) for the other direction. The YANG
+ *    'must "not(../ebgp-multihop)"' only catches same-entry
+ *    co-configuration; this VALIDATE guard is the group/member-aware
+ *    equivalent, per the inventory.
+ */
 int instance_neighbor_ttl_security_hops_modify(struct nb_cb_modify_args *args)
 {
+	struct peer *peer;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/ttl-security-hops");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		if (peer->conf_if &&
+		    yang_dnode_get_uint8(args->dnode, NULL) > BGP_GTSM_HOPS_CONNECTED) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "%s is directly connected peer, hops cannot exceed 1",
+				 peer->conf_if);
+			return NB_ERR_VALIDATION;
+		}
+
+		if (peer_ebgp_multihop_cfg(peer)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "ebgp-multihop and ttl-security cannot be configured together");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		ret = peer_ttl_security_hops_set(peer, yang_dnode_get_uint8(args->dnode, NULL));
+		if (ret != BGP_SUCCESS) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_ttl_security_hops_set() failed", __func__);
+			return NB_ERR_RESOURCE;
+		}
 		break;
 	}
 
@@ -970,15 +1099,21 @@ int instance_neighbor_ttl_security_hops_modify(struct nb_cb_modify_args *args)
 
 int instance_neighbor_ttl_security_hops_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/ttl-security-hops");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer *peer;
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	ret = peer_ttl_security_hops_unset(peer);
+	if (ret != BGP_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_ttl_security_hops_unset() failed", __func__);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
@@ -986,16 +1121,19 @@ int instance_neighbor_ttl_security_hops_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_disable_connected_check_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/disable-connected-check");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK);
+	else
+		peer_flag_unset(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK);
 
 	return NB_OK;
 }

@@ -9042,8 +9042,15 @@ int is_ebgp_multihop_configured(struct peer *peer)
  * ebgp-multihop is configured on the peer/group/any member, keyed off cfg_ttl
  * (the sort-independent source of truth) so it still fires while a local-as
  * override has temporarily made the peer iBGP.
+ *
+ * Exported (was static) for the proteus-bgp northbound conversion (M4 batch
+ * B6): the northbound ttl-security-hops VALIDATE callback
+ * (bgp_nb_neighbor.c/bgp_nb_peer_group.c) needs this to mirror
+ * peer_ttl_security_hops_set()'s own internal mutual-exclusion check
+ * up-front, the same way the legacy ebgp-multihop vty path already does
+ * with peer_gtsm_configured() below.
  */
-static int peer_ebgp_multihop_cfg(struct peer *peer)
+int peer_ebgp_multihop_cfg(struct peer *peer)
 {
 	struct peer_group *group;
 	struct listnode *node, *nnode;

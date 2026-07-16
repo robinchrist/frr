@@ -4576,93 +4576,12 @@ ALIAS_HIDDEN(
 	"Nexthop attribute\n"
 	"Med attribute\n")
 
-/* EBGP multihop configuration. */
-static int peer_ebgp_multihop_set_vty(struct vty *vty, const char *ip_str,
-				      const char *ttl_str)
-{
-	struct peer *peer;
-	unsigned int ttl;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (peer->conf_if)
-		return bgp_vty_return(vty, BGP_ERR_INVALID_FOR_DIRECT_PEER);
-
-	if (!ttl_str)
-		ttl = MAXTTL;
-	else
-		ttl = strtoul(ttl_str, NULL, 10);
-
-	/*
-	 * ebgp-multihop and ttl-security are mutually exclusive. Enforce it for
-	 * the whole peer/group/member set here, because peer_ebgp_multihop_set()
-	 * skips the GTSM check on its no-op paths (bare/MAXTTL form, or an
-	 * iBGP-sorted group with eBGP members) - which would otherwise let us
-	 * record cfg_ttl while a member still has ttl-security.
-	 */
-	if (peer_gtsm_configured(peer))
-		return bgp_vty_return(vty, BGP_ERR_NO_EBGP_MULTIHOP_WITH_TTLHACK);
-
-	ret = peer_ebgp_multihop_set(peer, ttl, true);
-
-	return bgp_vty_return(vty, ret);
-}
-
-static int peer_ebgp_multihop_unset_vty(struct vty *vty, const char *ip_str)
-{
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_ebgp_multihop_unset(peer, true);
-
-	return bgp_vty_return(vty, ret);
-}
-
-/* neighbor ebgp-multihop. */
-DEFUN (neighbor_ebgp_multihop,
-       neighbor_ebgp_multihop_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Allow EBGP neighbors not on directly connected networks\n")
-{
-	int idx_peer = 1;
-	return peer_ebgp_multihop_set_vty(vty, argv[idx_peer]->arg, NULL);
-}
-
-DEFUN (neighbor_ebgp_multihop_ttl,
-       neighbor_ebgp_multihop_ttl_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop (1-255)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Allow EBGP neighbors not on directly connected networks\n"
-       "maximum hop count\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	return peer_ebgp_multihop_set_vty(vty, argv[idx_peer]->arg,
-					  argv[idx_number]->arg);
-}
-
-DEFUN (no_neighbor_ebgp_multihop,
-       no_neighbor_ebgp_multihop_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> ebgp-multihop [(1-255)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Allow EBGP neighbors not on directly connected networks\n"
-       "maximum hop count\n")
-{
-	int idx_peer = 2;
-	return peer_ebgp_multihop_unset_vty(vty, argv[idx_peer]->arg);
-}
+/* neighbor ebgp-multihop [(1-255)] / ttl-security hops (1-254) /
+ * disable-connected-check: converted to northbound, see
+ * 'neighbor_ebgp_multihop_cli_cmd'/'neighbor_ttl_security_cli_cmd'/
+ * 'neighbor_disable_connected_check_cli_cmd' in bgp_cli_neighbor.c (M4
+ * batch B6).
+ */
 
 /* neighbor aigp: converted to northbound, see 'neighbor_aigp_cli_cmd' in
  * bgp_cli_neighbor.c (M4 batch B4).
@@ -4768,34 +4687,6 @@ DEFPY(no_neighbor_role,
 /* neighbor oad: converted to northbound, see 'neighbor_oad_cli_cmd' in
  * bgp_cli_neighbor.c (M4 batch B4).
  */
-
-/* disable-connected-check */
-DEFUN (neighbor_disable_connected_check,
-       neighbor_disable_connected_check_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> <disable-connected-check|enforce-multihop>",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "one-hop away EBGP peer using loopback address\n"
-       "Enforce EBGP neighbors perform multihop\n")
-{
-	int idx_peer = 1;
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_DISABLE_CONNECTED_CHECK);
-}
-
-DEFUN (no_neighbor_disable_connected_check,
-       no_neighbor_disable_connected_check_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> <disable-connected-check|enforce-multihop>",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "one-hop away EBGP peer using loopback address\n"
-       "Enforce EBGP neighbors perform multihop\n")
-{
-	int idx_peer = 2;
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_DISABLE_CONNECTED_CHECK);
-}
 
 DEFPY(neighbor_extended_link_bw,
       neighbor_extended_link_bw_cmd,
@@ -6240,59 +6131,9 @@ ALIAS_HIDDEN(
 	"Number of occurrences of AS number\n"
 	"Only accept my AS in the as-path if the route was originated in my AS\n")
 
-DEFUN (neighbor_ttl_security,
-       neighbor_ttl_security_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> ttl-security hops (1-254)",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP ttl-security parameters\n"
-       "Specify the maximum number of hops to the BGP peer\n"
-       "Number of hops to BGP peer\n")
-{
-	int idx_peer = 1;
-	int idx_number = 4;
-	struct peer *peer;
-	int gtsm_hops;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	gtsm_hops = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	/*
-	 * If 'neighbor swpX', then this is for directly connected peers,
-	 * we should not accept a ttl-security hops value greater than 1.
-	 */
-	if (peer->conf_if && (gtsm_hops > BGP_GTSM_HOPS_CONNECTED)) {
-		vty_out(vty,
-			"%s is directly connected peer, hops cannot exceed 1\n",
-			argv[idx_peer]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return bgp_vty_return(vty, peer_ttl_security_hops_set(peer, gtsm_hops));
-}
-
-DEFUN (no_neighbor_ttl_security,
-       no_neighbor_ttl_security_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> ttl-security hops (1-254)",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "BGP ttl-security parameters\n"
-       "Specify the maximum number of hops to the BGP peer\n"
-       "Number of hops to BGP peer\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	return bgp_vty_return(vty, peer_ttl_security_hops_unset(peer));
-}
+/* neighbor ttl-security hops (1-254): converted to northbound, see
+ * 'neighbor_ttl_security_cli_cmd' in bgp_cli_neighbor.c (M4 batch B6).
+ */
 
 /* "neighbor encapsulation-srv6|encapsulation-mpls" */
 DEFPY (neighbor_encapsulation_srv6_or_mpls,
@@ -17563,7 +17404,6 @@ static void bgp_config_write_peer_remote_as(struct vty *vty, struct peer *peer, 
 static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 					 struct peer *peer)
 {
-	struct peer *g_peer = NULL;
 	char *addr;
 
 	/* Skip dynamic neighbors. */
@@ -17604,10 +17444,13 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * see peer_group_cli_write()/neighbor_cli_write() in bgp_cli.c
 	 * (M4 batch B1). description/password/solo/port/source-interface/
 	 * tcp-mss/passive: converted, see bgp_cli_write_session_scalars()
-	 * in bgp_cli.c (M4 batch B3). g_peer is still needed below
-	 * (ebgp-multihop/GTSM comparison, still legacy). */
-	if (peer_group_active(peer))
-		g_peer = peer->group->conf;
+	 * in bgp_cli.c (M4 batch B3). ebgp-multihop/ttl-security-hops/
+	 * disable-connected-check: converted, see
+	 * bgp_cli_write_session_scalars() (M4 batch B6) -- the group's conf
+	 * (formerly g_peer here) is no longer needed now that
+	 * ttl-security-hops' emission gate is leaf-presence-based rather
+	 * than a peer/group gtsm_hops value comparison (see that function's
+	 * comment for why). */
 
 	/* local-as */
 	if (peergroup_flag_check(peer, PEER_FLAG_LOCAL_AS)) {
@@ -17630,26 +17473,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	if (peer->bfd_config)
 		bgp_bfd_peer_config_write(vty, peer, addr);
 
-	/*
-	 * ebgp-multihop. Serialize from peer->cfg_ttl (the operator-configured
-	 * hop count, independent of the current iBGP/eBGP sort) so an explicit
-	 * 'ebgp-multihop' survives a write/reload even while a local-as override
-	 * temporarily makes the peer iBGP. GTSM (ttl-security) drives peer->ttl
-	 * but not cfg_ttl, so it is correctly not emitted here. For a group
-	 * member, emit only when it owns the config (PEER_FLAG_EBGP_MULTIHOP):
-	 * a member with the same value as its group still owns it and must be
-	 * written, while a purely inherited value must not.
+	/* ebgp-multihop: converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B6).
 	 */
-	if (peer->cfg_ttl != 0) {
-		if (!peer_group_active(peer) || CHECK_FLAG(peer->flags, PEER_FLAG_EBGP_MULTIHOP)) {
-			if (peer->cfg_ttl != MAXTTL)
-				vty_out(vty, " neighbor %s ebgp-multihop %d\n", addr,
-					peer->cfg_ttl);
-			else
-				vty_out(vty, " neighbor %s ebgp-multihop\n",
-					addr);
-		}
-	}
 
 	/* aigp, graceful-shutdown: converted to northbound, see
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
@@ -17668,18 +17494,10 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * (bgp_cli_neighbor.c, M4 batch B4).
 	 */
 
-	/* ttl-security hops */
-	if (peer->gtsm_hops != BGP_GTSM_HOPS_DISABLED) {
-		if (!peer_group_active(peer)
-		    || g_peer->gtsm_hops != peer->gtsm_hops) {
-			vty_out(vty, " neighbor %s ttl-security hops %d\n",
-				addr, peer->gtsm_hops);
-		}
-	}
-
-	/* disable-connected-check */
-	if (peergroup_flag_check(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK))
-		vty_out(vty, " neighbor %s disable-connected-check\n", addr);
+	/* ttl-security hops, disable-connected-check: converted to
+	 * northbound, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B6).
+	 */
 
 	/* link-bw-encoding-ieee */
 	if (peergroup_flag_check(peer, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE))
@@ -19903,14 +19721,12 @@ void bgp_vty_init(void)
 	/* "neighbor capability fqdn" command. */
 	install_element(BGP_NODE, &neighbor_capability_fqdn_cmd);
 
-	/* "neighbor ebgp-multihop" commands. */
-	install_element(BGP_NODE, &neighbor_ebgp_multihop_cmd);
-	install_element(BGP_NODE, &neighbor_ebgp_multihop_ttl_cmd);
-	install_element(BGP_NODE, &no_neighbor_ebgp_multihop_cmd);
-
-	/* "neighbor disable-connected-check" commands.  */
-	install_element(BGP_NODE, &neighbor_disable_connected_check_cmd);
-	install_element(BGP_NODE, &no_neighbor_disable_connected_check_cmd);
+	/* "neighbor ebgp-multihop"/"neighbor disable-connected-check"
+	 * commands: converted to northbound, see
+	 * 'neighbor_ebgp_multihop_cli_cmd'/
+	 * 'neighbor_disable_connected_check_cli_cmd' in bgp_cli_neighbor.c
+	 * (M4 batch B6).
+	 */
 
 	/* "neighbor disable-link-bw-encoding-ieee" commands.  */
 	install_element(BGP_NODE, &neighbor_disable_link_bw_encoding_ieee_cmd);
@@ -20450,9 +20266,10 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV4_NODE, &bgp_imexport_vrf_cmd);
 	install_element(BGP_IPV6_NODE, &bgp_imexport_vrf_cmd);
 
-	/* ttl_security commands */
-	install_element(BGP_NODE, &neighbor_ttl_security_cmd);
-	install_element(BGP_NODE, &no_neighbor_ttl_security_cmd);
+	/* ttl_security commands: converted to northbound, see
+	 * 'neighbor_ttl_security_cli_cmd' in bgp_cli_neighbor.c (M4 batch
+	 * B6).
+	 */
 
 	/* "show [ip] bgp memory" commands. */
 	install_element(VIEW_NODE, &show_bgp_memory_cmd);

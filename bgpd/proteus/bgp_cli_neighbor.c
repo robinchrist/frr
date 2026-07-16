@@ -1123,6 +1123,110 @@ DEFPY_YANG(
 }
 
 /*
+ * ebgp-multihop, ttl-security hops, disable-connected-check (M4 batch B6):
+ * session-tuning leaves shared between neighbor/peer-group via the
+ * neighbor-session-parameters grouping. Pure subcommands like B3/B4/B5's,
+ * so no legacy DEFUN retention (same rationale as
+ * bgp_cli_peer_or_group_xpath()'s doc comment above). ebgp-multihop and
+ * ttl-security hops each collapse legacy's separate set/unset DEFUNs
+ * (neighbor_ebgp_multihop_cmd/_ttl_cmd/no_neighbor_ebgp_multihop_cmd,
+ * neighbor_ttl_security_cmd/no_neighbor_ttl_security_cmd, bgp_vty.c,
+ * retired) into one '[no]'-prefixed grammar, same shape as B4/B5's
+ * combined commands; disable-connected-check keeps legacy's
+ * '<disable-connected-check|enforce-multihop>' keyword alternation
+ * (neighbor_disable_connected_check_cmd/no_..., retired) unchanged.
+ */
+
+DEFPY_YANG(
+	neighbor_ebgp_multihop, neighbor_ebgp_multihop_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer ebgp-multihop [(1-255)]$ttl",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Allow EBGP neighbors not on directly connected networks\n"
+	"maximum hop count\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ebgp-multihop", xpath);
+	if (no)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	else
+		/* Bare 'ebgp-multihop' (no ttl_str) is legacy's MAXTTL (255)
+		 * default -- the same value that makes the leaf render bare
+		 * again on write (see bgp_cli_write_session_scalars() below).
+		 */
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, ttl_str ? ttl_str : "255");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_ttl_security, neighbor_ttl_security_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer ttl-security hops (1-254)$hops",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP ttl-security parameters\n"
+	"Specify the maximum number of hops to the BGP peer\n"
+	"Number of hops to BGP peer\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ttl-security-hops", xpath);
+	if (no)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, hops_str);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_disable_connected_check, neighbor_disable_connected_check_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer <disable-connected-check|enforce-multihop>",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"one-hop away EBGP peer using loopback address\n"
+	"Enforce EBGP neighbors perform multihop\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/disable-connected-check", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * timers (+ connect, + delayopen), advertisement-interval (M4 batch B5):
  * numeric session-tuning leaves shared between neighbor/peer-group via the
  * neighbor-session-parameters grouping. Pure subcommands like B3/B4's, so
@@ -1520,6 +1624,26 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 				? yang_dnode_get_uint8(dnode, "shutdown/rtt/count")
 				: 1);
 
+	/* ebgp-multihop (M4 batch B6): reproduces bgp_config_write_peer_global()'s
+	 * (bgp_vty.c, retired) ebgp-multihop block, gated purely on this entry's
+	 * own leaf presence -- the northbound mirror of legacy's
+	 * '!peer_group_active(peer) || CHECK_FLAG(peer->flags,
+	 * PEER_FLAG_EBGP_MULTIHOP)' ownership check (PEER_FLAG_EBGP_MULTIHOP is
+	 * always mirrored into flags_override, bgpd.c's peer_cfg_ttl_set()), same
+	 * "presence on this dnode is exactly legacy's ownership flag" principle
+	 * already used for description/password/etc. above. 255 (MAXTTL) is the
+	 * bare 'ebgp-multihop' form; any other value carries the explicit hop
+	 * count.
+	 */
+	if (yang_dnode_exists(dnode, "ebgp-multihop")) {
+		uint8_t ttl = yang_dnode_get_uint8(dnode, "ebgp-multihop");
+
+		if (ttl != MAXTTL)
+			vty_out(vty, " neighbor %s ebgp-multihop %u\n", addr, ttl);
+		else
+			vty_out(vty, " neighbor %s ebgp-multihop\n", addr);
+	}
+
 	if (yang_dnode_exists(dnode, "aigp") && yang_dnode_get_bool(dnode, "aigp"))
 		vty_out(vty, " neighbor %s aigp\n", addr);
 
@@ -1529,6 +1653,28 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 
 	if (yang_dnode_exists(dnode, "oad") && yang_dnode_get_bool(dnode, "oad"))
 		vty_out(vty, " neighbor %s oad\n", addr);
+
+	/* ttl-security hops, disable-connected-check (M4 batch B6):
+	 * reproduces bgp_config_write_peer_global()'s (bgp_vty.c, retired)
+	 * ttl-security-hops-through-disable-connected-check block.
+	 * ttl-security-hops is gated on this entry's own leaf presence rather
+	 * than legacy's '!peer_group_active(peer) || g_peer->gtsm_hops !=
+	 * peer->gtsm_hops' value comparison: gtsm_hops has no ownership flag
+	 * of its own in legacy (unlike ebgp-multihop's PEER_FLAG_EBGP_MULTIHOP),
+	 * so that comparison is itself only a best-effort proxy for ownership,
+	 * and can under-suppress a member whose explicit hop count happens to
+	 * numerically match its group's -- the same value-comparison edge case
+	 * already documented (and deliberately not replicated) for remote-as in
+	 * neighbor_cli_write() above. Leaf presence is the exact ownership
+	 * invariant the legacy check was approximating.
+	 */
+	if (yang_dnode_exists(dnode, "ttl-security-hops"))
+		vty_out(vty, " neighbor %s ttl-security hops %u\n", addr,
+			yang_dnode_get_uint8(dnode, "ttl-security-hops"));
+
+	if (yang_dnode_exists(dnode, "disable-connected-check") &&
+	    yang_dnode_get_bool(dnode, "disable-connected-check"))
+		vty_out(vty, " neighbor %s disable-connected-check\n", addr);
 
 	/* advertisement-interval, timers (+ connect, + delayopen) (M4 batch
 	 * B5): reproduces bgp_config_write_peer_global()'s (bgp_vty.c,
@@ -1746,6 +1892,12 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_graceful_shutdown_cli_cmd);
 	install_element(BGP_NODE, &neighbor_aigp_cli_cmd);
 	install_element(BGP_NODE, &neighbor_oad_cli_cmd);
+
+	/* ebgp-multihop, ttl-security hops, disable-connected-check (M4
+	 * batch B6). */
+	install_element(BGP_NODE, &neighbor_ebgp_multihop_cli_cmd);
+	install_element(BGP_NODE, &neighbor_ttl_security_cli_cmd);
+	install_element(BGP_NODE, &neighbor_disable_connected_check_cli_cmd);
 
 	/* timers (+ connect, + delayopen), advertisement-interval (M4
 	 * batch B5). */
