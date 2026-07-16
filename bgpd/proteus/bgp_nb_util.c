@@ -831,3 +831,67 @@ void bgp_nb_instance_update_delay_apply(struct bgp *bgp, uint16_t delay,
 	bgp->v_update_delay = delay;
 	bgp->v_establish_wait = establish_wait ? establish_wait : delay;
 }
+
+/* Send dynamic capability on the peer(s) that own the TCP BGP session
+ * (M4 batch B8, moved vty-free from bgp_vty.c's static
+ * bgp_vty_capability_send_dynamic_peer_group(), now retired -- the
+ * capabilities/extended-nexthop callback is the only remaining caller).
+ * The peer-group template (PEER_STATUS_GROUP) stays Idle; members in
+ * peer->group->peer are Established, so a peer-group edit must fan the
+ * dynamic capability message out to each live member instead of the
+ * (unconnected) template.
+ */
+void bgp_nb_capability_send_dynamic_peer_group(struct peer *peer, afi_t afi, safi_t safi,
+					       int capability_code, int action)
+{
+	struct listnode *node;
+	struct peer *member;
+	struct peer_group *pg;
+
+	if (!peer)
+		return;
+
+	if (CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
+		pg = peer->group;
+		if (!pg)
+			return;
+		for (ALL_LIST_ELEMENTS_RO(pg->peer, node, member))
+			bgp_capability_send(member->connection, afi, safi, capability_code, action);
+	} else {
+		bgp_capability_send(peer->connection, afi, safi, capability_code, action);
+	}
+}
+
+/* Restores one of the capabilities container's six Tier B leaves (dynamic,
+ * extended-nexthop, software-version[-latest-encoding], link-local, fqdn)
+ * to "no explicit config on this list entry" (M4 batch B8). DESTROY of one
+ * of these leaves has no direct legacy CLI equivalent: legacy's bare 'no
+ * neighbor X capability ...' is itself an explicit-false MODIFY (the Tier B
+ * deprecated-alias shape, tiers.md), not a "forget I ever configured this"
+ * operation. A peer-group member reverts to inheriting its group's value
+ * via peer_flag_inherit() (bgpd.c), the same vty-free helper already used
+ * by the _unset() helpers for update-source/tcp-mss/local-as/etc. A
+ * standalone peer or a peer-group entry itself (peer_group_active() is
+ * false for both -- there's no group to inherit from) reverts to whatever
+ * a freshly created peer would carry for this flag, replicating peer_new()'s
+ * own seeding for the flag family: instance_default is bgp->flags-derived
+ * for dynamic/software-version[-latest-encoding]/link-local (each has a
+ * matching already-converted instance-level 'bgp default ...' leaf,
+ * bgp_nb_instance.c), unconditionally true for fqdn (peer_new() sets it
+ * with no bgp-> dependency at all), and unconditionally false for
+ * extended-nexthop (no instance-level default toggle exists for ENHE --
+ * only the separate unnumbered/conf_if force-on, handled entirely at
+ * neighbor creation, M4 batch B1).
+ */
+void bgp_nb_capability_flag_destroy(struct peer *peer, uint64_t flag, bool instance_default)
+{
+	if (peer_group_active(peer)) {
+		peer_flag_inherit(peer, flag);
+		return;
+	}
+
+	if (instance_default)
+		peer_flag_set(peer, flag);
+	else
+		peer_flag_unset(peer, flag);
+}

@@ -1185,49 +1185,74 @@ int instance_peer_group_timers_delayopen_destroy(struct nb_cb_destroy_args *args
 	return NB_OK;
 }
 
+/*
+ * capabilities container (M4 batch B8): shares the same shape as the
+ * neighbor-scope callbacks (bgp_nb_neighbor.c) -- see that file's leading
+ * comment for the full design rationale. group->conf (a real 'struct
+ * peer *') is the target throughout, mirroring B3/B4/B5's idiom;
+ * group->conf is never a conf_if peer, so extended-nexthop has no
+ * conf_if VALIDATE guard at this scope (B6's ebgp-multihop/ttl-security-hops
+ * precedent for the same asymmetry).
+ */
 int instance_peer_group_capabilities_dynamic_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/dynamic");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_DYNAMIC_CAPABILITY);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_DYNAMIC_CAPABILITY);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_dynamic_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/dynamic");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_DYNAMIC_CAPABILITY,
+				       bgp && CHECK_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY));
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_extended_nexthop_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/extended-nexthop");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL)) {
+		peer_flag_set(group->conf, PEER_FLAG_CAPABILITY_ENHE);
+		bgp_nb_capability_send_dynamic_peer_group(group->conf, AFI_IP, SAFI_UNICAST,
+							  CAPABILITY_CODE_ENHE,
+							  CAPABILITY_ACTION_SET);
+	} else {
+		bgp_nb_capability_send_dynamic_peer_group(group->conf, AFI_IP, SAFI_UNICAST,
+							  CAPABILITY_CODE_ENHE,
+							  CAPABILITY_ACTION_UNSET);
+		peer_flag_unset(group->conf, PEER_FLAG_CAPABILITY_ENHE);
 	}
 
 	return NB_OK;
@@ -1235,48 +1260,73 @@ int instance_peer_group_capabilities_extended_nexthop_modify(struct nb_cb_modify
 
 int instance_peer_group_capabilities_extended_nexthop_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/extended-nexthop");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_CAPABILITY_ENHE, false);
+	bgp_nb_capability_send_dynamic_peer_group(group->conf, AFI_IP, SAFI_UNICAST,
+						  CAPABILITY_CODE_ENHE,
+						  CHECK_FLAG(group->conf->flags,
+							     PEER_FLAG_CAPABILITY_ENHE)
+							  ? CAPABILITY_ACTION_SET
+							  : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_software_version_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/software-version");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+	bool val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	val = yang_dnode_get_bool(args->dnode, NULL);
+	if (val)
+		peer_flag_set(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD);
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_SOFT_VERSION,
+			    val ? CAPABILITY_ACTION_SET : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_software_version_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/software-version");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD,
+				       bgp && CHECK_FLAG(bgp->flags,
+							 BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD));
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_SOFT_VERSION,
+			    CHECK_FLAG(group->conf->flags, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD)
+				    ? CAPABILITY_ACTION_SET
+				    : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
@@ -1284,16 +1334,25 @@ int instance_peer_group_capabilities_software_version_destroy(struct nb_cb_destr
 int instance_peer_group_capabilities_software_version_latest_encoding_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/software-version-latest-encoding");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+	bool val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	val = yang_dnode_get_bool(args->dnode, NULL);
+	if (val)
+		peer_flag_set(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW);
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_SOFT_VERSION,
+			    val ? CAPABILITY_ACTION_SET : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
@@ -1301,110 +1360,171 @@ int instance_peer_group_capabilities_software_version_latest_encoding_modify(
 int instance_peer_group_capabilities_software_version_latest_encoding_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/software-version-latest-encoding");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW,
+				       bgp && CHECK_FLAG(bgp->flags,
+							 BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW));
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_SOFT_VERSION,
+			    CHECK_FLAG(group->conf->flags, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW)
+				    ? CAPABILITY_ACTION_SET
+				    : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_link_local_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/link-local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+	bool val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	val = yang_dnode_get_bool(args->dnode, NULL);
+	if (val)
+		peer_flag_set(group->conf, PEER_FLAG_CAPABILITY_LINK_LOCAL);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_CAPABILITY_LINK_LOCAL);
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_LINK_LOCAL,
+			    val ? CAPABILITY_ACTION_SET : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_link_local_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/link-local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_CAPABILITY_LINK_LOCAL,
+				       bgp && CHECK_FLAG(bgp->flags,
+							 BGP_FLAG_LINK_LOCAL_CAPABILITY));
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST,
+			    CAPABILITY_CODE_LINK_LOCAL,
+			    CHECK_FLAG(group->conf->flags, PEER_FLAG_CAPABILITY_LINK_LOCAL)
+				    ? CAPABILITY_ACTION_SET
+				    : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_fqdn_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/fqdn");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+	bool val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	val = yang_dnode_get_bool(args->dnode, NULL);
+	if (val)
+		peer_flag_set(group->conf, PEER_FLAG_CAPABILITY_FQDN);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_CAPABILITY_FQDN);
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_FQDN,
+			    val ? CAPABILITY_ACTION_SET : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_fqdn_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/fqdn");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_CAPABILITY_FQDN, true);
+
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_FQDN,
+			    CHECK_FLAG(group->conf->flags, PEER_FLAG_CAPABILITY_FQDN)
+				    ? CAPABILITY_ACTION_SET
+				    : CAPABILITY_ACTION_UNSET);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_dont_capability_negotiate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/dont-capability-negotiate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_DONT_CAPABILITY);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_DONT_CAPABILITY);
 
 	return NB_OK;
 }
 
 int instance_peer_group_capabilities_override_capability_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/override-capability");
-		return NB_ERR_VALIDATION;
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (group && yang_dnode_get_bool(args->dnode, NULL) &&
+		    CHECK_FLAG(group->conf->flags, PEER_FLAG_STRICT_CAP_MATCH)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Can't set override-capability and strict-capability-match at the same time");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			peer_flag_set(group->conf, PEER_FLAG_OVERRIDE_CAPABILITY);
+		else
+			peer_flag_unset(group->conf, PEER_FLAG_OVERRIDE_CAPABILITY);
 		break;
 	}
 
@@ -1413,14 +1533,30 @@ int instance_peer_group_capabilities_override_capability_modify(struct nb_cb_mod
 
 int instance_peer_group_capabilities_strict_capability_match_modify(struct nb_cb_modify_args *args)
 {
+	struct peer_group *group;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/capabilities/strict-capability-match");
-		return NB_ERR_VALIDATION;
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (group && yang_dnode_get_bool(args->dnode, NULL) &&
+		    CHECK_FLAG(group->conf->flags, PEER_FLAG_OVERRIDE_CAPABILITY)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Can't set override-capability and strict-capability-match at the same time");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			peer_flag_set(group->conf, PEER_FLAG_STRICT_CAP_MATCH);
+		else
+			peer_flag_unset(group->conf, PEER_FLAG_STRICT_CAP_MATCH);
 		break;
 	}
 

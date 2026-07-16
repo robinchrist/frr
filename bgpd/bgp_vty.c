@@ -3338,240 +3338,14 @@ ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
  * (M4 batch B4).
  */
 
-/* neighbor capability dynamic. */
-DEFUN (neighbor_capability_dynamic,
-       neighbor_capability_dynamic_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability dynamic",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise dynamic capability to this neighbor\n")
-{
-	int idx_peer = 1;
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_DYNAMIC_CAPABILITY);
-}
-
-DEFUN (no_neighbor_capability_dynamic,
-       no_neighbor_capability_dynamic_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability dynamic",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise dynamic capability to this neighbor\n")
-{
-	int idx_peer = 2;
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_DYNAMIC_CAPABILITY);
-}
-
-/* neighbor dont-capability-negotiate */
-DEFUN (neighbor_dont_capability_negotiate,
-       neighbor_dont_capability_negotiate_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> dont-capability-negotiate",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Do not perform capability negotiation\n")
-{
-	int idx_peer = 1;
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_DONT_CAPABILITY);
-}
-
-DEFUN (no_neighbor_dont_capability_negotiate,
-       no_neighbor_dont_capability_negotiate_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> dont-capability-negotiate",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Do not perform capability negotiation\n")
-{
-	int idx_peer = 2;
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_DONT_CAPABILITY);
-}
-
-/* neighbor capability fqdn */
-DEFPY (neighbor_capability_fqdn,
-       neighbor_capability_fqdn_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability fqdn",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise fqdn capability to the peer\n")
-{
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		ret = peer_flag_unset_vty(vty, neighbor,
-					  PEER_FLAG_CAPABILITY_FQDN);
-	else
-		ret = peer_flag_set_vty(vty, neighbor,
-					PEER_FLAG_CAPABILITY_FQDN);
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_FQDN,
-			    no ? CAPABILITY_ACTION_UNSET : CAPABILITY_ACTION_SET);
-
-	return ret;
-}
-
-/*
- * Send dynamic capability on the peer(s) that own the TCP BGP session.
- * The peer-group template (PEER_STATUS_GROUP) stays Idle; members in
- * peer->group->peer are Established.
+/* neighbor capability dynamic, dont-capability-negotiate, capability fqdn,
+ * capability extended-nexthop, capability software-version(+latest-
+ * encoding), capability link-local: converted to northbound, see
+ * 'neighbor_capability_dynamic_cli_cmd' and siblings in bgp_cli_neighbor.c
+ * (M4 batch B8). The dynamic-capability-renegotiation fan-out helper
+ * (formerly static here) moved vty-free to
+ * bgp_nb_capability_send_dynamic_peer_group() (bgp_nb_util.c).
  */
-static void bgp_vty_capability_send_dynamic_peer_group(struct peer *peer, afi_t afi, safi_t safi,
-						       int capability_code, int action)
-{
-	struct listnode *node;
-	struct peer *member;
-	struct peer_group *pg;
-
-	if (!peer)
-		return;
-
-	if (CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
-		pg = peer->group;
-		if (!pg)
-			return;
-		for (ALL_LIST_ELEMENTS_RO(pg->peer, node, member))
-			bgp_capability_send(member->connection, afi, safi, capability_code,
-					    action);
-	} else {
-		bgp_capability_send(peer->connection, afi, safi, capability_code, action);
-	}
-}
-
-/* neighbor capability extended next hop encoding */
-DEFUN (neighbor_capability_enhe,
-       neighbor_capability_enhe_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> capability extended-nexthop",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise extended next-hop capability to the peer\n")
-{
-	int idx_peer = 1;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (peer && peer->conf_if)
-		return CMD_SUCCESS;
-
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_flag_set_vty(vty, argv[idx_peer]->arg, PEER_FLAG_CAPABILITY_ENHE);
-
-	bgp_vty_capability_send_dynamic_peer_group(peer, AFI_IP, SAFI_UNICAST,
-						   CAPABILITY_CODE_ENHE, CAPABILITY_ACTION_SET);
-
-	return ret;
-}
-
-DEFUN (no_neighbor_capability_enhe,
-       no_neighbor_capability_enhe_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability extended-nexthop",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise extended next-hop capability to the peer\n")
-{
-	int idx_peer = 2;
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (peer && peer->conf_if) {
-		vty_out(vty,
-			"Peer %s cannot have capability extended-nexthop turned off\n",
-			argv[idx_peer]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	/*
-	 * Send dynamic UNSET while PEER_FLAG_CAPABILITY_ENHE is still set.
-	 * bgp_capability_send() only encodes ENHE TLVs when that flag is set;
-	 * peer_flag_unset_vty clears it on members first.
-	 */
-	bgp_vty_capability_send_dynamic_peer_group(peer, AFI_IP, SAFI_UNICAST,
-						   CAPABILITY_CODE_ENHE, CAPABILITY_ACTION_UNSET);
-
-	ret = peer_flag_unset_vty(vty, argv[idx_peer]->arg, PEER_FLAG_CAPABILITY_ENHE);
-
-	return ret;
-}
-
-/* neighbor capability software-version */
-DEFPY(neighbor_capability_software_version,
-      neighbor_capability_software_version_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability software-version [latest-encoding$latest_encoding]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Advertise capability to the peer\n"
-      "Advertise Software Version capability to the peer\n"
-      "Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n")
-{
-	struct peer *peer;
-	int ret;
-	uint64_t encoding = latest_encoding ? PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW
-					    : PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		ret = peer_flag_unset_vty(vty, neighbor, encoding);
-	else
-		ret = peer_flag_set_vty(vty, neighbor, encoding);
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_SOFT_VERSION,
-			    no ? CAPABILITY_ACTION_UNSET : CAPABILITY_ACTION_SET);
-
-	return ret;
-}
-
-/* neighbor capability link-local */
-DEFPY(neighbor_capability_link_local,
-      neighbor_capability_link_local_cmd,
-      "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor capability link-local",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Advertise capability to the peer\n"
-      "Advertise Link-Local Next Hop capability to the peer\n")
-{
-	struct peer *peer;
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		ret = peer_flag_unset_vty(vty, neighbor, PEER_FLAG_CAPABILITY_LINK_LOCAL);
-	else
-		ret = peer_flag_set_vty(vty, neighbor, PEER_FLAG_CAPABILITY_LINK_LOCAL);
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_LINK_LOCAL,
-			    no ? CAPABILITY_ACTION_UNSET : CAPABILITY_ACTION_SET);
-
-	return ret;
-}
 
 /* RPKI strict mode */
 DEFPY(neighbor_rpki_strict,
@@ -4984,58 +4758,10 @@ ALIAS_HIDDEN(no_neighbor_weight, no_neighbor_weight_hidden_cmd,
 	     "default weight\n")
 
 
-/* Override capability negotiation. */
-DEFUN (neighbor_override_capability,
-       neighbor_override_capability_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> override-capability",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Override capability negotiation result\n")
-{
-	int idx_peer = 1;
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_OVERRIDE_CAPABILITY);
-}
-
-DEFUN (no_neighbor_override_capability,
-       no_neighbor_override_capability_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> override-capability",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Override capability negotiation result\n")
-{
-	int idx_peer = 2;
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_OVERRIDE_CAPABILITY);
-}
-
-DEFUN (neighbor_strict_capability,
-       neighbor_strict_capability_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> strict-capability-match",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Strict capability negotiation match\n")
-{
-	int idx_peer = 1;
-
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_STRICT_CAP_MATCH);
-}
-
-DEFUN (no_neighbor_strict_capability,
-       no_neighbor_strict_capability_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> strict-capability-match",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Strict capability negotiation match\n")
-{
-	int idx_peer = 2;
-
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_STRICT_CAP_MATCH);
-}
+/* neighbor override-capability, strict-capability-match: converted to
+ * northbound, see 'neighbor_override_capability_cli_cmd'/
+ * 'neighbor_strict_capability_cli_cmd' in bgp_cli_neighbor.c (M4 batch B8).
+ */
 
 /* timers (+ connect, + delayopen), advertisement-interval: converted to
  * northbound, see bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4
@@ -17456,86 +17182,15 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * (bgp_cli_neighbor.c, M4 batch B5).
 	 */
 
-	/* capability software-version */
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY)) {
-		if (!peergroup_flag_check(peer, PEER_FLAG_DYNAMIC_CAPABILITY))
-			vty_out(vty, " no neighbor %s capability dynamic\n",
-				addr);
-	} else {
-		if (peergroup_flag_check(peer, PEER_FLAG_DYNAMIC_CAPABILITY))
-			vty_out(vty, " neighbor %s capability dynamic\n", addr);
-	}
-
-	/* capability extended-nexthop */
-	if (peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_ENHE)) {
-		if (CHECK_FLAG(peer->flags_invert, PEER_FLAG_CAPABILITY_ENHE) &&
-		    !peer->conf_if)
-			vty_out(vty,
-				" no neighbor %s capability extended-nexthop\n",
-				addr);
-		else if (!peer->conf_if)
-			vty_out(vty,
-				" neighbor %s capability extended-nexthop\n",
-				addr);
-	}
-
-	/* capability software-version */
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD)) {
-		if (!peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD))
-			vty_out(vty,
-				" no neighbor %s capability software-version\n",
-				addr);
-	} else {
-		if (peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD))
-			vty_out(vty,
-				" neighbor %s capability software-version\n",
-				addr);
-	}
-
-	/* capability software-version latest-encoding */
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW)) {
-		if (!peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW))
-			vty_out(vty,
-				" no neighbor %s capability software-version latest-encoding\n",
-				addr);
-	} else {
-		if (peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW))
-			vty_out(vty, " neighbor %s capability software-version latest-encoding\n",
-				addr);
-	}
+	/* capabilities container (dynamic, extended-nexthop, software-version
+	 * (+latest-encoding), link-local, fqdn, dont-capability-negotiate,
+	 * override-capability, strict-capability-match): converted to
+	 * northbound, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B8).
+	 */
 
 	if (peergroup_flag_check(peer, PEER_FLAG_RPKI_STRICT))
 		vty_out(vty, " neighbor %s rpki strict\n", addr);
-
-	/* capability link-local */
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY)) {
-		if (!peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_LINK_LOCAL))
-			vty_out(vty, " no neighbor %s capability link-local\n", addr);
-	} else {
-		if (!peer->conf_if && peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_LINK_LOCAL))
-			vty_out(vty, " neighbor %s capability link-local\n", addr);
-		else if (peer->conf_if &&
-			 !peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_LINK_LOCAL))
-			vty_out(vty, " no neighbor %s capability link-local\n", addr);
-	}
-
-	/* dont-capability-negotiation */
-	if (peergroup_flag_check(peer, PEER_FLAG_DONT_CAPABILITY))
-		vty_out(vty, " neighbor %s dont-capability-negotiate\n", addr);
-
-	/* capability fqdn */
-	if (peergroup_flag_check(peer, PEER_FLAG_CAPABILITY_FQDN))
-		vty_out(vty,
-			" no neighbor %s capability fqdn\n",
-			addr);
-
-	/* override-capability */
-	if (peergroup_flag_check(peer, PEER_FLAG_OVERRIDE_CAPABILITY))
-		vty_out(vty, " neighbor %s override-capability\n", addr);
-
-	/* strict-capability-match */
-	if (peergroup_flag_check(peer, PEER_FLAG_STRICT_CAP_MATCH))
-		vty_out(vty, " neighbor %s strict-capability-match\n", addr);
 
 	/* Sender side AS path loop detection. */
 	if (peergroup_flag_check(peer, PEER_FLAG_AS_LOOP_DETECTION))
@@ -19586,15 +19241,11 @@ void bgp_vty_init(void)
 	/* "neighbor shutdown" (+ message, + rtt) commands: converted to
 	 * northbound, see bgp_cli_neighbor_init() (M4 batch B4). */
 
-	/* "neighbor capability extended-nexthop" commands.*/
-	install_element(BGP_NODE, &neighbor_capability_enhe_cmd);
-	install_element(BGP_NODE, &no_neighbor_capability_enhe_cmd);
-
-	/* "neighbor capability software-version" commands.*/
-	install_element(BGP_NODE, &neighbor_capability_software_version_cmd);
-
-	/* "neighbor capability link-local" commands.*/
-	install_element(BGP_NODE, &neighbor_capability_link_local_cmd);
+	/* "neighbor capability extended-nexthop"/"neighbor capability
+	 * software-version"/"neighbor capability link-local" commands:
+	 * converted to northbound, see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c, M4 batch B8).
+	 */
 
 	/* neighbor rpki ... commands. */
 	install_element(BGP_NODE, &neighbor_rpki_strict_cmd);
@@ -19616,16 +19267,10 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &neighbor_capability_orf_prefix_cmd);
 	install_element(BGP_IPV6L_NODE, &no_neighbor_capability_orf_prefix_cmd);
 
-	/* "neighbor capability dynamic" commands.*/
-	install_element(BGP_NODE, &neighbor_capability_dynamic_cmd);
-	install_element(BGP_NODE, &no_neighbor_capability_dynamic_cmd);
-
-	/* "neighbor dont-capability-negotiate" commands. */
-	install_element(BGP_NODE, &neighbor_dont_capability_negotiate_cmd);
-	install_element(BGP_NODE, &no_neighbor_dont_capability_negotiate_cmd);
-
-	/* "neighbor capability fqdn" command. */
-	install_element(BGP_NODE, &neighbor_capability_fqdn_cmd);
+	/* "neighbor capability dynamic"/"neighbor dont-capability-negotiate"/
+	 * "neighbor capability fqdn" commands: converted to northbound, see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B8).
+	 */
 
 	/* "neighbor ebgp-multihop"/"neighbor disable-connected-check"
 	 * commands: converted to northbound, see
@@ -19705,13 +19350,10 @@ void bgp_vty_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
 
-	/* "neighbor override-capability" commands. */
-	install_element(BGP_NODE, &neighbor_override_capability_cmd);
-	install_element(BGP_NODE, &no_neighbor_override_capability_cmd);
-
-	/* "neighbor strict-capability-match" commands. */
-	install_element(BGP_NODE, &neighbor_strict_capability_cmd);
-	install_element(BGP_NODE, &no_neighbor_strict_capability_cmd);
+	/* "neighbor override-capability"/"neighbor strict-capability-match"
+	 * commands: converted to northbound, see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c, M4 batch B8).
+	 */
 
 	/* "neighbor timers"/"neighbor timers connect"/"neighbor timers
 	 * delayopen"/"neighbor advertisement-interval" commands: converted

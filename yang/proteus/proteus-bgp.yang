@@ -541,8 +541,15 @@ module proteus-bgp {
       leaf strict-capability-match {
         type boolean;
         default "false";
+        must "../override-capability != 'true'" {
+          error-message
+            "Can't set override-capability and strict-capability-match at
+             the same time";
+        }
         description
-          "'neighbor X strict-capability-match'.";
+          "'neighbor X strict-capability-match'. Mutually exclusive with
+           override-capability in FRR (the 'must'; peer_flag_modify()'s
+           own BGP_ERR_PEER_FLAG_CONFLICT check, bgpd.c).";
       }
     }
 

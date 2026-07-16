@@ -14,6 +14,9 @@ extern "C" {
 #endif
 
 void bgp_nb_advertisement_delay_reset(struct bgp *bgp);
+void bgp_nb_capability_flag_destroy(struct peer *peer, uint64_t flag, bool instance_default);
+void bgp_nb_capability_send_dynamic_peer_group(struct peer *peer, afi_t afi, safi_t safi,
+					       int capability_code, int action);
 void bgp_nb_clear_star_soft(struct bgp *bgp, enum bgp_clear_type stype);
 int bgp_nb_default_af_safi_conflict_validate(struct nb_cb_modify_args *args,
 						    const char *sibling_relpath,

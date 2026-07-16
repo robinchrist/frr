@@ -918,6 +918,761 @@ DEFPY_YANG(
 }
 
 /*
+ * capabilities container (M4 batch B8): dynamic, extended-nexthop,
+ * software-version(+latest-encoding), link-local, fqdn -- Tier B, canonical
+ * '<enabled|disabled>$mode' grammar (tiers.md) plus two CMD_ATTR_DEPRECATED
+ * bare aliases reproducing legacy's only grammar exactly (bare positive ->
+ * modify "true"; bare 'no' -> modify "false", NOT a destroy -- that's what
+ * legacy actually persisted). dont-capability-negotiate, override-capability,
+ * strict-capability-match -- Tier A, single combined '[no]' command like
+ * B6's disable-connected-check. All nine shared between neighbor/peer-group
+ * via bgp_cli_peer_or_group_xpath(), same as every leaf in this section.
+ */
+DEFPY_YANG(
+	neighbor_capability_dynamic, neighbor_capability_dynamic_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability dynamic <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise dynamic capability to this neighbor\n"
+	"Enable dynamic capability\n"
+	"Disable dynamic capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/dynamic", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_dynamic, no_neighbor_capability_dynamic_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability dynamic <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise dynamic capability to this neighbor\n"
+	"Enable dynamic capability\n"
+	"Disable dynamic capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/dynamic", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_dynamic_deprecated, neighbor_capability_dynamic_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability dynamic",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise dynamic capability to this neighbor\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/dynamic", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_dynamic_deprecated, no_neighbor_capability_dynamic_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability dynamic",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise dynamic capability to this neighbor\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/dynamic", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_capability_enhe, neighbor_capability_enhe_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability extended-nexthop <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise extended next-hop capability to the peer\n"
+	"Enable extended next-hop capability\n"
+	"Disable extended next-hop capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/extended-nexthop", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_enhe, no_neighbor_capability_enhe_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability extended-nexthop <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise extended next-hop capability to the peer\n"
+	"Enable extended next-hop capability\n"
+	"Disable extended next-hop capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/extended-nexthop", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_enhe_deprecated, neighbor_capability_enhe_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability extended-nexthop",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise extended next-hop capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/extended-nexthop", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_enhe_deprecated, no_neighbor_capability_enhe_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability extended-nexthop",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise extended next-hop capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/extended-nexthop", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_capability_software_version, neighbor_capability_software_version_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Enable Software Version capability\n"
+	"Disable Software Version capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_software_version, no_neighbor_capability_software_version_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Enable Software Version capability\n"
+	"Disable Software Version capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_software_version_deprecated,
+	neighbor_capability_software_version_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_software_version_deprecated,
+	no_neighbor_capability_software_version_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_capability_software_version_latest_encoding,
+	neighbor_capability_software_version_latest_encoding_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version latest-encoding <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n"
+	"Enable latest-encoding\n"
+	"Disable latest-encoding\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version-latest-encoding",
+				 xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_software_version_latest_encoding,
+	no_neighbor_capability_software_version_latest_encoding_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version latest-encoding <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n"
+	"Enable latest-encoding\n"
+	"Disable latest-encoding\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version-latest-encoding",
+				 xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_software_version_latest_encoding_deprecated,
+	neighbor_capability_software_version_latest_encoding_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version latest-encoding",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version-latest-encoding",
+				 xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_software_version_latest_encoding_deprecated,
+	no_neighbor_capability_software_version_latest_encoding_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability software-version latest-encoding",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Software Version capability to the peer\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/software-version-latest-encoding",
+				 xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_capability_link_local, neighbor_capability_link_local_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability link-local <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Link-Local Next Hop capability to the peer\n"
+	"Enable Link-Local Next Hop capability\n"
+	"Disable Link-Local Next Hop capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/link-local", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_link_local, no_neighbor_capability_link_local_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability link-local <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Link-Local Next Hop capability to the peer\n"
+	"Enable Link-Local Next Hop capability\n"
+	"Disable Link-Local Next Hop capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/link-local", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_link_local_deprecated, neighbor_capability_link_local_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability link-local",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Link-Local Next Hop capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/link-local", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_link_local_deprecated,
+	no_neighbor_capability_link_local_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability link-local",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise Link-Local Next Hop capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/link-local", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_capability_fqdn, neighbor_capability_fqdn_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability fqdn <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise fqdn capability to the peer\n"
+	"Enable fqdn capability\n"
+	"Disable fqdn capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/fqdn", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_capability_fqdn, no_neighbor_capability_fqdn_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability fqdn <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise fqdn capability to the peer\n"
+	"Enable fqdn capability\n"
+	"Disable fqdn capability\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/fqdn", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_capability_fqdn_deprecated, neighbor_capability_fqdn_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability fqdn",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise fqdn capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/fqdn", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_capability_fqdn_deprecated, no_neighbor_capability_fqdn_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability fqdn",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise fqdn capability to the peer\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/fqdn", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_dont_capability_negotiate, neighbor_dont_capability_negotiate_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer dont-capability-negotiate",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Do not perform capability negotiation\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/dont-capability-negotiate", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_override_capability, neighbor_override_capability_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer override-capability",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Override capability negotiation result\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/override-capability", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_strict_capability, neighbor_strict_capability_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer strict-capability-match",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Strict capability negotiation match\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/capabilities/strict-capability-match", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * shutdown (+ message, + rtt), graceful-shutdown, aigp, oad (M4 batch B4):
  * session-admin-control leaves shared between neighbor/peer-group via the
  * neighbor-session-parameters grouping. Pure subcommands like B3's, so no
@@ -1778,6 +2533,61 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	    yang_dnode_get_bool(dnode, "ip-transparent"))
 		vty_out(vty, " neighbor %s ip-transparent\n", addr);
 
+	/* capabilities container (M4 batch B8): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired) capability-
+	 * dynamic-through-strict-capability-match block, skipping rpki-strict
+	 * (unconverted, stays legacy, B13) which sits between the software-
+	 * version-latest-encoding and link-local lines there. Gated on this
+	 * entry's own leaf presence for all six Tier B leaves -- the same
+	 * "presence is exactly legacy's ownership flag" principle used
+	 * throughout this function -- rather than legacy's various value-
+	 * comparison approximations (fqdn's inverted comparison never
+	 * renders an explicit re-enable to the default; link-local's extra
+	 * conf_if special case), deliberately not replicated for the same
+	 * reason ttl-security-hops' (M4 batch B6) wasn't.
+	 */
+	if (yang_dnode_exists(dnode, "capabilities/dynamic"))
+		vty_out(vty, " neighbor %s capability dynamic %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/dynamic") ? "enabled"
+									   : "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/extended-nexthop"))
+		vty_out(vty, " neighbor %s capability extended-nexthop %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/extended-nexthop") ? "enabled"
+										    : "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/software-version"))
+		vty_out(vty, " neighbor %s capability software-version %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/software-version") ? "enabled"
+										    : "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/software-version-latest-encoding"))
+		vty_out(vty, " neighbor %s capability software-version latest-encoding %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/software-version-latest-encoding")
+				? "enabled"
+				: "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/link-local"))
+		vty_out(vty, " neighbor %s capability link-local %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/link-local") ? "enabled"
+									      : "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/fqdn"))
+		vty_out(vty, " neighbor %s capability fqdn %s\n", addr,
+			yang_dnode_get_bool(dnode, "capabilities/fqdn") ? "enabled" : "disabled");
+
+	if (yang_dnode_exists(dnode, "capabilities/dont-capability-negotiate") &&
+	    yang_dnode_get_bool(dnode, "capabilities/dont-capability-negotiate"))
+		vty_out(vty, " neighbor %s dont-capability-negotiate\n", addr);
+
+	if (yang_dnode_exists(dnode, "capabilities/override-capability") &&
+	    yang_dnode_get_bool(dnode, "capabilities/override-capability"))
+		vty_out(vty, " neighbor %s override-capability\n", addr);
+
+	if (yang_dnode_exists(dnode, "capabilities/strict-capability-match") &&
+	    yang_dnode_get_bool(dnode, "capabilities/strict-capability-match"))
+		vty_out(vty, " neighbor %s strict-capability-match\n", addr);
+
 	/* advertisement-interval, timers (+ connect, + delayopen) (M4 batch
 	 * B5): reproduces bgp_config_write_peer_global()'s (bgp_vty.c,
 	 * retired for these leaves) advertisement-interval-through-
@@ -2005,6 +2815,37 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_update_source_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_update_source_cli_cmd);
 	install_element(BGP_NODE, &neighbor_ip_transparent_cli_cmd);
+
+	/* capabilities container (M4 batch B8). */
+	install_element(BGP_NODE, &neighbor_capability_dynamic_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_dynamic_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_dynamic_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_dynamic_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_enhe_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_enhe_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_enhe_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_enhe_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_software_version_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_software_version_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_software_version_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_software_version_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_software_version_latest_encoding_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_software_version_latest_encoding_cli_cmd);
+	install_element(BGP_NODE,
+			&neighbor_capability_software_version_latest_encoding_deprecated_cli_cmd);
+	install_element(BGP_NODE,
+			&no_neighbor_capability_software_version_latest_encoding_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_link_local_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_link_local_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_link_local_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_link_local_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_fqdn_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_fqdn_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_fqdn_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_capability_fqdn_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_dont_capability_negotiate_cli_cmd);
+	install_element(BGP_NODE, &neighbor_override_capability_cli_cmd);
+	install_element(BGP_NODE, &neighbor_strict_capability_cli_cmd);
 
 	/* timers (+ connect, + delayopen), advertisement-interval (M4
 	 * batch B5). */
