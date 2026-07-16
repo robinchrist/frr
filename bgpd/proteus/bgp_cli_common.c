@@ -560,9 +560,21 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/peer-group/listen-range",
+			.cbs = {
+				.cli_show = peer_group_listen_range_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/neighbor",
 			.cbs = {
 				.cli_show = neighbor_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/listen-limit",
+			.cbs = {
+				.cli_show = instance_listen_limit_cli_write,
 			}
 		},
 		{

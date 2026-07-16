@@ -790,6 +790,31 @@ DEFPY_YANG(
 }
 
 DEFPY_YANG(
+	bgp_listen_limit, bgp_listen_limit_cli_cmd,
+	"bgp listen limit (1-65535)$limit",
+	BGP_STR
+	"BGP Dynamic Neighbors listen commands\n"
+	"Maximum number of BGP Dynamic Neighbors that can be created\n"
+	"Configure Dynamic Neighbors listen limit value\n")
+{
+	nb_cli_enqueue_change(vty, "./listen-limit", NB_OP_MODIFY, limit_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_listen_limit, no_bgp_listen_limit_cli_cmd,
+	"no bgp listen limit [(1-65535)]",
+	NO_STR
+	BGP_STR
+	"BGP Dynamic Neighbors listen commands\n"
+	"Maximum number of BGP Dynamic Neighbors that can be created\n"
+	"Configure Dynamic Neighbors listen limit value\n")
+{
+	nb_cli_enqueue_change(vty, "./listen-limit", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
 	bgp_condadv_period, bgp_condadv_period_cli_cmd,
 	"[no$no] bgp conditional-advertisement timer (5-240)$period",
 	NO_STR
@@ -3098,6 +3123,12 @@ void instance_hard_administrative_reset_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+void instance_listen_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, " bgp listen limit %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
 void instance_deterministic_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults)
 {
@@ -3227,6 +3258,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_timers_cli_cmd);
 	install_element(BGP_NODE, &bgp_minimum_holdtime_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_minimum_holdtime_cli_cmd);
+	install_element(BGP_NODE, &bgp_listen_limit_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_listen_limit_cli_cmd);
 	install_element(BGP_NODE, &bgp_condadv_period_cli_cmd);
 	install_element(BGP_NODE, &bgp_def_originate_eval_cli_cmd);
 

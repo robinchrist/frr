@@ -180,7 +180,6 @@ extern bool bgp_default_software_version_capability_latest_encoding_default(void
 extern bool bgp_default_link_local_capability_default(void);
 extern bool bgp_default_dynamic_capability_default(void);
 extern bool bgp_route_reflector_allow_outbound_policy_default(void);
-extern void bgp_config_write_listen(struct vty *vty, struct bgp *bgp);
 extern int bgp_vty_return(struct vty *vty, enum bgp_create_error_code ret);
 extern bool bgp_config_inprocess(void);
 extern struct peer *peer_and_group_lookup_vty(struct vty *vty,

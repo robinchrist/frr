@@ -355,6 +355,28 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* Legacy peer_group_delete() (bgpd.c) implicitly peer_delete()s every
+ * member bound to the group with no unbind primitive; the northbound
+ * /proteus-bgp:instance/peer-group destroy callback (bgp_nb_config.c) is
+ * intentionally stricter and VALIDATE-rejects a peer-group destroy while
+ * any neighbor entry is still bound to it in the candidate datastore, to
+ * keep datastore and runtime coherent (a destroy callback cannot itself
+ * reach into sibling list entries to clean them up). This iterator
+ * restores the one-command legacy UX at the CLI layer by enqueuing every
+ * bound member's own destroy alongside the peer-group's.
+ */
+static int no_neighbor_peer_group_member_iter_cb(const struct lyd_node *dnode, void *arg)
+{
+	struct vty *vty = arg;
+	const char *address = yang_dnode_get_string(dnode, "address");
+	char *xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", address);
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return YANG_ITER_CONTINUE;
+}
+
 DEFPY_YANG(
 	no_neighbor_peer_group, no_neighbor_peer_group_cli_cmd,
 	"no neighbor WORD$name peer-group",
@@ -365,6 +387,9 @@ DEFPY_YANG(
 {
 	char *xpath;
 	int ret;
+
+	yang_dnode_iterate(no_neighbor_peer_group_member_iter_cb, vty, bgp_cli_instance_dnode(vty),
+			   "./neighbor[peer-group='%s']", name);
 
 	xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']", name);
 	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
@@ -442,6 +467,77 @@ DEFPY_YANG(
  * PEER_STATUS_GROUP set and are never themselves peer_group_active()),
  * followed by "neighbor PGNAME remote-as ..." if set.
  */
+DEFPY_YANG(
+	bgp_listen_range, bgp_listen_range_cli_cmd,
+	"bgp listen range <A.B.C.D/M|X:X::X:X/M>$range peer-group PGNAME$pgname",
+	BGP_STR
+	"Configure BGP dynamic neighbors listen range\n"
+	"Configure BGP dynamic neighbors listen range\n"
+	NEIGHBOR_ADDR_STR
+	"Member of the peer-group\n"
+	"Peer-group name\n")
+{
+	char *xpath;
+	int ret;
+
+	if (!yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./peer-group[name='%s']", pgname)) {
+		vty_out(vty, "%% Configure the peer-group first\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']/listen-range[.='%s']", pgname,
+			   range_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_bgp_listen_range, no_bgp_listen_range_cli_cmd,
+	"no bgp listen range <A.B.C.D/M|X:X::X:X/M>$range peer-group PGNAME$pgname",
+	NO_STR
+	BGP_STR
+	"Unconfigure BGP dynamic neighbors listen range\n"
+	"Unconfigure BGP dynamic neighbors listen range\n"
+	NEIGHBOR_ADDR_STR
+	"Member of the peer-group\n"
+	"Peer-group name\n")
+{
+	char *xpath;
+	int ret;
+
+	xpath = asprintfrr(MTYPE_TMP, "./peer-group[name='%s']/listen-range[.='%s']", pgname,
+			   range_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
+ * XPath: /proteus-bgp:instance/peer-group/listen-range
+ *
+ * One "bgp listen range PFX peer-group PGNAME" line per leaf-list entry,
+ * matching bgp_config_write_listen()'s per-range loop (bgp_vty.c, retired
+ * in M4 batch B2). libyang's inet:ipv4-prefix/ipv6-prefix type plugins
+ * canonicalize (mask) the stored value on write, same effect as legacy's
+ * apply_mask() before storing into group->listen_range[], so the stored
+ * string can be rendered as-is.
+ */
+void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	const struct lyd_node *pg_dnode = yang_dnode_get_parent(dnode, "peer-group");
+
+	vty_out(vty, " bgp listen range %s peer-group %s\n", yang_dnode_get_string(dnode, NULL),
+		yang_dnode_get_string(pg_dnode, "name"));
+}
+
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				 bool show_defaults)
 {
@@ -558,4 +654,9 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &no_neighbor_peer_group_cli_cmd);
 	install_element(BGP_NODE, &neighbor_set_peer_group_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_set_peer_group_cli_cmd);
+
+	/* "bgp listen range ... peer-group PGNAME" dynamic neighbors (M4
+	 * batch B2). */
+	install_element(BGP_NODE, &bgp_listen_range_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_listen_range_cli_cmd);
 }

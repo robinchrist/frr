@@ -156,9 +156,6 @@ DEFINE_HOOK(bgp_snmp_traps_config_write, (struct vty * vty), (vty));
 DEFINE_HOOK(bgp_route_distinguisher_update, (struct bgp *bgp, afi_t afi, bool preconfig),
 	    (bgp, afi, preconfig));
 
-static struct peer_group *listen_range_exists(struct bgp *bgp,
-					      struct prefix *range, int exact);
-
 /* Show BGP peer's information. */
 enum show_type {
 	show_all,
@@ -2484,71 +2481,6 @@ void bgp_initiate_graceful_shut_unshut(struct vty *vty, struct bgp *bgp)
 	bgp_clear_star_soft_in(vty, bgp->name);
 }
 
-DEFUN (bgp_listen_limit,
-       bgp_listen_limit_cmd,
-       "bgp listen limit (1-65535)",
-       BGP_STR
-       "BGP Dynamic Neighbors listen commands\n"
-       "Maximum number of BGP Dynamic Neighbors that can be created\n"
-       "Configure Dynamic Neighbors listen limit value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 3;
-	int listen_limit;
-
-	listen_limit = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	bgp_listen_limit_set(bgp, listen_limit);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_listen_limit,
-       no_bgp_listen_limit_cmd,
-       "no bgp listen limit [(1-65535)]",
-       NO_STR
-       BGP_STR
-       "BGP Dynamic Neighbors listen commands\n"
-       "Maximum number of BGP Dynamic Neighbors that can be created\n"
-       "Configure Dynamic Neighbors listen limit value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp_listen_limit_unset(bgp);
-	return CMD_SUCCESS;
-}
-
-
-/*
- * Check if this listen range is already configured. Check for exact
- * match or overlap based on input.
- */
-static struct peer_group *listen_range_exists(struct bgp *bgp,
-					      struct prefix *range, int exact)
-{
-	struct listnode *node, *nnode;
-	struct listnode *node1, *nnode1;
-	struct peer_group *group;
-	struct prefix *lr;
-	afi_t afi;
-	int match;
-
-	afi = family2afi(range->family);
-	for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group)) {
-		for (ALL_LIST_ELEMENTS(group->listen_range[afi], node1, nnode1,
-				       lr)) {
-			if (exact)
-				match = prefix_same(range, lr);
-			else
-				match = (prefix_match(range, lr)
-					 || prefix_match(lr, range));
-			if (match)
-				return group;
-		}
-	}
-
-	return NULL;
-}
-
 /*
  * Check if there is no neighbors nor listening range on bgp
  */
@@ -2577,158 +2509,16 @@ void bgp_may_stop_listening(struct bgp *bgp, struct vty *vty)
 	UNSET_FLAG(bgp->flags, BGP_FLAG_VRF_MAY_LISTEN);
 }
 
-DEFUN (bgp_listen_range,
-       bgp_listen_range_cmd,
-       "bgp listen range <A.B.C.D/M|X:X::X:X/M> peer-group PGNAME",
-       BGP_STR
-       "Configure BGP dynamic neighbors listen range\n"
-       "Configure BGP dynamic neighbors listen range\n"
-       NEIGHBOR_ADDR_STR
-       "Member of the peer-group\n"
-       "Peer-group name\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct prefix range;
-	struct peer_group *group, *existing_group;
-	afi_t afi;
-	int ret;
-	int idx = 0;
-
-	argv_find(argv, argc, "A.B.C.D/M", &idx);
-	argv_find(argv, argc, "X:X::X:X/M", &idx);
-	char *prefix = argv[idx]->arg;
-	argv_find(argv, argc, "PGNAME", &idx);
-	char *peergroup = argv[idx]->arg;
-
-	/* Convert IP prefix string to struct prefix. */
-	ret = str2prefix(prefix, &range);
-	if (!ret) {
-		vty_out(vty, "%% Malformed listen range\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	afi = family2afi(range.family);
-
-	if (afi == AFI_IP6 && IN6_IS_ADDR_LINKLOCAL(&range.u.prefix6)) {
-		vty_out(vty,
-			"%% Malformed listen range (link-local address)\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	apply_mask(&range);
-
-	/* Check if same listen range is already configured. */
-	existing_group = listen_range_exists(bgp, &range, 1);
-	if (existing_group) {
-		if (strcmp(existing_group->name, peergroup) == 0)
-			return CMD_SUCCESS;
-		else {
-			vty_out(vty,
-				"%% Same listen range is attached to peer-group %s\n",
-				existing_group->name);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	/* Check if an overlapping listen range exists. */
-	if (listen_range_exists(bgp, &range, 0)) {
-		vty_out(vty,
-			"%% Listen range overlaps with existing listen range\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	group = peer_group_lookup(bgp, peergroup);
-	if (!group) {
-		vty_out(vty, "%% Configure the peer-group first\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* if need start listening */
-	bgp_need_listening(bgp, vty);
-
-	ret = peer_group_listen_range_add(group, &range);
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_listen_range,
-       no_bgp_listen_range_cmd,
-       "no bgp listen range <A.B.C.D/M|X:X::X:X/M> peer-group PGNAME",
-       NO_STR
-       BGP_STR
-       "Unconfigure BGP dynamic neighbors listen range\n"
-       "Unconfigure BGP dynamic neighbors listen range\n"
-       NEIGHBOR_ADDR_STR
-       "Member of the peer-group\n"
-       "Peer-group name\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct prefix range;
-	struct peer_group *group;
-	afi_t afi;
-	int ret;
-	int idx = 0;
-
-	argv_find(argv, argc, "A.B.C.D/M", &idx);
-	argv_find(argv, argc, "X:X::X:X/M", &idx);
-	char *prefix = argv[idx]->arg;
-	argv_find(argv, argc, "PGNAME", &idx);
-	char *peergroup = argv[idx]->arg;
-
-	/* Convert IP prefix string to struct prefix. */
-	ret = str2prefix(prefix, &range);
-	if (!ret) {
-		vty_out(vty, "%% Malformed listen range\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	afi = family2afi(range.family);
-
-	if (afi == AFI_IP6 && IN6_IS_ADDR_LINKLOCAL(&range.u.prefix6)) {
-		vty_out(vty,
-			"%% Malformed listen range (link-local address)\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	apply_mask(&range);
-
-	group = peer_group_lookup(bgp, peergroup);
-	if (!group) {
-		vty_out(vty, "%% Peer-group does not exist\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = peer_group_listen_range_del(group, &range);
-
-	/*
-	 * if need stop listening
-	 */
-	bgp_may_stop_listening(bgp, vty);
-
-	return bgp_vty_return(vty, ret);
-}
-
-void bgp_config_write_listen(struct vty *vty, struct bgp *bgp)
-{
-	struct peer_group *group;
-	struct listnode *node, *nnode, *rnode, *nrnode;
-	struct prefix *range;
-	afi_t afi;
-
-	if (bgp->dynamic_neighbors_limit != BGP_DYNAMIC_NEIGHBORS_LIMIT_DEFAULT)
-		vty_out(vty, " bgp listen limit %d\n",
-			bgp->dynamic_neighbors_limit);
-
-	for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group)) {
-		for (afi = AFI_IP; afi < AFI_MAX; afi++) {
-			for (ALL_LIST_ELEMENTS(group->listen_range[afi], rnode,
-					       nrnode, range)) {
-				vty_out(vty,
-					" bgp listen range %pFX peer-group %s\n",
-					range, group->name);
-			}
-		}
-	}
-}
+/* "bgp listen limit"/"bgp listen range" (dynamic neighbors): converted to
+ * northbound in M4 batch B2. No legacy subcommand attaches to a listen
+ * range or the listen limit afterward in the same config block (unlike
+ * neighbor/peer-group lifecycle above), so unlike those there is no
+ * replay-ordering reason to keep a legacy DEFUN alive here -- see
+ * doc/developer/northbound/bgpd-proteus-conversion.rst. The exact-match/
+ * overlap cross-peer-group validation the retired bgp_listen_range_cmd
+ * DEFUN used to perform (listen_range_exists()) is not replicated in the
+ * northbound callback (bgp_nb_peer_group.c); see that file's comment.
+ */
 
 /* neighbor/peer-group lifecycle + remote-as: the legacy commands below
  * were retired in M4 batch B1 (northbound now owns config_write) but are
@@ -3547,10 +3337,11 @@ ALIAS_HIDDEN(no_neighbor_activate, no_neighbor_activate_hidden_cmd,
  * replay-ordering reason as the other neighbor/peer-group lifecycle
  * commands above; see the block comment before peer_conf_interface_get().
  * The BGP_IPV4_NODE/etc. hidden address-family-context aliases
- * (neighbor_set_peer_group_hidden_cmd et al.) are deliberately not
- * reinstalled here -- pure CLI convenience, no functional loss since the
- * command is still reachable from BGP_NODE, same known-gap call already
- * made for these in the M4 batch B1 commit message. */
+ * (neighbor_set_peer_group_hidden_cmd et al.) are reinstalled below
+ * (M4 batch B2) -- pure CLI convenience, byte-identical grammar to the
+ * pre-conversion aliases, reachable only from bgpd's own vty (these AF
+ * nodes are not yet dual-routed to mgmtd, milestone 5 territory), so
+ * they belong here rather than in bgp_cli.c. */
 DEFUN (neighbor_set_peer_group,
        neighbor_set_peer_group_cmd,
        "neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
@@ -3604,6 +3395,12 @@ DEFUN (neighbor_set_peer_group,
 	return bgp_vty_return(vty, ret);
 }
 
+ALIAS_HIDDEN(neighbor_set_peer_group, neighbor_set_peer_group_hidden_cmd,
+	     "neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
+	     "Member of the peer-group\n"
+	     "Peer-group name\n")
+
 DEFUN (no_neighbor_set_peer_group,
        no_neighbor_set_peer_group_cmd,
        "no neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
@@ -3654,6 +3451,12 @@ DEFUN (no_neighbor_set_peer_group,
 
 	return bgp_vty_return(vty, ret);
 }
+
+ALIAS_HIDDEN(no_neighbor_set_peer_group, no_neighbor_set_peer_group_hidden_cmd,
+	     "no neighbor <A.B.C.D|X:X::X:X|WORD> peer-group PGNAME",
+	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
+	     "Member of the peer-group\n"
+	     "Peer-group name\n")
 
 /* neighbor passive. */
 DEFUN (neighbor_passive,
@@ -19489,8 +19292,8 @@ int bgp_config_write(struct vty *vty)
 				bgp_config_write_peer_global(vty, bgp, peer);
 		}
 
-		/* listen range and limit for dynamic BGP neighbors */
-		bgp_config_write_listen(vty, bgp);
+		/* listen range and limit for dynamic BGP neighbors:
+		 * northbound now, see bgp_cli.c (M4 batch B2) */
 
 		/*
 		 * BGP default autoshutdown neighbors
@@ -20203,13 +20006,8 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
 	/* bgp graceful-restart rib-stale-time: northbound now, see bgp_cli.c */
 
-	/* "bgp listen limit" commands. */
-	install_element(BGP_NODE, &bgp_listen_limit_cmd);
-	install_element(BGP_NODE, &no_bgp_listen_limit_cmd);
-
-	/* "bgp listen range" commands. */
-	install_element(BGP_NODE, &bgp_listen_range_cmd);
-	install_element(BGP_NODE, &no_bgp_listen_range_cmd);
+	/* "bgp listen limit"/"bgp listen range": northbound now, see
+	 * bgp_cli.c (M4 batch B2) */
 
 	/* "bgp default shutdown" command */
 	install_element(BGP_NODE, &bgp_default_shutdown_cmd);
@@ -20286,13 +20084,29 @@ void bgp_vty_init(void)
 
 	/* "neighbor ... peer-group PGNAME" bind/unbind commands: reinstated,
 	 * see the block comment before neighbor_set_peer_group() above. The
-	 * BGP_IPV4_NODE/etc. hidden AF-context aliases are not reinstalled
-	 * in this batch (pure CLI convenience, no functional loss -- the
-	 * command is still reachable from BGP_NODE); flagged as a known gap
-	 * for a follow-up batch (same call already made in the M4 batch B1
-	 * commit message). */
+	 * BGP_IPV4_NODE/etc. hidden AF-context aliases are reinstalled too
+	 * (M4 batch B2), matching the pre-conversion node list exactly. */
 	install_element(BGP_NODE, &neighbor_set_peer_group_cmd);
+	install_element(BGP_IPV4_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_set_peer_group_hidden_cmd);
+
 	install_element(BGP_NODE, &no_neighbor_set_peer_group_cmd);
+	install_element(BGP_IPV4_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_set_peer_group_hidden_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_set_peer_group_hidden_cmd);
 
 	/* "neighbor softreconfiguration inbound" commands.*/
 	install_element(BGP_NODE, &neighbor_soft_reconfiguration_hidden_cmd);

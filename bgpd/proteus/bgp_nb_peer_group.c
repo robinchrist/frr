@@ -13,6 +13,7 @@
 #include "lib/log.h"
 #include "lib/yang_wrappers.h"
 #include "lib/frrevent.h"
+#include "lib/prefix.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
@@ -75,10 +76,35 @@ int instance_peer_group_destroy(struct nb_cb_destroy_args *args)
 	switch (args->event) {
 	case NB_EV_VALIDATE: {
 		afi_t afi;
+		const struct lyd_node *instance_dnode;
+		const char *name;
+		uint32_t member_count;
 
 		group = bgp_nb_peer_group_lookup(args->dnode);
 		if (!group)
 			break;
+
+		/* Stricter-than-legacy northbound semantics: peer_group_delete()
+		 * (bgpd.c) implicitly peer_delete()s every bound member with no
+		 * unbind primitive, but reconciling the members' now-stale
+		 * northbound 'neighbor' list entries after the fact is not
+		 * something a plain VALIDATE/APPLY pair can do cleanly (a
+		 * destroy callback cannot itself mutate sibling list entries in
+		 * the same transaction). Reject here instead, forcing explicit
+		 * neighbor deletion first so the datastore never disagrees with
+		 * runtime; bgp_cli.c's 'no neighbor WORD peer-group' CLI
+		 * restores the legacy one-command UX by enqueuing the member
+		 * destroys itself before this one.
+		 */
+		name = yang_dnode_get_string(args->dnode, "name");
+		instance_dnode = yang_dnode_get_parent(args->dnode, "instance");
+		member_count = yang_dnode_count(instance_dnode, "./neighbor[peer-group='%s']", name);
+		if (member_count) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Peer-group %s still has %u neighbor(s) bound to it, delete them first",
+				 name, member_count);
+			return NB_ERR_VALIDATION;
+		}
 
 		for (afi = AFI_IP; afi < AFI_MAX; afi++) {
 			if (listcount(group->listen_range[afi])) {
@@ -99,13 +125,9 @@ int instance_peer_group_destroy(struct nb_cb_destroy_args *args)
 		if (!group)
 			break;
 
-		/* peer_group_delete() deletes every member peer (and its
-		 * doppelganger), it does not demote them to standalone
-		 * peers -- there is no legacy unbind primitive (bgpd.c).
-		 * Their northbound 'neighbor' list entries are left as-is
-		 * in the running datastore by this callback; reconciling
-		 * them is out of scope for this batch (see commit message).
-		 */
+		/* No members can remain bound at this point (VALIDATE above
+		 * rejects otherwise), so peer_group_delete() has nothing left
+		 * to implicitly tear down beyond the group's own conf peer. */
 		peer_group_notify_unconfig(group);
 		peer_group_delete(group);
 		if (bgp)
@@ -1382,16 +1404,66 @@ int instance_peer_group_extended_optional_parameters_modify(struct nb_cb_modify_
 	return NB_OK;
 }
 
+/* 'bgp listen range <A.B.C.D/M|X:X::X:X/M> peer-group PGNAME': dynamic
+ * neighbor listen range, keyed on the range itself as a leaf-list under
+ * the owning peer-group (bgp_config_write_listen(), bgp_vty.c). Only the
+ * purely syntactic checks (malformed prefix, IPv6 link-local) run at
+ * VALIDATE -- the legacy CLI's "peer-group must already have remote-as"
+ * and cross-group same-range/overlap rejections both depend on other
+ * peer-groups' live state, which is not settled until APPLY when this
+ * range's own peer-group is being created in the same commit (the B1
+ * create/remote-as-leaf ordering issue). peer_group_listen_range_add()
+ * itself still enforces the remote-as precondition; a same-commit
+ * cross-group duplicate/overlap is the one legacy check not replicated
+ * here (documented gap, not a scope-drop: the legacy check lived in the
+ * now-retired DEFUN, not in the setter).
+ */
 int instance_peer_group_listen_range_create(struct nb_cb_create_args *args)
 {
+	struct peer_group *group;
+	struct prefix range;
+	const char *range_str;
+	afi_t afi;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/listen-range");
-		return NB_ERR_VALIDATION;
+		range_str = yang_dnode_get_string(args->dnode, NULL);
+		if (!str2prefix(range_str, &range)) {
+			snprintf(args->errmsg, args->errmsg_len, "Malformed listen range: %s",
+				 range_str);
+			return NB_ERR_VALIDATION;
+		}
+
+		afi = family2afi(range.family);
+		if (afi == AFI_IP6 && IN6_IS_ADDR_LINKLOCAL(&range.u.prefix6)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Malformed listen range (link-local address)");
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		range_str = yang_dnode_get_string(args->dnode, NULL);
+		if (!str2prefix(range_str, &range))
+			break;
+		apply_mask(&range);
+
+		bgp_need_listening(group->bgp, NULL);
+
+		ret = peer_group_listen_range_add(group, &range);
+		if (ret) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_group_listen_range_add() failed for %s on %s: %d",
+				 __func__, range_str, group->name, ret);
+			return NB_ERR_RESOURCE;
+		}
 		break;
 	}
 
@@ -1400,16 +1472,31 @@ int instance_peer_group_listen_range_create(struct nb_cb_create_args *args)
 
 int instance_peer_group_listen_range_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/listen-range");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+	struct prefix range;
+	const char *range_str;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	range_str = yang_dnode_get_string(args->dnode, NULL);
+	if (!str2prefix(range_str, &range))
+		return NB_OK;
+	apply_mask(&range);
+
+	/* peer_group_listen_range_del() also tears down every live dynamic
+	 * peer that fell inside this range (bgpd.c) -- must be called
+	 * rather than just dropping the prefix from a local list. */
+	peer_group_listen_range_del(group, &range);
+
+	if (bgp)
+		bgp_may_stop_listening(bgp, NULL);
 
 	return NB_OK;
 }

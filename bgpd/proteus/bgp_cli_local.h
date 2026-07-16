@@ -142,6 +142,8 @@ void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dno
 void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults);
+void instance_listen_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
 void instance_log_neighbor_changes_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults);
 void instance_long_lived_graceful_restart_stale_time_cli_write(struct vty *vty,
@@ -186,6 +188,8 @@ void instance_write_quanta_cli_write(struct vty *vty, const struct lyd_node *dno
 void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				 bool show_defaults);
+void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
 void process_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults);
 void process_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
