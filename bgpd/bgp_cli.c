@@ -1309,6 +1309,101 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B8: graceful-restart instance-only leaves
+ * ('bgp long-lived-graceful-restart stale-time', 'bgp graceful-restart
+ * notification'). Both installed at BGP_NODE, relative "./..." xpaths.
+ */
+
+DEFPY_YANG(
+	bgp_llgr_stalepath_time, bgp_llgr_stalepath_time_cli_cmd,
+	"bgp long-lived-graceful-restart stale-time (1-16777215)$stale_time",
+	BGP_STR
+	"Enable Long-lived Graceful Restart\n"
+	"Specifies maximum time to wait before purging long-lived stale routes\n"
+	"Stale time value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./long-lived-graceful-restart-stale-time", NB_OP_MODIFY,
+			      stale_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_llgr_stalepath_time, no_bgp_llgr_stalepath_time_cli_cmd,
+	"no bgp long-lived-graceful-restart stale-time [(1-16777215)]",
+	NO_STR BGP_STR
+	"Enable Long-lived Graceful Restart\n"
+	"Specifies maximum time to wait before purging long-lived stale routes\n"
+	"Stale time value (seconds)\n")
+{
+	nb_cli_enqueue_change(vty, "./long-lived-graceful-restart-stale-time", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Tri-state (profile-dependent FRR_CFG_DEFAULT_BOOL(BGP_GRACEFUL_NOTIFICATION)):
+ * legacy bgp_config_write() diffs against SAVE_BGP_GRACEFUL_NOTIFICATION to
+ * decide whether to emit the bare '[no] bgp graceful-restart notification'
+ * line, so this leaf has no YANG default and follows the tri-state
+ * enabled|disabled scheme (see instance_log_neighbor_changes above): the
+ * canonical form is presence-based (cli_show always emits an explicit
+ * value), and the pre-existing bare grammar is kept as deprecated aliases
+ * so configs saved before this leaf grew the enabled|disabled grammar keep
+ * loading with their original meaning.
+ */
+DEFPY_YANG(
+	bgp_graceful_restart_notification, bgp_graceful_restart_notification_cli_cmd,
+	"bgp graceful-restart notification <enabled|disabled>$mode",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Indicate Graceful Restart support for BGP NOTIFICATION messages\n"
+	"Enable Graceful Restart Notification support\n"
+	"Disable Graceful Restart Notification support\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/notification", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_restart_notification, no_bgp_graceful_restart_notification_cli_cmd,
+	"no bgp graceful-restart notification <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Graceful restart capability parameters\n"
+	"Indicate Graceful Restart support for BGP NOTIFICATION messages\n"
+	"Enable Graceful Restart Notification support\n"
+	"Disable Graceful Restart Notification support\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/notification", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_graceful_restart_notification_deprecated,
+	bgp_graceful_restart_notification_deprecated_cli_cmd,
+	"bgp graceful-restart notification",
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Indicate Graceful Restart support for BGP NOTIFICATION messages\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/notification", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_graceful_restart_notification_deprecated,
+	no_bgp_graceful_restart_notification_deprecated_cli_cmd,
+	"no bgp graceful-restart notification",
+	NO_STR
+	BGP_STR
+	"Graceful restart capability parameters\n"
+	"Indicate Graceful Restart support for BGP NOTIFICATION messages\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/notification", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -1798,6 +1893,25 @@ static void instance_tcp_keepalive_cli_write(struct vty *vty, const struct lyd_n
 		yang_dnode_get_uint16(dnode, "interval"), yang_dnode_get_uint8(dnode, "probes"));
 }
 
+static void instance_long_lived_graceful_restart_stale_time_cli_write(struct vty *vty,
+								      const struct lyd_node *dnode,
+								      bool show_defaults)
+{
+	vty_out(vty, " bgp long-lived-graceful-restart stale-time %u\n",
+		yang_dnode_get_uint32(dnode, NULL));
+}
+
+/* Tri-state, presence-based (see B8 DEFPY comment above): always emits an
+ * explicit enabled|disabled value, never the legacy bare/negative form.
+ */
+static void instance_graceful_restart_notification_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, " bgp graceful-restart notification %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -2111,6 +2225,18 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/long-lived-graceful-restart-stale-time",
+			.cbs = {
+				.cli_show = instance_long_lived_graceful_restart_stale_time_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/notification",
+			.cbs = {
+				.cli_show = instance_graceful_restart_notification_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/route-map-delay-timer",
 			.cbs = {
 				.cli_show = process_route_map_delay_timer_cli_write,
@@ -2236,6 +2362,13 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_confederation_peers_cli_cmd);
 	install_element(BGP_NODE, &bgp_tcp_keepalive_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_tcp_keepalive_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_llgr_stalepath_time_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_llgr_stalepath_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_notification_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_notification_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_notification_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_notification_deprecated_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

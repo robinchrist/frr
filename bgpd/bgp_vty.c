@@ -627,6 +627,11 @@ bool bgp_log_neighbor_changes_default(void)
 	return DFLT_BGP_LOG_NEIGHBOR_CHANGES;
 }
 
+bool bgp_graceful_restart_notification_default(void)
+{
+	return DFLT_BGP_GRACEFUL_NOTIFICATION;
+}
+
 int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 		enum bgp_instance_type inst_type, const char *as_pretty,
 		enum asnotation_mode asnotation)
@@ -2929,30 +2934,6 @@ DEFUN (no_bgp_graceful_restart_preserve_fw,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_graceful_restart_notification,
-	bgp_graceful_restart_notification_cmd,
-	"[no$no] bgp graceful-restart notification",
-	NO_STR
-	BGP_STR
-	"Graceful restart capability parameters\n"
-	"Indicate Graceful Restart support for BGP NOTIFICATION messages\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
-
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
-		bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
-				    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
-
-	return CMD_SUCCESS;
-}
-
 DEFPY (bgp_administrative_reset,
 	bgp_administrative_reset_cmd,
 	"[no$no] bgp hard-administrative-reset",
@@ -3334,49 +3315,6 @@ DEFUN (no_bgp_graceful_restart_rib_stale_time,
 	/* Send the stale timer update message to RIB */
 	if (bgp_zebra_stale_timer_update(bgp))
 		return CMD_WARNING;
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(bgp_llgr_stalepath_time, bgp_llgr_stalepath_time_cmd,
-      "bgp long-lived-graceful-restart stale-time (1-16777215)",
-      BGP_STR
-      "Enable Long-lived Graceful Restart\n"
-      "Specifies maximum time to wait before purging long-lived stale routes\n"
-      "Stale time value (seconds)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	uint32_t llgr_stale_time;
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	llgr_stale_time = strtoul(argv[3]->arg, NULL, 10);
-	bgp->llgr_stale_time = llgr_stale_time;
-
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
-		bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_LLGR,
-				    CAPABILITY_ACTION_SET);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_llgr_stalepath_time, no_bgp_llgr_stalepath_time_cmd,
-      "no bgp long-lived-graceful-restart stale-time [(1-16777215)]",
-      NO_STR BGP_STR
-      "Enable Long-lived Graceful Restart\n"
-      "Specifies maximum time to wait before purging long-lived stale routes\n"
-      "Stale time value (seconds)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node, *nnode;
-	struct peer *peer;
-
-	bgp->llgr_stale_time = BGP_DEFAULT_LLGR_STALE_TIME;
-
-	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
-		bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_LLGR,
-				    CAPABILITY_ACTION_UNSET);
 
 	return CMD_SUCCESS;
 }
@@ -20780,12 +20718,6 @@ int bgp_config_write(struct vty *vty)
 			if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN))
 				vty_out(vty, " bgp graceful-shutdown\n");
 
-		/* Long-lived Graceful Restart */
-		if (bgp->llgr_stale_time != BGP_DEFAULT_LLGR_STALE_TIME)
-			vty_out(vty,
-				" bgp long-lived-graceful-restart stale-time %u\n",
-				bgp->llgr_stale_time);
-
 		/* BGP per-instance graceful-restart. */
 		/* BGP-wide settings and per-instance settings are mutually
 		 * exclusive.
@@ -20801,14 +20733,6 @@ int bgp_config_write(struct vty *vty)
 				vty_out(vty,
 					" bgp graceful-restart restart-time %u\n",
 					bgp->restart_time);
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION) !=
-		    SAVE_BGP_GRACEFUL_NOTIFICATION)
-			vty_out(vty, " %sbgp graceful-restart notification\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_GRACEFUL_NOTIFICATION)
-					? ""
-					: "no ");
 
 		if (bm->select_defer_time == BGP_DEFAULT_SELECT_DEFERRAL_TIME)
 			if (bgp->select_defer_time !=
@@ -21636,7 +21560,6 @@ void bgp_vty_init(void)
 			&no_bgp_graceful_restart_select_defer_time_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_preserve_fw_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_preserve_fw_cmd);
-	install_element(BGP_NODE, &bgp_graceful_restart_notification_cmd);
 
 	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
@@ -21649,10 +21572,6 @@ void bgp_vty_init(void)
 
 	/* "bgp hard-administrative-reset" commands */
 	install_element(BGP_NODE, &bgp_administrative_reset_cmd);
-
-	/* "bgp long-lived-graceful-restart" commands */
-	install_element(BGP_NODE, &bgp_llgr_stalepath_time_cmd);
-	install_element(BGP_NODE, &no_bgp_llgr_stalepath_time_cmd);
 
 	/* "bgp bestpath aigp" commands */
 	install_element(BGP_NODE, &bgp_bestpath_aigp_cmd);

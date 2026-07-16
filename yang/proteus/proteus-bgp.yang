@@ -2778,8 +2778,18 @@ module proteus-bgp {
       leaf notification {
         type boolean;
         description
-          "'[no] bgp graceful-restart notification' (RFC 8538
-           N-bit; default on).";
+          "'bgp graceful-restart notification <enabled|disabled>'
+           (also 'no bgp graceful-restart notification
+           <enabled|disabled>' to unset; RFC 8538 N-bit), emitted
+           by bgp_config_write() in bgpd/bgp_vty.c. Tri-state: no
+           YANG default, unset means the compile-profile default
+           (FRR_CFG_DEFAULT_BOOL(BGP_GRACEFUL_NOTIFICATION), on from
+           FRR 8.3 on); an explicit value, once set, is always
+           rendered explicitly. Deprecated bare 'bgp graceful-restart
+           notification' / 'no bgp graceful-restart notification'
+           aliases keep loading configs saved before this leaf grew
+           the enabled|disabled grammar (bare means true, bare 'no'
+           persists an explicit false).";
       }
       leaf preserve-fw-state {
         type boolean;

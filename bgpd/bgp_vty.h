@@ -163,6 +163,7 @@ extern int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 		       enum bgp_instance_type inst_type, const char *as_pretty,
 		       enum asnotation_mode asnotation);
 extern bool bgp_log_neighbor_changes_default(void);
+extern bool bgp_graceful_restart_notification_default(void);
 extern void bgp_config_write_update_delay(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_advertisement_delay(struct vty *vty, struct bgp *bgp);
 extern void bgp_config_write_listen(struct vty *vty, struct bgp *bgp);

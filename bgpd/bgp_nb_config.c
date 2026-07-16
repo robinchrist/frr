@@ -18,6 +18,8 @@
 #include "bgpd/bgp_conditional_adv.h"
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_fsm.h"
+#include "bgpd/bgp_open.h"
+#include "bgpd/bgp_packet.h"
 
 /* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
  * from, so unlike the instance-scoped callbacks below there is no
@@ -2467,14 +2469,23 @@ int instance_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 
 int instance_long_lived_graceful_restart_stale_time_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/long-lived-graceful-restart-stale-time");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->llgr_stale_time = yang_dnode_get_uint32(args->dnode, NULL);
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_LLGR, CAPABILITY_ACTION_SET);
 		break;
 	}
 
@@ -2483,14 +2494,23 @@ int instance_long_lived_graceful_restart_stale_time_modify(struct nb_cb_modify_a
 
 int instance_long_lived_graceful_restart_stale_time_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/long-lived-graceful-restart-stale-time");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->llgr_stale_time = BGP_DEFAULT_LLGR_STALE_TIME;
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_LLGR, CAPABILITY_ACTION_UNSET);
 		break;
 	}
 
@@ -2531,14 +2551,30 @@ int instance_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args)
 
 int instance_graceful_restart_notification_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/notification");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
+		/* Matches the legacy DEFPY: capability renegotiation is
+		 * unconditionally CAPABILITY_ACTION_SET regardless of the
+		 * new flag's polarity.
+		 */
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
 		break;
 	}
 
@@ -2547,14 +2583,26 @@ int instance_graceful_restart_notification_modify(struct nb_cb_modify_args *args
 
 int instance_graceful_restart_notification_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node, *nnode;
+	struct peer *peer;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-restart/notification");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_graceful_restart_notification_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_NOTIFICATION);
+		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer))
+			bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST,
+					    CAPABILITY_CODE_RESTART, CAPABILITY_ACTION_SET);
 		break;
 	}
 
