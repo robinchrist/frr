@@ -1404,6 +1404,757 @@ DEFPY_ATTR(
 }
 
 /*
+ * Milestone 2 batch B9: the 13 (14-xpath, software-version-capability
+ * splits into two leaves) profile-dependent tri-state booleans.
+ *
+ * Every one of these leaves is tri-state for the same reason as
+ * log-neighbor-changes/graceful-restart-notification above: the legacy
+ * bgp_config_write() diffs the flag against a SAVE_BGP_* macro
+ * (FRR_CFG_DEFAULT_BOOL profile/version table, see bgp_vty.c) and emits
+ * either the bare command or its 'no' form whenever the live value differs
+ * from what the *current* FRR build would pick by default, so there is no
+ * single static YANG default that could replace that logic. Each leaf
+ * therefore has no YANG default, follows the canonical
+ * '<cmd> <enabled|disabled>' / 'no <cmd> <enabled|disabled>' scheme
+ * (MODIFY true/false, DESTROY restores the DFLT_BGP_* profile default via a
+ * bgp_<leaf>_default() wrapper in bgp_vty.c/bgp_vty.h), and keeps the old
+ * bare grammar as deprecated aliases (bare positive -> MODIFY "true", bare
+ * 'no' -> MODIFY "false", not DESTROY, since that is what the legacy
+ * negative form actually persisted).
+ *
+ * route-reflector-allow-outbound-policy is folded into this scheme even
+ * though its FRR_CFG_DEFAULT_BOOL table entry never varies by
+ * profile/version (always {false}): bgp_config_write() still diffs it
+ * against SAVE_BGP_RR_ALLOW_OUTBOUND_POLICY using the exact same idiom as
+ * the profile-dependent leaves, so it is classified as tri-state on the
+ * emission-idiom evidence, not on whether the default happens to vary
+ * today.
+ *
+ * deterministic-med additionally carries the legacy addpath-dmed
+ * NB_EV_VALIDATE rejection; see instance_deterministic_med_validate_disable()
+ * in bgp_nb_config.c for the design note on why that check is safe to run
+ * at VALIDATE despite VALIDATE having no guaranteed bgp struct.
+ */
+
+DEFPY_YANG(
+	bgp_ebgp_requires_policy, bgp_ebgp_requires_policy_cli_cmd,
+	"bgp ebgp-requires-policy <enabled|disabled>$mode",
+	BGP_STR
+	"Require in and out policy for eBGP peers (RFC8212)\n"
+	"Enable required in/out policy for eBGP peers\n"
+	"Disable required in/out policy for eBGP peers\n")
+{
+	nb_cli_enqueue_change(vty, "./ebgp-requires-policy", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_ebgp_requires_policy, no_bgp_ebgp_requires_policy_cli_cmd,
+	"no bgp ebgp-requires-policy <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Require in and out policy for eBGP peers (RFC8212)\n"
+	"Enable required in/out policy for eBGP peers\n"
+	"Disable required in/out policy for eBGP peers\n")
+{
+	nb_cli_enqueue_change(vty, "./ebgp-requires-policy", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_ebgp_requires_policy_deprecated, bgp_ebgp_requires_policy_deprecated_cli_cmd,
+	"bgp ebgp-requires-policy",
+	BGP_STR
+	"Require in and out policy for eBGP peers (RFC8212)\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./ebgp-requires-policy", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_ebgp_requires_policy_deprecated, no_bgp_ebgp_requires_policy_deprecated_cli_cmd,
+	"no bgp ebgp-requires-policy",
+	NO_STR
+	BGP_STR
+	"Require in and out policy for eBGP peers (RFC8212)\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./ebgp-requires-policy", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_enforce_first_as, bgp_enforce_first_as_cli_cmd,
+	"bgp enforce-first-as <enabled|disabled>$mode",
+	BGP_STR
+	"Enforce the first AS for EBGP routes\n"
+	"Enable enforcing the first AS for EBGP routes\n"
+	"Disable enforcing the first AS for EBGP routes\n")
+{
+	nb_cli_enqueue_change(vty, "./enforce-first-as", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_enforce_first_as, no_bgp_enforce_first_as_cli_cmd,
+	"no bgp enforce-first-as <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Enforce the first AS for EBGP routes\n"
+	"Enable enforcing the first AS for EBGP routes\n"
+	"Disable enforcing the first AS for EBGP routes\n")
+{
+	nb_cli_enqueue_change(vty, "./enforce-first-as", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_enforce_first_as_deprecated, bgp_enforce_first_as_deprecated_cli_cmd,
+	"bgp enforce-first-as",
+	BGP_STR
+	"Enforce the first AS for EBGP routes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./enforce-first-as", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_enforce_first_as_deprecated, no_bgp_enforce_first_as_deprecated_cli_cmd,
+	"no bgp enforce-first-as",
+	NO_STR
+	BGP_STR
+	"Enforce the first AS for EBGP routes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./enforce-first-as", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_suppress_duplicates, bgp_suppress_duplicates_cli_cmd,
+	"bgp suppress-duplicates <enabled|disabled>$mode",
+	BGP_STR
+	"Suppress duplicate updates if the route actually not changed\n"
+	"Enable suppressing duplicate updates\n"
+	"Disable suppressing duplicate updates\n")
+{
+	nb_cli_enqueue_change(vty, "./suppress-duplicates", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_suppress_duplicates, no_bgp_suppress_duplicates_cli_cmd,
+	"no bgp suppress-duplicates <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Suppress duplicate updates if the route actually not changed\n"
+	"Enable suppressing duplicate updates\n"
+	"Disable suppressing duplicate updates\n")
+{
+	nb_cli_enqueue_change(vty, "./suppress-duplicates", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_suppress_duplicates_deprecated, bgp_suppress_duplicates_deprecated_cli_cmd,
+	"bgp suppress-duplicates",
+	BGP_STR
+	"Suppress duplicate updates if the route actually not changed\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./suppress-duplicates", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_suppress_duplicates_deprecated, no_bgp_suppress_duplicates_deprecated_cli_cmd,
+	"no bgp suppress-duplicates",
+	NO_STR
+	BGP_STR
+	"Suppress duplicate updates if the route actually not changed\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./suppress-duplicates", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_administrative_reset, bgp_administrative_reset_cli_cmd,
+	"bgp hard-administrative-reset <enabled|disabled>$mode",
+	BGP_STR
+	"Send Hard Reset CEASE Notification for 'Administrative Reset'\n"
+	"Enable Hard Reset CEASE Notification\n"
+	"Disable Hard Reset CEASE Notification\n")
+{
+	nb_cli_enqueue_change(vty, "./hard-administrative-reset", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_administrative_reset, no_bgp_administrative_reset_cli_cmd,
+	"no bgp hard-administrative-reset <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Send Hard Reset CEASE Notification for 'Administrative Reset'\n"
+	"Enable Hard Reset CEASE Notification\n"
+	"Disable Hard Reset CEASE Notification\n")
+{
+	nb_cli_enqueue_change(vty, "./hard-administrative-reset", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_administrative_reset_deprecated, bgp_administrative_reset_deprecated_cli_cmd,
+	"bgp hard-administrative-reset",
+	BGP_STR
+	"Send Hard Reset CEASE Notification for 'Administrative Reset'\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./hard-administrative-reset", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_administrative_reset_deprecated, no_bgp_administrative_reset_deprecated_cli_cmd,
+	"no bgp hard-administrative-reset",
+	NO_STR
+	BGP_STR
+	"Send Hard Reset CEASE Notification for 'Administrative Reset'\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./hard-administrative-reset", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_deterministic_med, bgp_deterministic_med_cli_cmd,
+	"bgp deterministic-med <enabled|disabled>$mode",
+	BGP_STR
+	"Pick the best-MED path among paths advertised from the neighboring AS\n"
+	"Enable deterministic-MED\n"
+	"Disable deterministic-MED\n")
+{
+	nb_cli_enqueue_change(vty, "./deterministic-med", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_deterministic_med, no_bgp_deterministic_med_cli_cmd,
+	"no bgp deterministic-med <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Pick the best-MED path among paths advertised from the neighboring AS\n"
+	"Enable deterministic-MED\n"
+	"Disable deterministic-MED\n")
+{
+	nb_cli_enqueue_change(vty, "./deterministic-med", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_deterministic_med_deprecated, bgp_deterministic_med_deprecated_cli_cmd,
+	"bgp deterministic-med",
+	BGP_STR
+	"Pick the best-MED path among paths advertised from the neighboring AS\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./deterministic-med", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_deterministic_med_deprecated, no_bgp_deterministic_med_deprecated_cli_cmd,
+	"no bgp deterministic-med",
+	NO_STR
+	BGP_STR
+	"Pick the best-MED path among paths advertised from the neighboring AS\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./deterministic-med", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_network_import_check, bgp_network_import_check_cli_cmd,
+	"bgp network import-check <enabled|disabled>$mode",
+	BGP_STR
+	"BGP network command\n"
+	"Check BGP network route exists in IGP\n"
+	"Enable checking BGP network route exists in IGP\n"
+	"Disable checking BGP network route exists in IGP\n")
+{
+	nb_cli_enqueue_change(vty, "./network-import-check", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_network_import_check, no_bgp_network_import_check_cli_cmd,
+	"no bgp network import-check <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"BGP network command\n"
+	"Check BGP network route exists in IGP\n"
+	"Enable checking BGP network route exists in IGP\n"
+	"Disable checking BGP network route exists in IGP\n")
+{
+	nb_cli_enqueue_change(vty, "./network-import-check", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_network_import_check_deprecated, bgp_network_import_check_deprecated_cli_cmd,
+	"bgp network import-check",
+	BGP_STR
+	"BGP network command\n"
+	"Check BGP network route exists in IGP\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./network-import-check", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_network_import_check_deprecated, no_bgp_network_import_check_deprecated_cli_cmd,
+	"no bgp network import-check",
+	NO_STR
+	BGP_STR
+	"BGP network command\n"
+	"Check BGP network route exists in IGP\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./network-import-check", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_bestpath_aigp, bgp_bestpath_aigp_cli_cmd,
+	"bgp bestpath aigp <enabled|disabled>$mode",
+	BGP_STR
+	"Change the default bestpath selection\n"
+	"Evaluate the AIGP attribute during the best path selection process\n"
+	"Enable evaluating the AIGP attribute\n"
+	"Disable evaluating the AIGP attribute\n")
+{
+	nb_cli_enqueue_change(vty, "./bestpath/aigp", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_bestpath_aigp, no_bgp_bestpath_aigp_cli_cmd,
+	"no bgp bestpath aigp <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Change the default bestpath selection\n"
+	"Evaluate the AIGP attribute during the best path selection process\n"
+	"Enable evaluating the AIGP attribute\n"
+	"Disable evaluating the AIGP attribute\n")
+{
+	nb_cli_enqueue_change(vty, "./bestpath/aigp", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_bestpath_aigp_deprecated, bgp_bestpath_aigp_deprecated_cli_cmd,
+	"bgp bestpath aigp",
+	BGP_STR
+	"Change the default bestpath selection\n"
+	"Evaluate the AIGP attribute during the best path selection process\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./bestpath/aigp", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_bestpath_aigp_deprecated, no_bgp_bestpath_aigp_deprecated_cli_cmd,
+	"no bgp bestpath aigp",
+	NO_STR
+	BGP_STR
+	"Change the default bestpath selection\n"
+	"Evaluate the AIGP attribute during the best path selection process\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./bestpath/aigp", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_default_show_hostname, bgp_default_show_hostname_cli_cmd,
+	"bgp default show-hostname <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname in certain command outputs\n"
+	"Enable showing hostname\n"
+	"Disable showing hostname\n")
+{
+	nb_cli_enqueue_change(vty, "./default/show-hostname", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_show_hostname, no_bgp_default_show_hostname_cli_cmd,
+	"no bgp default show-hostname <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname in certain command outputs\n"
+	"Enable showing hostname\n"
+	"Disable showing hostname\n")
+{
+	nb_cli_enqueue_change(vty, "./default/show-hostname", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_default_show_hostname_deprecated, bgp_default_show_hostname_deprecated_cli_cmd,
+	"bgp default show-hostname",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname in certain command outputs\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/show-hostname", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_show_hostname_deprecated, no_bgp_default_show_hostname_deprecated_cli_cmd,
+	"no bgp default show-hostname",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname in certain command outputs\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/show-hostname", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_default_show_nexthop_hostname, bgp_default_show_nexthop_hostname_cli_cmd,
+	"bgp default show-nexthop-hostname <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname for nexthop in certain command outputs\n"
+	"Enable showing nexthop hostname\n"
+	"Disable showing nexthop hostname\n")
+{
+	nb_cli_enqueue_change(vty, "./default/show-nexthop-hostname", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_show_nexthop_hostname, no_bgp_default_show_nexthop_hostname_cli_cmd,
+	"no bgp default show-nexthop-hostname <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname for nexthop in certain command outputs\n"
+	"Enable showing nexthop hostname\n"
+	"Disable showing nexthop hostname\n")
+{
+	nb_cli_enqueue_change(vty, "./default/show-nexthop-hostname", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_default_show_nexthop_hostname_deprecated,
+	bgp_default_show_nexthop_hostname_deprecated_cli_cmd,
+	"bgp default show-nexthop-hostname",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname for nexthop in certain command outputs\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/show-nexthop-hostname", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_show_nexthop_hostname_deprecated,
+	no_bgp_default_show_nexthop_hostname_deprecated_cli_cmd,
+	"no bgp default show-nexthop-hostname",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Show hostname for nexthop in certain command outputs\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/show-nexthop-hostname", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* software-version-capability carries two independent flag bits
+ * (BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD/_NEW) selected by the legacy
+ * grammar's optional 'latest-encoding' token; the YANG model keeps that
+ * distinction as two separate leaves rather than collapsing it, so the
+ * canonical/deprecated commands below come in two families, one per leaf.
+ */
+DEFPY_YANG(
+	bgp_default_software_version_capability, bgp_default_software_version_capability_cli_cmd,
+	"bgp default software-version-capability <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Enable advertising software version capability\n"
+	"Disable advertising software version capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/software-version-capability", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_software_version_capability,
+	no_bgp_default_software_version_capability_cli_cmd,
+	"no bgp default software-version-capability <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Enable advertising software version capability\n"
+	"Disable advertising software version capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/software-version-capability", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_default_software_version_capability_latest_encoding,
+	bgp_default_software_version_capability_latest_encoding_cli_cmd,
+	"bgp default software-version-capability latest-encoding <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n"
+	"Enable the latest-encoding software version capability\n"
+	"Disable the latest-encoding software version capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/software-version-capability-latest-encoding",
+			      NB_OP_MODIFY, strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_software_version_capability_latest_encoding,
+	no_bgp_default_software_version_capability_latest_encoding_cli_cmd,
+	"no bgp default software-version-capability latest-encoding <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n"
+	"Enable the latest-encoding software version capability\n"
+	"Disable the latest-encoding software version capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/software-version-capability-latest-encoding",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare alias: replicates the legacy single-DEFPY grammar
+ * '[no] bgp default software-version-capability [latest-encoding]' exactly,
+ * routing to whichever of the two leaves the optional token selects.
+ */
+DEFPY_ATTR(
+	bgp_default_software_version_capability_deprecated,
+	bgp_default_software_version_capability_deprecated_cli_cmd,
+	"bgp default software-version-capability [latest-encoding$latest_encoding]",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty,
+			      latest_encoding
+				      ? "./default/software-version-capability-latest-encoding"
+				      : "./default/software-version-capability",
+			      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_software_version_capability_deprecated,
+	no_bgp_default_software_version_capability_deprecated_cli_cmd,
+	"no bgp default software-version-capability [latest-encoding$latest_encoding]",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise software version capability for all neighbors\n"
+	"Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty,
+			      latest_encoding
+				      ? "./default/software-version-capability-latest-encoding"
+				      : "./default/software-version-capability",
+			      NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_default_link_local_capability, bgp_default_link_local_capability_cli_cmd,
+	"bgp default link-local-capability <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise Link-Local Next Hop capability for all neighbors\n"
+	"Enable advertising Link-Local Next Hop capability\n"
+	"Disable advertising Link-Local Next Hop capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/link-local-capability", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_link_local_capability, no_bgp_default_link_local_capability_cli_cmd,
+	"no bgp default link-local-capability <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise Link-Local Next Hop capability for all neighbors\n"
+	"Enable advertising Link-Local Next Hop capability\n"
+	"Disable advertising Link-Local Next Hop capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/link-local-capability", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_default_link_local_capability_deprecated,
+	bgp_default_link_local_capability_deprecated_cli_cmd,
+	"bgp default link-local-capability",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise Link-Local Next Hop capability for all neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/link-local-capability", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_link_local_capability_deprecated,
+	no_bgp_default_link_local_capability_deprecated_cli_cmd,
+	"no bgp default link-local-capability",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise Link-Local Next Hop capability for all neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/link-local-capability", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_default_dynamic_capability, bgp_default_dynamic_capability_cli_cmd,
+	"bgp default dynamic-capability <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise dynamic capability for all neighbors\n"
+	"Enable advertising dynamic capability\n"
+	"Disable advertising dynamic capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/dynamic-capability", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_dynamic_capability, no_bgp_default_dynamic_capability_cli_cmd,
+	"no bgp default dynamic-capability <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise dynamic capability for all neighbors\n"
+	"Enable advertising dynamic capability\n"
+	"Disable advertising dynamic capability\n")
+{
+	nb_cli_enqueue_change(vty, "./default/dynamic-capability", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_default_dynamic_capability_deprecated, bgp_default_dynamic_capability_deprecated_cli_cmd,
+	"bgp default dynamic-capability",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise dynamic capability for all neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/dynamic-capability", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_dynamic_capability_deprecated,
+	no_bgp_default_dynamic_capability_deprecated_cli_cmd,
+	"no bgp default dynamic-capability",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Advertise dynamic capability for all neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/dynamic-capability", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_rr_allow_outbound_policy, bgp_rr_allow_outbound_policy_cli_cmd,
+	"bgp route-reflector allow-outbound-policy <enabled|disabled>$mode",
+	BGP_STR
+	"Allow modifications made by out route-map\n"
+	"on ibgp neighbors\n"
+	"Enable allowing out route-map modifications on ibgp neighbors\n"
+	"Disable allowing out route-map modifications on ibgp neighbors\n")
+{
+	nb_cli_enqueue_change(vty, "./route-reflector-allow-outbound-policy", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_rr_allow_outbound_policy, no_bgp_rr_allow_outbound_policy_cli_cmd,
+	"no bgp route-reflector allow-outbound-policy <enabled|disabled>$mode",
+	NO_STR BGP_STR
+	"Allow modifications made by out route-map\n"
+	"on ibgp neighbors\n"
+	"Enable allowing out route-map modifications on ibgp neighbors\n"
+	"Disable allowing out route-map modifications on ibgp neighbors\n")
+{
+	nb_cli_enqueue_change(vty, "./route-reflector-allow-outbound-policy", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_rr_allow_outbound_policy_deprecated, bgp_rr_allow_outbound_policy_deprecated_cli_cmd,
+	"bgp route-reflector allow-outbound-policy",
+	BGP_STR
+	"Allow modifications made by out route-map\n"
+	"on ibgp neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./route-reflector-allow-outbound-policy", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_rr_allow_outbound_policy_deprecated,
+	no_bgp_rr_allow_outbound_policy_deprecated_cli_cmd,
+	"no bgp route-reflector allow-outbound-policy",
+	NO_STR
+	BGP_STR
+	"Allow modifications made by out route-map\n"
+	"on ibgp neighbors\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./route-reflector-allow-outbound-policy", NB_OP_MODIFY,
+			      "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * XPath: /proteus-bgp:instance
  *
  * Must reproduce bgp_config_write()'s "router bgp ..." header byte-for-byte
@@ -1912,6 +2663,110 @@ static void instance_graceful_restart_notification_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+static void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	vty_out(vty, " bgp ebgp-requires-policy %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_enforce_first_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	vty_out(vty, " bgp enforce-first-as %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_suppress_duplicates_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	vty_out(vty, " bgp suppress-duplicates %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_hard_administrative_reset_cli_write(struct vty *vty,
+							 const struct lyd_node *dnode,
+							 bool show_defaults)
+{
+	vty_out(vty, " bgp hard-administrative-reset %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_deterministic_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
+{
+	vty_out(vty, " bgp deterministic-med %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_network_import_check_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	vty_out(vty, " bgp network import-check %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_bestpath_aigp_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	vty_out(vty, " bgp bestpath aigp %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_show_hostname_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	vty_out(vty, " bgp default show-hostname %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_show_nexthop_hostname_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, " bgp default show-nexthop-hostname %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_software_version_capability_cli_write(struct vty *vty,
+								   const struct lyd_node *dnode,
+								   bool show_defaults)
+{
+	vty_out(vty, " bgp default software-version-capability %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_software_version_capability_latest_encoding_cli_write(
+	struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	vty_out(vty, " bgp default software-version-capability latest-encoding %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_link_local_capability_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, " bgp default link-local-capability %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_default_dynamic_capability_cli_write(struct vty *vty,
+							  const struct lyd_node *dnode,
+							  bool show_defaults)
+{
+	vty_out(vty, " bgp default dynamic-capability %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
+static void instance_route_reflector_allow_outbound_policy_cli_write(struct vty *vty,
+								     const struct lyd_node *dnode,
+								     bool show_defaults)
+{
+	vty_out(vty, " bgp route-reflector allow-outbound-policy %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
+}
+
 static void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -2237,6 +3092,92 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/ebgp-requires-policy",
+			.cbs = {
+				.cli_show = instance_ebgp_requires_policy_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/enforce-first-as",
+			.cbs = {
+				.cli_show = instance_enforce_first_as_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/suppress-duplicates",
+			.cbs = {
+				.cli_show = instance_suppress_duplicates_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/hard-administrative-reset",
+			.cbs = {
+				.cli_show = instance_hard_administrative_reset_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/deterministic-med",
+			.cbs = {
+				.cli_show = instance_deterministic_med_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/network-import-check",
+			.cbs = {
+				.cli_show = instance_network_import_check_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/bestpath/aigp",
+			.cbs = {
+				.cli_show = instance_bestpath_aigp_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/show-hostname",
+			.cbs = {
+				.cli_show = instance_default_show_hostname_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/show-nexthop-hostname",
+			.cbs = {
+				.cli_show = instance_default_show_nexthop_hostname_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/software-version-capability",
+			.cbs = {
+				.cli_show = instance_default_software_version_capability_cli_write,
+			}
+		},
+		{
+			.xpath =
+				"/proteus-bgp:instance/default/software-version-capability-latest-encoding",
+			.cbs = {
+				.cli_show =
+					instance_default_software_version_capability_latest_encoding_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/link-local-capability",
+			.cbs = {
+				.cli_show = instance_default_link_local_capability_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/default/dynamic-capability",
+			.cbs = {
+				.cli_show = instance_default_dynamic_capability_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/route-reflector-allow-outbound-policy",
+			.cbs = {
+				.cli_show = instance_route_reflector_allow_outbound_policy_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/route-map-delay-timer",
 			.cbs = {
 				.cli_show = process_route_map_delay_timer_cli_write,
@@ -2369,6 +3310,74 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_notification_cli_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_notification_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_notification_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_ebgp_requires_policy_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_ebgp_requires_policy_cli_cmd);
+	install_element(BGP_NODE, &bgp_ebgp_requires_policy_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_ebgp_requires_policy_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_enforce_first_as_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_enforce_first_as_cli_cmd);
+	install_element(BGP_NODE, &bgp_enforce_first_as_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_enforce_first_as_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_suppress_duplicates_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_suppress_duplicates_cli_cmd);
+	install_element(BGP_NODE, &bgp_suppress_duplicates_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_suppress_duplicates_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_administrative_reset_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_administrative_reset_cli_cmd);
+	install_element(BGP_NODE, &bgp_administrative_reset_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_administrative_reset_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_deterministic_med_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_deterministic_med_cli_cmd);
+	install_element(BGP_NODE, &bgp_deterministic_med_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_deterministic_med_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_network_import_check_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_network_import_check_cli_cmd);
+	install_element(BGP_NODE, &bgp_network_import_check_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_network_import_check_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_bestpath_aigp_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_bestpath_aigp_cli_cmd);
+	install_element(BGP_NODE, &bgp_bestpath_aigp_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_bestpath_aigp_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_show_hostname_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_show_hostname_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_show_hostname_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_show_hostname_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_show_nexthop_hostname_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_show_nexthop_hostname_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_show_nexthop_hostname_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_show_nexthop_hostname_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_software_version_capability_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_software_version_capability_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_software_version_capability_latest_encoding_cli_cmd);
+	install_element(BGP_NODE,
+			&no_bgp_default_software_version_capability_latest_encoding_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_software_version_capability_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_software_version_capability_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_link_local_capability_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_link_local_capability_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_link_local_capability_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_link_local_capability_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_default_dynamic_capability_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_dynamic_capability_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_dynamic_capability_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_dynamic_capability_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_rr_allow_outbound_policy_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_rr_allow_outbound_policy_cli_cmd);
+	install_element(BGP_NODE, &bgp_rr_allow_outbound_policy_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_rr_allow_outbound_policy_deprecated_cli_cmd);
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);

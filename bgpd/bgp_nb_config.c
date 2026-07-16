@@ -20,6 +20,7 @@
 #include "bgpd/bgp_fsm.h"
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
+#include "bgpd/bgp_addpath.h"
 
 /* Process-wide (bm->) leaves have no per-instance struct lyd_node to walk up
  * from, so unlike the instance-scoped callbacks below there is no
@@ -1090,14 +1091,21 @@ int instance_always_compare_med_modify(struct nb_cb_modify_args *args)
 
 int instance_ebgp_requires_policy_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/ebgp-requires-policy");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
 		break;
 	}
 
@@ -1106,14 +1114,21 @@ int instance_ebgp_requires_policy_modify(struct nb_cb_modify_args *args)
 
 int instance_ebgp_requires_policy_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/ebgp-requires-policy");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_ebgp_requires_policy_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
 		break;
 	}
 
@@ -1122,14 +1137,33 @@ int instance_ebgp_requires_policy_destroy(struct nb_cb_destroy_args *args)
 
 int instance_enforce_first_as_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node;
+	struct peer *peer;
+	afi_t afi;
+	safi_t safi;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/enforce-first-as");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = yang_dnode_get_bool(args->dnode, NULL);
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
+			FOREACH_AFI_SAFI (afi, safi)
+				peer_on_policy_change(peer, afi, safi, 0);
+		}
 		break;
 	}
 
@@ -1138,14 +1172,33 @@ int instance_enforce_first_as_modify(struct nb_cb_modify_args *args)
 
 int instance_enforce_first_as_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	struct listnode *node;
+	struct peer *peer;
+	afi_t afi;
+	safi_t safi;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/enforce-first-as");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = bgp_enforce_first_as_default();
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
+			FOREACH_AFI_SAFI (afi, safi)
+				peer_on_policy_change(peer, afi, safi, 0);
+		}
 		break;
 	}
 
@@ -1241,14 +1294,21 @@ int instance_reject_as_sets_modify(struct nb_cb_modify_args *args)
 
 int instance_suppress_duplicates_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/suppress-duplicates");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
 		break;
 	}
 
@@ -1257,14 +1317,21 @@ int instance_suppress_duplicates_modify(struct nb_cb_modify_args *args)
 
 int instance_suppress_duplicates_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/suppress-duplicates");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_suppress_duplicates_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
 		break;
 	}
 
@@ -1273,14 +1340,21 @@ int instance_suppress_duplicates_destroy(struct nb_cb_destroy_args *args)
 
 int instance_hard_administrative_reset_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/hard-administrative-reset");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
 		break;
 	}
 
@@ -1289,14 +1363,21 @@ int instance_hard_administrative_reset_modify(struct nb_cb_modify_args *args)
 
 int instance_hard_administrative_reset_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/hard-administrative-reset");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_hard_administrative_reset_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
 		break;
 	}
 
@@ -1602,14 +1683,21 @@ int instance_default_local_preference_modify(struct nb_cb_modify_args *args)
 
 int instance_default_show_hostname_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/show-hostname");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
 		break;
 	}
 
@@ -1618,14 +1706,21 @@ int instance_default_show_hostname_modify(struct nb_cb_modify_args *args)
 
 int instance_default_show_hostname_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/show-hostname");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_show_hostname_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
 		break;
 	}
 
@@ -1634,14 +1729,21 @@ int instance_default_show_hostname_destroy(struct nb_cb_destroy_args *args)
 
 int instance_default_show_nexthop_hostname_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/show-nexthop-hostname");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
 		break;
 	}
 
@@ -1650,14 +1752,21 @@ int instance_default_show_nexthop_hostname_modify(struct nb_cb_modify_args *args
 
 int instance_default_show_nexthop_hostname_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/show-nexthop-hostname");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_show_nexthop_hostname_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
 		break;
 	}
 
@@ -1666,14 +1775,21 @@ int instance_default_show_nexthop_hostname_destroy(struct nb_cb_destroy_args *ar
 
 int instance_default_software_version_capability_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/software-version-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
 		break;
 	}
 
@@ -1682,14 +1798,21 @@ int instance_default_software_version_capability_modify(struct nb_cb_modify_args
 
 int instance_default_software_version_capability_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/software-version-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_software_version_capability_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
 		break;
 	}
 
@@ -1699,14 +1822,21 @@ int instance_default_software_version_capability_destroy(struct nb_cb_destroy_ar
 int instance_default_software_version_capability_latest_encoding_modify(
 	struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/software-version-capability-latest-encoding");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
 		break;
 	}
 
@@ -1716,14 +1846,21 @@ int instance_default_software_version_capability_latest_encoding_modify(
 int instance_default_software_version_capability_latest_encoding_destroy(
 	struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/software-version-capability-latest-encoding");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_software_version_capability_latest_encoding_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
 		break;
 	}
 
@@ -1732,14 +1869,21 @@ int instance_default_software_version_capability_latest_encoding_destroy(
 
 int instance_default_link_local_capability_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/link-local-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
 		break;
 	}
 
@@ -1748,14 +1892,21 @@ int instance_default_link_local_capability_modify(struct nb_cb_modify_args *args
 
 int instance_default_link_local_capability_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/link-local-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_link_local_capability_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
 		break;
 	}
 
@@ -1764,14 +1915,21 @@ int instance_default_link_local_capability_destroy(struct nb_cb_destroy_args *ar
 
 int instance_default_dynamic_capability_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/dynamic-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
 		break;
 	}
 
@@ -1780,14 +1938,21 @@ int instance_default_dynamic_capability_modify(struct nb_cb_modify_args *args)
 
 int instance_default_dynamic_capability_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/dynamic-capability");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_default_dynamic_capability_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
 		break;
 	}
 
@@ -2082,16 +2247,74 @@ int instance_confederation_peers_asdot_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Legacy no_bgp_deterministic_med's addpath-dmed rejection ('bgp
+ * deterministic-med cannot be disabled while addpath-tx-bestpath-per-AS is
+ * in use'): scans every peer/afi/safi for bgp_addpath_dmed_required(). Runs
+ * at NB_EV_VALIDATE rather than APPLY so a bad config is rejected before
+ * anything is applied, same as the legacy CLI.
+ *
+ * VALIDATE has no guaranteed bgp struct (the instance may be created in the
+ * same transaction as this leaf, and northbound validates the whole
+ * candidate before applying any of it) -- bgp_nb_instance_lookup() can
+ * legitimately return NULL here. That is not a reason to skip the check
+ * unsafely: if the instance does not exist yet, it has no peers, so there
+ * is nothing that could have addpath-tx-bestpath-per-AS configured, and the
+ * check trivially passes. If the instance does already exist -- the normal
+ * case of disabling this on a running config -- the check is authoritative
+ * at VALIDATE time because it reads live struct bgp/peer state, which is
+ * runtime state independent of the northbound candidate tree.
+ */
+static int instance_deterministic_med_validate_disable(const struct lyd_node *dnode, char *errmsg,
+						       size_t errmsg_len)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	struct peer *peer;
+	struct listnode *node;
+	afi_t afi;
+	safi_t safi;
+
+	if (!bgp)
+		return NB_OK;
+
+	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
+		FOREACH_AFI_SAFI (afi, safi)
+			if (bgp_addpath_dmed_required(peer->addpath_type[afi][safi])) {
+				snprintf(errmsg, errmsg_len,
+					 "bgp deterministic-med cannot be disabled while addpath-tx-bestpath-per-AS is in use");
+				return NB_ERR_VALIDATION;
+			}
+	}
+
+	return NB_OK;
+}
+
 int instance_deterministic_med_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/deterministic-med");
-		return NB_ERR_VALIDATION;
+		if (!yang_dnode_get_bool(args->dnode, NULL))
+			return instance_deterministic_med_validate_disable(args->dnode,
+									   args->errmsg,
+									   args->errmsg_len);
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = yang_dnode_get_bool(args->dnode, NULL);
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -2100,14 +2323,31 @@ int instance_deterministic_med_modify(struct nb_cb_modify_args *args)
 
 int instance_deterministic_med_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/deterministic-med");
-		return NB_ERR_VALIDATION;
+		if (!bgp_deterministic_med_default())
+			return instance_deterministic_med_validate_disable(args->dnode,
+									   args->errmsg,
+									   args->errmsg_len);
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = bgp_deterministic_med_default();
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -3044,14 +3284,22 @@ int instance_bestpath_use_imported_attributes_modify(struct nb_cb_modify_args *a
 
 int instance_bestpath_aigp_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/aigp");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (yang_dnode_get_bool(args->dnode, NULL))
+			SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -3060,14 +3308,22 @@ int instance_bestpath_aigp_modify(struct nb_cb_modify_args *args)
 
 int instance_bestpath_aigp_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/bestpath/aigp");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp_bestpath_aigp_default())
+			SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
+		bgp_recalculate_all_bestpaths(bgp);
 		break;
 	}
 
@@ -3218,14 +3474,27 @@ int instance_bestpath_bandwidth_destroy(struct nb_cb_destroy_args *args)
 
 int instance_route_reflector_allow_outbound_policy_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/route-reflector-allow-outbound-policy");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = yang_dnode_get_bool(args->dnode, NULL);
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
+		update_group_announce_rrclients(bgp);
+		bgp_nb_clear_star_soft(bgp, BGP_CLEAR_SOFT_OUT);
 		break;
 	}
 
@@ -3234,14 +3503,27 @@ int instance_route_reflector_allow_outbound_policy_modify(struct nb_cb_modify_ar
 
 int instance_route_reflector_allow_outbound_policy_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/route-reflector-allow-outbound-policy");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = bgp_route_reflector_allow_outbound_policy_default();
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
+		update_group_announce_rrclients(bgp);
+		bgp_nb_clear_star_soft(bgp, BGP_CLEAR_SOFT_OUT);
 		break;
 	}
 
@@ -3250,14 +3532,26 @@ int instance_route_reflector_allow_outbound_policy_destroy(struct nb_cb_destroy_
 
 int instance_network_import_check_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/network-import-check");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = yang_dnode_get_bool(args->dnode, NULL);
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
+		bgp_static_redo_import_check(bgp);
 		break;
 	}
 
@@ -3266,14 +3560,26 @@ int instance_network_import_check_modify(struct nb_cb_modify_args *args)
 
 int instance_network_import_check_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/network-import-check");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = bgp_network_import_check_default();
+		if (enable == !!CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK))
+			break;
+		if (enable)
+			SET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
+		else
+			UNSET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
+		bgp_static_redo_import_check(bgp);
 		break;
 	}
 

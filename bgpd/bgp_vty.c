@@ -632,6 +632,76 @@ bool bgp_graceful_restart_notification_default(void)
 	return DFLT_BGP_GRACEFUL_NOTIFICATION;
 }
 
+bool bgp_ebgp_requires_policy_default(void)
+{
+	return DFLT_BGP_EBGP_REQUIRES_POLICY;
+}
+
+bool bgp_enforce_first_as_default(void)
+{
+	return DFLT_BGP_ENFORCE_FIRST_AS;
+}
+
+bool bgp_suppress_duplicates_default(void)
+{
+	return DFLT_BGP_SUPPRESS_DUPLICATES;
+}
+
+bool bgp_hard_administrative_reset_default(void)
+{
+	return DFLT_BGP_HARD_ADMIN_RESET;
+}
+
+bool bgp_deterministic_med_default(void)
+{
+	return DFLT_BGP_DETERMINISTIC_MED;
+}
+
+bool bgp_network_import_check_default(void)
+{
+	return DFLT_BGP_IMPORT_CHECK;
+}
+
+bool bgp_bestpath_aigp_default(void)
+{
+	return DFLT_BGP_COMPARE_AIGP;
+}
+
+bool bgp_default_show_hostname_default(void)
+{
+	return DFLT_BGP_SHOW_HOSTNAME;
+}
+
+bool bgp_default_show_nexthop_hostname_default(void)
+{
+	return DFLT_BGP_SHOW_NEXTHOP_HOSTNAME;
+}
+
+bool bgp_default_software_version_capability_default(void)
+{
+	return DFLT_BGP_SOFT_VERSION_CAPABILITY_OLD;
+}
+
+bool bgp_default_software_version_capability_latest_encoding_default(void)
+{
+	return DFLT_BGP_SOFT_VERSION_CAPABILITY_NEW;
+}
+
+bool bgp_default_link_local_capability_default(void)
+{
+	return DFLT_BGP_LINK_LOCAL_CAPABILITY;
+}
+
+bool bgp_default_dynamic_capability_default(void)
+{
+	return DFLT_BGP_DYNAMIC_CAPABILITY;
+}
+
+bool bgp_route_reflector_allow_outbound_policy_default(void)
+{
+	return DFLT_BGP_RR_ALLOW_OUTBOUND_POLICY;
+}
+
 int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,
 		enum bgp_instance_type inst_type, const char *as_pretty,
 		enum asnotation_mode asnotation)
@@ -2368,138 +2438,6 @@ DEFPY (bgp_af_nexthop_prefer_global,
 	return CMD_SUCCESS;
 }
 
-DEFUN(bgp_ebgp_requires_policy, bgp_ebgp_requires_policy_cmd,
-      "bgp ebgp-requires-policy",
-      BGP_STR
-      "Require in and out policy for eBGP peers (RFC8212)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_ebgp_requires_policy, no_bgp_ebgp_requires_policy_cmd,
-      "no bgp ebgp-requires-policy",
-      NO_STR
-      BGP_STR
-      "Require in and out policy for eBGP peers (RFC8212)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY);
-	return CMD_SUCCESS;
-}
-
-DEFPY(bgp_enforce_first_as,
-      bgp_enforce_first_as_cmd,
-      "[no] bgp enforce-first-as",
-      NO_STR
-      BGP_STR
-      "Enforce the first AS for EBGP routes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node;
-	struct peer *peer;
-	afi_t afi;
-	safi_t safi;
-
-	if (no) {
-		if (!CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS))
-			return CMD_SUCCESS;
-		UNSET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
-	} else {
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS))
-			return CMD_SUCCESS;
-		SET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
-	}
-
-	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
-		FOREACH_AFI_SAFI (afi, safi)
-			peer_on_policy_change(peer, afi, safi, 0);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(bgp_suppress_duplicates, bgp_suppress_duplicates_cmd,
-      "bgp suppress-duplicates",
-      BGP_STR
-      "Suppress duplicate updates if the route actually not changed\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_suppress_duplicates, no_bgp_suppress_duplicates_cmd,
-      "no bgp suppress-duplicates",
-      NO_STR
-      BGP_STR
-      "Suppress duplicate updates if the route actually not changed\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES);
-	return CMD_SUCCESS;
-}
-
-/* "bgp deterministic-med" configuration. */
-DEFUN (bgp_deterministic_med,
-       bgp_deterministic_med_cmd,
-       "bgp deterministic-med",
-       BGP_STR
-       "Pick the best-MED path among paths advertised from the neighboring AS\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (!CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED)) {
-		SET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
-		bgp_recalculate_all_bestpaths(bgp);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_deterministic_med,
-       no_bgp_deterministic_med_cmd,
-       "no bgp deterministic-med",
-       NO_STR
-       BGP_STR
-       "Pick the best-MED path among paths advertised from the neighboring AS\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int bestpath_per_as_used;
-	afi_t afi;
-	safi_t safi;
-	struct peer *peer;
-	struct listnode *node, *nnode;
-
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED)) {
-		bestpath_per_as_used = 0;
-
-		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
-			FOREACH_AFI_SAFI (afi, safi)
-				if (bgp_addpath_dmed_required(
-					peer->addpath_type[afi][safi])) {
-					bestpath_per_as_used = 1;
-					break;
-				}
-
-			if (bestpath_per_as_used)
-				break;
-		}
-
-		if (bestpath_per_as_used) {
-			vty_out(vty,
-				"bgp deterministic-med cannot be disabled while addpath-tx-bestpath-per-AS is in use\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		} else {
-			UNSET_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED);
-			bgp_recalculate_all_bestpaths(bgp);
-		}
-	}
-
-	return CMD_SUCCESS;
-}
-
 static int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on,
 				  bool disable)
 {
@@ -2931,23 +2869,6 @@ DEFUN (no_bgp_graceful_restart_preserve_fw,
 		VTY_DECLVAR_CONTEXT(bgp, bgp);
 		UNSET_FLAG(bgp->flags, BGP_FLAG_GR_PRESERVE_FWD);
 	}
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_administrative_reset,
-	bgp_administrative_reset_cmd,
-	"[no$no] bgp hard-administrative-reset",
-	NO_STR
-	BGP_STR
-	"Send Hard Reset CEASE Notification for 'Administrative Reset'\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET);
-
 	return CMD_SUCCESS;
 }
 
@@ -3431,207 +3352,6 @@ DEFUN (no_bgp_graceful_shutdown,
 	if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN)) {
 		UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN);
 		bgp_initiate_graceful_shut_unshut(vty, bgp);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_bestpath_aigp,
-       bgp_bestpath_aigp_cmd,
-       "[no$no] bgp bestpath aigp",
-       NO_STR
-       BGP_STR
-       "Change the default bestpath selection\n"
-       "Evaluate the AIGP attribute during the best path selection process\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP);
-
-	bgp_recalculate_all_bestpaths(bgp);
-
-	return CMD_SUCCESS;
-}
-
-/* Display hostname in certain command outputs */
-DEFUN (bgp_default_show_hostname,
-       bgp_default_show_hostname_cmd,
-       "bgp default show-hostname",
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Show hostname in certain command outputs\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_default_show_hostname,
-       no_bgp_default_show_hostname_cmd,
-       "no bgp default show-hostname",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Show hostname in certain command outputs\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME);
-	return CMD_SUCCESS;
-}
-
-/* Display hostname in certain command outputs */
-DEFUN (bgp_default_show_nexthop_hostname,
-       bgp_default_show_nexthop_hostname_cmd,
-       "bgp default show-nexthop-hostname",
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Show hostname for nexthop in certain command outputs\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_default_show_nexthop_hostname,
-       no_bgp_default_show_nexthop_hostname_cmd,
-       "no bgp default show-nexthop-hostname",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Show hostname for nexthop in certain command outputs\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME);
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_default_software_version_capability,
-       bgp_default_software_version_capability_cmd,
-       "[no] bgp default software-version-capability [latest-encoding$latest_encoding]",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Advertise software version capability for all neighbors\n"
-       "Use the latest-encoding defined in draft-abraitis-bgp-version-capability-15\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	uint64_t encoding = latest_encoding ? BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW
-					    : BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD;
-
-	if (no)
-		UNSET_FLAG(bgp->flags, encoding);
-	else
-		SET_FLAG(bgp->flags, encoding);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_default_link_local_capability,
-       bgp_default_link_local_capability_cmd,
-       "[no] bgp default link-local-capability",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Advertise Link-Local Next Hop capability for all neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_default_dynamic_capability,
-       bgp_default_dynamic_capability_cmd,
-       "[no] bgp default dynamic-capability",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Advertise dynamic capability for all neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
-
-	return CMD_SUCCESS;
-}
-
-/* "bgp network import-check" configuration.  */
-DEFUN (bgp_network_import_check,
-       bgp_network_import_check_cmd,
-       "bgp network import-check",
-       BGP_STR
-       "BGP network command\n"
-       "Check BGP network route exists in IGP\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	if (!CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK)) {
-		SET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
-		bgp_static_redo_import_check(bgp);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_network_import_check,
-       no_bgp_network_import_check_cmd,
-       "no bgp network import-check",
-       NO_STR
-       BGP_STR
-       "BGP network command\n"
-       "Check BGP network route exists in IGP\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK)) {
-		UNSET_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK);
-		bgp_static_redo_import_check(bgp);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_rr_allow_outbound_policy,
-       bgp_rr_allow_outbound_policy_cmd,
-       "bgp route-reflector allow-outbound-policy",
-       BGP_STR
-       "Allow modifications made by out route-map\n"
-       "on ibgp neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (!CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY)) {
-		SET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
-		update_group_announce_rrclients(bgp);
-		bgp_clear_star_soft_out(vty, bgp->name);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_rr_allow_outbound_policy,
-       no_bgp_rr_allow_outbound_policy_cmd,
-       "no bgp route-reflector allow-outbound-policy",
-       NO_STR
-       BGP_STR
-       "Allow modifications made by out route-map\n"
-       "on ibgp neighbors\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY)) {
-		UNSET_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY);
-		update_group_announce_rrclients(bgp);
-		bgp_clear_star_soft_out(vty, bgp->name);
 	}
 
 	return CMD_SUCCESS;
@@ -20591,93 +20311,41 @@ int bgp_config_write(struct vty *vty)
 				vty_out(vty, " bgp suppress-fib-pending\n");
 		}
 
-		/* RFC8212 default eBGP policy. */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_EBGP_REQUIRES_POLICY)
-		    != SAVE_BGP_EBGP_REQUIRES_POLICY)
-			vty_out(vty, " %sbgp ebgp-requires-policy\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_EBGP_REQUIRES_POLICY)
-					? ""
-					: "no ");
-
-		/* bgp enforce-first-as */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS) !=
-		    SAVE_BGP_ENFORCE_FIRST_AS)
-			vty_out(vty, " %sbgp enforce-first-as\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_ENFORCE_FIRST_AS)
-					? ""
-					: "no ");
-
-		/* Suppress duplicate updates if the route actually not changed
+		/* RFC8212 default eBGP policy: converted to northbound, see
+		 * '/proteus-bgp:instance/ebgp-requires-policy' cli_show in
+		 * bgp_cli.c.
 		 */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_DUPLICATES)
-		    != SAVE_BGP_SUPPRESS_DUPLICATES)
-			vty_out(vty, " %sbgp suppress-duplicates\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_SUPPRESS_DUPLICATES)
-					? ""
-					: "no ");
 
-		/* Send Hard Reset CEASE Notification for 'Administrative Reset'
+		/* bgp enforce-first-as: converted to northbound, see
+		 * '/proteus-bgp:instance/enforce-first-as' cli_show in
+		 * bgp_cli.c.
 		 */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_HARD_ADMIN_RESET) !=
-		    SAVE_BGP_HARD_ADMIN_RESET)
-			vty_out(vty, " %sbgp hard-administrative-reset\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_HARD_ADMIN_RESET)
-					? ""
-					: "no ");
+
+		/* bgp suppress-duplicates: converted to northbound, see
+		 * '/proteus-bgp:instance/suppress-duplicates' cli_show in
+		 * bgp_cli.c.
+		 */
+
+		/* bgp hard-administrative-reset: converted to northbound, see
+		 * '/proteus-bgp:instance/hard-administrative-reset' cli_show
+		 * in bgp_cli.c.
+		 */
 
 		/* BGP default local-preference: converted to northbound, see
 		 * '/proteus-bgp:instance/default/local-preference' cli_show
 		 * in bgp_cli.c.
 		 */
 
-		/* BGP default show-hostname */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME)
-		    != SAVE_BGP_SHOW_HOSTNAME)
-			vty_out(vty, " %sbgp default show-hostname\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_SHOW_HOSTNAME)
-					? ""
-					: "no ");
-
-		/* BGP default show-nexthop-hostname */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SHOW_NEXTHOP_HOSTNAME)
-		    != SAVE_BGP_SHOW_HOSTNAME)
-			vty_out(vty, " %sbgp default show-nexthop-hostname\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_SHOW_NEXTHOP_HOSTNAME)
-					? ""
-					: "no ");
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD) !=
-		    SAVE_BGP_SOFT_VERSION_CAPABILITY_OLD)
-			vty_out(vty, " %sbgp default software-version-capability\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD)
-					? ""
-					: "no ");
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW) !=
-		    SAVE_BGP_SOFT_VERSION_CAPABILITY_NEW)
-			vty_out(vty, " %sbgp default software-version-capability latest-encoding\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW)
-					? ""
-					: "no ");
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY) !=
-		    SAVE_BGP_LINK_LOCAL_CAPABILITY)
-			vty_out(vty, " %sbgp default link-local-capability\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY) ? "" : "no ");
-
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY) !=
-		    SAVE_BGP_DYNAMIC_CAPABILITY)
-			vty_out(vty,
-				" %sbgp default dynamic-capability\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_DYNAMIC_CAPABILITY)
-					? ""
-					: "no ");
+		/* BGP default show-hostname/show-nexthop-hostname/
+		 * software-version-capability[-latest-encoding]/
+		 * link-local-capability/dynamic-capability: converted to
+		 * northbound, see
+		 * '/proteus-bgp:instance/default/{show-hostname,
+		 * show-nexthop-hostname,software-version-capability,
+		 * software-version-capability-latest-encoding,
+		 * link-local-capability,dynamic-capability}' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		/* BGP default subgroup-pkt-queue-max: converted to
 		 * northbound, see
@@ -20690,14 +20358,10 @@ int bgp_config_write(struct vty *vty)
 		 * cli_show in bgp_cli.c.
 		 */
 
-		/* BGP deterministic-med. */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_DETERMINISTIC_MED)
-		    != SAVE_BGP_DETERMINISTIC_MED)
-			vty_out(vty, " %sbgp deterministic-med\n",
-				CHECK_FLAG(bgp->flags,
-					   BGP_FLAG_DETERMINISTIC_MED)
-					? ""
-					: "no ");
+		/* BGP deterministic-med: converted to northbound, see
+		 * '/proteus-bgp:instance/deterministic-med' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		/* BGP update-delay. */
 		bgp_config_write_update_delay(vty, bgp);
@@ -20768,24 +20432,17 @@ int bgp_config_write(struct vty *vty)
 					" bgp graceful-restart rib-stale-time %u\n",
 					bgp->rib_stale_time);
 
-		/* BGP bestpath method. */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY) !=
-		    SAVE_BGP_RR_ALLOW_OUTBOUND_POLICY)
-			vty_out(vty, " %sbgp route-reflector allow-outbound-policy\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_RR_ALLOW_OUTBOUND_POLICY) ? ""
-											  : "no ");
+		/* BGP bestpath method: route-reflector-allow-outbound-policy
+		 * and aigp converted to northbound, see
+		 * '/proteus-bgp:instance/route-reflector-allow-outbound-policy'
+		 * and '/proteus-bgp:instance/bestpath/aigp' cli_show in
+		 * bgp_cli.c.
+		 */
 
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP) != SAVE_BGP_COMPARE_AIGP)
-			vty_out(vty, " %sbgp bestpath aigp\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP) ? "" : "no ");
-
-		/* BGP network import check. */
-		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK)
-		    != SAVE_BGP_IMPORT_CHECK)
-			vty_out(vty, " %sbgp network import-check\n",
-				CHECK_FLAG(bgp->flags, BGP_FLAG_IMPORT_CHECK)
-					? ""
-					: "no ");
+		/* BGP network import check: converted to northbound, see
+		 * '/proteus-bgp:instance/network-import-check' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		/* peer-group */
 		for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group)) {
@@ -21512,21 +21169,6 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
 	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
 
-	/* bgp ebgp-requires-policy */
-	install_element(BGP_NODE, &bgp_ebgp_requires_policy_cmd);
-	install_element(BGP_NODE, &no_bgp_ebgp_requires_policy_cmd);
-
-	/* bgp enforce-first-as */
-	install_element(BGP_NODE, &bgp_enforce_first_as_cmd);
-
-	/* bgp suppress-duplicates */
-	install_element(BGP_NODE, &bgp_suppress_duplicates_cmd);
-	install_element(BGP_NODE, &no_bgp_suppress_duplicates_cmd);
-
-	/* "bgp deterministic-med" commands */
-	install_element(BGP_NODE, &bgp_deterministic_med_cmd);
-	install_element(BGP_NODE, &no_bgp_deterministic_med_cmd);
-
 	/* "bgp graceful-restart" command */
 	install_element(BGP_NODE, &bgp_graceful_restart_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_cmd);
@@ -21569,37 +21211,6 @@ void bgp_vty_init(void)
 	/* "bgp graceful-shutdown" commands */
 	install_element(BGP_NODE, &bgp_graceful_shutdown_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_shutdown_cmd);
-
-	/* "bgp hard-administrative-reset" commands */
-	install_element(BGP_NODE, &bgp_administrative_reset_cmd);
-
-	/* "bgp bestpath aigp" commands */
-	install_element(BGP_NODE, &bgp_bestpath_aigp_cmd);
-
-	/* "bgp network import-check" commands. */
-	install_element(BGP_NODE, &bgp_network_import_check_cmd);
-	install_element(BGP_NODE, &no_bgp_network_import_check_cmd);
-
-	/* bgp default show-hostname */
-	install_element(BGP_NODE, &bgp_default_show_hostname_cmd);
-	install_element(BGP_NODE, &no_bgp_default_show_hostname_cmd);
-
-	/* bgp default show-nexthop-hostname */
-	install_element(BGP_NODE, &bgp_default_show_nexthop_hostname_cmd);
-	install_element(BGP_NODE, &no_bgp_default_show_nexthop_hostname_cmd);
-
-	/* bgp default software-version-capability */
-	install_element(BGP_NODE, &bgp_default_software_version_capability_cmd);
-
-	/* bgp default link-local-capability */
-	install_element(BGP_NODE, &bgp_default_link_local_capability_cmd);
-
-	/* bgp default dynamic-capability */
-	install_element(BGP_NODE, &bgp_default_dynamic_capability_cmd);
-
-	/* bgp ibgp-allow-policy-mods command */
-	install_element(BGP_NODE, &bgp_rr_allow_outbound_policy_cmd);
-	install_element(BGP_NODE, &no_bgp_rr_allow_outbound_policy_cmd);
 
 	/* "bgp listen limit" commands. */
 	install_element(BGP_NODE, &bgp_listen_limit_cmd);
