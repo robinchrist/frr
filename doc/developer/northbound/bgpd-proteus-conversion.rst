@@ -161,12 +161,79 @@ under ``INTERFACE_NODE`` (``mpls bgp forwarding``) and ``VRF_NODE``
   node entry/exit DEFUNSHes, which must keep reaching the daemon for
   its vty node tracking.
 
-Known remaining instance of the same race shape: lib's route-map and
-access-/prefix-list CLI (``VTYSH_RMAP_CONFIG``/``VTYSH_ACL_CONFIG``)
-is northbound-backed and still routed to bgpd. Converting bgpd off
-its local copies is milestone-scale (bgpd extends route-maps via
-``frr-bgp-route-map``) and deferred; a flakiness risk during config
-replay, not a deterministic startup failure.
+**Resolved: route-map and access-/prefix-list CLI (Milestone 3,
+batches B-RM1/B-RM2).** lib's route-map and filter CLI
+(``lib/routemap_cli.c``, ``lib/filter_cli.c``) used to be northbound-
+backed but still routed to and run inside bgpd, the same race shape
+as above. Unlike interface/vrf, this could not be closed with the
+node-only pattern (register the node, give the daemon its own
+idempotent local node-entry command): lib's real ``route-map NAME
+<deny|permit> SEQ`` node-entry command performs a genuine northbound
+``CREATE`` on entry (``lib/routemap_cli.c``'s
+``DEFPY_YANG_NOSH(route_map, ...)``), unlike ``if_get_by_name()``/
+``vrf_get()``, which are pure local data-structure gets with no
+northbound transaction of their own. A bgpd-local copy of that
+command would still race mgmtd's copy for every route-map creation,
+reproducing the exact problem being fixed.
+
+The resolution instead follows the ripd/zebra/staticd model all the
+way: ``bgp_route_map_init()`` (``bgpd/bgp_routemap.c``) switches from
+``route_map_init()`` to ``route_map_init_new(true)``, and
+``bgpd.c``'s BGP init switches from ``access_list_init()`` to
+``access_list_init_new(true)``, exactly like ``rip_route_map_init()``/
+``ripd.c``. bgpd subscribes to ``/frr-route-map:lib`` and
+``/frr-filter:lib`` in ``bgpd_config_xpaths[]`` (``bgp_main.c``) so
+the config mgmtd commits still reaches bgpd's existing
+``frr_route_map_info``/``frr_filter_info``/``frr_bgp_route_map_info``
+northbound callbacks over the backend channel. ``vtysh.h``'s
+``VTYSH_RMAP_CONFIG``/``VTYSH_ACL_CONFIG`` masks drop ``VTYSH_BGPD``
+outright (no ``_SUBSET`` split needed, unlike
+``VTYSH_INTERFACE``/``VTYSH_VRF``): bgpd has no legacy subcommands of
+its own under ``ACCESS_NODE``/``PREFIX_*_NODE``, and after this
+change it has none under ``RMAP_NODE`` either, so nothing needs to
+keep reaching bgpd's local vty for these nodes at all.
+
+That last point covers bgpd's own 143 ``frr-bgp-route-map`` match/set
+commands too. Milestone 3's earlier batch (B-RM3) had split them out
+of ``bgp_routemap.c`` into ``bgp_routemap_cli.c``, compiled into both
+bgpd and mgmtd as an interim step, and left nine of them
+(``match``/``no match alias``, ``set as-path prepend``, ``set as-path
+exclude``, ``set community``, ``set``/``no set vpn-nexthop``,
+``set``/``no set ipv4|ipv6 vpn next-hop``) installed only in bgpd
+because their CLI bodies called validation helpers living in
+bgpd-only compilation units (the live community-alias table in
+``bgp_community_alias.c``; ``bgp_aspath.c``/``bgp_community.c``'s
+syntax parsers; ``bgp_vty.c``/``bgp_mplsvpn.c``'s argv token
+matchers). B-RM1 finishes the move: ``bgp_routemap_cli.c`` now
+compiles only into mgmtd (``bgpd/subdir.am`` no longer lists it,
+matching ``bgp_cli.c``), and the nine commands move there too, with
+their bgpd-only calls dropped or inlined:
+
+- ``match``/``no match alias``: the eager CLI-side alias-existence
+  check is dropped. The northbound apply path never validated this
+  (``route_match_alias_compile()`` just stores the string; an unknown
+  alias simply never matches any route), so this makes ``match
+  alias`` a forward reference like every other name-based match
+  clause in this file, not a special case -- apply-time behavior is
+  unchanged, so this is not a validation regression.
+- ``set as-path prepend``/``set as-path exclude``/``set community``:
+  the eager CLI-side syntax pre-check (``route_aspath_compile()``/
+  ``community_str2com()``) is dropped. The northbound apply path
+  (``generic_set_add()`` calling ``route_set_aspath_prepend_cmd``/
+  ``route_set_community_cmd``'s compile hooks, both still bgpd-only
+  and unchanged) already re-validates with the same compile functions
+  and fails the transaction on malformed input, so no unvalidated
+  value can reach running config -- the failure just surfaces at
+  apply time instead of CLI-parse time, same as every other command
+  in this file. ``set community``'s stored string is the raw,
+  space-joined token text rather than ``community_str2com()``'s
+  canonical pretty-printed form (a ``show running-config`` cosmetic
+  difference only).
+- the four VPN-nexthop commands: their only "validation" was CLI
+  token matching (``vpnv4``/``vpnv6``/``ipv4``/``ipv6``) via thin
+  ``bgp_vty.c``/``bgp_mplsvpn.c`` wrappers around
+  ``lib/command.c``'s ``argv_find()``; inlined directly with no
+  behavior change.
 
 Two-tier boolean convention: default-at-the-root vs. tri-state
 ------------------------------------------------------------------

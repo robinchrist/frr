@@ -440,6 +440,15 @@ static const char *const bgpd_config_xpaths[] = {
 	"/frr-logging:logging",
 	"/proteus-bgp:instance",
 	"/proteus-bgp:process",
+	/*
+	 * M3 B-RM1: bgpd no longer runs lib's northbound route-map/
+	 * filter CLI locally (bgp_route_map_init()/bgpd.c's
+	 * access_list_init_new(true) call, mirroring ripd); subscribe
+	 * as a backend client so mgmtd's CLI-driven commits still reach
+	 * bgpd's frr_route_map_info/frr_filter_info northbound callbacks.
+	 */
+	"/frr-route-map:lib",
+	"/frr-filter:lib",
 };
 
 struct mgmt_be_client_cbs bgpd_be_client_data = {

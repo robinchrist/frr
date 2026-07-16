@@ -16,24 +16,20 @@
  * has none) -- rendering goes through lib/routemap_cli.c's generic
  * nb_cli_show_dnode_cmds(), which is lib-owned already.
  *
- * Interim dual installation: this commit compiles bgp_routemap_cli.c
- * into both bgpd and mgmtd and bgp_route_map_init() (bgp_routemap.c)
- * still calls bgp_routemap_cli_init() itself, exactly like the M1
- * interim state, so vtysh continues reaching a working copy of these
- * commands in both processes while the vtysh-routing/backend-
- * subscription follow-up (B-RM1/B-RM2) is staged separately. A later
- * batch retires the call from bgp_route_map_init().
- *
- * Known gap in this batch: nine commands (match/no_match alias,
- * set_aspath_prepend_asn, set_aspath_exclude, set_community,
- * set/no_set_vpn_nexthop, set/no_set_ipx_vpn_nexthop) validate their
- * argument with a helper that lives in bgpd-only compilation units
- * bgp_community_alias.c/bgp_aspath.c/bgp_community.c/bgp_vty.c/
- * bgp_mplsvpn.c (none of which mgmtd links). They were left in
- * bgp_routemap.c, unmoved, reachable only from bgpd's own CLI as
- * before -- no behavior change, just not yet available from mgmtd.
- * Follow-up work should either port the needed helpers or decide
- * these nine stay bgpd-local permanently.
+ * M3 B-RM1 finished the move: bgp_routemap_cli.c compiles only into
+ * mgmtd (mgmtd/subdir.am), exactly like bgp_cli.c; bgpd/subdir.am no
+ * longer lists it, and bgp_route_map_init() (bgp_routemap.c) no
+ * longer calls bgp_routemap_cli_init() -- bgpd stops installing any
+ * route-map CLI locally, matching ripd/zebra/staticd. All 143
+ * match/set commands, including the nine below that B-RM3 left
+ * behind (match/no_match alias, set_aspath_prepend_asn,
+ * set_aspath_exclude, set_community, set/no_set_vpn_nexthop,
+ * set/no_set_ipx_vpn_nexthop), now run only in mgmtd; the CLI-side
+ * bodies had their bgpd-only validation helper calls
+ * (bgp_ca_alias_lookup, route_aspath_compile, community_str2com,
+ * argv_find_and_parse_vpnvx/afi) dropped or inlined -- see the
+ * comment immediately above match_alias_cmd below for why that is
+ * not a validation regression.
  */
 
 #include <zebra.h>
@@ -65,7 +61,6 @@
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_regex.h"
 #include "bgpd/bgp_community.h"
-#include "bgpd/bgp_community_alias.h"
 #include "bgpd/bgp_clist.h"
 #include "bgpd/bgp_filter.h"
 #include "bgpd/bgp_mplsvpn.h"
@@ -2940,6 +2935,373 @@ DEFPY_YANG (match_vpn_dataplane,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/*
+ * The nine commands below (match/no_match alias, set_aspath_prepend_asn,
+ * set_aspath_exclude, set_community, set/no_set_vpn_nexthop,
+ * set/no_set_ipx_vpn_nexthop) were left out of the original B-RM3 split
+ * because their CLI bodies called validation helpers that live in
+ * bgpd-only compilation units (bgp_community_alias.c, bgp_aspath.c,
+ * bgp_community.c, bgp_vty.c, bgp_mplsvpn.c), none of which mgmtd
+ * links. M3 B-RM1 needs bgpd to stop installing any route-map CLI
+ * locally (see bgp_route_map_init(), bgp_routemap.c), so these move
+ * here too, with the bgpd-only calls dropped:
+ *
+ *  - match_alias/no_match_alias: the CLI used to reject an unknown
+ *    alias name eagerly via bgp_ca_alias_lookup(). The northbound
+ *    apply path never validated this (route_match_alias_compile()
+ *    just XSTRDUPs the string; an alias that doesn't exist yet simply
+ *    never matches any route), so dropping the eager check makes
+ *    "match alias" a forward-reference like every other name-based
+ *    match clause in this file (community-list, prefix-list, ...)
+ *    instead of a special case -- not a validation regression, since
+ *    apply-time behavior is unchanged.
+ *  - set_aspath_prepend_asn/set_aspath_exclude/set_community: the CLI
+ *    used to pre-validate via route_aspath_compile()/
+ *    community_str2com() and reject before enqueuing. The northbound
+ *    apply path (generic_set_add() -> route_set_aspath_prepend_cmd /
+ *    route_set_community_cmd's compile hooks in bgp_routemap.c, both
+ *    bgpd-only and unchanged) already re-validates with the same
+ *    compile functions and fails the transaction (NB_ERR_INCONSISTENCY)
+ *    on malformed input, so no unvalidated value can reach running
+ *    config; a bad value now surfaces as an apply-time error instead
+ *    of a CLI-parse-time one, same as the other commands in this file.
+ *    set_community's stored community-string leaf is the raw,
+ *    space-joined token text instead of community_str2com()'s
+ *    canonical pretty-printed form (a "show running-config" cosmetic
+ *    difference only -- community_str()/community_free() are not
+ *    reachable from mgmtd either).
+ *  - set_vpn_nexthop/no_set_vpn_nexthop/set_ipx_vpn_nexthop/
+ *    no_set_ipx_vpn_nexthop: argv_find_and_parse_vpnvx()/
+ *    argv_find_and_parse_afi() (bgp_mplsvpn.c/bgp_vty.c) are thin
+ *    wrappers around lib/command.c's argv_find() with a fixed literal
+ *    token ("vpnv4"/"vpnv6"/"ipv4"/"ipv6"); inlined directly below.
+ *    No validation was ever done beyond the CLI grammar's own
+ *    A.B.C.D/X:X::X:X address-syntax matching, so there is nothing to
+ *    relocate.
+ */
+
+DEFUN_YANG(match_alias, match_alias_cmd, "match alias ALIAS_NAME",
+	   MATCH_STR
+	   "Match BGP community alias name\n"
+	   "BGP community alias name\n")
+{
+	const char *alias = argv[2]->arg;
+	const char *xpath = "./match-condition[condition='frr-bgp-route-map:match-alias']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-match-condition/frr-bgp-route-map:alias", xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, alias);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFUN_YANG(no_match_alias, no_match_alias_cmd, "no match alias [ALIAS_NAME]",
+	   NO_STR MATCH_STR
+	   "Match BGP community alias name\n"
+	   "BGP community alias name\n")
+{
+	int idx_alias = 3;
+	const char *xpath = "./match-condition[condition='frr-bgp-route-map:match-alias']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	if (argc <= idx_alias)
+		return nb_cli_apply_changes(vty, NULL);
+
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-match-condition/frr-bgp-route-map:alias", xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_DESTROY, argv[idx_alias]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFUN_YANG (set_aspath_prepend_asn,
+	    set_aspath_prepend_asn_cmd,
+	    "set as-path prepend ASNUM...",
+	    SET_STR
+	    "Transform BGP AS_PATH attribute\n"
+	    "Prepend to the as-path\n"
+	    AS_STR)
+{
+	int idx_asn = 3;
+	int ret;
+	char *str;
+
+	str = argv_concat(argv, argc, idx_asn);
+
+	const char *xpath = "./set-action[action='frr-bgp-route-map:as-path-prepend']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-set-action/frr-bgp-route-map:prepend-as-path", xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, str);
+	return ret;
+}
+
+DEFUN_YANG (set_aspath_exclude,
+	    set_aspath_exclude_cmd,
+	    "set as-path exclude ASNUM...",
+	    SET_STR
+	    "Transform BGP AS-path attribute\n"
+	    "Exclude from the as-path\n"
+	    AS_STR)
+{
+	int idx_asn = 3;
+	int ret;
+	char *str;
+
+	str = argv_concat(argv, argc, idx_asn);
+
+	const char *xpath = "./set-action[action='frr-bgp-route-map:as-path-exclude']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-set-action/frr-bgp-route-map:exclude-as-path", xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, str);
+	return ret;
+}
+
+DEFUN_YANG (set_community,
+	    set_community_cmd,
+	    "set community AA:NN...",
+	    SET_STR
+	    "BGP community attribute\n"
+	    COMMUNITY_VAL_STR)
+{
+	int idx_aa_nn = 2;
+	int i;
+	int first = 0;
+	int additive = 0;
+	struct buffer *b;
+	char *str;
+	int ret;
+
+	const char *xpath = "./set-action[action='frr-bgp-route-map:set-community']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-set-action/frr-bgp-route-map:community-string", xpath);
+
+	b = buffer_new(1024);
+
+	for (i = idx_aa_nn; i < argc; i++) {
+		if (strncmp(argv[i]->arg, "additive", strlen(argv[i]->arg)) == 0) {
+			additive = 1;
+			continue;
+		}
+
+		if (first)
+			buffer_putc(b, ' ');
+		else
+			first = 1;
+
+		if (strncmp(argv[i]->arg, "local-AS", strlen(argv[i]->arg)) == 0) {
+			buffer_putstr(b, "local-AS");
+			continue;
+		}
+		if (strncmp(argv[i]->arg, "no-a", strlen("no-a")) == 0 &&
+		    strncmp(argv[i]->arg, "no-advertise", strlen(argv[i]->arg)) == 0) {
+			buffer_putstr(b, "no-advertise");
+			continue;
+		}
+		if (strncmp(argv[i]->arg, "no-e", strlen("no-e")) == 0 &&
+		    strncmp(argv[i]->arg, "no-export", strlen(argv[i]->arg)) == 0) {
+			buffer_putstr(b, "no-export");
+			continue;
+		}
+		if (strncmp(argv[i]->arg, "blackhole", strlen(argv[i]->arg)) == 0) {
+			buffer_putstr(b, "blackhole");
+			continue;
+		}
+		if (strncmp(argv[i]->arg, "graceful-shutdown", strlen(argv[i]->arg)) == 0) {
+			buffer_putstr(b, "graceful-shutdown");
+			continue;
+		}
+		buffer_putstr(b, argv[i]->arg);
+	}
+	if (additive)
+		buffer_putstr(b, " additive");
+	buffer_putc(b, '\0');
+
+	str = buffer_getstr(b);
+	buffer_free(b);
+
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	XFREE(MTYPE_TMP, str);
+
+	return ret;
+}
+
+#ifdef KEEP_OLD_VPN_COMMANDS
+DEFUN_YANG (set_vpn_nexthop,
+	    set_vpn_nexthop_cmd,
+	    "set <vpnv4 next-hop A.B.C.D|vpnv6 next-hop X:X::X:X>",
+	    SET_STR
+	    "VPNv4 information\n"
+	    "VPN next-hop address\n"
+	    "IP address of next hop\n"
+	    "VPNv6 information\n"
+	    "VPN next-hop address\n"
+	    "IPv6 address of next hop\n")
+{
+	int idx_ip = 3;
+	afi_t afi;
+	int idx = 0;
+	char xpath_value[XPATH_MAXLEN];
+
+	if (argv_find(argv, argc, "vpnv4", &idx))
+		afi = AFI_IP;
+	else if (argv_find(argv, argc, "vpnv6", &idx))
+		afi = AFI_IP6;
+	else
+		return CMD_SUCCESS;
+
+	if (afi == AFI_IP) {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv4-vpn-address']";
+
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/rmap-set-action/frr-bgp-route-map:ipv4-address", xpath);
+	} else {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv6-vpn-address']";
+
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/rmap-set-action/frr-bgp-route-map:ipv6-address", xpath);
+	}
+
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, argv[idx_ip]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFUN_YANG (no_set_vpn_nexthop,
+	   no_set_vpn_nexthop_cmd,
+	   "no set <vpnv4 next-hop A.B.C.D|vpnv6 next-hop X:X::X:X>",
+	   NO_STR
+	   SET_STR
+	   "VPNv4 information\n"
+	   "VPN next-hop address\n"
+	   "IP address of next hop\n"
+	   "VPNv6 information\n"
+	   "VPN next-hop address\n"
+	   "IPv6 address of next hop\n")
+{
+	afi_t afi;
+	int idx = 0;
+
+	if (argv_find(argv, argc, "vpnv4", &idx))
+		afi = AFI_IP;
+	else if (argv_find(argv, argc, "vpnv6", &idx))
+		afi = AFI_IP6;
+	else
+		return CMD_SUCCESS;
+
+	if (afi == AFI_IP) {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv4-vpn-address']";
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv6-vpn-address']";
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+#endif /* KEEP_OLD_VPN_COMMANDS */
+
+DEFPY_YANG (set_ipx_vpn_nexthop,
+	    set_ipx_vpn_nexthop_cmd,
+	    "set <ipv4|ipv6> vpn next-hop <A.B.C.D$addrv4|X:X::X:X$addrv6>",
+	    SET_STR
+	    "IPv4 information\n"
+	    "IPv6 information\n"
+	    "VPN information\n"
+	    "VPN next-hop address\n"
+	    "IP address of next hop\n"
+	    "IPv6 address of next hop\n")
+{
+	int idx_ip = 4;
+	afi_t afi;
+	int idx = 0;
+	char xpath_value[XPATH_MAXLEN];
+
+	if (argv_find(argv, argc, "ipv4", &idx))
+		afi = AFI_IP;
+	else if (argv_find(argv, argc, "ipv6", &idx))
+		afi = AFI_IP6;
+	else
+		return CMD_SUCCESS;
+
+	if (afi == AFI_IP) {
+		if (addrv6_str) {
+			vty_out(vty, "%% IPv4 next-hop expected\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv4-vpn-address']";
+
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/rmap-set-action/frr-bgp-route-map:ipv4-address", xpath);
+	} else {
+		if (addrv4_str) {
+			vty_out(vty, "%% IPv6 next-hop expected\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv6-vpn-address']";
+
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/rmap-set-action/frr-bgp-route-map:ipv6-address", xpath);
+	}
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, argv[idx_ip]->arg);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFUN_YANG (no_set_ipx_vpn_nexthop,
+	    no_set_ipx_vpn_nexthop_cmd,
+	    "no set <ipv4|ipv6> vpn next-hop [<A.B.C.D|X:X::X:X>]",
+	    NO_STR
+	    SET_STR
+	    "IPv4 information\n"
+	    "IPv6 information\n"
+	    "VPN information\n"
+	    "VPN next-hop address\n"
+	    "IP address of next hop\n"
+	    "IPv6 address of next hop\n")
+{
+	afi_t afi;
+	int idx = 0;
+
+	if (argv_find(argv, argc, "ipv4", &idx))
+		afi = AFI_IP;
+	else if (argv_find(argv, argc, "ipv6", &idx))
+		afi = AFI_IP6;
+	else
+		return CMD_SUCCESS;
+
+	if (afi == AFI_IP) {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv4-vpn-address']";
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		const char *xpath = "./set-action[action='frr-bgp-route-map:ipv6-vpn-address']";
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 void bgp_routemap_cli_init(void)
 {
 	install_element(RMAP_NODE, &match_peer_cmd);
@@ -3091,4 +3453,16 @@ void bgp_routemap_cli_init(void)
 #ifdef HAVE_SCRIPTING
 	install_element(RMAP_NODE, &match_script_cmd);
 #endif
+
+	install_element(RMAP_NODE, &match_alias_cmd);
+	install_element(RMAP_NODE, &no_match_alias_cmd);
+	install_element(RMAP_NODE, &set_aspath_prepend_asn_cmd);
+	install_element(RMAP_NODE, &set_aspath_exclude_cmd);
+	install_element(RMAP_NODE, &set_community_cmd);
+#ifdef KEEP_OLD_VPN_COMMANDS
+	install_element(RMAP_NODE, &set_vpn_nexthop_cmd);
+	install_element(RMAP_NODE, &no_set_vpn_nexthop_cmd);
+#endif /* KEEP_OLD_VPN_COMMANDS */
+	install_element(RMAP_NODE, &set_ipx_vpn_nexthop_cmd);
+	install_element(RMAP_NODE, &no_set_ipx_vpn_nexthop_cmd);
 }

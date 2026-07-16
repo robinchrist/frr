@@ -9765,8 +9765,16 @@ void bgp_init(unsigned short instance)
 	bgp_ethernetvpn_init();
 	bgp_flowspec_vty_init();
 
-	/* Access list initialize. */
-	access_list_init();
+	/* Access list initialize. bgpd is a backend daemon (M3 B-RM1):
+	 * do not install lib's northbound access/mac-access-list CLI
+	 * locally (lib/filter_cli.c, mgmtd-owned), matching
+	 * bgp_route_map_init()'s route_map_init_new(true) above and
+	 * ripd_route_map_init()'s access_list_init_new(true) precedent.
+	 * prefix_list_init() below needs no equivalent change: its CLI
+	 * (ip prefix-list ...) lives entirely in lib/filter_cli.c too,
+	 * and prefix_list_init() itself never installs any CLI.
+	 */
+	access_list_init_new(true);
 	access_list_add_hook(peer_distribute_update);
 	access_list_delete_hook(peer_distribute_update);
 

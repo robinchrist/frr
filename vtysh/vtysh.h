@@ -51,10 +51,13 @@ extern struct event_loop *master;
 		VTYSH_PIM6D | VTYSH_NHRPD | VTYSH_EIGRPD | VTYSH_BABELD |      \
 		VTYSH_SHARPD | VTYSH_PBRD | VTYSH_STATICD | VTYSH_BFDD |       \
 		VTYSH_FABRICD | VTYSH_VRRPD | VTYSH_PATHD | VTYSH_MGMTD
-#define VTYSH_ACL_CONFIG                                                       \
-	VTYSH_BABELD | VTYSH_BGPD | VTYSH_EIGRPD | VTYSH_ISISD |               \
-		VTYSH_FABRICD | VTYSH_LDPD | VTYSH_NHRPD | VTYSH_OSPF6D |      \
-		VTYSH_OSPFD | VTYSH_PBRD | VTYSH_PIMD | VTYSH_PIM6D |          \
+/* not VTYSH_BGPD: bgpd is a backend daemon (M3 B-RM1) and installs no
+ * access/prefix-list extensions of its own under ACCESS_NODE/
+ * PREFIX_*_NODE, unlike the interface/vrf nodes -- lib/filter_cli.c's
+ * commands now run only in mgmtd, matching ripd/zebra/staticd. */
+#define VTYSH_ACL_CONFIG                                                                          \
+	VTYSH_BABELD | VTYSH_EIGRPD | VTYSH_ISISD | VTYSH_FABRICD | VTYSH_LDPD | VTYSH_NHRPD |    \
+		VTYSH_OSPF6D | VTYSH_OSPFD | VTYSH_PBRD | VTYSH_PIMD | VTYSH_PIM6D |              \
 		VTYSH_VRRPD | VTYSH_MGMTD
 #define VTYSH_ACL_SHOW                                                         \
 	VTYSH_BABELD | VTYSH_BGPD | VTYSH_EIGRPD | VTYSH_ISISD |  \
@@ -63,9 +66,14 @@ extern struct event_loop *master;
 		VTYSH_RIPD | VTYSH_RIPNGD | VTYSH_VRRPD | VTYSH_ZEBRA
 
 #define VTYSH_AFFMAP VTYSH_ISISD | VTYSH_MGMTD
-#define VTYSH_RMAP_CONFIG                                                      \
-	VTYSH_OSPFD | VTYSH_OSPF6D | VTYSH_BGPD | VTYSH_ISISD |  \
-		VTYSH_PIMD | VTYSH_PIM6D | VTYSH_EIGRPD | VTYSH_FABRICD | VTYSH_MGMTD
+/* not VTYSH_BGPD: bgpd is a backend daemon (M3 B-RM1) and no longer
+ * installs any route-map CLI locally, including its own match/set
+ * commands (bgp_routemap_cli.c compiles only into mgmtd now) -- all
+ * of RMAP_NODE, generic and bgp-specific alike, runs only in mgmtd,
+ * matching ripd (which has no route-map extensions of its own). */
+#define VTYSH_RMAP_CONFIG                                                                         \
+	VTYSH_OSPFD | VTYSH_OSPF6D | VTYSH_ISISD | VTYSH_PIMD | VTYSH_PIM6D | VTYSH_EIGRPD |      \
+		VTYSH_FABRICD | VTYSH_MGMTD
 #define VTYSH_RMAP_SHOW                                                        \
 	VTYSH_ZEBRA | VTYSH_RIPD | VTYSH_RIPNGD | VTYSH_OSPFD | VTYSH_OSPF6D | \
 		VTYSH_BGPD | VTYSH_ISISD | VTYSH_PIMD | VTYSH_PIM6D |          \
