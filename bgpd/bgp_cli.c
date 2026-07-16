@@ -643,6 +643,63 @@ DEFPY_YANG(
 }
 
 /*
+ * Milestone 2 batch B12: 'bgp graceful-shutdown' (process + instance
+ * pair). Legacy is a single dual-purpose DEFUN (bgp_graceful_shutdown_cmd /
+ * no_bgp_graceful_shutdown_cmd, bgpd/bgp_vty.c) installed identically at
+ * both CONFIG_NODE and BGP_NODE and branching on vty->node -- split here
+ * into two independent DEFPY_YANG pairs (same "bgp graceful-shutdown"
+ * grammar at both nodes, same as legacy), one per scope, each with its own
+ * fixed target xpath. The strict bidirectional mutual-exclusion guard is
+ * enforced in NB_EV_VALIDATE in bgp_nb_config.c, reading the live bm-> /
+ * bgp-> runtime state. Both leaves carry a YANG default (false), so the
+ * no-form maps to NB_OP_DESTROY same as suppress-fib-pending's 'enabled'
+ * (B10) -- there is no separate no-form callback since DESTROY is
+ * schema-invalid for a default-bearing leaf; northbound instead redelivers
+ * it as a MODIFY of the default value to the single .modify callback.
+ */
+DEFPY_YANG(
+	bgp_global_graceful_shutdown, bgp_global_graceful_shutdown_cli_cmd,
+	"bgp graceful-shutdown",
+	BGP_STR
+	"Graceful shutdown parameters\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-shutdown", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_graceful_shutdown, no_bgp_global_graceful_shutdown_cli_cmd,
+	"no bgp graceful-shutdown",
+	NO_STR
+	BGP_STR
+	"Graceful shutdown parameters\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/graceful-shutdown", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_graceful_shutdown, bgp_graceful_shutdown_cli_cmd,
+	"bgp graceful-shutdown",
+	BGP_STR
+	"Graceful shutdown parameters\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-shutdown", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_graceful_shutdown, no_bgp_graceful_shutdown_cli_cmd,
+	"no bgp graceful-shutdown",
+	NO_STR
+	BGP_STR
+	"Graceful shutdown parameters\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-shutdown", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
  * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
@@ -2574,6 +2631,21 @@ static void instance_advertisement_delay_cli_write(struct vty *vty, const struct
 		vty_out(vty, " advertisement-delay %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
+/* Batch B12: 'bgp graceful-shutdown', per-instance form. Static
+ * default-off boolean, legacy positive-only emission (matches
+ * bgp_config_write()'s "if (!CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_
+ * SHUTDOWN)) if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN)) ...";
+ * the guard against the process-wide flag being set is a no-op here since
+ * NB_EV_VALIDATE already refuses to let both be true at once, so a plain
+ * value check reproduces the same emitted output).
+ */
+static void instance_graceful_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp graceful-shutdown\n");
+}
+
 static void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
@@ -3139,6 +3211,18 @@ static void process_advertisement_delay_cli_write(struct vty *vty, const struct 
 		vty_out(vty, "bgp advertisement-delay %u\n", yang_dnode_get_uint16(dnode, NULL));
 }
 
+/* Batch B12: 'bgp graceful-shutdown', process-wide form. Same
+ * value-checked shape as instance_graceful_shutdown_cli_write above, no
+ * leading space (top-level, matches legacy's "if (CHECK_FLAG(bm->flags,
+ * BM_FLAG_GRACEFUL_SHUTDOWN)) vty_out(vty, \"bgp graceful-shutdown\\n\")").
+ */
+static void process_graceful_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "bgp graceful-shutdown\n");
+}
+
 const struct frr_yang_module_info proteus_bgp_cli_info = {
 	.name = "proteus-bgp",
 	.ignore_cfg_cbs = true,
@@ -3238,6 +3322,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/advertisement-delay",
 			.cbs = {
 				.cli_show = instance_advertisement_delay_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/graceful-shutdown",
+			.cbs = {
+				.cli_show = instance_graceful_shutdown_cli_write,
 			}
 		},
 		{
@@ -3585,6 +3675,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/graceful-shutdown",
+			.cbs = {
+				.cli_show = process_graceful_shutdown_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -3617,6 +3713,9 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_update_delay_cli_cmd);
 	install_element(BGP_NODE, &bgp_advertisement_delay_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_advertisement_delay_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_graceful_shutdown_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_shutdown_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
@@ -3774,4 +3873,7 @@ void bgp_cli_init(void)
 	install_element(CONFIG_NODE, &no_bgp_global_update_delay_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_global_advertisement_delay_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_advertisement_delay_cli_cmd);
+
+	install_element(CONFIG_NODE, &bgp_global_graceful_shutdown_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_graceful_shutdown_cli_cmd);
 }

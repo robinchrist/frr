@@ -479,18 +479,99 @@ int process_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *a
 	return NB_OK;
 }
 
+/* Milestone 2 batch B12: 'bgp graceful-shutdown' (process + instance
+ * pair). Legacy is a single dual-purpose DEFUN (bgp_graceful_shutdown_cmd /
+ * no_bgp_graceful_shutdown_cmd, bgpd/bgp_vty.c) branching on vty->node --
+ * split here into independent process/instance northbound callbacks that
+ * share the mutual-exclusion helpers below.
+ *
+ * Both leaves carry a YANG 'default "false"' (Tier A, positive-only legacy
+ * emission), which makes NB_CB_DESTROY schema-invalid for them
+ * (nb_cb_operation_is_valid() in lib/northbound.c refuses DESTROY on any
+ * leaf with a YANG default) -- unlike update-delay (B11), there is no
+ * .destroy callback at all (matching the already-generated stub table
+ * entries, bgp_nb.c). Deleting the explicit override back to the default
+ * is instead delivered as a MODIFY carrying the default value (libyang's
+ * LYD_DIFF_DEFAULTS diff mode, lib/northbound.c:nb_config_diff()), same
+ * shape as B10's suppress-fib-pending 'enabled'. Both modify callbacks
+ * below therefore handle the false transition themselves -- there is no
+ * separate no-form entry point to rely on.
+ */
+
+/* Mirrors bgp_global_graceful_shutdown_config_vty()'s guard: only checked
+ * for the true (shutdown-on) transition, and only while the global flag
+ * isn't already set -- a redundant re-set is always allowed, matching
+ * update-delay's process-side "only check while still at default" pattern
+ * (B11). The false transition (bgp_global_graceful_shutdown_deconfig_vty())
+ * has no guard at all in legacy code.
+ */
+static bool bgp_nb_graceful_shutdown_process_blocked_by_instance(void)
+{
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+
+	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
+		return false;
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
+		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN))
+			return true;
+	}
+
+	return false;
+}
+
+/* Mirrors bgp_graceful_shutdown_cmd's/no_bgp_graceful_shutdown_cmd's
+ * per-instance branch: the instance form is blocked outright whenever the
+ * process-wide flag is set, in both directions (true and false), same
+ * shape as update-delay's instance-side guard (B11).
+ */
+static bool bgp_nb_graceful_shutdown_instance_blocked_by_process(void)
+{
+	return CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN);
+}
+
 int process_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 {
+	struct listnode *node, *nnode;
+	struct bgp *bgp;
+	bool new_val;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/graceful-shutdown");
-		return NB_ERR_VALIDATION;
+		new_val = yang_dnode_get_bool(args->dnode, NULL);
+		if (new_val && bgp_nb_graceful_shutdown_process_blocked_by_instance()) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "graceful-shutdown configuration found in a vrf: global graceful-shutdown not permitted");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	new_val = yang_dnode_get_bool(args->dnode, NULL);
+
+	/* Legacy re-entry behavior: bgp_global_graceful_shutdown_config_vty()
+	 * and _deconfig_vty() are both no-ops when the flag is already at
+	 * the requested state, so a replay reapplying the same value
+	 * (bgp_nb_instance_replay()) never re-fires
+	 * bgp_initiate_graceful_shut_unshut() on every peer of every
+	 * instance.
+	 */
+	if (new_val == CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
+		return NB_OK;
+
+	if (new_val)
+		SET_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN);
+	else
+		UNSET_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN);
+
+	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
+		bgp_initiate_graceful_shut_unshut(NULL, bgp);
 
 	return NB_OK;
 }
@@ -2895,18 +2976,55 @@ int instance_coalesce_time_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Mirrors bgp_graceful_shutdown_cmd's/no_bgp_graceful_shutdown_cmd's
+ * per-instance branch: same YANG-default-boolean shape as the process
+ * callback above (no .destroy, both directions handled through this one
+ * MODIFY), but here the process-blocked guard applies unconditionally in
+ * both directions -- see bgp_nb_graceful_shutdown_instance_blocked_by_process()
+ * above.
+ */
 int instance_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	bool new_val;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/graceful-shutdown");
-		return NB_ERR_VALIDATION;
+		if (bgp_nb_graceful_shutdown_instance_blocked_by_process()) {
+			new_val = yang_dnode_get_bool(args->dnode, NULL);
+			snprintf(args->errmsg, args->errmsg_len,
+				 new_val ? "per-vrf graceful-shutdown config not permitted with global graceful-shutdown"
+					 : "bgp graceful-shutdown configured globally, delete per-vrf not permitted");
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		return NB_OK;
 	case NB_EV_APPLY:
 		break;
 	}
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	new_val = yang_dnode_get_bool(args->dnode, NULL);
+
+	/* Legacy re-entry behavior: both the positive and negative DEFUN
+	 * bodies only touch the flag (and fire the side effect) when it
+	 * isn't already at the requested state, so a replay of an
+	 * already-shut instance (bgp_nb_instance_replay()) stays harmless.
+	 */
+	if (new_val == CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN))
+		return NB_OK;
+
+	if (new_val)
+		SET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN);
+	else
+		UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN);
+
+	bgp_initiate_graceful_shut_unshut(NULL, bgp);
 
 	return NB_OK;
 }

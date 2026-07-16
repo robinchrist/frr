@@ -2928,121 +2928,17 @@ DEFUN (no_bgp_graceful_restart_rib_stale_time,
 	return CMD_SUCCESS;
 }
 
-static inline void bgp_initiate_graceful_shut_unshut(struct vty *vty,
-						     struct bgp *bgp)
+/* Graceful-shutdown side effect on every peer in the instance: converted
+ * to northbound, see '/proteus-bgp:process/graceful-shutdown' and
+ * '/proteus-bgp:instance/graceful-shutdown' callbacks in bgp_nb_config.c.
+ * Exposed (no longer static) via bgp_vty.h for that caller.
+ */
+void bgp_initiate_graceful_shut_unshut(struct vty *vty, struct bgp *bgp)
 {
 	bgp_static_redo_import_check(bgp);
 	bgp_redistribute_redo(bgp);
 	bgp_clear_star_soft_out(vty, bgp->name);
 	bgp_clear_star_soft_in(vty, bgp->name);
-}
-
-static int bgp_global_graceful_shutdown_config_vty(struct vty *vty)
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-	bool vrf_cfg = false;
-
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
-		return CMD_SUCCESS;
-
-	/* See if graceful-shutdown is set per-vrf and warn user to delete */
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp)) {
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN)) {
-			vty_out(vty,
-				"%% graceful-shutdown configuration found in vrf %s\n",
-				bgp->inst_type == BGP_INSTANCE_TYPE_DEFAULT ?
-					VRF_DEFAULT_NAME : bgp->name);
-			vrf_cfg = true;
-		}
-	}
-
-	if (vrf_cfg) {
-		vty_out(vty,
-			"%%Failed: global graceful-shutdown not permitted\n");
-		return CMD_WARNING;
-	}
-
-	/* Set flag globally */
-	SET_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN);
-
-	/* Initiate processing for all BGP instances. */
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-		bgp_initiate_graceful_shut_unshut(vty, bgp);
-
-	return CMD_SUCCESS;
-}
-
-static int bgp_global_graceful_shutdown_deconfig_vty(struct vty *vty)
-{
-	struct listnode *node, *nnode;
-	struct bgp *bgp;
-
-	if (!CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
-		return CMD_SUCCESS;
-
-	/* Unset flag globally */
-	UNSET_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN);
-
-	/* Initiate processing for all BGP instances. */
-	for (ALL_LIST_ELEMENTS(bm->bgp, node, nnode, bgp))
-		bgp_initiate_graceful_shut_unshut(vty, bgp);
-
-	return CMD_SUCCESS;
-}
-
-/* "bgp graceful-shutdown" configuration */
-DEFUN (bgp_graceful_shutdown,
-       bgp_graceful_shutdown_cmd,
-       "bgp graceful-shutdown",
-       BGP_STR
-       "Graceful shutdown parameters\n")
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_graceful_shutdown_config_vty(vty);
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	/* if configured globally, per-instance config is not allowed */
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN)) {
-		vty_out(vty,
-			"%%Failed: per-vrf graceful-shutdown config not permitted with global graceful-shutdown\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (!CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN)) {
-		SET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN);
-		bgp_initiate_graceful_shut_unshut(vty, bgp);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_graceful_shutdown,
-       no_bgp_graceful_shutdown_cmd,
-       "no bgp graceful-shutdown",
-       NO_STR
-       BGP_STR
-       "Graceful shutdown parameters\n")
-{
-	if (vty->node == CONFIG_NODE)
-		return bgp_global_graceful_shutdown_deconfig_vty(vty);
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	/* If configured globally, cannot remove from one bgp instance */
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN)) {
-		vty_out(vty,
-			"%%Failed: bgp graceful-shutdown configured globally. Delete per-vrf not permitted\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN)) {
-		UNSET_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN);
-		bgp_initiate_graceful_shut_unshut(vty, bgp);
-	}
-
-	return CMD_SUCCESS;
 }
 
 DEFUN (bgp_listen_limit,
@@ -19953,8 +19849,9 @@ int bgp_config_write(struct vty *vty)
 		vty_out(vty, "bgp graceful-restart rib-stale-time %u\n",
 			bm->rib_stale_time);
 
-	if (CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
-		vty_out(vty, "bgp graceful-shutdown\n");
+	/* BGP graceful-shutdown: converted to northbound, see
+	 * '/proteus-bgp:process/graceful-shutdown' cli_show in bgp_cli.c.
+	 */
 
 	vty_out(vty, "!\n");
 
@@ -20053,13 +19950,10 @@ int bgp_config_write(struct vty *vty)
 		 * cli_show in bgp_cli.c.
 		 */
 
-		/* BGP per-instance graceful-shutdown */
-		/* BGP-wide settings and per-instance settings are mutually
-		 * exclusive.
+		/* BGP per-instance graceful-shutdown: converted to
+		 * northbound, see '/proteus-bgp:instance/graceful-shutdown'
+		 * cli_show in bgp_cli.c.
 		 */
-		if (!CHECK_FLAG(bm->flags, BM_FLAG_GRACEFUL_SHUTDOWN))
-			if (CHECK_FLAG(bgp->flags, BGP_FLAG_GRACEFUL_SHUTDOWN))
-				vty_out(vty, " bgp graceful-shutdown\n");
 
 		/* BGP per-instance graceful-restart. */
 		/* BGP-wide settings and per-instance settings are mutually
@@ -20754,9 +20648,9 @@ void bgp_vty_init(void)
 	 * per-VRF instance scopes are northbound now, see bgp_cli.c
 	 */
 
-	/* global bgp graceful-shutdown command */
-	install_element(CONFIG_NODE, &bgp_graceful_shutdown_cmd);
-	install_element(CONFIG_NODE, &no_bgp_graceful_shutdown_cmd);
+	/* bgp graceful-shutdown: both process and per-VRF instance scopes
+	 * are northbound now, see bgp_cli.c
+	 */
 
 	/* BGP-wide graceful-restart commands. */
 	install_element(CONFIG_NODE, &bgp_graceful_restart_cmd);
@@ -20868,10 +20762,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_rib_stale_time_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_rib_stale_time_cmd);
-
-	/* "bgp graceful-shutdown" commands */
-	install_element(BGP_NODE, &bgp_graceful_shutdown_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_shutdown_cmd);
 
 	/* "bgp listen limit" commands. */
 	install_element(BGP_NODE, &bgp_listen_limit_cmd);
