@@ -453,6 +453,106 @@ int instance_ebgp_requires_policy_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Interim bridge (delete at M8 when peer creation becomes a northbound
+ * transaction operation, see the commit message for the full rationale):
+ * during config-file load, native 'neighbor ... remote-as' peer creation
+ * (bgpd.c peer_new(), ~1792-1807) still runs immediately as bgpd reads the
+ * file, while these instance-default capability/enforce-first-as leaves are
+ * mgmtd-owned and only reach bgpd once mgmtd pushes its batched commit over
+ * the backend connection. A peer created earlier in the file therefore
+ * never gets seeded. Replay peer_new()'s seeding onto peers that already
+ * exist, gated on bgp_nb_reseed_gate() (below) so interactive config keeps
+ * legacy's future-peers-only semantics untouched (legacy interactive
+ * 'bgp default ...' never iterated existing peers either). Override-aware
+ * apply mirrors peer_group2peer_config_copy() (bgpd.c ~3412-3435): a peer
+ * with an explicit (non-inherited) value for the flag is left alone.
+ */
+
+/* bgp_nb_reseed_gate() - is this APPLY part of the config-load window?
+ *
+ * bgp_config_inprocess() (bgp_vty.c) only tracks bgpd's own vty_read_file()
+ * of bgpd.conf, bracketed by the literal 'XFRR_start_configuration'/
+ * 'XFRR_end_configuration' markers that vtysh emits for an integrated
+ * frr.conf. Split-config per-daemon files (the normal case, e.g. every
+ * topotest) never contain those markers, so bgp_config_inprocess()
+ * never becomes true for them, even though mgmtd still separately reads
+ * and northbound-commits bgpd.conf and still pushes the result to bgpd as
+ * one batched backend transaction once bgpd registers as a backend client
+ * -- the exact race this bridge exists to paper over. bgp_config_inprocess()
+ * is kept as the primary gate (it is correct for integrated frr.conf), and
+ * this is a fallback for the split-config case: the first backend APPLY
+ * bgpd ever processes is -- by construction, since mgmtd commits an entire
+ * config file as a single transaction -- indistinguishable from "the
+ * config-file load just caught up", so treat it as one. The gate stays
+ * open for the remainder of that same synchronous APPLY batch (the closing
+ * event is only queued, not yet run) and closes for good on the next event
+ * loop turn, before any later transaction -- reload or interactive -- can
+ * reach a callback.
+ */
+static bool bgp_nb_reseed_window_open = true;
+static struct event *bgp_nb_reseed_window_close_ev;
+
+static void bgp_nb_reseed_window_close(struct event *t)
+{
+	bgp_nb_reseed_window_open = false;
+}
+
+static bool bgp_nb_reseed_gate(void)
+{
+	/* Arm the one-shot window close on the very first call regardless of
+	 * which branch answers below: otherwise an integrated frr.conf load
+	 * (answered by bgp_config_inprocess()) would never queue the close, and
+	 * the first post-boot interactive change -- inprocess now false, window
+	 * never exercised -- would find the fallback window still open and
+	 * wrongly re-seed live peers, breaking legacy future-peers-only
+	 * semantics. The close fires one event-loop turn later; during an
+	 * integrated load bgp_config_inprocess() keeps covering the rest of the
+	 * load, so closing the fallback window early is harmless.
+	 */
+	if (bgp_nb_reseed_window_open && !bgp_nb_reseed_window_close_ev)
+		event_add_event(bm->master, bgp_nb_reseed_window_close, NULL, 0,
+				&bgp_nb_reseed_window_close_ev);
+
+	if (bgp_config_inprocess())
+		return true;
+
+	return bgp_nb_reseed_window_open;
+}
+
+static void bgp_reseed_default_capability(struct bgp *bgp, uint64_t bgp_flag, uint64_t peer_flag)
+{
+	struct listnode *node;
+	struct peer *peer;
+
+	if (!CHECK_FLAG(bgp->flags, bgp_flag))
+		return;
+
+	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
+		if (!CHECK_FLAG(peer->flags_override, peer_flag))
+			SET_FLAG(peer->flags, peer_flag);
+	}
+}
+
+static void bgp_reseed_default_enforce_first_as(struct bgp *bgp)
+{
+	struct listnode *node;
+	struct peer *peer;
+
+	if (!CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS))
+		return;
+
+	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
+		if (CHECK_FLAG(peer->flags_override, PEER_FLAG_ENFORCE_FIRST_AS))
+			continue;
+		/* Mirror peer_new()'s manual set (bgpd.c ~1792-1795): the flag
+		 * defaults to enabled, so it must be marked inverted for
+		 * correct 'show running-config' display.
+		 */
+		SET_FLAG(peer->flags_invert, PEER_FLAG_ENFORCE_FIRST_AS);
+		SET_FLAG(peer->flags, PEER_FLAG_ENFORCE_FIRST_AS);
+	}
+}
+
 int instance_enforce_first_as_modify(struct nb_cb_modify_args *args)
 {
 	struct bgp *bgp;
@@ -478,6 +578,8 @@ int instance_enforce_first_as_modify(struct nb_cb_modify_args *args)
 			SET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
 		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS);
+		if (bgp_nb_reseed_gate())
+			bgp_reseed_default_enforce_first_as(bgp);
 		for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
 			FOREACH_AFI_SAFI (afi, safi)
 				peer_on_policy_change(peer, afi, safi, 0);
@@ -1057,6 +1159,9 @@ int instance_default_software_version_capability_modify(struct nb_cb_modify_args
 			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
 		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD);
+		if (bgp_nb_reseed_gate())
+			bgp_reseed_default_capability(bgp, BGP_FLAG_SOFT_VERSION_CAPABILITY_OLD,
+						      PEER_FLAG_CAPABILITY_SOFT_VERSION_OLD);
 		break;
 	}
 
@@ -1104,6 +1209,9 @@ int instance_default_software_version_capability_latest_encoding_modify(
 			SET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
 		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW);
+		if (bgp_nb_reseed_gate())
+			bgp_reseed_default_capability(bgp, BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW,
+						      PEER_FLAG_CAPABILITY_SOFT_VERSION_NEW);
 		break;
 	}
 
@@ -1151,6 +1259,9 @@ int instance_default_link_local_capability_modify(struct nb_cb_modify_args *args
 			SET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
 		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_LINK_LOCAL_CAPABILITY);
+		if (bgp_nb_reseed_gate())
+			bgp_reseed_default_capability(bgp, BGP_FLAG_LINK_LOCAL_CAPABILITY,
+						      PEER_FLAG_CAPABILITY_LINK_LOCAL);
 		break;
 	}
 
@@ -1197,6 +1308,9 @@ int instance_default_dynamic_capability_modify(struct nb_cb_modify_args *args)
 			SET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
 		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_DYNAMIC_CAPABILITY);
+		if (bgp_nb_reseed_gate())
+			bgp_reseed_default_capability(bgp, BGP_FLAG_DYNAMIC_CAPABILITY,
+						      PEER_FLAG_DYNAMIC_CAPABILITY);
 		break;
 	}
 
