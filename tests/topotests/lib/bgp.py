@@ -1268,6 +1268,21 @@ def modify_bgp_config_when_bgpd_down(tgen, topo, input_dict):
                 )
                 router_list[router].run(cmd)
 
+                # bgpd is mid-conversion to mgmtd: some of the lines just
+                # appended to bgpd.conf are northbound-owned and only take
+                # effect via mgmtd's datastore, which never re-reads
+                # bgpd.conf on its own and is otherwise untouched by the
+                # raw file edit above. mgmtd (unlike bgpd) is still up at
+                # this point, so also push the same lines through vtysh
+                # now; vtysh skips the daemons it can't currently reach
+                # (bgpd), so this only lands the northbound-owned lines in
+                # mgmtd while leaving bgpd's still-legacy lines to be
+                # picked up from the file when bgpd restarts below.
+                vtysh_cmd = "vtysh -f {}/{}/{}".format(
+                    tgen.logdir, router, FRRCFG_FILE
+                )
+                router_list[router].run(vtysh_cmd)
+
     except Exception as e:
         errormsg = traceback.format_exc()
         logger.error(errormsg)
