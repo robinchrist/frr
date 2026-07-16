@@ -2063,7 +2063,7 @@ module proteus-bgp {
     container suppress-fib-pending {
       description
         "'bgp suppress-fib-pending [(0-10000)]': wait for FIB
-         install before advertising.";
+         install before advertising, globally.";
       leaf enabled {
         type boolean;
         default "false";
@@ -2073,6 +2073,12 @@ module proteus-bgp {
           range "0..10000";
         }
         units "milliseconds";
+        default "1000";
+        description
+          "Static default-on scalar, no inheritance (YANG default
+           1000, BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY in bgpd.h);
+           bgp_config_write() in bgpd/bgp_vty.c prints the value
+           only when it differs from this default.";
       }
     }
     container graceful-restart {
@@ -2335,6 +2341,12 @@ module proteus-bgp {
           range "0..10000";
         }
         units "milliseconds";
+        default "1000";
+        description
+          "Static default-on scalar, no inheritance (YANG default
+           1000, BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY in bgpd.h);
+           bgp_config_write() in bgpd/bgp_vty.c prints the value
+           only when it differs from this default.";
       }
     }
 

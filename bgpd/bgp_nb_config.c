@@ -157,50 +157,43 @@ int process_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Both leaves below drive the same bm_wait_for_fib_set(set, adv_delay) call
+ * (bgpd.c), matching bgp_global_suppress_fib_pending_cmd exactly: whichever
+ * leaf's modify callback runs re-reads its sibling (both are default-bearing
+ * so a plain yang_dnode_get_* always succeeds, no existence check needed)
+ * and re-applies the full state. bm_wait_for_fib_set() is idempotent when
+ * called twice with the same resulting (set, adv_delay) pair, which happens
+ * whenever both leaves change in the same transaction (same shape as B7's
+ * instance_tcp_keepalive_*_modify siblings).
+ */
 int process_suppress_fib_pending_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/suppress-fib-pending/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	bool enabled;
+	uint16_t adv_delay;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	enabled = yang_dnode_get_bool(args->dnode, NULL);
+	adv_delay = yang_dnode_get_uint16(args->dnode, "../advertisement-delay");
+
+	bm_wait_for_fib_set(enabled, adv_delay);
 
 	return NB_OK;
 }
 
 int process_suppress_fib_pending_advertisement_delay_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/suppress-fib-pending/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	bool enabled;
+	uint16_t adv_delay;
 
-	return NB_OK;
-}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-int process_suppress_fib_pending_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:process/suppress-fib-pending/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	adv_delay = yang_dnode_get_uint16(args->dnode, NULL);
+	enabled = yang_dnode_get_bool(args->dnode, "../enabled");
+
+	bm_wait_for_fib_set(enabled, adv_delay);
 
 	return NB_OK;
 }
@@ -971,50 +964,50 @@ int instance_ipv6_auto_ra_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* Both leaves drive the same bgp_suppress_fib_pending_set(bgp, set,
+ * adv_delay) call (bgpd.c), matching bgp_suppress_fib_pending_cmd exactly,
+ * including its VIEW-instance no-op and zclient-not-ready deferral -- both
+ * live entirely inside the setter. Same re-read-sibling-and-reapply shape as
+ * the process-scope pair above.
+ */
 int instance_suppress_fib_pending_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/suppress-fib-pending/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	bool enabled;
+	uint16_t adv_delay;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	enabled = yang_dnode_get_bool(args->dnode, NULL);
+	adv_delay = yang_dnode_get_uint16(args->dnode, "../advertisement-delay");
+
+	bgp_suppress_fib_pending_set(bgp, enabled, adv_delay);
 
 	return NB_OK;
 }
 
 int instance_suppress_fib_pending_advertisement_delay_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/suppress-fib-pending/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	bool enabled;
+	uint16_t adv_delay;
 
-	return NB_OK;
-}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-int instance_suppress_fib_pending_advertisement_delay_destroy(struct nb_cb_destroy_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/suppress-fib-pending/advertisement-delay");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	adv_delay = yang_dnode_get_uint16(args->dnode, NULL);
+	enabled = yang_dnode_get_bool(args->dnode, "../enabled");
+
+	bgp_suppress_fib_pending_set(bgp, enabled, adv_delay);
 
 	return NB_OK;
 }

@@ -430,6 +430,92 @@ DEFPY_ATTR(
 }
 
 /*
+ * Milestone 2 batch B10: 'bgp suppress-fib-pending' (process + instance
+ * pair). Fresh grep of bgp_vty.c/bgpd.c confirms no mutual-exclusion guard
+ * exists between the two scopes: bm_wait_for_fib_set() (process,
+ * bm->wait_for_fib) and bgp_suppress_fib_pending_set() (instance,
+ * BGP_FLAG_SUPPRESS_FIB_PENDING) are independent setters with no
+ * cross-check against each other's state in either direction, and
+ * BGP_SUPPRESS_FIB_ENABLED(bgp) (bgpd.h) simply ORs the two together at
+ * every use site -- both can be configured simultaneously today with no
+ * error and no precedence rule beyond that OR. Converted as-is: no new
+ * guard is introduced.
+ *
+ * 'enabled' is a static default-off boolean with a legacy positive-only
+ * emission (no <cmd> deletes back to the false default, same shape as
+ * 'bgp always-compare-med'); 'advertisement-delay' is a static
+ * default-on scalar (YANG default 1000 == BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY,
+ * same shape as 'bgp default local-preference'). Both leaves are set/reset
+ * together off the single legacy "[no] bgp suppress-fib-pending
+ * [(0-10000)$delay]" grammar, same shape as 'bgp max-med administrative'.
+ */
+DEFPY_YANG(
+	bgp_global_suppress_fib_pending, bgp_global_suppress_fib_pending_cli_cmd,
+	"bgp suppress-fib-pending [(0-10000)$delay]",
+	BGP_STR
+	"Advertise only routes that are programmed in kernel to peers globally\n"
+	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/enabled",
+			      NB_OP_MODIFY, "true");
+	if (delay_str)
+		nb_cli_enqueue_change(vty,
+				      "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
+				      NB_OP_MODIFY, delay_str);
+	else
+		nb_cli_enqueue_change(vty,
+				      "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
+				      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_global_suppress_fib_pending, no_bgp_global_suppress_fib_pending_cli_cmd,
+	"no bgp suppress-fib-pending [(0-10000)]",
+	NO_STR
+	BGP_STR
+	"Advertise only routes that are programmed in kernel to peers globally\n"
+	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/enabled",
+			      NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_suppress_fib_pending, bgp_suppress_fib_pending_cli_cmd,
+	"bgp suppress-fib-pending [(0-10000)$delay]",
+	BGP_STR
+	"Advertise only routes that are programmed in kernel to peers\n"
+	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
+{
+	nb_cli_enqueue_change(vty, "./suppress-fib-pending/enabled", NB_OP_MODIFY, "true");
+	if (delay_str)
+		nb_cli_enqueue_change(vty, "./suppress-fib-pending/advertisement-delay",
+				      NB_OP_MODIFY, delay_str);
+	else
+		nb_cli_enqueue_change(vty, "./suppress-fib-pending/advertisement-delay",
+				      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_suppress_fib_pending, no_bgp_suppress_fib_pending_cli_cmd,
+	"no bgp suppress-fib-pending [(0-10000)]",
+	NO_STR
+	BGP_STR
+	"Advertise only routes that are programmed in kernel to peers\n"
+	"Advertisement delay in milliseconds after FIB installation (default 1000)\n")
+{
+	nb_cli_enqueue_change(vty, "./suppress-fib-pending/enabled", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./suppress-fib-pending/advertisement-delay", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
  * keepalive/holdtime, 'bgp minimum-holdtime', 'bgp
@@ -2298,6 +2384,24 @@ static void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_no
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+/* Joint emission of 'bgp suppress-fib-pending [(0-10000)]', per-instance
+ * form (batch B10): same guarded-container shape as
+ * process_suppress_fib_pending_cli_write above, one leading space since
+ * it's nested inside the 'router bgp' block.
+ */
+static void instance_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	if (yang_dnode_get_uint16(dnode, "advertisement-delay") != 1000)
+		vty_out(vty, " bgp suppress-fib-pending %u\n",
+			yang_dnode_get_uint16(dnode, "advertisement-delay"));
+	else
+		vty_out(vty, " bgp suppress-fib-pending\n");
+}
+
 static void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults)
 {
@@ -2810,6 +2914,29 @@ static void process_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_nod
 		vty_out(vty, "no bgp ipv6-auto-ra\n");
 }
 
+/* Joint emission of 'bgp suppress-fib-pending [(0-10000)]', process-wide
+ * form: registered on the "suppress-fib-pending" container so 'enabled'
+ * and 'advertisement-delay' land on one line (batch B10), same
+ * guarded-container shape as instance_max_med_administrative_cli_write.
+ * 'enabled' has a YANG default (false), so it's value-checked, not merely
+ * presence-checked; 'advertisement-delay' also carries a YANG default
+ * (1000) and is value-checked against it, matching bgp_config_write()'s
+ * "if (bm->suppress_fib_adv_delay != BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY)"
+ * arm exactly.
+ */
+static void process_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	if (yang_dnode_get_uint16(dnode, "advertisement-delay") != 1000)
+		vty_out(vty, "bgp suppress-fib-pending %u\n",
+			yang_dnode_get_uint16(dnode, "advertisement-delay"));
+	else
+		vty_out(vty, "bgp suppress-fib-pending\n");
+}
+
 const struct frr_yang_module_info proteus_bgp_cli_info = {
 	.name = "proteus-bgp",
 	.ignore_cfg_cbs = true,
@@ -2891,6 +3018,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/ipv6-auto-ra",
 			.cbs = {
 				.cli_show = instance_ipv6_auto_ra_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/suppress-fib-pending",
+			.cbs = {
+				.cli_show = instance_suppress_fib_pending_cli_write,
 			}
 		},
 		{
@@ -3220,6 +3353,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/suppress-fib-pending",
+			.cbs = {
+				.cli_show = process_suppress_fib_pending_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}
@@ -3244,6 +3383,9 @@ void bgp_cli_init(void)
 	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_cli_cmd);
 	install_element(BGP_NODE, &bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_instance_ipv6_auto_ra_deprecated_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_suppress_fib_pending_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_suppress_fib_pending_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);
@@ -3393,4 +3535,7 @@ void bgp_cli_init(void)
 	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
+
+	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_global_suppress_fib_pending_cli_cmd);
 }

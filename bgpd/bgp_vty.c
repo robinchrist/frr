@@ -1906,42 +1906,6 @@ DEFPY(bgp_community_alias, bgp_community_alias_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_global_suppress_fib_pending,
-       bgp_global_suppress_fib_pending_cmd,
-       "[no] bgp suppress-fib-pending [(0-10000)$delay]",
-       NO_STR
-       BGP_STR
-       "Advertise only routes that are programmed in kernel to peers globally\n"
-       "Advertisement delay in milliseconds after FIB installation (default 1000)\n")
-{
-	uint16_t adv_delay = BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY;
-
-	if (!no && delay_str)
-		adv_delay = delay;
-
-	bm_wait_for_fib_set(!no, adv_delay);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_suppress_fib_pending,
-       bgp_suppress_fib_pending_cmd,
-       "[no] bgp suppress-fib-pending [(0-10000)$delay]",
-       NO_STR
-       BGP_STR
-       "Advertise only routes that are programmed in kernel to peers\n"
-       "Advertisement delay in milliseconds after FIB installation (default 1000)\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	uint16_t adv_delay = BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY;
-
-	if (!no && delay_str)
-		adv_delay = delay;
-
-	bgp_suppress_fib_pending_set(bgp, !no, adv_delay);
-	return CMD_SUCCESS;
-}
-
 /**
  * Central routine for maximum-paths configuration.
  * @peer_type: BGP_PEER_EBGP or BGP_PEER_IBGP
@@ -20239,13 +20203,9 @@ int bgp_config_write(struct vty *vty)
 	if (bm->v_advertisement_delay != BGP_ADVERTISEMENT_DELAY_DEFAULT)
 		vty_out(vty, "bgp advertisement-delay %d\n", bm->v_advertisement_delay);
 
-	if (bm->wait_for_fib) {
-		if (bm->suppress_fib_adv_delay != BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY)
-			vty_out(vty, "bgp suppress-fib-pending %u\n",
-				bm->suppress_fib_adv_delay);
-		else
-			vty_out(vty, "bgp suppress-fib-pending\n");
-	}
+	/* bgp suppress-fib-pending: converted to northbound, see
+	 * '/proteus-bgp:process/suppress-fib-pending' cli_show in bgp_cli.c.
+	 */
 
 	if (bm->stalepath_time != BGP_DEFAULT_STALEPATH_TIME)
 		vty_out(vty, "bgp graceful-restart stalepath-time %u\n",
@@ -20300,16 +20260,10 @@ int bgp_config_write(struct vty *vty)
 
 		vty_out(vty, "\n");
 
-		/* Suppress fib pending */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_SUPPRESS_FIB_PENDING)) {
-			if (bgp->suppress_fib_adv_delay !=
-			    BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY)
-				vty_out(vty,
-					" bgp suppress-fib-pending %u\n",
-					bgp->suppress_fib_adv_delay);
-			else
-				vty_out(vty, " bgp suppress-fib-pending\n");
-		}
+		/* bgp suppress-fib-pending: converted to northbound, see
+		 * '/proteus-bgp:instance/suppress-fib-pending' cli_show in
+		 * bgp_cli.c.
+		 */
 
 		/* RFC8212 default eBGP policy: converted to northbound, see
 		 * '/proteus-bgp:instance/ebgp-requires-policy' cli_show in
@@ -21062,9 +21016,6 @@ void bgp_vty_init(void)
 	install_element(CONFIG_NODE, &bgp_local_mac_cmd);
 	install_element(CONFIG_NODE, &no_bgp_local_mac_cmd);
 
-	/* "bgp suppress-fib-pending" global */
-	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cmd);
-
 	install_element(BGP_NODE, &bgp_allow_martian_cmd);
 
 	/* bgp fast-convergence command */
@@ -21108,9 +21059,6 @@ void bgp_vty_init(void)
 
 	/* "router bgp" commands. */
 	install_element(CONFIG_NODE, &router_bgp_cmd);
-
-	/* "bgp suppress-fib-pending" command */
-	install_element(BGP_NODE, &bgp_suppress_fib_pending_cmd);
 
 	/* "neighbor role" commands. */
 	install_element(BGP_NODE, &neighbor_role_cmd);

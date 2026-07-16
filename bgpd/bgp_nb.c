@@ -46,7 +46,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:process/suppress-fib-pending/advertisement-delay",
 			.cbs = {
 				.modify = process_suppress_fib_pending_advertisement_delay_modify,
-				.destroy = process_suppress_fib_pending_advertisement_delay_destroy,
 			}
 		},
 		{
@@ -218,7 +217,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/suppress-fib-pending/advertisement-delay",
 			.cbs = {
 				.modify = instance_suppress_fib_pending_advertisement_delay_modify,
-				.destroy = instance_suppress_fib_pending_advertisement_delay_destroy,
 			}
 		},
 		{
