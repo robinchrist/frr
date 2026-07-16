@@ -2147,181 +2147,21 @@ int bgp_inst_gr_config_vty(struct vty *vty, struct bgp *bgp, bool on, bool disab
  * bgp_nb_update_graceful_restart_capability().
  */
 
-DEFUN (bgp_neighbor_graceful_restart_set,
-	bgp_neighbor_graceful_restart_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart",
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	GR_NEIGHBOR_CMD
-      )
-{
-	int idx_peer = 1;
-	struct peer *peer;
-	int result = BGP_GR_FAILURE, ret = BGP_GR_SUCCESS;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	result = bgp_neighbor_graceful_restart(peer, PEER_GR_CMD);
-	if (result == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-		vty_out(vty,
-			"Graceful restart configuration changed, reset this peer to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_neighbor_graceful_restart,
-	no_bgp_neighbor_graceful_restart_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart",
-	NO_STR
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	NO_GR_NEIGHBOR_CMD
-      )
-{
-	int idx_peer = 2;
-	int result = BGP_GR_FAILURE, ret = BGP_GR_SUCCESS;
-	struct peer *peer;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	result = bgp_neighbor_graceful_restart(peer, NO_PEER_GR_CMD);
-	if (ret == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-		vty_out(vty,
-			"Graceful restart configuration changed, reset this peer to take effect\n");
-	}
-
-	return bgp_vty_return(vty, result);
-}
-
-DEFUN (bgp_neighbor_graceful_restart_helper_set,
-	bgp_neighbor_graceful_restart_helper_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-helper",
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	GR_NEIGHBOR_HELPER_CMD
-      )
-{
-	int idx_peer = 1;
-	struct peer *peer;
-	int ret = BGP_GR_FAILURE;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = bgp_neighbor_graceful_restart(peer, PEER_HELPER_CMD);
-	if (ret == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-		vty_out(vty,
-			"Graceful restart configuration changed, reset this peer to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_neighbor_graceful_restart_helper,
-	no_bgp_neighbor_graceful_restart_helper_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-helper",
-	NO_STR
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	NO_GR_NEIGHBOR_HELPER_CMD
-      )
-{
-	int idx_peer = 2;
-	int ret = BGP_GR_FAILURE;
-	struct peer *peer;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = bgp_neighbor_graceful_restart(peer, NO_PEER_HELPER_CMD);
-	if (ret == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-		vty_out(vty,
-			"Graceful restart configuration changed, reset this peer to take effect\n");
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (bgp_neighbor_graceful_restart_disable_set,
-	bgp_neighbor_graceful_restart_disable_set_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-disable",
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	GR_NEIGHBOR_DISABLE_CMD
-      )
-{
-	int idx_peer = 1;
-	struct peer *peer;
-	int ret = BGP_GR_FAILURE;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = bgp_neighbor_graceful_restart(peer, PEER_DISABLE_CMD);
-	if (ret == BGP_GR_SUCCESS) {
-		if (event_is_scheduled(peer->bgp->t_startup) || bgp_in_graceful_restart())
-			bgp_peer_gr_flags_update(peer);
-
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-	}
-
-	return bgp_vty_return(vty, ret);
-}
-
-DEFUN (no_bgp_neighbor_graceful_restart_disable,
-	no_bgp_neighbor_graceful_restart_disable_set_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> graceful-restart-disable",
-	NO_STR
-	NEIGHBOR_STR
-	NEIGHBOR_ADDR_STR2
-	NO_GR_NEIGHBOR_DISABLE_CMD
-      )
-{
-	int idx_peer = 2;
-	int ret = BGP_GR_FAILURE;
-	struct peer *peer;
-
-	VTY_BGP_GR_DEFINE_LOOP_VARIABLE;
-
-	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = bgp_neighbor_graceful_restart(peer, NO_PEER_DISABLE_CMD);
-	if (ret == BGP_GR_SUCCESS) {
-		VTY_BGP_GR_ROUTER_DETECT(bgp, peer, peer->bgp->peer);
-		VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA(peer->bgp, ret);
-	}
-
-	return bgp_vty_return(vty, ret);
-}
+/* "neighbor X graceful-restart"/"-helper"/"-disable" (+ 'no' forms):
+ * converted to northbound, see '/proteus-bgp:instance/peer-group/
+ * graceful-restart-mode' and '/proteus-bgp:instance/neighbor/
+ * graceful-restart-mode' callbacks in bgp_nb_instance_gr.c (M4 batch B11).
+ * All six legacy DEFUNs funneled into bgp_neighbor_graceful_restart()
+ * (bgp_fsm.c, unchanged, still the real state-machine entry point -- only
+ * its CLI-layer callers move). The disable-set DEFUN's extra
+ * event_is_scheduled()/bgp_in_graceful_restart()-gated bgp_peer_gr_flags_update()
+ * call is not replicated: bgp_peer_move_to_gr_mode() (bgp_fsm.c), called
+ * unconditionally by bgp_neighbor_graceful_restart()'s own action function
+ * for every real transition, already calls bgp_peer_gr_flags_update() on
+ * every transition regardless of that gate -- a second, provably redundant
+ * call, same shape as the redundant zebra-capability call already
+ * documented and dropped for the process/instance scope (M2 batch B13).
+ */
 
 /*
  * Function to announce route to peer
@@ -17100,28 +16940,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 			" neighbor %s path-attribute treat-as-withdraw %s\n",
 			addr, withdraw_attrs_str);
 
-	if (!CHECK_FLAG(peer->peer_gr_new_status_flag,
-			PEER_GRACEFUL_RESTART_NEW_STATE_INHERIT)) {
-
-		if (CHECK_FLAG(peer->peer_gr_new_status_flag,
-			       PEER_GRACEFUL_RESTART_NEW_STATE_HELPER)) {
-			vty_out(vty,
-				" neighbor %s graceful-restart-helper\n", addr);
-		} else if (CHECK_FLAG(
-				   peer->peer_gr_new_status_flag,
-				   PEER_GRACEFUL_RESTART_NEW_STATE_RESTART)) {
-			vty_out(vty,
-				" neighbor %s graceful-restart\n", addr);
-		} else if (
-			(!(CHECK_FLAG(peer->peer_gr_new_status_flag,
-				      PEER_GRACEFUL_RESTART_NEW_STATE_HELPER))
-			 && !(CHECK_FLAG(
-				 peer->peer_gr_new_status_flag,
-				 PEER_GRACEFUL_RESTART_NEW_STATE_RESTART)))) {
-			vty_out(vty, " neighbor %s graceful-restart-disable\n",
-				addr);
-		}
-	}
+	/* graceful-restart-mode: northbound now, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B11).
+	 */
 
 	if (peergroup_flag_check(peer, PEER_FLAG_SEND_NHC_ATTRIBUTE))
 		vty_out(vty, " neighbor %s send-nexthop-characteristics\n", addr);
@@ -18473,21 +18294,9 @@ void bgp_vty_init(void)
 	 * 'bgp graceful-restart-disable'): northbound now, see bgp_cli.c
 	 */
 
-	/* "neighbor a:b:c:d graceful-restart" command */
-	install_element(BGP_NODE, &bgp_neighbor_graceful_restart_set_cmd);
-	install_element(BGP_NODE, &no_bgp_neighbor_graceful_restart_set_cmd);
-
-	/* "neighbor a:b:c:d graceful-restart-disable" command */
-	install_element(BGP_NODE,
-			&bgp_neighbor_graceful_restart_disable_set_cmd);
-	install_element(BGP_NODE,
-			&no_bgp_neighbor_graceful_restart_disable_set_cmd);
-
-	/* "neighbor a:b:c:d graceful-restart-helper" command */
-	install_element(BGP_NODE,
-			&bgp_neighbor_graceful_restart_helper_set_cmd);
-	install_element(BGP_NODE,
-			&no_bgp_neighbor_graceful_restart_helper_set_cmd);
+	/* "neighbor a:b:c:d graceful-restart"/"-helper"/"-disable": northbound
+	 * now, see bgp_cli_neighbor.c (M4 batch B11)
+	 */
 
 	/* bgp graceful-restart restart-time/stalepath-time/select-defer-time
 	 * and preserve-fw-state: northbound now, see bgp_cli.c

@@ -874,17 +874,105 @@ int instance_peer_group_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X graceful-restart'/'graceful-restart-helper'/
+ * 'graceful-restart-disable' (+ their 'no' forms) (M4 batch B11): reproduces
+ * bgp_neighbor_graceful_restart_set/no_bgp_neighbor_graceful_restart/
+ * bgp_neighbor_graceful_restart_helper_set/no_bgp_neighbor_graceful_restart_helper/
+ * bgp_neighbor_graceful_restart_disable_set/no_bgp_neighbor_graceful_restart_disable
+ * (bgp_vty.c, retired), which all funnel into bgp_neighbor_graceful_restart()
+ * -- bgp_fsm.c, NOT bgpd.c. Tier B, no YANG default (the leaf's description:
+ * "unset inherits the instance-level mode"). MODIFY maps the new value onto
+ * PEER_GR_CMD/PEER_HELPER_CMD/PEER_DISABLE_CMD regardless of the peer's
+ * current GR state: bgp_peer_gr_init()'s FSM table (bgpd.c) defines a
+ * transition for every (current state, command) pair, so issuing the
+ * command matching only the new value reproduces exactly what typing that
+ * one legacy DEFUN directly would do from any starting state (including
+ * jumping straight from restarter to disable in one step). DESTROY has a
+ * single entry point standing in for what were three separate legacy 'no'
+ * commands, so -- same trick as instance_graceful_restart_mode_destroy()
+ * above (B13) -- it reads the *old* value straight off args->dnode at
+ * NB_EV_APPLY (valid for a leaf being destroyed) and feeds the matching
+ * NO_PEER_*_CMD, returning the peer to PEER_GLOBAL_INHERIT -- the FSM's
+ * default state (bgp_peer_gr_init()), which live-inherits
+ * bgp->global_gr_present_state on every subsequent bgp_peer_move_to_gr_mode()
+ * call. That state is already kept current by the B13-converted
+ * instance/process graceful-restart-mode callbacks, so no extra coupling is
+ * needed here.
+ *
+ * Peer-group scope calls bgp_neighbor_graceful_restart() on group->conf,
+ * mirroring legacy's own peer_and_group_lookup_vty() (bgp_vty.c), which
+ * returns group->conf for a peer-group name. bgp_peer_gr_action()
+ * (bgp_fsm.c, the FSM's action function) branches on
+ * CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP) to fan a real transition out
+ * to every *current* group member -- unconditionally, with no
+ * flags_override-style per-member exemption (confirmed by direct
+ * inspection: unlike peer_flag_modify()'s fanout, this loop has none). A
+ * member that previously set its own explicit graceful-restart-mode is
+ * therefore silently overwritten at the runtime peer_gr_present_state level
+ * by a later peer-group-level change, exactly like legacy -- not something
+ * this conversion fixes. The member's own northbound leaf (if it has one)
+ * stays untouched in the datastore, the same "presence is exactly legacy's
+ * ownership flag, independent of live runtime divergence" split already
+ * used throughout this file (e.g. the shutdown leaves above): cli_show for
+ * a member still renders whatever that member's own command last set, even
+ * though the live struct peer has since diverged from it, matching legacy's
+ * own config-write reading live peer->peer_gr_new_status_flag.
+ *
+ * bgp_neighbor_graceful_restart()'s action function already performs an
+ * automatic session reset (bgp_session_reset()) or graceful notification
+ * (peer_notify_config_change()) as a side effect of a real state transition
+ * -- confirmed by direct inspection of bgp_peer_gr_action() (bgp_fsm.c), the
+ * same "if (!peer_notify_config_change(...)) bgp_session_reset(...)" idiom
+ * used by every other peer-mutating setter in bgpd.c -- so no extra reset
+ * call is added here despite legacy's four "Graceful restart configuration
+ * changed, reset this peer to take effect" DEFUN messages (bare
+ * graceful-restart and graceful-restart-helper only, never the disable
+ * forms): that text is purely informational vty_out chrome, unconditionally
+ * printed on BGP_GR_SUCCESS in the legacy DEFUN bodies but reproduced here
+ * unconditionally in bgp_cli_neighbor.c (the CLI layer has no visibility
+ * into the northbound APPLY's per-transition FSM result), the same
+ * precedent already set by the tcp-mss session-reset warning (M4 batch B3).
+ *
+ * The zebra graceful-restart-capability push is a real side effect that
+ * bgp_neighbor_graceful_restart() itself does NOT perform (confirmed:
+ * bgp_peer_gr_action() never touches zebra) -- legacy's DEFUN bodies do it
+ * themselves via VTY_BGP_GR_ROUTER_DETECT()+VTY_SEND_BGP_GR_CAPABILITY_TO_ZEBRA()
+ * (bgp_vty.h), both scanning the *whole* bgp instance's peer list
+ * (peer->bgp->peer) regardless of which peer/group triggered the change, so
+ * this replicates that with the combined
+ * VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA() macro (the same
+ * one bgp_inst_gr_config_vty() already uses for the instance/process
+ * scope), gated on BGP_GR_SUCCESS exactly like legacy.
+ */
 int instance_peer_group_graceful_restart_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/graceful-restart-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer_group *group;
+	const char *mode;
+	enum peer_gr_command cmd;
+	struct bgp *bgp;
+	int ret = BGP_GR_SUCCESS;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	mode = yang_dnode_get_string(args->dnode, NULL);
+	if (strmatch(mode, "restarter"))
+		cmd = PEER_GR_CMD;
+	else if (strmatch(mode, "disable"))
+		cmd = PEER_DISABLE_CMD;
+	else
+		cmd = PEER_HELPER_CMD;
+
+	if (bgp_neighbor_graceful_restart(group->conf, cmd) == BGP_GR_SUCCESS) {
+		bgp = group->conf->bgp;
+		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer, ret);
+		if (ret != BGP_GR_SUCCESS)
+			zlog_warn("%s: failed to send graceful-restart capability update to zebra",
+				  __func__);
 	}
 
 	return NB_OK;
@@ -892,15 +980,34 @@ int instance_peer_group_graceful_restart_mode_modify(struct nb_cb_modify_args *a
 
 int instance_peer_group_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/graceful-restart-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer_group *group;
+	const char *mode;
+	enum peer_gr_command cmd;
+	struct bgp *bgp;
+	int ret = BGP_GR_SUCCESS;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	/* Old value, same trick as instance_graceful_restart_mode_destroy(). */
+	mode = yang_dnode_get_string(args->dnode, NULL);
+	if (strmatch(mode, "restarter"))
+		cmd = NO_PEER_GR_CMD;
+	else if (strmatch(mode, "disable"))
+		cmd = NO_PEER_DISABLE_CMD;
+	else
+		cmd = NO_PEER_HELPER_CMD;
+
+	if (bgp_neighbor_graceful_restart(group->conf, cmd) == BGP_GR_SUCCESS) {
+		bgp = group->conf->bgp;
+		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer, ret);
+		if (ret != BGP_GR_SUCCESS)
+			zlog_warn("%s: failed to send graceful-restart capability update to zebra",
+				  __func__);
 	}
 
 	return NB_OK;
@@ -1051,17 +1158,42 @@ int instance_neighbor_graceful_shutdown_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* See the peer-group-scope callback's comment above for the full design
+ * (FSM mapping, DESTROY-reads-old-value trick, why no extra reset is added,
+ * and the zebra capability push). Calls bgp_neighbor_graceful_restart()
+ * directly on the looked-up peer rather than a group->conf -- this is the
+ * !CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP) branch of
+ * bgp_peer_gr_action(), a single-peer reset with no member fanout.
+ */
 int instance_neighbor_graceful_restart_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/graceful-restart-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer *peer;
+	const char *mode;
+	enum peer_gr_command cmd;
+	struct bgp *bgp;
+	int ret = BGP_GR_SUCCESS;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	mode = yang_dnode_get_string(args->dnode, NULL);
+	if (strmatch(mode, "restarter"))
+		cmd = PEER_GR_CMD;
+	else if (strmatch(mode, "disable"))
+		cmd = PEER_DISABLE_CMD;
+	else
+		cmd = PEER_HELPER_CMD;
+
+	if (bgp_neighbor_graceful_restart(peer, cmd) == BGP_GR_SUCCESS) {
+		bgp = peer->bgp;
+		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer, ret);
+		if (ret != BGP_GR_SUCCESS)
+			zlog_warn("%s: failed to send graceful-restart capability update to zebra",
+				  __func__);
 	}
 
 	return NB_OK;
@@ -1069,15 +1201,34 @@ int instance_neighbor_graceful_restart_mode_modify(struct nb_cb_modify_args *arg
 
 int instance_neighbor_graceful_restart_mode_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/graceful-restart-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer *peer;
+	const char *mode;
+	enum peer_gr_command cmd;
+	struct bgp *bgp;
+	int ret = BGP_GR_SUCCESS;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	/* Old value, same trick as instance_graceful_restart_mode_destroy(). */
+	mode = yang_dnode_get_string(args->dnode, NULL);
+	if (strmatch(mode, "restarter"))
+		cmd = NO_PEER_GR_CMD;
+	else if (strmatch(mode, "disable"))
+		cmd = NO_PEER_DISABLE_CMD;
+	else
+		cmd = NO_PEER_HELPER_CMD;
+
+	if (bgp_neighbor_graceful_restart(peer, cmd) == BGP_GR_SUCCESS) {
+		bgp = peer->bgp;
+		VTY_BGP_GR_ROUTER_DETECT_AND_SEND_CAPABILITY_TO_ZEBRA(bgp, bgp->peer, ret);
+		if (ret != BGP_GR_SUCCESS)
+			zlog_warn("%s: failed to send graceful-restart capability update to zebra",
+				  __func__);
 	}
 
 	return NB_OK;

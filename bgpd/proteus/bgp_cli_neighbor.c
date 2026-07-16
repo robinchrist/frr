@@ -2790,6 +2790,195 @@ DEFPY_YANG(
 #endif /* HAVE_BFDD */
 
 /*
+ * graceful-restart-mode (M4 batch B11): shares bgp_cli_peer_or_group_xpath()
+ * like B3/B4/B5/B6/B7/B9/B10's pure subcommands (no legacy DEFUN retention).
+ * Legacy's six DEFUNs (bgp_neighbor_graceful_restart_set/
+ * no_bgp_neighbor_graceful_restart/bgp_neighbor_graceful_restart_helper_set/
+ * no_bgp_neighbor_graceful_restart_helper/
+ * bgp_neighbor_graceful_restart_disable_set/
+ * no_bgp_neighbor_graceful_restart_disable, bgp_vty.c, retired) collapse
+ * into three MODIFY/DESTROY pairs on one enum leaf, same shape as B13's
+ * instance-level 'bgp graceful-restart'/'bgp graceful-restart-disable' mode
+ * commands (bgp_cli_instance.c). All trailing tokens on the 'no' forms are
+ * irrelevant (DESTROY always fully unsets, matching legacy's own three 'no'
+ * DEFUNs, none of which take an argument); only the base command word
+ * (graceful-restart/-helper/-disable) distinguishes the three DESTROY call
+ * sites here, and all three enqueue the identical DESTROY -- the actual
+ * "which of the three 'no' forms was issued" distinction is irrelevant at
+ * the northbound layer too, since instance_neighbor_graceful_restart_mode_destroy()/
+ * instance_peer_group_graceful_restart_mode_destroy() (bgp_nb_instance_gr.c)
+ * read the *old* value to decide which underlying command to replay, not
+ * which 'no' spelling was used -- exactly mirroring legacy's FSM, where
+ * e.g. 'no neighbor X graceful-restart-helper' while X is actually in
+ * restarter mode is a documented no-op (NO_PEER_HELPER_CMD only has a
+ * transition defined out of PEER_HELPER mode).
+ *
+ * The "Graceful restart configuration changed, reset this peer to take
+ * effect" message accompanies only the bare graceful-restart and
+ * graceful-restart-helper forms in legacy (never graceful-restart-disable),
+ * gated there on BGP_GR_SUCCESS; reproduced here unconditionally, same
+ * precedent as the tcp-mss session-reset warning (M4 batch B3) -- the CLI
+ * layer has no visibility into the northbound APPLY's per-transition FSM
+ * result. See bgp_nb_instance_gr.c's callback comment for why no actual
+ * extra reset call is needed: bgp_neighbor_graceful_restart() already
+ * performs one as a side effect of a real transition.
+ */
+DEFPY_YANG(
+	neighbor_graceful_restart, neighbor_graceful_restart_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	GR_NEIGHBOR_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, "Graceful restart configuration changed, reset this peer to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "restarter");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_graceful_restart, no_neighbor_graceful_restart_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	NO_GR_NEIGHBOR_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, "Graceful restart configuration changed, reset this peer to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_graceful_restart_helper, neighbor_graceful_restart_helper_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart-helper",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	GR_NEIGHBOR_HELPER_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, "Graceful restart configuration changed, reset this peer to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "helper");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_graceful_restart_helper, no_neighbor_graceful_restart_helper_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart-helper",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	NO_GR_NEIGHBOR_HELPER_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	vty_out(vty, "Graceful restart configuration changed, reset this peer to take effect\n");
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_graceful_restart_disable, neighbor_graceful_restart_disable_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart-disable",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	GR_NEIGHBOR_DISABLE_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "disable");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_graceful_restart_disable, no_neighbor_graceful_restart_disable_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer graceful-restart-disable",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	NO_GR_NEIGHBOR_DISABLE_CMD)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/graceful-restart-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
  * XPath: /proteus-bgp:instance/peer-group
  *
  * Reproduces the peer-group-only slice of bgp_config_write_peer_global()
@@ -3208,6 +3397,27 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "timers/delayopen"))
 		vty_out(vty, " neighbor %s timers delayopen %u\n", addr,
 			yang_dnode_get_uint8(dnode, "timers/delayopen"));
+
+	/* graceful-restart-mode (M4 batch B11): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired) per-neighbor
+	 * graceful-restart block. Presence-based like every Tier B leaf in
+	 * this function -- only present when this exact entry's own
+	 * graceful-restart/-helper/-disable command was issued -- rather than
+	 * legacy's peer->peer_gr_new_status_flag runtime read, which can
+	 * diverge from this entry's own stored command after a later
+	 * peer-group-level fanout (see bgp_nb_instance_gr.c's callback
+	 * comment).
+	 */
+	if (yang_dnode_exists(dnode, "graceful-restart-mode")) {
+		const char *mode = yang_dnode_get_string(dnode, "graceful-restart-mode");
+
+		if (strmatch(mode, "restarter"))
+			vty_out(vty, " neighbor %s graceful-restart\n", addr);
+		else if (strmatch(mode, "helper"))
+			vty_out(vty, " neighbor %s graceful-restart-helper\n", addr);
+		else
+			vty_out(vty, " neighbor %s graceful-restart-disable\n", addr);
+	}
 }
 
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -3398,6 +3608,14 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_bfd_profile_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_bfd_profile_cli_cmd);
 #endif /* HAVE_BFDD */
+
+	/* graceful-restart-mode (M4 batch B11). */
+	install_element(BGP_NODE, &neighbor_graceful_restart_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_graceful_restart_cli_cmd);
+	install_element(BGP_NODE, &neighbor_graceful_restart_helper_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_graceful_restart_helper_cli_cmd);
+	install_element(BGP_NODE, &neighbor_graceful_restart_disable_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_graceful_restart_disable_cli_cmd);
 
 	/* capabilities container (M4 batch B8). */
 	install_element(BGP_NODE, &neighbor_capability_dynamic_cli_cmd);
