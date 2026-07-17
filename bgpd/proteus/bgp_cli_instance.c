@@ -8,6 +8,7 @@
  * in this file for why.
  */
 #include <zebra.h>
+#include <inttypes.h>
 #include "command.h"
 #include "northbound.h"
 #include "northbound_cli.h"
@@ -17,6 +18,7 @@
 
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
+#include "bgpd/bgp_damp.h"
 #include "bgpd/proteus/bgp_cli_local.h"
 #include "bgpd/proteus/bgp_cli_instance_clippy.c"
 
@@ -3961,6 +3963,323 @@ void afi_safis_redistribute_cli_write(struct vty *vty, const struct lyd_node *dn
 	vty_out(vty, "\n");
 }
 
+/*
+ * M5 batch B12: instance-AF 'maximum-paths (1-N)' / 'maximum-paths ibgp
+ * (1-N) [equal-cluster-length]' (af-route-selection/maximum-paths in
+ * proteus-bgp.yang), across all eight instance AFs that 'uses'
+ * af-route-selection. The container's three leaves (ebgp, ibgp,
+ * ibgp-equal-cluster-length) are independent, but legacy only ever exposed
+ * 'equal-cluster-length' as a suffix of 'maximum-paths ibgp N' -- so the
+ * positive ibgp form always issues a concrete MODIFY of both 'ibgp' and
+ * 'ibgp-equal-cluster-length' together (the "always rewrite from scratch"
+ * idiom B6/B8 established), and the bare 'no maximum-paths ibgp' form
+ * DESTROYs 'ibgp' while resetting 'ibgp-equal-cluster-length' back to its
+ * false default in the same call, matching
+ * bgp_maximum_paths_unset()'s own same_clusterlen=false reset
+ * (bgp_mpath.c). The grammar's own range is the full uint16 span
+ * (1-65535), not legacy's compile-time CMD_RANGE_STR(1, MULTIPATH_NUM) --
+ * DEFPY_YANG's grammar string is parsed by a tool that does not run the C
+ * preprocessor, so a macro-built range string is not an option here, and
+ * the YANG leaf itself is deliberately unbounded ("modeled ... without a
+ * tighter range on purpose"). The real, run-time-configurable bound
+ * against 'multipath_num' is enforced uniformly for every northbound
+ * client (CLI included) by the apply side's NB_EV_VALIDATE
+ * (bgp_nb_af_maximum_paths_validate(), bgpd/proteus/bgp_nb_util.c).
+ */
+DEFPY_YANG(
+	instance_afi_safis_maximum_paths, instance_afi_safis_maximum_paths_cli_cmd,
+	"[no] maximum-paths (1-65535)$mpaths",
+	NO_STR
+	"Forward packets over multiple paths\n"
+	"Number of paths\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-paths/ebgp", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_MODIFY, mpaths_str);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_no_maximum_paths, instance_afi_safis_no_maximum_paths_cli_cmd,
+	"no maximum-paths",
+	NO_STR
+	"Forward packets over multiple paths\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-paths/ebgp", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_maximum_paths_ibgp, instance_afi_safis_maximum_paths_ibgp_cli_cmd,
+	"[no] maximum-paths ibgp (1-65535)$mpaths [equal-cluster-length$cluster]",
+	NO_STR
+	"Forward packets over multiple paths\n"
+	"iBGP-multipath\n"
+	"Number of paths\n"
+	"Match the cluster length\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-paths", VTY_CURR_XPATH,
+				container);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, no ? NB_OP_DESTROY : NB_OP_MODIFY, mpaths_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp-equal-cluster-length", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, (no || !cluster) ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_no_maximum_paths_ibgp, instance_afi_safis_no_maximum_paths_ibgp_cli_cmd,
+	"no maximum-paths ibgp",
+	NO_STR
+	"Forward packets over multiple paths\n"
+	"iBGP-multipath\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-paths", VTY_CURR_XPATH,
+				container);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp-equal-cluster-length", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath: bgp_config_write_maxpaths()'s own
+ * two-line rendering (bgp_vty.c, retired for these eight AFs in M5 batch
+ * B12), one line per leaf that is set. */
+void afi_safis_maximum_paths_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "ebgp"))
+		vty_out(vty, "  maximum-paths %u\n", yang_dnode_get_uint16(dnode, "ebgp"));
+
+	if (yang_dnode_exists(dnode, "ibgp")) {
+		vty_out(vty, "  maximum-paths ibgp %u", yang_dnode_get_uint16(dnode, "ibgp"));
+		if (yang_dnode_exists(dnode, "ibgp-equal-cluster-length") &&
+		    yang_dnode_get_bool(dnode, "ibgp-equal-cluster-length"))
+			vty_out(vty, " equal-cluster-length");
+		vty_out(vty, "\n");
+	}
+}
+
+/*
+ * M5 batch B12: instance-AF 'table-map WORD' (af-route-selection/table-map
+ * leaf), across the same eight instance AFs. A plain string leaf (policy
+ * name, per the established plain-string rule -- never a leafref).
+ */
+DEFPY_YANG(
+	instance_afi_safis_table_map, instance_afi_safis_table_map_cli_cmd,
+	"[no] table-map WORD$rmap",
+	NO_STR
+	"BGP table to RIB route download filter\n"
+	"Name of the route map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/table-map", VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_MODIFY, rmap);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_table_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				   bool show_defaults)
+{
+	vty_out(vty, "  table-map %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+/*
+ * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
+ * (1-255)]]' (af-route-selection/dampening in proteus-bgp.yang), across the
+ * same eight instance AFs. Same container shape (and the same
+ * all-or-nothing 'must' on the four number leaves) as B8's per-neighbor
+ * dampening; this reuses that batch's CLI idiom verbatim, at the instance
+ * base xpath instead of a peer/group xpath, and with the suppress-threshold
+ * range legacy's own instance-level bgp_damp_set_cmd used ((1-50000), vs
+ * the per-neighbor variant's (1-20000)). The positive form always issues a
+ * concrete MODIFY of 'enabled' plus all four number leaves -- reproducing
+ * legacy's own default-filling ('bgp dampening' bare ->
+ * DEFAULT_HALF_LIFE/_REUSE/_SUPPRESS/half*4; 'bgp dampening H' -> given
+ * half-life, defaults for the rest, both computed here exactly as legacy's
+ * own DEFUN body did) -- never a partial update. The negative form destroys
+ * the whole container in one shot.
+ */
+DEFPY_YANG(
+	instance_afi_safis_dampening, instance_afi_safis_dampening_cli_cmd,
+	"[no] bgp dampening [(1-45)$half [(1-20000)$reuse (1-50000)$suppress (1-255)$max]]",
+	NO_STR
+	"BGP Specific commands\n"
+	"Enable route-flap dampening\n"
+	"Half-life time for the penalty\n"
+	"Value to start reusing a route\n"
+	"Value to start suppressing a route\n"
+	"Maximum duration to suppress a stable route\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath_base, *xpath_child;
+	char half_buf[24], reuse_buf[24], suppress_buf[24], max_buf[24];
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/dampening", VTY_CURR_XPATH, container);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_base);
+		return nb_cli_apply_changes(vty, NULL);
+	}
+
+	if (!half)
+		half = DEFAULT_HALF_LIFE;
+	if (!reuse) {
+		reuse = DEFAULT_REUSE;
+		suppress = DEFAULT_SUPPRESS;
+		max = half * 4;
+	}
+	if (suppress < reuse) {
+		vty_out(vty, "%% Suppress value cannot be less than reuse value\n");
+		XFREE(MTYPE_TMP, xpath_base);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(half_buf, sizeof(half_buf), "%lld", (long long)half);
+	snprintf(reuse_buf, sizeof(reuse_buf), "%lld", (long long)reuse);
+	snprintf(suppress_buf, sizeof(suppress_buf), "%lld", (long long)suppress);
+	snprintf(max_buf, sizeof(max_buf), "%lld", (long long)max);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enabled", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/half-life", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, half_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/reuse-threshold", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, reuse_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/suppress-threshold", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, suppress_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/max-suppress-time", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, max_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath, reproducing bgp_config_write_damp()'s
+ * three-way rendering: bare 'bgp dampening' when every number matches the
+ * legacy defaults, 'bgp dampening <half>' when only half-life differs, else
+ * the full four-number form. */
+void afi_safis_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				   bool show_defaults)
+{
+	int64_t half, reuse, suppress, max;
+
+	if (!yang_dnode_exists(dnode, "enabled") || !yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	half = yang_dnode_exists(dnode, "half-life") ? yang_dnode_get_uint8(dnode, "half-life")
+						     : DEFAULT_HALF_LIFE;
+	reuse = yang_dnode_exists(dnode, "reuse-threshold")
+			? yang_dnode_get_uint16(dnode, "reuse-threshold")
+			: DEFAULT_REUSE;
+	suppress = yang_dnode_exists(dnode, "suppress-threshold")
+			   ? yang_dnode_get_uint16(dnode, "suppress-threshold")
+			   : DEFAULT_SUPPRESS;
+	max = yang_dnode_exists(dnode, "max-suppress-time")
+			  ? yang_dnode_get_uint8(dnode, "max-suppress-time")
+			  : half * 4;
+
+	if (half == DEFAULT_HALF_LIFE && reuse == DEFAULT_REUSE && suppress == DEFAULT_SUPPRESS &&
+	    max == half * 4)
+		vty_out(vty, "  bgp dampening\n");
+	else if (reuse == DEFAULT_REUSE && suppress == DEFAULT_SUPPRESS && max == half * 4)
+		vty_out(vty, "  bgp dampening %" PRId64 "\n", half);
+	else
+		vty_out(vty, "  bgp dampening %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 "\n",
+			half, reuse, suppress, max);
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -4211,4 +4530,64 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV4_NODE, &instance_afi_safis_redistribute_instance_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_redistribute_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_redistribute_instance_cli_cmd);
+
+	/* M5 B12: instance-AF 'maximum-paths'/'table-map'/'bgp dampening',
+	 * all eight instance AFs that 'uses' af-route-selection (ipv4/ipv6 x
+	 * unicast/multicast/labeled-unicast/vpn -- l2vpn-evpn does not use
+	 * the grouping and is deliberately excluded). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_dampening_cli_cmd);
 }

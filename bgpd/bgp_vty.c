@@ -16561,6 +16561,22 @@ static void bgp_vpn_config_write(struct vty *vty, struct bgp *bgp, afi_t afi,
 		vty_out(vty, "  no bgp retain route-target all\n");
 }
 
+/* M5 batch B12: instance-AF 'maximum-paths'/'table-map'/'bgp dampening'
+ * (af-route-selection in proteus-bgp.yang) is mgmtd-owned for the eight
+ * instance AFs that 'uses' the grouping -- ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast/vpn; their lines are emitted by
+ * afi_safis_maximum_paths_cli_write()/afi_safis_table_map_cli_write()/
+ * afi_safis_dampening_cli_write() (bgpd/proteus/bgp_cli_instance.c) instead.
+ * l2vpn-evpn does not 'use' af-route-selection (M6's instance-l2vpn-evpn
+ * grouping has its own shape) and never reaches this predicate. */
+static bool bgp_af_route_selection_is_proteus(afi_t afi, safi_t safi)
+{
+	if (afi != AFI_IP && afi != AFI_IP6)
+		return false;
+	return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
+	       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
+}
+
 /* Address family based peer configuration display.  */
 static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 				    safi_t safi)
@@ -16631,8 +16647,11 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 	bgp_config_write_ipv6_nexthop_prefer_global(vty, bgp, afi, safi);
 
-	/* BGP flag dampening. */
-	if (CHECK_FLAG(bgp->af_flags[afi][safi], BGP_CONFIG_DAMPENING))
+	/* BGP flag dampening: emitted by mgmtd for the eight proteus AFs (M5
+	 * B12); still native for l2vpn-evpn/encap/flowspec/unreachability/
+	 * link-state. */
+	if (!bgp_af_route_selection_is_proteus(afi, safi) &&
+	    CHECK_FLAG(bgp->af_flags[afi][safi], BGP_CONFIG_DAMPENING))
 		bgp_config_write_damp(vty, bgp, afi, safi);
 	/* Per-neighbor dampening: emitted by mgmtd for the nine proteus AFs
 	 * (M5 B8, neighbor_af_dampening_cli_write() in
@@ -16656,8 +16675,13 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 			bgp_config_write_peer_af(vty, bgp, peer, afi, safi);
 	}
 
-	bgp_config_write_maxpaths(vty, bgp, afi, safi);
-	bgp_config_write_table_map(vty, bgp, afi, safi);
+	/* maximum-paths / table-map: emitted by mgmtd for the eight proteus
+	 * AFs (M5 B12); still native for l2vpn-evpn/encap/flowspec/
+	 * unreachability/link-state. */
+	if (!bgp_af_route_selection_is_proteus(afi, safi)) {
+		bgp_config_write_maxpaths(vty, bgp, afi, safi);
+		bgp_config_write_table_map(vty, bgp, afi, safi);
+	}
 
 	if (safi == SAFI_EVPN)
 		bgp_config_write_evpn_info(vty, bgp, afi, safi);
@@ -17548,33 +17572,17 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6M_NODE, &bgp_af_nexthop_prefer_global_cmd);
 	install_element(BGP_IPV6L_NODE, &bgp_af_nexthop_prefer_global_cmd);
 
-	/* "maximum-paths" commands. */
+	/* "maximum-paths" commands: converted to northbound for the eight
+	 * proteus AFs (M5 batch B12), see bgp_cli_instance_init()
+	 * (bgp_cli_instance.c); the hidden BGP_NODE aliases keep the DEFUNs
+	 * reachable (bare 'maximum-paths ...' under 'router bgp' always
+	 * meant ipv4-unicast, matching the bare-BGP_NODE precedent B6-B11
+	 * established). */
 	install_element(BGP_NODE, &bgp_maxpaths_hidden_cmd);
 	install_element(BGP_NODE, &no_bgp_maxpaths_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_maxpaths_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_maxpaths_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_maxpaths_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_maxpaths_cmd);
 	install_element(BGP_NODE, &bgp_maxpaths_ibgp_hidden_cmd);
 	install_element(BGP_NODE, &bgp_maxpaths_ibgp_cluster_hidden_cmd);
 	install_element(BGP_NODE, &no_bgp_maxpaths_ibgp_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_maxpaths_ibgp_cmd);
-
-	install_element(BGP_IPV4L_NODE, &bgp_maxpaths_cmd);
-	install_element(BGP_IPV4L_NODE, &no_bgp_maxpaths_cmd);
-	install_element(BGP_IPV4L_NODE, &bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV4L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
-	install_element(BGP_IPV4L_NODE, &no_bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_cmd);
-	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_cmd);
-	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cmd);
-	install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
-	install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
 
 	/* bgp graceful-restart mode ('bgp graceful-restart' /
 	 * 'bgp graceful-restart-disable'): northbound now, see bgp_cli.c

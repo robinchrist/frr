@@ -964,6 +964,11 @@ extern void bgp_process_early(struct bgp *bgp, struct bgp_dest *dest,
  */
 extern void bgp_add_eoiu_mark(struct bgp *bgp);
 extern void bgp_config_write_table_map(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi);
+/* M5 batch B12: vty-free core for the northbound 'table-map' callbacks
+ * (bgpd/proteus/bgp_nb_util.c), split out of the legacy DEFUN bodies
+ * (bgp_route.c). */
+extern void bgp_table_map_set(struct bgp *bgp, afi_t afi, safi_t safi, const char *rmap_name);
+extern void bgp_table_map_unset(struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_config_write_distance(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi);
 

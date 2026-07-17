@@ -194,6 +194,154 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_redistribute_cli_write,
 			}
 		},
+		/* M5 B12: instance-AF 'maximum-paths'/'table-map'/'bgp
+		 * dampening', all eight instance AFs that 'uses'
+		 * af-route-selection (ipv4/ipv6 x
+		 * unicast/multicast/labeled-unicast/vpn). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/maximum-paths",
+			.cbs = {
+				.cli_show = afi_safis_maximum_paths_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/table-map",
+			.cbs = {
+				.cli_show = afi_safis_table_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/dampening",
+			.cbs = {
+				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {

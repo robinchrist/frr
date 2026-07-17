@@ -9361,10 +9361,14 @@ void bgp_purge_static_redist_routes(struct bgp *bgp)
 		bgp_purge_af_static_redist_routes(bgp, afi, safi);
 }
 
-static int bgp_table_map_set(struct vty *vty, afi_t afi, safi_t safi,
-			     const char *rmap_name)
+/* M5 batch B12: split out of the legacy vty-taking DEFUN bodies, same
+ * B9/B10-style refactor -- an afi/safi-parameterized, vty-free core plus a
+ * thin _vty wrapper for the still-native DEFUNs below, so the northbound
+ * 'table-map' callbacks (bgp_nb_af_table_map_modify/_destroy,
+ * bgpd/proteus/bgp_nb_util.c) can call the core directly with an
+ * already-resolved 'struct bgp *'. */
+void bgp_table_map_set(struct bgp *bgp, afi_t afi, safi_t safi, const char *rmap_name)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	struct bgp_rmap *rmap;
 
 	rmap = &bgp->table_map[afi][safi];
@@ -9382,14 +9386,10 @@ static int bgp_table_map_set(struct vty *vty, afi_t afi, safi_t safi,
 
 	if (bgp_fibupd_safi(safi))
 		bgp_zebra_announce_table(bgp, afi, safi);
-
-	return CMD_SUCCESS;
 }
 
-static int bgp_table_map_unset(struct vty *vty, afi_t afi, safi_t safi,
-			       const char *rmap_name)
+void bgp_table_map_unset(struct bgp *bgp, afi_t afi, safi_t safi)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	struct bgp_rmap *rmap;
 
 	rmap = &bgp->table_map[afi][safi];
@@ -9399,7 +9399,21 @@ static int bgp_table_map_unset(struct vty *vty, afi_t afi, safi_t safi,
 
 	if (bgp_fibupd_safi(safi))
 		bgp_zebra_announce_table(bgp, afi, safi);
+}
 
+static int bgp_table_map_set_vty(struct vty *vty, afi_t afi, safi_t safi, const char *rmap_name)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+
+	bgp_table_map_set(bgp, afi, safi, rmap_name);
+	return CMD_SUCCESS;
+}
+
+static int bgp_table_map_unset_vty(struct vty *vty, afi_t afi, safi_t safi)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+
+	bgp_table_map_unset(bgp, afi, safi);
 	return CMD_SUCCESS;
 }
 
@@ -9419,8 +9433,8 @@ DEFUN (bgp_table_map,
        "Name of the route map\n")
 {
 	int idx_word = 1;
-	return bgp_table_map_set(vty, bgp_node_afi(vty), bgp_node_safi(vty),
-				 argv[idx_word]->arg);
+	return bgp_table_map_set_vty(vty, bgp_node_afi(vty), bgp_node_safi(vty),
+				     argv[idx_word]->arg);
 }
 DEFUN (no_bgp_table_map,
        no_bgp_table_map_cmd,
@@ -9429,9 +9443,7 @@ DEFUN (no_bgp_table_map,
        "BGP table to RIB route download filter\n"
        "Name of the route map\n")
 {
-	int idx_word = 2;
-	return bgp_table_map_unset(vty, bgp_node_afi(vty), bgp_node_safi(vty),
-				   argv[idx_word]->arg);
+	return bgp_table_map_unset_vty(vty, bgp_node_afi(vty), bgp_node_safi(vty));
 }
 
 /* Reachable only via the bare BGP_NODE install now (M5 batch B9): the eight
@@ -19201,13 +19213,12 @@ void bgp_route_init(void)
 
 	install_element(BGP_NODE, &aggregate_addressv4_cmd);
 
-	/* IPv4 unicast configuration.  */
-	install_element(BGP_IPV4_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_table_map_cmd);
-
-	/* IPv4 multicast configuration.  */
-	install_element(BGP_IPV4M_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV4M_NODE, &no_bgp_table_map_cmd);
+	/* 'table-map' commands: converted to northbound for the eight
+	 * proteus AFs (M5 batch B12), see bgp_cli_instance_init()
+	 * (bgp_cli_instance.c); the bare BGP_NODE install above stays native
+	 * (bare 'table-map WORD' under 'router bgp' always meant
+	 * ipv4-unicast, matching the bare-BGP_NODE precedent B6-B11
+	 * established). */
 
 	install_element(VIEW_NODE, &show_ip_bgp_instance_all_cmd);
 	install_element(VIEW_NODE, &show_ip_bgp_afi_safi_statistics_cmd);
@@ -19248,10 +19259,6 @@ void bgp_route_init(void)
 			&show_ip_bgp_vpn_neighbor_prefix_counts_cmd);
 #endif /* KEEP_OLD_VPN_COMMANDS */
 
-	/* New config IPv6 BGP commands.  */
-	install_element(BGP_IPV6_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_table_map_cmd);
-
 	install_element(BGP_NODE, &bgp_distance_cmd);
 	install_element(BGP_NODE, &no_bgp_distance_cmd);
 	install_element(BGP_NODE, &bgp_distance_source_cmd);
@@ -19288,21 +19295,13 @@ void bgp_route_init(void)
 	install_element(BGP_IPV6M_NODE,
 			&no_ipv6_bgp_distance_source_access_list_cmd);
 
-	/* BGP dampening */
+	/* BGP dampening: converted to northbound for the eight proteus AFs
+	 * (M5 batch B12), see bgp_cli_instance_init() (bgp_cli_instance.c);
+	 * the bare BGP_NODE install stays native (bare 'bgp dampening ...'
+	 * under 'router bgp' always meant ipv4-unicast, matching the
+	 * bare-BGP_NODE precedent B6-B11 established). */
 	install_element(BGP_NODE, &bgp_damp_set_cmd);
 	install_element(BGP_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV4L_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV4L_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV6M_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV6M_NODE, &bgp_damp_unset_cmd);
-	install_element(BGP_IPV6L_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_IPV6L_NODE, &bgp_damp_unset_cmd);
 
 	/* Large Communities */
 	install_element(VIEW_NODE, &show_ip_bgp_large_community_list_cmd);

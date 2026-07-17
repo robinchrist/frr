@@ -328,6 +328,16 @@ void afi_safis_aggregate_address_cli_write(struct vty *vty, const struct lyd_nod
 void afi_safis_redistribute_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults);
 
+/* M5 B12: instance-AF 'maximum-paths'/'table-map'/'bgp dampening' emitters
+ * (shared by all eight instance AFs -- af-route-selection is one grouping
+ * used by all of them). */
+void afi_safis_maximum_paths_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults);
+void afi_safis_table_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				   bool show_defaults);
+void afi_safis_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				   bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

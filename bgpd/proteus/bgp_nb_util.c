@@ -29,6 +29,7 @@
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_fsm.h"
 #include "bgpd/bgp_damp.h"
+#include "bgpd/bgp_mpath.h"
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
@@ -5487,6 +5488,372 @@ int bgp_nb_af_redistribute_route_map_destroy(struct nb_cb_destroy_args *args, af
 
 	if (bgp_redistribute_rmap_unset(red))
 		bgp_redistribute_set(bgp, afi, type, instance, true);
+
+	return NB_OK;
+}
+
+/*
+ * M5 batch B12: instance-AF 'maximum-paths (1-N)' / 'maximum-paths ibgp
+ * (1-N) [equal-cluster-length]' (proteus-bgp.yang's af-route-selection/
+ * maximum-paths container), across the eight instance AFs that 'uses'
+ * af-route-selection (ipv4/ipv6 x unicast/multicast/labeled-unicast/vpn).
+ * The container's three leaves (ebgp, ibgp, ibgp-equal-cluster-length) are
+ * independent -- no YANG 'must' ties them together -- but
+ * ibgp-equal-cluster-length only ever has meaning alongside 'ibgp', exactly
+ * as legacy's grammar only ever accepts 'equal-cluster-length' as a suffix
+ * of 'maximum-paths ibgp N'. All three leaves' MODIFY/DESTROY reroute to a
+ * single "reread the whole container, call
+ * bgp_maximum_paths_set()/_unset()" helper (legacy's own setters,
+ * bgp_mpath.c, already afi/safi/peertype-parameterized -- no refactor
+ * needed) so a MODIFY of 'ibgp-equal-cluster-length' alone still reapplies
+ * the current 'ibgp' value with the new cluster bit, and a DESTROY of
+ * 'ibgp' also resets 'ibgp-equal-cluster-length' back to its false default
+ * in the same call, matching bgp_maximum_paths_unset()'s own
+ * same_clusterlen=false reset. bgp_recalculate_all_bestpaths() is called
+ * once per reread, matching legacy's bgp_maxpaths_config_vty().
+ */
+static void bgp_nb_af_maximum_paths_apply(struct bgp *bgp, afi_t afi, safi_t safi,
+					  const struct lyd_node *dnode)
+{
+	bool cluster;
+
+	if (!bgp)
+		/* instance deleted underneath in this same commit */
+		return;
+
+	if (yang_dnode_exists(dnode, "ebgp"))
+		bgp_maximum_paths_set(bgp, afi, safi, BGP_PEER_EBGP,
+				      yang_dnode_get_uint16(dnode, "ebgp"), false);
+	else
+		bgp_maximum_paths_unset(bgp, afi, safi, BGP_PEER_EBGP);
+
+	cluster = yang_dnode_exists(dnode, "ibgp-equal-cluster-length") &&
+		 yang_dnode_get_bool(dnode, "ibgp-equal-cluster-length");
+
+	if (yang_dnode_exists(dnode, "ibgp"))
+		bgp_maximum_paths_set(bgp, afi, safi, BGP_PEER_IBGP,
+				      yang_dnode_get_uint16(dnode, "ibgp"), cluster);
+	else
+		bgp_maximum_paths_unset(bgp, afi, safi, BGP_PEER_IBGP);
+
+	bgp_recalculate_all_bestpaths(bgp);
+}
+
+/* Shared VALIDATE: legacy's bgp_maxpaths_config_vty() rejects a value above
+ * the runtime 'multipath_num' (set from MULTIPATH_NUM at daemon start, or
+ * lower via the '-M'/'--multipath' bgpd command-line option) with "%%
+ * Maxpaths Specified: ... is > than multipath num ..."; the YANG leaves are
+ * deliberately unbounded uint16 ("modeled ... without a tighter range on
+ * purpose") so this runtime bound is enforced here, not in the model. */
+static int bgp_nb_af_maximum_paths_validate(struct nb_cb_modify_args *args)
+{
+	uint16_t maxpaths = yang_dnode_get_uint16(args->dnode, NULL);
+
+	if (maxpaths > multipath_num) {
+		snprintf(args->errmsg, args->errmsg_len,
+			"Maxpaths Specified: %u is > than multipath num specified on bgp command line %u",
+			maxpaths, multipath_num);
+		return NB_ERR_VALIDATION;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		return bgp_nb_af_maximum_paths_validate(args);
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_maximum_paths_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					      yang_dnode_get_parent(args->dnode, "maximum-paths"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_maximum_paths_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				      yang_dnode_get_parent(args->dnode, "maximum-paths"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		return bgp_nb_af_maximum_paths_validate(args);
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_maximum_paths_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					      yang_dnode_get_parent(args->dnode, "maximum-paths"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_maximum_paths_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				      yang_dnode_get_parent(args->dnode, "maximum-paths"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_maximum_paths_ibgp_equal_cluster_length_modify(struct nb_cb_modify_args *args,
+							      afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_maximum_paths_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					      yang_dnode_get_parent(args->dnode, "maximum-paths"));
+	}
+
+	return NB_OK;
+}
+
+/*
+ * M5 batch B12: instance-AF 'table-map WORD' (proteus-bgp.yang's
+ * af-route-selection/table-map leaf), across the same eight instance AFs.
+ * A plain string leaf (policy-attachment name, per the established
+ * plain-string rule -- never a leafref); legacy's bgp_table_map_set()/
+ * _unset() (bgp_route.c) were vty-taking statics, split the same way B9/B10
+ * split bgp_static_set()/bgp_aggregate_set() into a vty-free 'struct bgp *'
+ * core plus a thin _vty wrapper for the still-native DEFUNs.
+ */
+int bgp_nb_af_table_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_table_map_set(bgp, afi, safi, yang_dnode_get_string(args->dnode, NULL));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_table_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_table_map_unset(bgp, afi, safi);
+
+	return NB_OK;
+}
+
+/*
+ * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
+ * (1-255)]]' (proteus-bgp.yang's af-route-selection/dampening container),
+ * across the same eight instance AFs. Same container shape (and the same
+ * all-or-nothing 'must' on the four number leaves) as B8's per-neighbor
+ * dampening; this reuses that batch's "reread the whole container, call
+ * bgp_damp_enable()/_disable()" idiom verbatim, with bgp_damp_enable()/
+ * _disable() (bgp_damp.c, already afi/safi-parameterized and vty-free) in
+ * place of B8's bgp_peer_damp_enable()/_disable(). The YANG leaves are
+ * minutes (matching bgp_damp_set_cmd's (1-45)/(1-255) ranges
+ * byte-for-byte); the *60 conversion to bgp_damp_enable()'s seconds
+ * parameters happens here, exactly where legacy's own DEFUN did it.
+ */
+static void bgp_nb_af_instance_dampening_apply(struct bgp *bgp, afi_t afi, safi_t safi,
+				      const struct lyd_node *dnode)
+{
+	bool enabled;
+	time_t half, max;
+	unsigned int reuse, suppress;
+
+	if (!bgp)
+		/* instance deleted underneath in this same commit */
+		return;
+
+	enabled = yang_dnode_exists(dnode, "enabled") && yang_dnode_get_bool(dnode, "enabled");
+	if (!enabled) {
+		bgp_damp_disable(bgp, afi, safi);
+		return;
+	}
+
+	half = yang_dnode_exists(dnode, "half-life") ? yang_dnode_get_uint8(dnode, "half-life")
+						     : DEFAULT_HALF_LIFE;
+	if (yang_dnode_exists(dnode, "reuse-threshold")) {
+		reuse = yang_dnode_get_uint16(dnode, "reuse-threshold");
+		suppress = yang_dnode_get_uint16(dnode, "suppress-threshold");
+		max = yang_dnode_exists(dnode, "max-suppress-time")
+			      ? yang_dnode_get_uint8(dnode, "max-suppress-time")
+			      : half * 4;
+	} else {
+		reuse = DEFAULT_REUSE;
+		suppress = DEFAULT_SUPPRESS;
+		max = half * 4;
+	}
+
+	bgp_damp_enable(bgp, afi, safi, half * 60, reuse, suppress, max * 60);
+}
+
+int bgp_nb_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+					       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_instance_dampening_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
 
 	return NB_OK;
 }

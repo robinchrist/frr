@@ -347,6 +347,33 @@ int bgp_nb_af_redistribute_route_map_modify(struct nb_cb_modify_args *args, afi_
 					    safi_t safi);
 int bgp_nb_af_redistribute_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 					     safi_t safi);
+/* M5 batch B12: instance-AF 'maximum-paths'/'table-map'/'bgp dampening'
+ * (af-route-selection in proteus-bgp.yang), the eight instance AFs that
+ * 'uses' the grouping (ipv4/ipv6 x unicast/multicast/labeled-unicast/vpn). */
+int bgp_nb_af_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_maximum_paths_ebgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_maximum_paths_ibgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_maximum_paths_ibgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_maximum_paths_ibgp_equal_cluster_length_modify(struct nb_cb_modify_args *args,
+							      afi_t afi, safi_t safi);
+int bgp_nb_af_table_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_table_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					  safi_t safi);
+int bgp_nb_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						safi_t safi);
+int bgp_nb_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi);
 
 #ifdef __cplusplus
 }
