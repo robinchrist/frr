@@ -318,6 +318,11 @@ void afi_safis_network_ipv4_cli_write(struct vty *vty, const struct lyd_node *dn
 void afi_safis_network_ipv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults);
 
+/* M5 B10: instance-AF 'aggregate-address' list emitter (shared by ipv4/ipv6
+ * -- af-aggregate-ipv4/-ipv6 model identical option leaves). */
+void afi_safis_aggregate_address_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

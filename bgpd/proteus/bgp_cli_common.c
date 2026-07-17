@@ -142,6 +142,44 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_network_ipv6_cli_write,
 			}
 		},
+		/* M5 B10: instance-AF 'aggregate-address' list, same six AFs;
+		 * ipv4/ipv6 share one emitter (identical option leaves). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address",
+			.cbs = {
+				.cli_show = afi_safis_aggregate_address_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {

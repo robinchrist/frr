@@ -319,6 +319,23 @@ int bgp_nb_af_network_label_index_modify(struct nb_cb_modify_args *args, afi_t a
 int bgp_nb_af_network_label_index_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 					  safi_t safi);
 int bgp_nb_af_network_backdoor_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+/* M5 batch B10: instance-AF 'aggregate-address' (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast). */
+int bgp_nb_af_aggregate_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_as_set_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_summary_only_modify(struct nb_cb_modify_args *args, afi_t afi,
+					    safi_t safi);
+int bgp_nb_af_aggregate_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_origin_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_origin_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_aggregate_matching_med_only_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_af_aggregate_suppress_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					    safi_t safi);
+int bgp_nb_af_aggregate_suppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi);
 
 #ifdef __cplusplus
 }

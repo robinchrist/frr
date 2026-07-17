@@ -3620,6 +3620,216 @@ void afi_safis_network_ipv6_cli_write(struct vty *vty, const struct lyd_node *dn
 	vty_out(vty, "\n");
 }
 
+/*
+ * M5 batch B10: instance-AF 'aggregate-address' (af-aggregate-ipv4/-ipv6 in
+ * proteus-bgp.yang), the same six ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast containers B9 established for
+ * 'network'. A keyed list (key 'prefix') with six option children
+ * (as-set, summary-only, route-map, origin, matching-med-only,
+ * suppress-map); collapses legacy's aggregate_addressv4/v6 DEFPYs
+ * (bgp_route.c) into one CREATE on the list entry plus one MODIFY/DESTROY
+ * per option child, always issued together (never partial) so a re-typed
+ * 'aggregate-address' line always rewrites every option from scratch,
+ * matching bgp_aggregate_set()'s own "unconditional overwrite" semantics.
+ * as-set/summary-only/matching-MED-only are Tier A default-false booleans
+ * (unconditional MODIFY); route-map/origin/suppress-map are no-default
+ * leaves (MODIFY if present, DESTROY otherwise). One grammar serves both
+ * the 'A.B.C.D/M' and 'A.B.C.D A.B.C.D' (address+mask) ipv4 forms, matching
+ * legacy; the ipv6 form has no mask alternative, also matching legacy.
+ * ipv4-vpn/ipv6-vpn (M7) and l2vpn-evpn (M6) are out of scope;
+ * bgp_afi_safi_container_name() guards against any other unmodeled AF node.
+ */
+DEFPY_YANG(
+	instance_afi_safis_aggregate_address, instance_afi_safis_aggregate_address_cli_cmd,
+	"[no] aggregate-address <A.B.C.D/M$prefix|A.B.C.D$addr A.B.C.D$mask> \
+	[{as-set$as_set|summary-only$summary_only|route-map RMAP_NAME$rmap_name| \
+	origin <egp|igp|incomplete>$origin_s|matching-MED-only$match_med| \
+	suppress-map RMAP_NAME$suppress_map}]",
+	NO_STR
+	"Configure BGP aggregate entries\n"
+	"Aggregate prefix\n"
+	"Aggregate address\n"
+	"Aggregate mask\n"
+	"Generate AS set path information\n"
+	"Filter more specific routes from updates\n"
+	"Apply route map to aggregate network\n"
+	"Route map name\n"
+	"BGP origin code\n"
+	"Remote EGP\n"
+	"Local IGP\n"
+	"Unknown heritage\n"
+	"Only aggregate routes with matching MED\n"
+	"Suppress the selected more specific routes\n"
+	"Route map with the route selectors\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char addr_prefix_str[BUFSIZ];
+	const char *prefix_use;
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (addr_str) {
+		if (!netmask_str2prefix_str(addr_str, mask_str, addr_prefix_str,
+					    sizeof(addr_prefix_str))) {
+			vty_out(vty, "%% Inconsistent address and mask\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		prefix_use = addr_prefix_str;
+	} else {
+		prefix_use = prefix_str;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/aggregate-address[prefix='%s']",
+			   VTY_CURR_XPATH, container, prefix_use);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/as-set", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, as_set ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/summary-only", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+				      summary_only ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, rmap_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      rmap_name);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/origin", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, origin_s ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      origin_s);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/matching-med-only", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, match_med ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/suppress-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child,
+				      suppress_map ? NB_OP_MODIFY : NB_OP_DESTROY, suppress_map);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_aggregate_address_ipv6,
+	instance_afi_safis_aggregate_address_ipv6_cli_cmd,
+	"[no] aggregate-address X:X::X:X/M$prefix \
+	[{as-set$as_set|summary-only$summary_only|route-map RMAP_NAME$rmap_name| \
+	origin <egp|igp|incomplete>$origin_s|matching-MED-only$match_med| \
+	suppress-map RMAP_NAME$suppress_map}]",
+	NO_STR
+	"Configure BGP aggregate entries\n"
+	"Aggregate prefix\n"
+	"Generate AS set path information\n"
+	"Filter more specific routes from updates\n"
+	"Apply route map to aggregate network\n"
+	"Route map name\n"
+	"BGP origin code\n"
+	"Remote EGP\n"
+	"Local IGP\n"
+	"Unknown heritage\n"
+	"Only aggregate routes with matching MED\n"
+	"Suppress the selected more specific routes\n"
+	"Route map with the route selectors\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/aggregate-address[prefix='%s']",
+			   VTY_CURR_XPATH, container, prefix_str);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/as-set", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, as_set ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/summary-only", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+				      summary_only ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, rmap_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      rmap_name);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/origin", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, origin_s ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      origin_s);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/matching-med-only", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, match_med ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/suppress-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child,
+				      suppress_map ? NB_OP_MODIFY : NB_OP_DESTROY, suppress_map);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+/* One 'aggregate-address PFX [as-set] [summary-only] [route-map NAME]
+ * [origin O] [matching-MED-only] [suppress-map NAME]' line per list entry,
+ * matching bgp_config_write_network()'s former aggregate field order
+ * (bgp_route.c, retired for these six AFs in M5 batch B10). Shared by both
+ * ipv4 and ipv6 -- af-aggregate-ipv4/-ipv6 model identical option leaves. */
+void afi_safis_aggregate_address_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  aggregate-address %s", yang_dnode_get_string(dnode, "prefix"));
+
+	if (yang_dnode_get_bool(dnode, "as-set"))
+		vty_out(vty, " as-set");
+
+	if (yang_dnode_get_bool(dnode, "summary-only"))
+		vty_out(vty, " summary-only");
+
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+
+	if (yang_dnode_exists(dnode, "origin"))
+		vty_out(vty, " origin %s", yang_dnode_get_string(dnode, "origin"));
+
+	if (yang_dnode_get_bool(dnode, "matching-med-only"))
+		vty_out(vty, " matching-MED-only");
+
+	if (yang_dnode_exists(dnode, "suppress-map"))
+		vty_out(vty, " suppress-map %s", yang_dnode_get_string(dnode, "suppress-map"));
+
+	vty_out(vty, "\n");
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -3854,4 +4064,13 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
 	install_element(BGP_IPV6M_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
 	install_element(BGP_IPV6L_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
+
+	/* M5 B10: instance-AF 'aggregate-address' (ipv4/ipv6 x
+	 * unicast/multicast/labeled-unicast). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_aggregate_address_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_aggregate_address_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_aggregate_address_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
 }

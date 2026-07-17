@@ -62,183 +62,64 @@ int instance_afi_safis_ipv6_unicast_network_label_index_destroy(struct nb_cb_des
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_as_set_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/as-set");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_as_set_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_summary_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/summary-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_summary_only_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
-int instance_afi_safis_ipv6_unicast_aggregate_address_route_map_modify(struct nb_cb_modify_args *args)
+int instance_afi_safis_ipv6_unicast_aggregate_address_route_map_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_route_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_origin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
-int instance_afi_safis_ipv6_unicast_aggregate_address_origin_destroy(struct nb_cb_destroy_args *args)
+int instance_afi_safis_ipv6_unicast_aggregate_address_origin_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_matching_med_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/matching-med-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_matching_med_only_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_suppress_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_aggregate_address_suppress_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_redistribute_create(struct nb_cb_create_args *args)
@@ -1614,185 +1495,66 @@ int instance_afi_safis_ipv6_multicast_network_label_index_destroy(struct nb_cb_d
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
-int instance_afi_safis_ipv6_multicast_aggregate_address_as_set_modify(struct nb_cb_modify_args *args)
+int instance_afi_safis_ipv6_multicast_aggregate_address_as_set_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/as-set");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_as_set_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_summary_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/summary-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_summary_only_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_route_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_route_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
-int instance_afi_safis_ipv6_multicast_aggregate_address_origin_modify(struct nb_cb_modify_args *args)
+int instance_afi_safis_ipv6_multicast_aggregate_address_origin_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_origin_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_matching_med_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/matching-med-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_matching_med_only_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_suppress_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_aggregate_address_suppress_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args)
@@ -2269,189 +2031,70 @@ int instance_afi_safis_ipv6_labeled_unicast_network_label_index_destroy(
 	return bgp_nb_af_network_label_index_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
-int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_create(struct nb_cb_create_args *args)
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_create(
+	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
-int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_destroy(struct nb_cb_destroy_args *args)
+int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_as_set_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/as-set");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_as_set_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_summary_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/summary-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_summary_only_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_route_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_route_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_route_map_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_origin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_origin_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_origin_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_matching_med_only_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/matching-med-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_matching_med_only_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_suppress_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_aggregate_address_suppress_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/aggregate-address/suppress-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_aggregate_suppress_map_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_maximum_paths_ebgp_modify(struct nb_cb_modify_args *args)

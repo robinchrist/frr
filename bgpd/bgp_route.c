@@ -10555,10 +10555,9 @@ static const char *bgp_rpki_validation2str(enum rpki_states v_state)
 	return "ERROR";
 }
 
-static int bgp_aggregate_unset(struct vty *vty, const char *prefix_str,
-			       afi_t afi, safi_t safi)
+int bgp_aggregate_unset(struct bgp *bgp, const char *prefix_str, afi_t afi, safi_t safi,
+			char *errmsg, size_t errmsg_len)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	int ret;
 	struct prefix p;
 	struct bgp_dest *dest;
@@ -10567,17 +10566,16 @@ static int bgp_aggregate_unset(struct vty *vty, const char *prefix_str,
 	/* Convert string to prefix structure. */
 	ret = str2prefix(prefix_str, &p);
 	if (!ret) {
-		vty_out(vty, "Malformed prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "Malformed prefix");
+		return -1;
 	}
 	apply_mask(&p);
 
 	/* Old configuration check. */
 	dest = bgp_node_lookup(bgp->aggregate[afi][safi], &p);
 	if (!dest) {
-		vty_out(vty,
-			"%% There is no aggregate-address configuration.\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "There is no aggregate-address configuration");
+		return -1;
 	}
 
 	aggregate = bgp_dest_get_bgp_aggregate_info(dest);
@@ -10600,6 +10598,25 @@ static int bgp_aggregate_unset(struct vty *vty, const char *prefix_str,
 	dest = bgp_dest_unlock_node(dest);
 	assert(dest);
 	bgp_dest_unlock_node(dest);
+
+	return 0;
+}
+
+/* vty-facing wrapper: resolves the bgp instance from the vty context and
+ * turns bgp_aggregate_unset()'s errmsg/-1 into the CLI's vty_out()/
+ * CMD_WARNING_CONFIG_FAILED idiom, for the ipv4-unicast bgp_aggregate
+ * DEFPY, which stays reachable only via the bare BGP_NODE install now that
+ * the six proteus 'aggregate-address' AFs are mgmtd-owned (M5 batch B10). */
+static int bgp_aggregate_unset_vty(struct vty *vty, const char *prefix_str, afi_t afi,
+				   safi_t safi)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	char errmsg[256];
+
+	if (bgp_aggregate_unset(bgp, prefix_str, afi, safi, errmsg, sizeof(errmsg))) {
+		vty_out(vty, "%% %s\n", errmsg);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
 
 	return CMD_SUCCESS;
 }
@@ -10625,37 +10642,35 @@ static bool bgp_aggregate_cmp_params(struct bgp_aggregate *aggregate, const char
 	return true;
 }
 
-static int bgp_aggregate_set(struct vty *vty, const char *prefix_str, afi_t afi,
-			     safi_t safi, const char *rmap,
-			     uint8_t summary_only, uint8_t as_set,
-			     uint8_t origin, bool match_med,
-			     const char *suppress_map)
+int bgp_aggregate_set(struct bgp *bgp, const char *prefix_str, afi_t afi, safi_t safi,
+		      const char *rmap, uint8_t summary_only, uint8_t as_set, uint8_t origin,
+		      bool match_med, const char *suppress_map, char *errmsg, size_t errmsg_len)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	int ret;
 	struct prefix p;
 	struct bgp_dest *dest;
 	struct bgp_aggregate *aggregate;
 
 	if (suppress_map && summary_only) {
-		vty_out(vty,
-			"'summary-only' and 'suppress-map' can't be used at the same time\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len,
+			"'summary-only' and 'suppress-map' can't be used at the same time");
+		return -1;
 	}
 
 	/* Convert string to prefix structure. */
 	ret = str2prefix(prefix_str, &p);
 	if (!ret) {
-		vty_out(vty, "Malformed prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "Malformed prefix");
+		return -1;
 	}
 	apply_mask(&p);
 
 	if ((afi == AFI_IP && p.prefixlen == IPV4_MAX_BITLEN) ||
 	    (afi == AFI_IP6 && p.prefixlen == IPV6_MAX_BITLEN)) {
-		vty_out(vty, "Specified prefix: %s will not result in any useful aggregation, disallowing\n",
+		snprintf(errmsg, errmsg_len,
+			"Specified prefix: %s will not result in any useful aggregation, disallowing",
 			prefix_str);
-		return CMD_WARNING_CONFIG_FAILED;
+		return -1;
 	}
 
 	/* Old configuration check. */
@@ -10666,15 +10681,13 @@ static int bgp_aggregate_set(struct vty *vty, const char *prefix_str, afi_t afi,
 		/* Check for duplicate configs */
 		if (bgp_aggregate_cmp_params(aggregate, rmap, summary_only, as_set, origin,
 					     match_med, suppress_map))
-			return CMD_SUCCESS;
+			return 0;
 
-		vty_out(vty, "There is already same aggregate network.\n");
 		/* try to remove the old entry */
-		ret = bgp_aggregate_unset(vty, prefix_str, afi, safi);
+		ret = bgp_aggregate_unset(bgp, prefix_str, afi, safi, errmsg, errmsg_len);
 		if (ret) {
-			vty_out(vty, "Error deleting aggregate.\n");
 			bgp_dest_unlock_node(dest);
-			return CMD_WARNING_CONFIG_FAILED;
+			return -1;
 		}
 	}
 
@@ -10696,8 +10709,6 @@ static int bgp_aggregate_set(struct vty *vty, const char *prefix_str, afi_t afi,
 			zlog_warn(
 				"%s: Ignoring as-set because `bgp reject-as-sets` is enabled.",
 				__func__);
-			vty_out(vty,
-				"Ignoring as-set because `bgp reject-as-sets` is enabled.\n");
 		}
 	}
 
@@ -10738,9 +10749,37 @@ static int bgp_aggregate_set(struct vty *vty, const char *prefix_str, afi_t afi,
 		bgp_dest_unlock_node(dest);
 	}
 
+	return 0;
+}
+
+/* vty-facing wrapper: resolves the bgp instance from the vty context and
+ * turns bgp_aggregate_set()'s errmsg/-1 into the CLI's vty_out()/
+ * CMD_WARNING_CONFIG_FAILED idiom, for the ipv4-unicast bgp_aggregate
+ * DEFPY, which stays reachable only via the bare BGP_NODE install now that
+ * the six proteus 'aggregate-address' AFs are mgmtd-owned (M5 batch B10). */
+static int bgp_aggregate_set_vty(struct vty *vty, const char *prefix_str, afi_t afi, safi_t safi,
+				 const char *rmap, uint8_t summary_only, uint8_t as_set,
+				 uint8_t origin, bool match_med, const char *suppress_map)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	char errmsg[256];
+
+	if (bgp_aggregate_set(bgp, prefix_str, afi, safi, rmap, summary_only, as_set, origin,
+			      match_med, suppress_map, errmsg, sizeof(errmsg))) {
+		vty_out(vty, "%% %s\n", errmsg);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	return CMD_SUCCESS;
 }
 
+/* Reachable only via the bare BGP_NODE install now (M5 batch B10): the six
+ * proteus 'aggregate-address' AFs (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast) are mgmtd-owned
+ * (bgpd/proteus/bgp_cli_common.c). 'aggregate-address ...' typed directly
+ * under 'router bgp' has no other AF context to fall back to -- it always
+ * meant ipv4-unicast (bgp_node_safi()'s default case), so this stays native
+ * for that one entry point, matching B9's bare-BGP_NODE precedent. */
 DEFPY(aggregate_addressv4, aggregate_addressv4_cmd,
       "[no] aggregate-address <A.B.C.D/M$prefix|A.B.C.D$addr A.B.C.D$mask> [{"
       "as-set$as_set_s"
@@ -10798,11 +10837,11 @@ DEFPY(aggregate_addressv4, aggregate_addressv4_cmd,
 
 	/* Handle configuration removal, otherwise installation. */
 	if (no)
-		return bgp_aggregate_unset(vty, prefix_s, AFI_IP, safi);
+		return bgp_aggregate_unset_vty(vty, prefix_s, AFI_IP, safi);
 
-	return bgp_aggregate_set(vty, prefix_s, AFI_IP, safi, rmap_name,
-				 summary_only != NULL, as_set, origin,
-				 match_med != NULL, suppress_map);
+	return bgp_aggregate_set_vty(vty, prefix_s, AFI_IP, safi, rmap_name,
+				     summary_only != NULL, as_set, origin,
+				     match_med != NULL, suppress_map);
 }
 
 void bgp_free_aggregate_info(struct bgp_aggregate *aggregate)
@@ -10831,55 +10870,6 @@ void bgp_free_aggregate_info(struct bgp_aggregate *aggregate)
 	hash_clean_and_free(&aggregate->aspath_hash, bgp_aggr_aspath_remove);
 
 	bgp_aggregate_free(aggregate);
-}
-
-DEFPY(aggregate_addressv6, aggregate_addressv6_cmd,
-      "[no] aggregate-address X:X::X:X/M$prefix [{"
-      "as-set$as_set_s"
-      "|summary-only$summary_only"
-      "|route-map RMAP_NAME$rmap_name"
-      "|origin <egp|igp|incomplete>$origin_s"
-      "|matching-MED-only$match_med"
-      "|suppress-map RMAP_NAME$suppress_map"
-      "}]",
-      NO_STR
-      "Configure BGP aggregate entries\n"
-      "Aggregate prefix\n"
-      "Generate AS set path information\n"
-      "Filter more specific routes from updates\n"
-      "Apply route map to aggregate network\n"
-      "Route map name\n"
-      "BGP origin code\n"
-      "Remote EGP\n"
-      "Local IGP\n"
-      "Unknown heritage\n"
-      "Only aggregate routes with matching MED\n"
-      "Suppress the selected more specific routes\n"
-      "Route map with the route selectors\n")
-{
-	uint8_t origin = BGP_ORIGIN_UNSPECIFIED;
-	int as_set = AGGREGATE_AS_UNSET;
-
-	if (origin_s) {
-		if (strcmp(origin_s, "egp") == 0)
-			origin = BGP_ORIGIN_EGP;
-		else if (strcmp(origin_s, "igp") == 0)
-			origin = BGP_ORIGIN_IGP;
-		else if (strcmp(origin_s, "incomplete") == 0)
-			origin = BGP_ORIGIN_INCOMPLETE;
-	}
-
-	if (as_set_s)
-		as_set = AGGREGATE_AS_SET;
-
-	/* Handle configuration removal, otherwise installation. */
-	if (no)
-		return bgp_aggregate_unset(vty, prefix_str, AFI_IP6,
-					   SAFI_UNICAST);
-
-	return bgp_aggregate_set(vty, prefix_str, AFI_IP6, SAFI_UNICAST,
-				 rmap_name, summary_only != NULL, as_set,
-				 origin, match_med != NULL, suppress_map);
 }
 
 /* Redistribute route treatment. */
@@ -19061,11 +19051,14 @@ static void bgp_config_write_network_evpn(struct vty *vty, struct bgp *bgp,
 
 /* Configuration of static route announcement and aggregate
    information. */
-/* M5 batch B9: the six instance-AF 'network' families (ipv4/ipv6 x
- * unicast/multicast/labeled-unicast -- af-network-ipv4/-ipv6 in
- * proteus-bgp.yang) are mgmtd-owned; their 'network ...' lines are emitted
- * by afi_safis_network_ipv4_cli_write()/afi_safis_network_ipv6_cli_write()
- * in bgpd/proteus/bgp_cli_instance.c instead. The ipv4-vpn/ipv6-vpn
+/* M5 batches B9 (network) and B10 (aggregate-address): the six instance-AF
+ * 'network'/'aggregate-address' families (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast -- af-network-ipv4/-ipv6 and
+ * af-aggregate-ipv4/-ipv6 in proteus-bgp.yang, same AF set) are mgmtd-owned;
+ * their lines are emitted by afi_safis_network_ipv4_cli_write()/
+ * afi_safis_network_ipv6_cli_write()/afi_safis_aggregate_address_cli_write()
+ * (the last shared by both ipv4/ipv6 -- identical option leaves) in
+ * bgpd/proteus/bgp_cli_instance.c instead. The ipv4-vpn/ipv6-vpn
  * (af-network-vpn-*, M7) and l2vpn-evpn (M6) AFs dispatch to their own
  * emitters above and never reach this predicate. */
 static bool bgp_af_network_is_proteus(afi_t afi, safi_t safi)
@@ -19121,38 +19114,43 @@ void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 		}
 	}
 
-	/* Aggregate-address configuration. */
-	for (dest = bgp_table_top(bgp->aggregate[afi][safi]); dest;
-	     dest = bgp_route_next(dest)) {
-		bgp_aggregate = bgp_dest_get_bgp_aggregate_info(dest);
-		if (bgp_aggregate == NULL)
-			continue;
+	/* Aggregate-address configuration: emitted by mgmtd for the six proteus
+	 * AFs (M5 B10, af-aggregate-ipv4/-ipv6 in proteus-bgp.yang -- the same
+	 * ipv4/ipv6 x unicast/multicast/labeled-unicast set as 'network',
+	 * B9); still native for encap/flowspec/unreachability/link-state. */
+	if (!bgp_af_network_is_proteus(afi, safi)) {
+		for (dest = bgp_table_top(bgp->aggregate[afi][safi]); dest;
+		     dest = bgp_route_next(dest)) {
+			bgp_aggregate = bgp_dest_get_bgp_aggregate_info(dest);
+			if (bgp_aggregate == NULL)
+				continue;
 
-		p = bgp_dest_get_prefix(dest);
+			p = bgp_dest_get_prefix(dest);
 
-		vty_out(vty, "  aggregate-address %pFX", p);
+			vty_out(vty, "  aggregate-address %pFX", p);
 
-		if (bgp_aggregate->as_set)
-			vty_out(vty, " as-set");
+			if (bgp_aggregate->as_set)
+				vty_out(vty, " as-set");
 
-		if (bgp_aggregate->summary_only)
-			vty_out(vty, " summary-only");
+			if (bgp_aggregate->summary_only)
+				vty_out(vty, " summary-only");
 
-		if (bgp_aggregate->rmap.name)
-			vty_out(vty, " route-map %s", bgp_aggregate->rmap.name);
+			if (bgp_aggregate->rmap.name)
+				vty_out(vty, " route-map %s", bgp_aggregate->rmap.name);
 
-		if (bgp_aggregate->origin != BGP_ORIGIN_UNSPECIFIED)
-			vty_out(vty, " origin %s",
-				bgp_origin2str(bgp_aggregate->origin));
+			if (bgp_aggregate->origin != BGP_ORIGIN_UNSPECIFIED)
+				vty_out(vty, " origin %s",
+					bgp_origin2str(bgp_aggregate->origin));
 
-		if (bgp_aggregate->match_med)
-			vty_out(vty, " matching-MED-only");
+			if (bgp_aggregate->match_med)
+				vty_out(vty, " matching-MED-only");
 
-		if (bgp_aggregate->suppress_map_name)
-			vty_out(vty, " suppress-map %s",
-				bgp_aggregate->suppress_map_name);
+			if (bgp_aggregate->suppress_map_name)
+				vty_out(vty, " suppress-map %s",
+					bgp_aggregate->suppress_map_name);
 
-		vty_out(vty, "\n");
+			vty_out(vty, "\n");
+		}
 	}
 }
 
@@ -19207,15 +19205,9 @@ void bgp_route_init(void)
 	install_element(BGP_IPV4_NODE, &bgp_table_map_cmd);
 	install_element(BGP_IPV4_NODE, &no_bgp_table_map_cmd);
 
-	install_element(BGP_IPV4_NODE, &aggregate_addressv4_cmd);
-
 	/* IPv4 multicast configuration.  */
 	install_element(BGP_IPV4M_NODE, &bgp_table_map_cmd);
 	install_element(BGP_IPV4M_NODE, &no_bgp_table_map_cmd);
-	install_element(BGP_IPV4M_NODE, &aggregate_addressv4_cmd);
-
-	/* IPv4 labeled-unicast configuration.  */
-	install_element(BGP_IPV4L_NODE, &aggregate_addressv4_cmd);
 
 	install_element(VIEW_NODE, &show_ip_bgp_instance_all_cmd);
 	install_element(VIEW_NODE, &show_ip_bgp_afi_safi_statistics_cmd);
@@ -19259,11 +19251,6 @@ void bgp_route_init(void)
 	/* New config IPv6 BGP commands.  */
 	install_element(BGP_IPV6_NODE, &bgp_table_map_cmd);
 	install_element(BGP_IPV6_NODE, &no_bgp_table_map_cmd);
-
-	install_element(BGP_IPV6_NODE, &aggregate_addressv6_cmd);
-
-	/* IPv6 labeled unicast address family. */
-	install_element(BGP_IPV6L_NODE, &aggregate_addressv6_cmd);
 
 	install_element(BGP_NODE, &bgp_distance_cmd);
 	install_element(BGP_NODE, &no_bgp_distance_cmd);

@@ -4948,3 +4948,297 @@ int bgp_nb_af_network_backdoor_modify(struct nb_cb_modify_args *args, afi_t afi,
 				     bgp_nb_af_network_label_index(entry_dnode),
 				     yang_dnode_get_bool(args->dnode, NULL));
 }
+
+/* M5 batch B10: instance-AF 'aggregate-address' (af-aggregate-ipv4/-ipv6 in
+ * proteus-bgp.yang), the six ipv4/ipv6 x unicast/multicast/labeled-unicast
+ * containers -- the same AF set B9 established for 'network', sharing the
+ * legacy bgp_config_write_network() emitter (bgp_route.c) with it. Legacy is
+ * bgp_aggregate_set()/bgp_aggregate_unset() (bgp_route.c), refactored the
+ * same way as bgp_static_set() in B9: both now take a resolved 'struct bgp *'
+ * plus an errmsg buffer instead of a vty, so they can be called directly from
+ * APPLY; bgp_aggregate_set_vty()/bgp_aggregate_unset_vty() are the new
+ * vty-facing wrappers for the one remaining native call site, the
+ * ipv4-unicast bgp_aggregate DEFPY reachable only via the bare BGP_NODE
+ * install (bare-BGP_NODE precedent, B6-B9).
+ *
+ * None of the six option leaves (as-set, summary-only, route-map, origin,
+ * matching-med-only, suppress-map) has a setter of its own -- like B9's
+ * 'network', bgp_aggregate_set() always takes the full option set at once --
+ * so every leaf callback rereads the other five from the sibling list entry
+ * and reissues a full bgp_aggregate_set() call, the same "reread the whole
+ * container, call the one legacy setter" idiom B6/B7/B8/B9 established.
+ * as-set/summary-only/matching-med-only are Tier A default-false booleans
+ * (modify only, no destroy, unconditionally reread via
+ * yang_dnode_get_bool()); route-map/origin/suppress-map are no-default
+ * leaves (modify + destroy). Destroying the whole list entry goes through
+ * bgp_aggregate_unset(), which (unlike bgp_static_set()'s negate path) takes
+ * no option arguments to begin with, so there is no "does the given option
+ * still match?" guard to bypass here.
+ */
+static const char *bgp_nb_af_aggregate_rmap(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "route-map") ?
+		       yang_dnode_get_string(entry_dnode, "route-map") : NULL;
+}
+
+static const char *bgp_nb_af_aggregate_suppress_map(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "suppress-map") ?
+		       yang_dnode_get_string(entry_dnode, "suppress-map") : NULL;
+}
+
+static uint8_t bgp_nb_af_aggregate_origin_from_str(const char *origin_str)
+{
+	if (!origin_str)
+		return BGP_ORIGIN_UNSPECIFIED;
+	if (strmatch(origin_str, "egp"))
+		return BGP_ORIGIN_EGP;
+	if (strmatch(origin_str, "igp"))
+		return BGP_ORIGIN_IGP;
+	if (strmatch(origin_str, "incomplete"))
+		return BGP_ORIGIN_INCOMPLETE;
+
+	return BGP_ORIGIN_UNSPECIFIED;
+}
+
+static uint8_t bgp_nb_af_aggregate_origin(const struct lyd_node *entry_dnode)
+{
+	if (!yang_dnode_exists(entry_dnode, "origin"))
+		return BGP_ORIGIN_UNSPECIFIED;
+
+	return bgp_nb_af_aggregate_origin_from_str(yang_dnode_get_string(entry_dnode, "origin"));
+}
+
+static int bgp_nb_af_aggregate_set(const struct lyd_node *entry_dnode, afi_t afi, safi_t safi,
+				   const char *rmap, bool summary_only, bool as_set,
+				   uint8_t origin, bool match_med, const char *suppress_map)
+{
+	struct bgp *bgp;
+	const char *prefix_str;
+	char errmsg[256];
+	int ret;
+
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(entry_dnode, "prefix");
+
+	ret = bgp_aggregate_set(bgp, prefix_str, afi, safi, rmap, summary_only ? 1 : 0,
+				as_set ? 1 : 0, origin, match_med, suppress_map, errmsg,
+				sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_aggregate_set() failed for %s: %s", __func__, prefix_str,
+			 errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_aggregate_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_aggregate_set(args->dnode, afi, safi,
+					       bgp_nb_af_aggregate_rmap(args->dnode),
+					       yang_dnode_get_bool(args->dnode, "summary-only"),
+					       yang_dnode_get_bool(args->dnode, "as-set"),
+					       bgp_nb_af_aggregate_origin(args->dnode),
+					       yang_dnode_get_bool(args->dnode,
+								   "matching-med-only"),
+					       bgp_nb_af_aggregate_suppress_map(args->dnode));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_aggregate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	const char *prefix_str;
+	char errmsg[256];
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(args->dnode, "prefix");
+
+	ret = bgp_aggregate_unset(bgp, prefix_str, afi, safi, errmsg, sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_aggregate_unset() failed for %s: %s", __func__, prefix_str,
+			 errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_aggregate_as_set_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(args->dnode, NULL),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_summary_only_modify(struct nb_cb_modify_args *args, afi_t afi,
+					    safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(args->dnode, NULL),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi,
+				       yang_dnode_get_string(args->dnode, NULL),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, NULL,
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_origin_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(
+		entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+		yang_dnode_get_bool(entry_dnode, "summary-only"),
+		yang_dnode_get_bool(entry_dnode, "as-set"),
+		bgp_nb_af_aggregate_origin_from_str(yang_dnode_get_string(args->dnode, NULL)),
+		yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+		bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_origin_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       BGP_ORIGIN_UNSPECIFIED,
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_matching_med_only_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(args->dnode, NULL),
+				       bgp_nb_af_aggregate_suppress_map(entry_dnode));
+}
+
+int bgp_nb_af_aggregate_suppress_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					    safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"),
+				       yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_aggregate_suppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "aggregate-address");
+
+	return bgp_nb_af_aggregate_set(entry_dnode, afi, safi, bgp_nb_af_aggregate_rmap(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "summary-only"),
+				       yang_dnode_get_bool(entry_dnode, "as-set"),
+				       bgp_nb_af_aggregate_origin(entry_dnode),
+				       yang_dnode_get_bool(entry_dnode, "matching-med-only"), NULL);
+}

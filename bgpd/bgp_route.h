@@ -919,6 +919,13 @@ extern int bgp_static_set_vty(struct vty *vty, bool negate, const char *ip_str,
 			      const char *gwip, const char *ethtag,
 			      const char *routermac);
 
+extern int bgp_aggregate_set(struct bgp *bgp, const char *prefix_str, afi_t afi, safi_t safi,
+			     const char *rmap, uint8_t summary_only, uint8_t as_set,
+			     uint8_t origin, bool match_med, const char *suppress_map,
+			     char *errmsg, size_t errmsg_len);
+extern int bgp_aggregate_unset(struct bgp *bgp, const char *prefix_str, afi_t afi, safi_t safi,
+			       char *errmsg, size_t errmsg_len);
+
 /* this is primarily for MPLS-VPN */
 extern void bgp_update(struct peer *peer, const struct prefix *p,
 		       uint32_t addpath_id, struct attr *attr, afi_t afi,
