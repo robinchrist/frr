@@ -4498,6 +4498,47 @@ void afi_safis_distance_prefix_cli_write(struct vty *vty, const struct lyd_node 
 			: "");
 }
 
+/*
+ * M5 batch B14: instance-AF 'nexthop prefer-global' (proteus-bgp.yang's
+ * ipv6-unicast/nexthop-prefer-global leaf), the ipv6-unicast container
+ * only -- the leaf is 'type boolean;' with no 'default' statement (legacy's
+ * own compile-time default, DFLT_BGP_IPV6_NEXTHOP_PREFER_GLOBAL,
+ * bgp_vty.c, is currently false but is not a YANG default), so this is a
+ * no-default leaf: modify on the positive form, destroy on 'no' (rather
+ * than an explicit modify-to-false), matching the hard rule for
+ * no-default leaves and mirroring instance_ipv6_auto_ra_modify/_destroy's
+ * shape (bgp_nb_instance.c). Legacy's DEFUN (bgp_af_nexthop_prefer_global,
+ * bgp_vty.c) is also installed on BGP_IPV6M_NODE/BGP_IPV6L_NODE, which
+ * proteus-bgp.yang does not model under this leaf (only ipv6-unicast) --
+ * those two nodes are left native, only the BGP_IPV6_NODE install is
+ * retired here.
+ */
+DEFPY_YANG(
+	instance_afi_safis_ipv6_unicast_nexthop_prefer_global,
+	instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd,
+	"[no] nexthop prefer-global",
+	NO_STR
+	"Nexthop\n"
+	"Prefer global over link-local if both exist\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/ipv6-unicast/nexthop-prefer-global",
+			      no ? NB_OP_DESTROY : NB_OP_MODIFY, no ? NULL : "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Registered on the leaf's own xpath; reproduces
+ * bgp_config_write_ipv6_nexthop_prefer_global()'s '  [no ]nexthop
+ * prefer-global\n' line. mgmtd only calls cli_show when the leaf is
+ * present (i.e. explicitly configured), matching legacy's own
+ * SAVE_BGP_IPV6_NEXTHOP_PREFER_GLOBAL "only render if non-default"
+ * guard. */
+void afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, "  %snexthop prefer-global\n", yang_dnode_get_bool(dnode, NULL) ? "" : "no ");
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -4845,4 +4886,9 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_distance_source_ipv6_cli_cmd);
+
+	/* M5 B14: 'nexthop prefer-global', ipv6-unicast only (see the DEFPY
+	 * above); BGP_IPV6M_NODE/BGP_IPV6L_NODE keep the legacy DEFUN
+	 * installed natively, bgp_vty.c. */
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd);
 }

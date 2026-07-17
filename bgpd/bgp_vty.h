@@ -221,4 +221,11 @@ extern bool peergroup_af_flag_check(struct peer *peer, afi_t afi, safi_t safi,
 				    uint64_t flag);
 extern void bgp_init_ipv6_nexthop_prefer_global(struct bgp *bgp);
 
+/* M5 batch B14: vty-free 'nexthop prefer-global' core + compile-time
+ * default, for the ipv6-unicast northbound callbacks
+ * (bgpd/proteus/bgp_nb_afi_safi_ipv6.c). See bgp_vty.c. */
+extern void bgp_ipv6_nexthop_prefer_global_set(struct bgp *bgp, afi_t afi, safi_t safi,
+					       bool enable);
+extern bool bgp_ipv6_nexthop_prefer_global_default(void);
+
 #endif /* _QUAGGA_BGP_VTY_H */

@@ -1072,16 +1072,31 @@ int instance_afi_safis_ipv6_unicast_vpn_rt_export_ipv4_destroy(struct nb_cb_dest
 	return NB_OK;
 }
 
+/*
+ * M5 batch B14: instance-AF 'nexthop prefer-global', ipv6-unicast only
+ * (proteus-bgp.yang:3264). A no-default boolean (see the leaf's own
+ * description and bgp_ipv6_nexthop_prefer_global_default(), bgp_vty.c) --
+ * MODIFY sets the leaf's value via the vty-free core the legacy DEFUN was
+ * split into (bgp_ipv6_nexthop_prefer_global_set()), DESTROY reverts to the
+ * compile-time default (bgp_ipv6_nexthop_prefer_global_default()), the same
+ * shape instance_ipv6_auto_ra_modify()/_destroy() (bgp_nb_instance.c) use
+ * for the process-wide leaf's per-VRF override.
+ */
 int instance_afi_safis_ipv6_unicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/nexthop-prefer-global");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_UNICAST,
+						   yang_dnode_get_bool(args->dnode, NULL));
 		break;
 	}
 
@@ -1090,14 +1105,19 @@ int instance_afi_safis_ipv6_unicast_nexthop_prefer_global_modify(struct nb_cb_mo
 
 int instance_afi_safis_ipv6_unicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bgp *bgp;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/nexthop-prefer-global");
-		return NB_ERR_VALIDATION;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_UNICAST,
+						   bgp_ipv6_nexthop_prefer_global_default());
 		break;
 	}
 

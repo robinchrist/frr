@@ -775,6 +775,37 @@ void bgp_init_ipv6_nexthop_prefer_global(struct bgp *bgp)
 }
 
 /*
+ * M5 batch B14: vty-free core of the legacy 'nexthop prefer-global' DEFUN
+ * body below, exported for the northbound MODIFY/DESTROY callbacks
+ * (instance_afi_safis_ipv6_unicast_nexthop_prefer_global_modify/_destroy,
+ * bgpd/proteus/bgp_nb_afi_safi_ipv6.c) -- same afi/safi-parameterized
+ * "set, and clear-soft-in only if the value actually changed" shape as the
+ * DEFUN always had, just without the vty plumbing.
+ */
+void bgp_ipv6_nexthop_prefer_global_set(struct bgp *bgp, afi_t afi, safi_t safi, bool enable)
+{
+	if (!bgp_nexthop_prefer_global_supported(afi, safi))
+		return;
+
+	if (bgp->nexthop_prefer_global[afi][safi] != enable) {
+		bgp->nexthop_prefer_global[afi][safi] = enable;
+		bgp_clear_soft_in(bgp, afi, safi);
+	}
+}
+
+/*
+ * M5 batch B14: the leaf has no YANG 'default' statement (its value is a
+ * compile-time/profile default, not a modeled one), so the northbound
+ * DESTROY callback needs this compile-time default to revert to -- exactly
+ * what bgp_init_ipv6_nexthop_prefer_global() below applies at instance
+ * creation time.
+ */
+bool bgp_ipv6_nexthop_prefer_global_default(void)
+{
+	return DFLT_BGP_IPV6_NEXTHOP_PREFER_GLOBAL;
+}
+
+/*
  * Write nexthop prefer-global configuration for the given AFI/SAFI.
  * Only writes non-default values to minimize configuration output.
  */
@@ -2030,6 +2061,9 @@ static void bgp_config_write_maxpaths(struct vty *vty, struct bgp *bgp,
  * Enables or disables preferring global IPv6 addresses over link-local
  * addresses when both are available as nexthops.
  */
+/* M5 batch B14: still native for BGP_IPV6M_NODE/BGP_IPV6L_NODE (ipv6-unicast
+ * is mgmtd-owned instead, see instance_afi_safis_ipv6_unicast_nexthop_prefer_
+ * global_cli_cmd, bgpd/proteus/bgp_cli_instance.c). */
 DEFPY (bgp_af_nexthop_prefer_global,
        bgp_af_nexthop_prefer_global_cmd,
        "[no] nexthop prefer-global",
@@ -2040,15 +2074,11 @@ DEFPY (bgp_af_nexthop_prefer_global,
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	afi_t afi = bgp_node_afi(vty);
 	safi_t safi = bgp_node_safi(vty);
-	bool enable = !no;
 
 	if (!bgp || !bgp_nexthop_prefer_global_supported(afi, safi))
 		return CMD_WARNING_CONFIG_FAILED;
 
-	if (bgp->nexthop_prefer_global[afi][safi] != enable) {
-		bgp->nexthop_prefer_global[afi][safi] = enable;
-		bgp_clear_soft_in(bgp, afi, safi);
-	}
+	bgp_ipv6_nexthop_prefer_global_set(bgp, afi, safi, !no);
 
 	return CMD_SUCCESS;
 }
@@ -16594,6 +16624,18 @@ static bool bgp_af_distance_is_proteus(afi_t afi, safi_t safi)
 	       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
 }
 
+/* M5 batch B14: instance-AF 'nexthop prefer-global' (ipv6-unicast/
+ * nexthop-prefer-global in proteus-bgp.yang) is mgmtd-owned for ipv6-unicast
+ * only -- unlike bgp_nexthop_prefer_global_supported() above, which also
+ * covers ipv6-multicast/ipv6-labeled-unicast (still native, no YANG leaf
+ * for those two containers); its line is emitted by
+ * afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c) instead. */
+static bool bgp_af_nexthop_prefer_global_is_proteus(afi_t afi, safi_t safi)
+{
+	return afi == AFI_IP6 && safi == SAFI_UNICAST;
+}
+
 /* Address family based peer configuration display.  */
 static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 				    safi_t safi)
@@ -16666,7 +16708,12 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 	bgp_config_write_redistribute(vty, bgp, afi, safi);
 
-	bgp_config_write_ipv6_nexthop_prefer_global(vty, bgp, afi, safi);
+	/* 'nexthop prefer-global': emitted by mgmtd for ipv6-unicast (M5
+	 * B14); still native for ipv6-multicast/ipv6-labeled-unicast (the
+	 * only other AFs bgp_nexthop_prefer_global_supported() covers -- no
+	 * YANG leaf models them). */
+	if (!bgp_af_nexthop_prefer_global_is_proteus(afi, safi))
+		bgp_config_write_ipv6_nexthop_prefer_global(vty, bgp, afi, safi);
 
 	/* BGP flag dampening: emitted by mgmtd for the eight proteus AFs (M5
 	 * B12); still native for l2vpn-evpn/encap/flowspec/unreachability/
@@ -17588,8 +17635,12 @@ void bgp_vty_init(void)
 
 	install_element(BGP_NODE, &bgp_use_underlying_nexthop_weight_cmd);
 
-	/* "nexthop prefer-global" commands */
-	install_element(BGP_IPV6_NODE, &bgp_af_nexthop_prefer_global_cmd);
+	/* "nexthop prefer-global" commands: ipv6-unicast converted to
+	 * northbound (M5 batch B14), see
+	 * instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd
+	 * (bgp_cli_instance.c); ipv6-multicast/ipv6-labeled-unicast stay
+	 * native (proteus-bgp.yang models the leaf under ipv6-unicast
+	 * only). */
 	install_element(BGP_IPV6M_NODE, &bgp_af_nexthop_prefer_global_cmd);
 	install_element(BGP_IPV6L_NODE, &bgp_af_nexthop_prefer_global_cmd);
 

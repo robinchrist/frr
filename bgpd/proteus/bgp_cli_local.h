@@ -348,6 +348,11 @@ void afi_safis_distance_cli_write(struct vty *vty, const struct lyd_node *dnode,
 void afi_safis_distance_prefix_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults);
 
+/* M5 B14: instance-AF 'nexthop prefer-global', ipv6-unicast only. */
+void afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);
