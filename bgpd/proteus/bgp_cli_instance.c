@@ -28,6 +28,235 @@ static struct cmd_node bgp_node = {
 	.config_write = NULL,
 };
 
+/*
+ * Milestone 5 batch B0: parallel mgmtd-side address-family node entry/exit.
+ *
+ * The legacy 'address-family <afi> [<safi>]' / 'exit-address-family'
+ * DEFUN_NOSH in bgpd/bgp_vty.c stay native and keep pushing bgpd's
+ * BGP_*_NODE, so still-unconverted per-AF lines attach to bgpd during file
+ * load. These parallel DEFPY_YANG_NOSH commands give mgmtd the same node
+ * tracking: they set the SAME vty->node and re-push the enclosing instance
+ * base xpath, performing NO northbound create -- the afi-safis/<af>
+ * sub-containers are non-presence and auto-instantiate on the first child
+ * leaf (M5 B1+), so entering an AF block commits nothing. vtysh dual-routes
+ * both to VTYSH_BGPD|VTYSH_MGMTD via the node-entry DEFUNSH masks in
+ * vtysh/vtysh.c (the router_bgp milestone-1 pattern); NOSH commands are
+ * skipped by python/xref2vtysh.py, so that routing lives in vtysh.c, not in
+ * the generated vtysh_cmd.c table.
+ *
+ * bgp_node_type()/bgp_node_afi()/bgp_node_safi() are defined in bgp_vty.c,
+ * which is not linked into mgmtd, so the node <-> (container, header)
+ * mapping is reproduced locally.
+ */
+
+/* AF sub-nodes mirrored into mgmtd (config_write NULL -- mgmtd renders via
+ * cli_show). parent_node BGP_NODE and the default no_xpath=false let
+ * cmd_exit() pop the instance base pushed on entry. The four non-proteus
+ * families (flowspec, unreachability) are tracked too so mgmtd follows the
+ * node transitions when it reads a legacy bgpd.conf directly, even though
+ * proteus models no per-AF config for them. */
+static struct cmd_node bgp_af_cmd_nodes[] = {
+	{ .name = "bgp ipv4 unicast",
+	  .node = BGP_IPV4_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv4 multicast",
+	  .node = BGP_IPV4M_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv4 labeled unicast",
+	  .node = BGP_IPV4L_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp vpnv4",
+	  .node = BGP_VPNV4_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv6 unicast",
+	  .node = BGP_IPV6_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv6 multicast",
+	  .node = BGP_IPV6M_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv6 labeled unicast",
+	  .node = BGP_IPV6L_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp vpnv6",
+	  .node = BGP_VPNV6_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af-vpnv6)# " },
+	{ .name = "bgp evpn",
+	  .node = BGP_EVPN_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-evpn)# " },
+	{ .name = "bgp ipv4 flowspec",
+	  .node = BGP_FLOWSPECV4_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv6 flowspec",
+	  .node = BGP_FLOWSPECV6_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv4 unreachability",
+	  .node = BGP_IPV4U_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp ipv6 unreachability",
+	  .node = BGP_IPV6U_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
+};
+
+/* The nine proteus afi-safis/<af> containers: node <-> container name and
+ * the exact 'address-family <...>' header text bgp_config_write_family()
+ * (bgp_vty.c) emits per family. B1+ per-AF leaf commands build
+ * '<instance-base>/afi-safis/<container>/...' from vty->node via
+ * bgp_afi_safi_container_name(); the cli_show header/trailer wrap those
+ * converted leaves in an address-family block byte-identical to bgpd's, so
+ * vtysh folds the two daemons' emissions by matching header text. */
+static const struct {
+	int node;
+	const char *container;
+	const char *cli_header;
+} bgp_afi_safi_map[] = {
+	{ BGP_IPV4_NODE, "ipv4-unicast", "ipv4 unicast" },
+	{ BGP_IPV4M_NODE, "ipv4-multicast", "ipv4 multicast" },
+	{ BGP_IPV4L_NODE, "ipv4-labeled-unicast", "ipv4 labeled-unicast" },
+	{ BGP_VPNV4_NODE, "ipv4-vpn", "ipv4 vpn" },
+	{ BGP_IPV6_NODE, "ipv6-unicast", "ipv6 unicast" },
+	{ BGP_IPV6M_NODE, "ipv6-multicast", "ipv6 multicast" },
+	{ BGP_IPV6L_NODE, "ipv6-labeled-unicast", "ipv6 labeled-unicast" },
+	{ BGP_VPNV6_NODE, "ipv6-vpn", "ipv6 vpn" },
+	{ BGP_EVPN_NODE, "l2vpn-evpn", "l2vpn evpn" },
+};
+
+/* Reverse of bgp_node_type(): the proteus afi-safis child container name
+ * for a BGP_*_NODE, or NULL for a non-proteus AF node. Exposed for M5 B1+
+ * per-AF leaf commands to build their xpath from vty->node. */
+const char *bgp_afi_safi_container_name(int node)
+{
+	for (size_t i = 0; i < array_size(bgp_afi_safi_map); i++)
+		if (bgp_afi_safi_map[i].node == node)
+			return bgp_afi_safi_map[i].container;
+	return NULL;
+}
+
+static const char *bgp_afi_safi_cli_header(const char *container)
+{
+	for (size_t i = 0; i < array_size(bgp_afi_safi_map); i++)
+		if (strmatch(bgp_afi_safi_map[i].container, container))
+			return bgp_afi_safi_map[i].cli_header;
+	return NULL;
+}
+
+/* Enter an address-family sub-node: re-push the enclosing instance base
+ * (VTY_CURR_XPATH, pushed by router_bgp) under the AF node so per-AF
+ * subcommands resolve './afi-safis/<af>/...' against it. No northbound
+ * change -- non-presence containers auto-instantiate on the first child
+ * leaf. */
+static int bgp_af_node_enter(struct vty *vty, int node)
+{
+	char xpath[XPATH_MAXLEN];
+
+	if (vty->xpath_index == 0) {
+		vty_out(vty, "%% Not in a BGP instance context\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	strlcpy(xpath, VTY_CURR_XPATH, sizeof(xpath));
+	VTY_PUSH_XPATH(node, xpath);
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG_NOSH(
+	address_family_ipv4_safi, address_family_ipv4_safi_cli_cmd,
+	"address-family ipv4 [<unicast|multicast|vpn|labeled-unicast|flowspec|unreachability>]$safi",
+	"Enter Address Family command mode\n" BGP_AF_STR BGP_SAFI_WITH_LABEL_HELP_STR)
+{
+	int node = BGP_IPV4_NODE;
+
+	if (safi) {
+		if (strmatch(safi, "multicast"))
+			node = BGP_IPV4M_NODE;
+		else if (strmatch(safi, "vpn"))
+			node = BGP_VPNV4_NODE;
+		else if (strmatch(safi, "labeled-unicast"))
+			node = BGP_IPV4L_NODE;
+		else if (strmatch(safi, "flowspec"))
+			node = BGP_FLOWSPECV4_NODE;
+		else if (strmatch(safi, "unreachability"))
+			node = BGP_IPV4U_NODE;
+	}
+
+	return bgp_af_node_enter(vty, node);
+}
+
+DEFPY_YANG_NOSH(
+	address_family_ipv6_safi, address_family_ipv6_safi_cli_cmd,
+	"address-family ipv6 [<unicast|multicast|vpn|labeled-unicast|flowspec|unreachability>]$safi",
+	"Enter Address Family command mode\n" BGP_AF_STR BGP_SAFI_WITH_LABEL_HELP_STR)
+{
+	int node = BGP_IPV6_NODE;
+
+	if (safi) {
+		if (strmatch(safi, "multicast"))
+			node = BGP_IPV6M_NODE;
+		else if (strmatch(safi, "vpn"))
+			node = BGP_VPNV6_NODE;
+		else if (strmatch(safi, "labeled-unicast"))
+			node = BGP_IPV6L_NODE;
+		else if (strmatch(safi, "flowspec"))
+			node = BGP_FLOWSPECV6_NODE;
+		else if (strmatch(safi, "unreachability"))
+			node = BGP_IPV6U_NODE;
+	}
+
+	return bgp_af_node_enter(vty, node);
+}
+
+#ifdef KEEP_OLD_VPN_COMMANDS
+DEFPY_YANG_NOSH(
+	address_family_vpnv4, address_family_vpnv4_cli_cmd,
+	"address-family vpnv4 [unicast]",
+	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
+{
+	return bgp_af_node_enter(vty, BGP_VPNV4_NODE);
+}
+
+DEFPY_YANG_NOSH(
+	address_family_vpnv6, address_family_vpnv6_cli_cmd,
+	"address-family vpnv6 [unicast]",
+	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
+{
+	return bgp_af_node_enter(vty, BGP_VPNV6_NODE);
+}
+#endif /* KEEP_OLD_VPN_COMMANDS */
+
+DEFPY_YANG_NOSH(
+	address_family_evpn, address_family_evpn_cli_cmd,
+	"address-family l2vpn evpn",
+	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
+{
+	return bgp_af_node_enter(vty, BGP_EVPN_NODE);
+}
+
+DEFPY_YANG_NOSH(
+	exit_address_family, exit_address_family_cli_cmd,
+	"exit-address-family",
+	"Exit from Address Family configuration mode\n")
+{
+	/* Only installed at the AF sub-nodes, so vty->node is always one of
+	 * them here; drop back to BGP_NODE and pop the instance base pushed
+	 * on entry (mirrors cmd_exit() for these no_xpath=false nodes). */
+	vty->node = BGP_NODE;
+	if (vty->xpath_index > 0)
+		vty->xpath_index--;
+	return CMD_SUCCESS;
+}
+
 DEFPY_YANG_NOSH(
 	router_bgp, router_bgp_cli_cmd,
 	"router bgp [ASNUM$instasn [<view|vrf>$view_vrf VIEWVRFNAME] [as-notation <dot|dot+|plain>$notation]]",
@@ -2469,6 +2698,30 @@ void instance_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
 	vty_out(vty, "!\n");
 }
 
+/* Header/trailer for a proteus afi-safis/<af> container. Registered on the
+ * nine instance afi-safis containers (M5 B0); reused for the neighbor and
+ * peer-group afi-safis containers as those per-AF leaves convert (B1+).
+ * Reproduces bgp_config_write_family()'s exact ' !\n address-family <...>'
+ * frame and ' exit-address-family' trailer (bgp_vty.c) so vtysh folds the
+ * bgpd and mgmtd emissions into one block by matching header text -- the
+ * per-AF analog of instance_cli_write()'s 'router bgp' header. Fires only
+ * once a child leaf materializes the non-presence container, so B0 (no
+ * per-AF leaves) emits nothing. */
+void afi_safi_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	const char *header = bgp_afi_safi_cli_header(dnode->schema->name);
+
+	if (!header)
+		return;
+
+	vty_out(vty, " !\n address-family %s\n", header);
+}
+
+void afi_safi_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
+{
+	vty_out(vty, " exit-address-family\n");
+}
+
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -3211,6 +3464,36 @@ void bgp_cli_instance_init(void)
 
 	install_element(CONFIG_NODE, &router_bgp_cli_cmd);
 	install_element(CONFIG_NODE, &no_router_bgp_cli_cmd);
+
+	/* M5 B0: address-family node entry/exit (mgmtd side). Register the AF
+	 * sub-nodes and their default exit/quit/end commands (install_element
+	 * needs a compile-time-constant node, so exit-address-family is
+	 * installed with literal nodes below). */
+	for (size_t i = 0; i < array_size(bgp_af_cmd_nodes); i++) {
+		install_node(&bgp_af_cmd_nodes[i]);
+		install_default(bgp_af_cmd_nodes[i].node);
+	}
+	install_element(BGP_NODE, &address_family_ipv4_safi_cli_cmd);
+	install_element(BGP_NODE, &address_family_ipv6_safi_cli_cmd);
+#ifdef KEEP_OLD_VPN_COMMANDS
+	install_element(BGP_NODE, &address_family_vpnv4_cli_cmd);
+	install_element(BGP_NODE, &address_family_vpnv6_cli_cmd);
+#endif /* KEEP_OLD_VPN_COMMANDS */
+	install_element(BGP_NODE, &address_family_evpn_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV6_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_EVPN_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &exit_address_family_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);

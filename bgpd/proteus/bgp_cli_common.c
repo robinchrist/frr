@@ -35,6 +35,74 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show_end = instance_cli_write_end,
 			}
 		},
+		/* M5 B0: address-family block header/trailer for the nine
+		 * instance afi-safis containers. cli_show fires only once a
+		 * per-AF leaf materializes the non-presence container (B1+),
+		 * wrapping the converted leaves in an 'address-family <...>'
+		 * block byte-identical to bgp_config_write_family(). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {
