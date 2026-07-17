@@ -36,6 +36,28 @@ void neighbor_af_advertise_map_cli_write(struct vty *vty, const struct lyd_node 
 					 bool show_defaults);
 void neighbor_af_soo_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
 
+/* M5 B4: per-AF plain PEER_FLAG_* boolean emitters, shared neighbor/
+ * peer-group. */
+void neighbor_af_route_reflector_client_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults);
+void neighbor_af_route_server_client_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+void neighbor_af_as_override_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults);
+void neighbor_af_next_hop_self_enabled_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults);
+void neighbor_af_next_hop_self_force_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+void neighbor_af_nexthop_local_unchanged_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults);
+void neighbor_af_soft_reconfiguration_inbound_cli_write(struct vty *vty,
+							 const struct lyd_node *dnode,
+							 bool show_defaults);
+void neighbor_af_accept_own_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+void neighbor_af_attribute_unchanged_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,

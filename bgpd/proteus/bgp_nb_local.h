@@ -47,6 +47,11 @@ int bgp_nb_neighbor_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi
 int bgp_nb_neighbor_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+/* M5 batch B4: plain per-AF PEER_FLAG_* booleans (neighbor + peer-group). */
+int bgp_nb_neighbor_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+				   uint64_t flag);
+int bgp_nb_peer_group_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+				     uint64_t flag);
 /* M5 batch B2: per-AF policy attachments (neighbor + peer-group). */
 int bgp_nb_neighbor_af_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
 					int direct);

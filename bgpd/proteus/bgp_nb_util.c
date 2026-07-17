@@ -638,6 +638,86 @@ int bgp_nb_peer_group_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t
 }
 
 /*
+ * M5 batch B4: plain per-AF PEER_FLAG_* booleans -- route-reflector-client,
+ * route-server-client, as-override, next-hop-self's two leaves (enabled/
+ * force), nexthop-local-unchanged, attribute-unchanged's three sub-leaves
+ * (as-path/next-hop/med), soft-reconfiguration-inbound, accept-own. All
+ * eleven xpaths are `type boolean; default "false";` at both neighbor and
+ * peer-group scope, matching the plain-flag category, not activate's tri-
+ * state: reverting a defaulted leaf to its default never invokes a destroy
+ * callback (frr's northbound code generator did not scaffold one for any of
+ * these eleven xpaths -- confirmed by grep, no "not yet implemented" destroy
+ * stub exists for them), so only MODIFY is wired up, mirroring the existing
+ * plain-boolean instance-scope leaves (e.g. instance_neighbor_passive_modify
+ * in bgp_nb_neighbor.c). peer_af_flag_set()/peer_af_flag_unset() (bgpd.c)
+ * already carry every side effect the retired DEFUNs relied on -- the
+ * PEER_FLAG_SOFT_RECONFIG route-refresh/clear-in table entry
+ * (peer_change_reset_in), the EVPN NEXTHOP_UNCHANGED coupling on next-hop-
+ * self, the route-server-client -> NEXTHOP_UNCHANGED coupling, and the
+ * peer-group -> member fanout via peer_group2peer_config_copy_af() -- so
+ * this helper does nothing beyond calling them with the looked-up peer.
+ */
+static int bgp_nb_peer_af_flag_apply(struct peer *conf, bool set, afi_t afi, safi_t safi,
+				     uint64_t flag)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (set)
+		ret = peer_af_flag_set(conf, afi, safi, flag);
+	else
+		ret = peer_af_flag_unset(conf, afi, safi, flag);
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_af_flag_%sset() failed: %d",
+			 __func__, set ? "" : "un", ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+				   uint64_t flag)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_af_flag_apply(bgp_nb_neighbor_lookup(args->dnode),
+						 yang_dnode_get_bool(args->dnode, NULL), afi, safi,
+						 flag);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+				     uint64_t flag)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_peer_af_flag_apply(group ? group->conf : NULL,
+						 yang_dnode_get_bool(args->dnode, NULL), afi, safi,
+						 flag);
+	}
+
+	return NB_OK;
+}
+
+/*
  * M5 batch B2: shared per-AF policy-attachment apply, parameterized by
  * afi/safi (and, for the four directional families, the FILTER_IN/
  * FILTER_OUT or RMAP_IN/RMAP_OUT direction) -- the B1 delegator template

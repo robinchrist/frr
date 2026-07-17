@@ -4822,6 +4822,345 @@ void neighbor_af_soo_cli_write(struct vty *vty, const struct lyd_node *dnode, bo
 		yang_dnode_get_string(soo, "%s/local-admin", case_name));
 }
 
+/*
+ * M5 batch B4: plain per-AF PEER_FLAG_* booleans (neighbor + peer-group, all
+ * nine proteus AFs where legacy reached them). Every leaf here is `type
+ * boolean; default "false";` (bgpd-no-line-yang-modeling-guidance.md's
+ * plain-flag category -- no inheritance tri-state), so every DEFPY below
+ * always issues a MODIFY (never a DESTROY, matching bgp_nb_util.c's
+ * bgp_nb_{neighbor,peer_group}_af_flag_modify(), the only apply-side
+ * callback wired up for these xpaths) -- 'no ...' writes an explicit
+ * "false", the same shape as instance-scope plain flags like
+ * neighbor_passive above. bgp_cli_neighbor_af_flag_modify() is this batch's
+ * xpath-building helper, the B1 bgp_cli_neighbor_activate() template
+ * parameterized by leaf name instead of hardcoding "activate".
+ *
+ * CLI install sets below intentionally do NOT match uniformly across all
+ * nine AFs: each mirrors exactly the per-AF install_element() calls the
+ * retired legacy DEFUN had (as-override never reached l2vpn evpn;
+ * nexthop-local-unchanged only ever reached ipv6-unicast; accept-own only
+ * vpnv4/vpnv6) -- while the northbound apply side (bgp_nb_util.c,
+ * bgp_nb_neighbor_afi_*.c/bgp_nb_peer_group_afi_*.c) is wired up uniformly
+ * across all nine, exactly like B2/B3's policy attachments. Where the
+ * retired DEFUN kept a hidden BGP_NODE alias (or, for next-hop-self force,
+ * a hidden 'all' alias reachable inside every AF node too) that alias stays
+ * native and is left installed below, per the existing B1-B3 precedent.
+ */
+static int bgp_cli_neighbor_af_flag_modify(struct vty *vty, const char *peer, const char *leaf,
+					   const char *value)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/%s", xpath, container, leaf);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, value);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Shared neighbor-or-peer-group display name for the standalone plain-flag
+ * emitters below: the address for a neighbor-scope dnode, the peer-group
+ * name otherwise -- the same "nbr ? ... : ..." idiom every other cli_write
+ * function in this file repeats individually (e.g.
+ * neighbor_af_activate_cli_write() above). */
+static const char *bgp_cli_neighbor_or_group_name(const struct lyd_node *dnode)
+{
+	const struct lyd_node *nbr = yang_dnode_get_parent(dnode, "neighbor");
+
+	if (nbr)
+		return yang_dnode_get_string(nbr, "address");
+
+	return yang_dnode_get_string(yang_dnode_get_parent(dnode, "peer-group"), "name");
+}
+
+DEFPY_YANG(
+	neighbor_route_reflector_client, neighbor_route_reflector_client_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer route-reflector-client",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure a neighbor as Route Reflector client\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "route-reflector-client",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_route_reflector_client_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s route-reflector-client\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+DEFPY_YANG(
+	neighbor_route_server_client, neighbor_route_server_client_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer route-server-client",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure a neighbor as Route Server client\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "route-server-client",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_route_server_client_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s route-server-client\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+DEFPY_YANG(
+	neighbor_as_override, neighbor_as_override_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer as-override",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Override ASNs in outbound updates if aspath equals remote-as\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "as-override", no ? "false" : "true");
+}
+
+void neighbor_af_as_override_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s as-override\n", bgp_cli_neighbor_or_group_name(dnode));
+}
+
+/* 'neighbor X next-hop-self [force]' / 'no neighbor X next-hop-self
+ * [force]': one grammar, two independent leaves -- legacy's
+ * neighbor_nexthop_self_force_cmd only ever touches
+ * PEER_FLAG_FORCE_NEXTHOP_SELF, never PEER_FLAG_NEXTHOP_SELF, and vice
+ * versa for the bare form (bgp_vty.c, retired), so the [force] token
+ * selects which single leaf this command modifies rather than setting both.
+ */
+DEFPY_YANG(
+	neighbor_nexthop_self, neighbor_nexthop_self_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer next-hop-self [force]$force",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disable the next hop calculation for this neighbor\n"
+	"Set the next hop to self for reflected routes\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer,
+					       force ? "next-hop-self/force"
+						     : "next-hop-self/enabled",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_next_hop_self_enabled_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s next-hop-self\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+void neighbor_af_next_hop_self_force_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s next-hop-self force\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+/* 'neighbor X nexthop-local unchanged': legacy only ever installed this on
+ * BGP_IPV6_NODE (ipv6-unicast) -- no hidden BGP_NODE alias, no other AF, no
+ * flowspec. Kept to that single AF here too. */
+DEFPY_YANG(
+	neighbor_nexthop_local_unchanged, neighbor_nexthop_local_unchanged_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer nexthop-local unchanged",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure treatment of outgoing link-local nexthop attribute\n"
+	"Leave link-local nexthop unchanged for this peer\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "nexthop-local-unchanged",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_nexthop_local_unchanged_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s nexthop-local unchanged\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+DEFPY_YANG(
+	neighbor_soft_reconfiguration, neighbor_soft_reconfiguration_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer soft-reconfiguration inbound",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Per neighbor soft reconfiguration\n"
+	"Allow inbound soft reconfiguration for this neighbor\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "soft-reconfiguration-inbound",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_soft_reconfiguration_inbound_cli_write(struct vty *vty,
+							 const struct lyd_node *dnode,
+							 bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s soft-reconfiguration inbound\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+/* 'neighbor X accept-own': legacy installed this only on BGP_VPNV4_NODE and
+ * BGP_VPNV6_NODE (neighbor_accept_own_cmd, bgp_vty.c, retired) -- no hidden
+ * BGP_NODE alias. */
+DEFPY_YANG(
+	neighbor_accept_own, neighbor_accept_own_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer accept-own",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable handling of self-originated VPN routes containing ACCEPT_OWN community\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "accept-own", no ? "false" : "true");
+}
+
+void neighbor_af_accept_own_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s accept-own\n", bgp_cli_neighbor_or_group_name(dnode));
+}
+
+/*
+ * 'neighbor X attribute-unchanged [{as-path|next-hop|med}]' /
+ * 'no neighbor X attribute-unchanged [{as-path|next-hop|med}]'
+ * (neighbor_attr_unchanged/no_neighbor_attr_unchanged, bgp_vty.c, retired).
+ * Three independent boolean leaves, but legacy's grammar has asymmetric
+ * "bare vs. selective" semantics that don't reduce to three independent
+ * per-leaf MODIFYs:
+ *  - bare positive ('attribute-unchanged', no sub-tokens) sets all three;
+ *  - selective positive ('attribute-unchanged as-path') REPLACES the whole
+ *    triple: the named leaves go true, the unnamed ones go false (legacy
+ *    unsets whichever of next-hop/med isn't named, even if it was
+ *    previously set -- see neighbor_attr_unchanged(), bgp_vty.c);
+ *  - bare negative ('no attribute-unchanged') clears all three;
+ *  - selective negative ('no ... as-path') clears only the named leaves and
+ *    leaves the rest untouched.
+ * All three leaves are always written together in one commit (three
+ * MODIFYs batched under one nb_cli_apply_changes()), matching B3's
+ * conditional-advertisement precedent for a CLI grammar that doesn't map
+ * 1:1 onto independent leaf writes.
+ */
+static void bgp_cli_attribute_unchanged_enqueue(struct vty *vty, const char *xpath,
+						const char *container, const char *leaf, bool val)
+{
+	char *xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/attribute-unchanged/%s", xpath,
+				       container, leaf);
+
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, val ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+}
+
+DEFPY_YANG(
+	neighbor_attribute_unchanged, neighbor_attribute_unchanged_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer attribute-unchanged"
+	" [{as-path$aspath|next-hop$nexthop|med$med}]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"BGP attribute is propagated unchanged to this neighbor\n"
+	"As-path attribute\n"
+	"Nexthop attribute\n"
+	"Med attribute\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	bool has_aspath = !!aspath, has_nexthop = !!nexthop, has_med = !!med;
+	bool any = has_aspath || has_nexthop || has_med;
+	bool bare_value = !no;
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (no && any) {
+		/* selective negative: clear only the named leaves */
+		if (has_aspath)
+			bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "as-path",
+							    false);
+		if (has_nexthop)
+			bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "next-hop",
+							    false);
+		if (has_med)
+			bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "med", false);
+	} else {
+		/* bare (either polarity): all three to bare_value. selective
+		 * positive: named leaves true, unnamed false (replace). */
+		bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "as-path",
+						    any ? has_aspath : bare_value);
+		bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "next-hop",
+						    any ? has_nexthop : bare_value);
+		bgp_cli_attribute_unchanged_enqueue(vty, xpath, container, "med",
+						    any ? has_med : bare_value);
+	}
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Shared attribute-unchanged emitter, both neighbor and peer-group.
+ * Registered on the CONTAINER xpath (bgp_cli_common.c), not on the three
+ * leaves individually: the three sub-flags are independent (any subset may
+ * be true), so no single leaf's presence is guaranteed whenever the line
+ * needs printing -- e.g. only 'med' set means the 'as-path'/'next-hop'
+ * leaves are still at their default and never walked on their own.
+ * Reproduces bgp_config_write_peer_af()'s (bgp_vty.c) exact token order and
+ * spacing: "  neighbor <addr> attribute-unchanged[ as-path][ next-hop][
+ * med]\n", omitted entirely when all three are false. */
+void neighbor_af_attribute_unchanged_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	bool aspath = yang_dnode_exists(dnode, "as-path") && yang_dnode_get_bool(dnode, "as-path");
+	bool nexthop = yang_dnode_exists(dnode, "next-hop") &&
+		       yang_dnode_get_bool(dnode, "next-hop");
+	bool med = yang_dnode_exists(dnode, "med") && yang_dnode_get_bool(dnode, "med");
+
+	if (!aspath && !nexthop && !med)
+		return;
+
+	vty_out(vty, "  neighbor %s attribute-unchanged%s%s%s\n",
+		bgp_cli_neighbor_or_group_name(dnode), aspath ? " as-path" : "",
+		nexthop ? " next-hop" : "", med ? " med" : "");
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -5121,4 +5460,77 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_IPV6L_NODE, &no_neighbor_soo_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &no_neighbor_soo_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_neighbor_soo_cli_cmd);
+
+	/* per-AF plain PEER_FLAG_* booleans, neighbor + peer-group (M5 batch
+	 * B4). Each install set matches the retired legacy DEFUN's per-AF
+	 * install_element() calls exactly; where legacy kept a hidden
+	 * BGP_NODE alias (or, for next-hop-self, a hidden 'all' alias
+	 * reachable inside every AF node), that alias is left native and
+	 * untouched in bgp_vty.c. */
+	install_element(BGP_IPV4_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_route_reflector_client_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_route_server_client_cli_cmd);
+
+	/* as-override: legacy never reached BGP_EVPN_NODE. */
+	install_element(BGP_IPV4_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_as_override_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_nexthop_self_cli_cmd);
+
+	/* nexthop-local unchanged: legacy only ever reached BGP_IPV6_NODE. */
+	install_element(BGP_IPV6_NODE, &neighbor_nexthop_local_unchanged_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+
+	/* accept-own: legacy only ever reached BGP_VPNV4_NODE/BGP_VPNV6_NODE. */
+	install_element(BGP_VPNV4_NODE, &neighbor_accept_own_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_accept_own_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_attribute_unchanged_cli_cmd);
 }

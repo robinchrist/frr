@@ -191,51 +191,21 @@ int instance_neighbor_afi_safis_l2vpn_evpn_orf_prefix_list_destroy(struct nb_cb_
 int instance_neighbor_afi_safis_l2vpn_evpn_route_reflector_client_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/route-reflector-client");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_REFLECTOR_CLIENT);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_next_hop_self_enabled_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/next-hop-self/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN, PEER_FLAG_NEXTHOP_SELF);
 }
 
-int instance_neighbor_afi_safis_l2vpn_evpn_next_hop_self_force_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_l2vpn_evpn_next_hop_self_force_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/next-hop-self/force");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_FORCE_NEXTHOP_SELF);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_remove_private_as_modify(struct nb_cb_modify_args *args)
@@ -272,18 +242,7 @@ int instance_neighbor_afi_safis_l2vpn_evpn_remove_private_as_destroy(struct nb_c
 
 int instance_neighbor_afi_safis_l2vpn_evpn_as_override_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/as-override");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN, PEER_FLAG_AS_OVERRIDE);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_send_community_standard_modify(
@@ -458,18 +417,7 @@ int instance_neighbor_afi_safis_l2vpn_evpn_default_originate_route_map_destroy(
 int instance_neighbor_afi_safis_l2vpn_evpn_soft_reconfiguration_inbound_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/soft-reconfiguration-inbound");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN, PEER_FLAG_SOFT_RECONFIG);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_count_modify(struct nb_cb_modify_args *args)
@@ -638,37 +586,18 @@ int instance_neighbor_afi_safis_l2vpn_evpn_maximum_prefix_out_destroy(struct nb_
 	return NB_OK;
 }
 
-int instance_neighbor_afi_safis_l2vpn_evpn_route_server_client_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_l2vpn_evpn_route_server_client_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/route-server-client");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_RSERVER_CLIENT);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_nexthop_local_unchanged_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/nexthop-local-unchanged");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args)
@@ -770,18 +699,7 @@ int instance_neighbor_afi_safis_l2vpn_evpn_allowas_in_route_map_destroy(
 
 int instance_neighbor_afi_safis_l2vpn_evpn_accept_own_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/accept-own");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN, PEER_FLAG_ACCEPT_OWN);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_soo_create(struct nb_cb_create_args *args)
@@ -890,52 +808,21 @@ int instance_neighbor_afi_safis_l2vpn_evpn_weight_destroy(struct nb_cb_destroy_a
 int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_as_path_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/attribute-unchanged/as-path");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_AS_PATH_UNCHANGED);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_next_hop_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/attribute-unchanged/next-hop");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN,
+					      PEER_FLAG_NEXTHOP_UNCHANGED);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_attribute_unchanged_med_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/attribute-unchanged/med");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_L2VPN, SAFI_EVPN, PEER_FLAG_MED_UNCHANGED);
 }
 
 int instance_neighbor_afi_safis_l2vpn_evpn_dampening_enabled_modify(struct nb_cb_modify_args *args)

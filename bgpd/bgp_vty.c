@@ -3845,34 +3845,12 @@ ALIAS_HIDDEN(no_neighbor_route_server_client,
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Configure a neighbor as Route Server client\n")
 
-DEFUN (neighbor_nexthop_local_unchanged,
-       neighbor_nexthop_local_unchanged_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> nexthop-local unchanged",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Configure treatment of outgoing link-local nexthop attribute\n"
-       "Leave link-local nexthop unchanged for this peer\n")
-{
-	int idx_peer = 1;
-	return peer_af_flag_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-				    bgp_node_safi(vty),
-				    PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED);
-}
-
-DEFUN (no_neighbor_nexthop_local_unchanged,
-       no_neighbor_nexthop_local_unchanged_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> nexthop-local unchanged",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Configure treatment of outgoing link-local-nexthop attribute\n"
-       "Leave link-local nexthop unchanged for this peer\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg,
-				      bgp_node_afi(vty), bgp_node_safi(vty),
-				      PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED);
-}
+/* "neighbor nexthop-local unchanged": fully converted to mgmtd for
+ * ipv6-unicast, its only proteus AF (M5 batch B4,
+ * bgpd/proteus/bgp_cli_neighbor.c) -- unlike every other B4 family, legacy
+ * never installed a hidden BGP_NODE alias or reached any flowspec node, so
+ * nothing keeps this DEFUN pair reachable; removed per the per-milestone
+ * rule. */
 
 DEFUN (neighbor_attr_unchanged,
        neighbor_attr_unchanged_cmd,
@@ -5128,31 +5106,11 @@ ALIAS_HIDDEN(
 	"Only give warning message when limit is exceeded\n"
 	"Force checking all received routes not only accepted\n")
 
-/* "neighbor accept-own" */
-DEFPY (neighbor_accept_own,
-       neighbor_accept_own_cmd,
-       "[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor accept-own",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Enable handling of self-originated VPN routes containing ACCEPT_OWN community\n")
-{
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (no)
-		ret = peer_af_flag_unset(peer, afi, safi, PEER_FLAG_ACCEPT_OWN);
-	else
-		ret = peer_af_flag_set(peer, afi, safi, PEER_FLAG_ACCEPT_OWN);
-
-	return bgp_vty_return(vty, ret);
-}
+/* "neighbor accept-own": fully converted to mgmtd for the nine proteus AFs
+ * (M5 batch B4, bgpd/proteus/bgp_cli_neighbor.c) -- legacy CLI only ever
+ * reached vpnv4/vpnv6, and like soo below, this DEFPY had no hidden
+ * BGP_NODE alias, so nothing keeps it reachable; removed per the
+ * per-milestone rule. */
 
 /* "neighbor soo": fully converted to mgmtd for all nine proteus AFs (M5
  * batch B3, bgpd/proteus/bgp_cli_neighbor.c) -- unlike every other M4/M5
@@ -16613,20 +16571,23 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "\n");
 	}
 
-	/* Route reflector client. */
-	if (peergroup_af_flag_check(peer, afi, safi,
-				    PEER_FLAG_REFLECTOR_CLIENT)) {
+	/* Route reflector client: emitted by mgmtd for the nine proteus AFs
+	 * (M5 B4); still native for flowspec. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_REFLECTOR_CLIENT)) {
 		vty_out(vty, "  neighbor %s route-reflector-client\n", addr);
 	}
 
-	/* next-hop-self force */
-	if (peergroup_af_flag_check(peer, afi, safi,
-				    PEER_FLAG_FORCE_NEXTHOP_SELF)) {
+	/* next-hop-self force: emitted by mgmtd for the nine proteus AFs (M5
+	 * B4). */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_FORCE_NEXTHOP_SELF)) {
 		vty_out(vty, "  neighbor %s next-hop-self force\n", addr);
 	}
 
-	/* next-hop-self */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_NEXTHOP_SELF)) {
+	/* next-hop-self: emitted by mgmtd for the nine proteus AFs (M5 B4). */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_NEXTHOP_SELF)) {
 		vty_out(vty, "  neighbor %s next-hop-self\n", addr);
 	}
 
@@ -16653,8 +16614,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s remove-private-AS\n", addr);
 	}
 
-	/* as-override */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_AS_OVERRIDE)) {
+	/* as-override: emitted by mgmtd for the eight proteus AFs it reaches
+	 * (M5 B4; never l2vpn evpn, matching legacy's install set). */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_AS_OVERRIDE)) {
 		vty_out(vty, "  neighbor %s as-override\n", addr);
 	}
 
@@ -16697,8 +16660,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "\n");
 	}
 
-	/* Soft reconfiguration inbound. */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_SOFT_RECONFIG)) {
+	/* Soft reconfiguration inbound: emitted by mgmtd for the nine proteus
+	 * AFs (M5 B4); still native for flowspec. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_SOFT_RECONFIG)) {
 		vty_out(vty, "  neighbor %s soft-reconfiguration inbound\n",
 			addr);
 	}
@@ -16729,15 +16694,19 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s maximum-prefix-out %u\n",
 			addr, peer->pmax_out[afi][safi]);
 
-	/* Route server client. */
-	if (peergroup_af_flag_check(peer, afi, safi,
-				    PEER_FLAG_RSERVER_CLIENT)) {
+	/* Route server client: emitted by mgmtd for the nine proteus AFs (M5
+	 * B4); still native for flowspec. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_RSERVER_CLIENT)) {
 		vty_out(vty, "  neighbor %s route-server-client\n", addr);
 	}
 
-	/* Nexthop-local unchanged. */
-	if (peergroup_af_flag_check(peer, afi, safi,
-				    PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED)) {
+	/* Nexthop-local unchanged: emitted by mgmtd for the nine proteus AFs
+	 * (M5 B4); legacy CLI only ever reached ipv6-unicast, but the
+	 * northbound apply side is wired up uniformly like every other M5
+	 * batch. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED)) {
 		vty_out(vty, "  neighbor %s nexthop-local unchanged\n", addr);
 	}
 
@@ -16769,8 +16738,11 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		}
 	}
 
-	/* accept-own */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ACCEPT_OWN))
+	/* accept-own: emitted by mgmtd for the nine proteus AFs (M5 B4);
+	 * legacy CLI only ever reached vpnv4/vpnv6, but the northbound apply
+	 * side is wired up uniformly like every other M5 batch. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ACCEPT_OWN))
 		vty_out(vty, "  neighbor %s accept-own\n", addr);
 
 	/* soo: emitted by mgmtd for the nine proteus AFs (M5 B3); still native
@@ -16801,12 +16773,14 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 	/* Filter. */
 	bgp_config_write_filter(vty, peer, afi, safi);
 
-	/* atribute-unchanged. */
-	if (peer_af_flag_check(peer, afi, safi, PEER_FLAG_AS_PATH_UNCHANGED)
-	    || (safi != SAFI_EVPN
-		&& peer_af_flag_check(peer, afi, safi,
-				      PEER_FLAG_NEXTHOP_UNCHANGED))
-	    || peer_af_flag_check(peer, afi, safi, PEER_FLAG_MED_UNCHANGED)) {
+	/* atribute-unchanged: emitted by mgmtd for the nine proteus AFs (M5
+	 * B4); still native for flowspec. */
+	if (!bgp_af_activate_is_proteus(afi, safi)
+	    && (peer_af_flag_check(peer, afi, safi, PEER_FLAG_AS_PATH_UNCHANGED)
+		|| (safi != SAFI_EVPN
+		    && peer_af_flag_check(peer, afi, safi,
+					  PEER_FLAG_NEXTHOP_UNCHANGED))
+		|| peer_af_flag_check(peer, afi, safi, PEER_FLAG_MED_UNCHANGED))) {
 
 		if (!peer_group_active(peer)
 		    || peergroup_af_flag_check(peer, afi, safi,
@@ -17942,25 +17916,12 @@ void bgp_vty_init(void)
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_set_peer_group_hidden_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_set_peer_group_hidden_cmd);
 
-	/* "neighbor softreconfiguration inbound" commands.*/
+	/* "neighbor softreconfiguration inbound" commands: converted to
+	 * mgmtd for the nine proteus AFs (M5 batch B4,
+	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias and the
+	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_soft_reconfiguration_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_soft_reconfiguration_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_soft_reconfiguration_cmd);
 	install_element(BGP_FLOWSPECV4_NODE,
 			&neighbor_soft_reconfiguration_cmd);
 	install_element(BGP_FLOWSPECV4_NODE,
@@ -17969,131 +17930,71 @@ void bgp_vty_init(void)
 			&neighbor_soft_reconfiguration_cmd);
 	install_element(BGP_FLOWSPECV6_NODE,
 			&no_neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_soft_reconfiguration_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_soft_reconfiguration_cmd);
 
-	/* "neighbor attribute-unchanged" commands.  */
+	/* "neighbor attribute-unchanged" commands: converted to mgmtd for the
+	 * nine proteus AFs (M5 batch B4); hidden BGP_NODE alias + flowspec
+	 * stay native. */
 	install_element(BGP_NODE, &neighbor_attr_unchanged_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_attr_unchanged_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_attr_unchanged_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_attr_unchanged_cmd);
-
-	install_element(BGP_EVPN_NODE, &neighbor_attr_unchanged_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_attr_unchanged_cmd);
 
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_attr_unchanged_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_attr_unchanged_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_attr_unchanged_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_attr_unchanged_cmd);
 
-	/* "nexthop-local unchanged" commands */
-	install_element(BGP_IPV6_NODE, &neighbor_nexthop_local_unchanged_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_neighbor_nexthop_local_unchanged_cmd);
+	/* "nexthop-local unchanged" commands: fully converted to mgmtd for
+	 * ipv6-unicast, its only proteus AF (M5 batch B4) -- unlike every
+	 * other B4 family, legacy never installed a hidden BGP_NODE alias or
+	 * reached any flowspec node, so nothing keeps this DEFUN reachable;
+	 * removed per the per-milestone rule. */
 
-	/* "neighbor next-hop-self" commands. */
+	/* "neighbor next-hop-self" commands: converted to mgmtd for the nine
+	 * proteus AFs (M5 batch B4); the hidden BGP_NODE alias keeps this
+	 * DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_nexthop_self_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_nexthop_self_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_nexthop_self_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_nexthop_self_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_nexthop_self_cmd);
 
-	/* "neighbor next-hop-self force" commands. */
+	/* "neighbor next-hop-self force" commands: converted to mgmtd for
+	 * the nine proteus AFs (M5 batch B4); the hidden BGP_NODE aliases
+	 * (force and the deprecated 'all' spelling) keep this DEFUN
+	 * reachable, and the 'all' spelling's per-AF hidden aliases (not
+	 * converted, still a distinct legacy command) stay installed on
+	 * every AF exactly as before. */
 	install_element(BGP_NODE, &neighbor_nexthop_self_force_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_nexthop_self_force_hidden_cmd);
 	install_element(BGP_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV4_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV4M_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV4L_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV6_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV6M_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_IPV6L_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_VPNV4_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_nexthop_self_force_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_all_hidden_cmd);
 	install_element(BGP_VPNV6_NODE,
 			&no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_nexthop_self_force_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_nexthop_self_force_cmd);
 
-	/* "neighbor as-override" commands. */
+	/* "neighbor as-override" commands: converted to mgmtd for the eight
+	 * proteus AFs it reaches (M5 batch B4; never l2vpn evpn, matching
+	 * legacy's install set); the hidden BGP_NODE alias keeps this DEFUN
+	 * reachable. */
 	install_element(BGP_NODE, &neighbor_as_override_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_as_override_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_as_override_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_as_override_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_as_override_cmd);
 
 	/* "neighbor remove-private-AS" commands. */
 	install_element(BGP_NODE, &neighbor_remove_private_as_hidden_cmd);
@@ -18254,32 +18155,12 @@ void bgp_vty_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_ecommunity_rpki_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_ecommunity_rpki_cmd);
 
-	/* "neighbor route-reflector" commands.*/
+	/* "neighbor route-reflector" commands: converted to mgmtd for the
+	 * nine proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
+	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_route_reflector_client_hidden_cmd);
 	install_element(BGP_NODE,
 			&no_neighbor_route_reflector_client_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_route_reflector_client_cmd);
 	install_element(BGP_FLOWSPECV4_NODE,
 			&neighbor_route_reflector_client_cmd);
 	install_element(BGP_FLOWSPECV4_NODE,
@@ -18288,30 +18169,12 @@ void bgp_vty_init(void)
 			&neighbor_route_reflector_client_cmd);
 	install_element(BGP_FLOWSPECV6_NODE,
 			&no_neighbor_route_reflector_client_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_route_reflector_client_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_route_reflector_client_cmd);
 
-	/* "neighbor route-server" commands.*/
+	/* "neighbor route-server" commands: converted to mgmtd for the nine
+	 * proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
+	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_route_server_client_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_route_server_client_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_route_server_client_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_route_server_client_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_route_server_client_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_server_client_cmd);
 	install_element(BGP_FLOWSPECV4_NODE,
 			&no_neighbor_route_server_client_cmd);
@@ -18795,9 +18658,10 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6U_NODE, &neighbor_allowas_in_cmd);
 	install_element(BGP_IPV6U_NODE, &no_neighbor_allowas_in_cmd);
 
-	/* neighbor accept-own */
-	install_element(BGP_VPNV4_NODE, &neighbor_accept_own_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_accept_own_cmd);
+	/* "neighbor accept-own": all nine proteus AFs converted to mgmtd (M5
+	 * batch B4: neighbor_accept_own_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c); legacy only ever installed
+	 * vpnv4/vpnv6 and had no hidden BGP_NODE alias to keep native. */
 
 	/* "neighbor soo": all nine proteus AFs converted to mgmtd (M5 batch
 	 * B3: neighbor_soo_cli_cmd/no_neighbor_soo_cli_cmd in
