@@ -3418,6 +3418,32 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 		else
 			vty_out(vty, " neighbor %s graceful-restart-disable\n", addr);
 	}
+
+	/* local-role (+ strict-mode) (M4 batch B12): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired) role block.
+	 * Gated on 'local-role/role's own presence (no YANG default, unlike
+	 * strict-mode) -- the same "presence is exactly legacy's ownership
+	 * flag" principle used throughout this function, replacing legacy's
+	 * peergroup_flag_check(peer, PEER_FLAG_ROLE) && local_role !=
+	 * ROLE_UNDEFINED value-comparison pair. The YANG enum string already
+	 * matches the CLI keyword directly, so no bgp_get_name_by_role()
+	 * round-trip is needed.
+	 */
+	if (yang_dnode_exists(dnode, "local-role/role"))
+		vty_out(vty, " neighbor %s local-role %s%s\n", addr,
+			yang_dnode_get_string(dnode, "local-role/role"),
+			yang_dnode_get_bool(dnode, "local-role/strict-mode") ? " strict-mode" : "");
+
+	/* enforce-first-as (M4 batch B12): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired) enforce-first-as
+	 * block. Tier B, gated on this entry's own leaf presence like every
+	 * other Tier B leaf in this function, replacing legacy's
+	 * peergroup_flag_check(peer, PEER_FLAG_ENFORCE_FIRST_AS) plus its
+	 * bgp->flags-derived polarity inversion for display.
+	 */
+	if (yang_dnode_exists(dnode, "enforce-first-as"))
+		vty_out(vty, " neighbor %s enforce-first-as %s\n", addr,
+			yang_dnode_get_bool(dnode, "enforce-first-as") ? "enabled" : "disabled");
 }
 
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -3533,6 +3559,227 @@ void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
 	 * the 'timers connect' SAVE_ idiom (see bgp_cli_write_session_scalars()).
 	 */
 	bgp_cli_write_session_scalars(vty, dnode, address, !has_pg);
+}
+
+/*
+ * 'neighbor X local-role <role> [strict-mode]' / 'no neighbor X local-role
+ * <role> [strict-mode]' (RFC 9234, M4 batch B12): shared between neighbor/
+ * peer-group via bgp_cli_peer_or_group_xpath() like every leaf in this
+ * file. The bare and strict-mode variants enqueue an explicit MODIFY on
+ * the sibling 'strict-mode' leaf alongside 'role' -- strict-mode has a YANG
+ * default and so is modify-only (no .destroy), the same convention as
+ * aigp/oad's bare '[no]' grammar above -- rather than leaving it untouched,
+ * reproducing peer_role_set()'s own unconditional strict_mode overwrite on
+ * any role change (bgpd.c, see bgp_nb_neighbor_role_apply()'s doc comment,
+ * bgp_nb_util.c). The 'no' form's role DESTROY and strict-mode MODIFY
+ * "false" together reproduce peer_role_unset()'s full reset, the same
+ * composite-destroy-across-siblings idiom already used for
+ * 'shutdown [message]' (M4 batch B4).
+ */
+DEFPY_YANG(
+	neighbor_role, neighbor_role_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-role <provider|rs-server|rs-client|customer|peer>$role",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set session role\n"
+	ROLE_STR)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/role", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, role);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/strict-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_role_strict, neighbor_role_strict_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-role <provider|rs-server|rs-client|customer|peer>$role strict-mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set session role\n"
+	ROLE_STR
+	"Use additional restriction on peer\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/role", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, role);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/strict-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_role, no_neighbor_role_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-role <provider|rs-server|rs-client|customer|peer> [strict-mode]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set session role\n"
+	ROLE_STR
+	"Use additional restriction on peer\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/role", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/strict-mode", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
+ * 'neighbor X enforce-first-as <enabled|disabled>' (M4 batch B12): Tier B,
+ * canonical '<enabled|disabled>$mode' grammar plus two CMD_ATTR_DEPRECATED
+ * bare aliases, the same shape as B8's capabilities container leaves (bare
+ * positive -> modify "true"; bare 'no' -> modify "false", not a destroy --
+ * that's what legacy actually persisted). Inventory section 1.12 confirmed
+ * this leaf shares B8's "profile-dependent instance default seeded onto
+ * peers" shape rather than needing a bespoke inheritance path -- see
+ * instance_neighbor_enforce_first_as_modify()'s doc comment
+ * (bgp_nb_neighbor.c).
+ */
+DEFPY_YANG(
+	neighbor_enforce_first_as, neighbor_enforce_first_as_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer enforce-first-as <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enforce the first AS for EBGP routes\n"
+	"Enable enforce-first-as\n"
+	"Disable enforce-first-as\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enforce-first-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_enforce_first_as, no_neighbor_enforce_first_as_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer enforce-first-as <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enforce the first AS for EBGP routes\n"
+	"Enable enforce-first-as\n"
+	"Disable enforce-first-as\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enforce-first-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_enforce_first_as_deprecated, neighbor_enforce_first_as_deprecated_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer enforce-first-as",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enforce the first AS for EBGP routes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enforce-first-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	no_neighbor_enforce_first_as_deprecated, no_neighbor_enforce_first_as_deprecated_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer enforce-first-as",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enforce the first AS for EBGP routes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enforce-first-as", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
 }
 
 void bgp_cli_neighbor_init(void)
@@ -3658,4 +3905,13 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &no_neighbor_timers_delayopen_cli_cmd);
 	install_element(BGP_NODE, &neighbor_advertisement_interval_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_advertisement_interval_cli_cmd);
+
+	/* local-role (+ strict-mode), enforce-first-as (M4 batch B12). */
+	install_element(BGP_NODE, &neighbor_role_cli_cmd);
+	install_element(BGP_NODE, &neighbor_role_strict_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_role_cli_cmd);
+	install_element(BGP_NODE, &neighbor_enforce_first_as_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_enforce_first_as_cli_cmd);
+	install_element(BGP_NODE, &neighbor_enforce_first_as_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_enforce_first_as_deprecated_cli_cmd);
 }

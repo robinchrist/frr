@@ -730,33 +730,39 @@ int instance_peer_group_aigp_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* See the neighbor-scope callbacks' comments (bgp_nb_neighbor.c) for the
+ * full local-role design (shared container-reread apply, capability-send
+ * semantics, and why the 'no' form's composite role-DESTROY +
+ * strict-mode-MODIFY-"false" CLI leaves this DESTROY as peer_role_unset()'s
+ * only caller). group->conf takes the fan-out-to-members branch inside
+ * peer_role_set()/peer_role_unset() (bgpd.c) itself, same as B9's local-as.
+ */
 int instance_peer_group_local_role_role_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-role/role");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_peer_group_role_apply(args->dnode);
 }
 
 int instance_peer_group_local_role_role_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-role/role");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer_group *group;
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	ret = peer_role_unset(group->conf);
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
+			    CAPABILITY_ACTION_UNSET);
+	if (ret != CMD_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_role_unset() failed", __func__);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
@@ -764,18 +770,10 @@ int instance_peer_group_local_role_role_destroy(struct nb_cb_destroy_args *args)
 
 int instance_peer_group_local_role_strict_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/local-role/strict-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_peer_group_role_apply(args->dnode);
 }
 
 /* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for why
@@ -897,34 +895,46 @@ int instance_peer_group_disable_connected_check_modify(struct nb_cb_modify_args 
 	return NB_OK;
 }
 
+/* See the neighbor-scope callback's comment (bgp_nb_neighbor.c) for the
+ * full enforce-first-as design (same shape as B8's capabilities container leaves).
+ * group->conf carries PEER_STATUS_GROUP, so peer_flag_set()/_unset() take
+ * the fan-out-to-members branch, same as every other peer-group-scope Tier B
+ * leaf in this file.
+ */
 int instance_peer_group_enforce_first_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/enforce-first-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_ENFORCE_FIRST_AS);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_ENFORCE_FIRST_AS);
 
 	return NB_OK;
 }
 
 int instance_peer_group_enforce_first_as_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/enforce-first-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(group->conf, PEER_FLAG_ENFORCE_FIRST_AS,
+				       bgp && CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS));
 
 	return NB_OK;
 }

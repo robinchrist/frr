@@ -4095,102 +4095,10 @@ ALIAS_HIDDEN(
  * bgp_cli_neighbor.c (M4 batch B4).
  */
 
-static uint8_t get_role_by_name(const char *role_str)
-{
-	if (strncmp(role_str, "peer", 2) == 0)
-		return ROLE_PEER;
-	if (strncmp(role_str, "provider", 2) == 0)
-		return ROLE_PROVIDER;
-	if (strncmp(role_str, "customer", 2) == 0)
-		return ROLE_CUSTOMER;
-	if (strncmp(role_str, "rs-server", 4) == 0)
-		return ROLE_RS_SERVER;
-	if (strncmp(role_str, "rs-client", 4) == 0)
-		return ROLE_RS_CLIENT;
-	return ROLE_UNDEFINED;
-}
-
-static int peer_role_set_vty(struct vty *vty, struct peer *peer,
-			     const char *role_str, bool strict_mode)
-{
-	uint8_t role = get_role_by_name(role_str);
-
-	if (role == ROLE_UNDEFINED)
-		return bgp_vty_return(vty, BGP_ERR_INVALID_ROLE_NAME);
-	return bgp_vty_return(vty, peer_role_set(peer, role, strict_mode));
-}
-
-DEFPY(neighbor_role,
-      neighbor_role_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Set session role\n"
-      ROLE_STR)
-{
-	int ret;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_role_set_vty(vty, peer, role, false);
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
-			    CAPABILITY_ACTION_SET);
-
-	return ret;
-}
-
-DEFPY(neighbor_role_strict,
-      neighbor_role_strict_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer>$role strict-mode",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Set session role\n"
-      ROLE_STR
-      "Use additional restriction on peer\n")
-{
-	int ret;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = peer_role_set_vty(vty, peer, role, true);
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
-			    CAPABILITY_ACTION_SET);
-
-	return ret;
-}
-
-DEFPY(no_neighbor_role,
-      no_neighbor_role_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor local-role <provider|rs-server|rs-client|customer|peer> [strict-mode]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Set session role\n"
-      ROLE_STR
-      "Use additional restriction on peer\n")
-{
-	int ret;
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ret = bgp_vty_return(vty, peer_role_unset(peer));
-
-	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
-			    CAPABILITY_ACTION_UNSET);
-
-	return ret;
-}
+/* neighbor local-role (+ strict-mode): converted to northbound, see
+ * 'neighbor_role_cli_cmd'/'neighbor_role_strict_cli_cmd'/
+ * 'no_neighbor_role_cli_cmd' in bgp_cli_neighbor.c (M4 batch B12).
+ */
 
 /* neighbor oad: converted to northbound, see 'neighbor_oad_cli_cmd' in
  * bgp_cli_neighbor.c (M4 batch B4).
@@ -4286,34 +4194,10 @@ DEFUN(no_neighbor_extended_optional_parameters,
 				   PEER_FLAG_EXTENDED_OPT_PARAMS);
 }
 
-/* enforce-first-as */
-DEFUN (neighbor_enforce_first_as,
-       neighbor_enforce_first_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> enforce-first-as",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Enforce the first AS for EBGP routes\n")
-{
-	int idx_peer = 1;
-
-	return peer_flag_set_vty(vty, argv[idx_peer]->arg,
-				 PEER_FLAG_ENFORCE_FIRST_AS);
-}
-
-DEFUN (no_neighbor_enforce_first_as,
-       no_neighbor_enforce_first_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> enforce-first-as",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Enforce the first AS for EBGP routes\n")
-{
-	int idx_peer = 2;
-
-	return peer_flag_unset_vty(vty, argv[idx_peer]->arg,
-				   PEER_FLAG_ENFORCE_FIRST_AS);
-}
-
+/* neighbor enforce-first-as: converted to northbound, see
+ * 'neighbor_enforce_first_as_cli_cmd'/'no_neighbor_enforce_first_as_cli_cmd'
+ * in bgp_cli_neighbor.c (M4 batch B12).
+ */
 
 /* neighbor description: converted to northbound, see
  * 'neighbor_description_cli_cmd' in bgp_cli.c (M4 batch B3).
@@ -16847,14 +16731,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B4).
 	 */
 
-	/* role */
-	if (peergroup_flag_check(peer, PEER_FLAG_ROLE) &&
-	    peer->local_role != ROLE_UNDEFINED)
-		vty_out(vty, " neighbor %s local-role %s%s\n", addr,
-			bgp_get_name_by_role(peer->local_role),
-			CHECK_FLAG(peer->flags, PEER_FLAG_ROLE_STRICT_MODE)
-				? " strict-mode"
-				: "");
+	/* role (+ strict-mode): converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B12).
+	 */
 
 	/* oad: converted to northbound, see bgp_cli_write_session_scalars()
 	 * (bgp_cli_neighbor.c, M4 batch B4).
@@ -16878,18 +16757,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, " neighbor %s extended-optional-parameters\n",
 			addr);
 
-	/* enforce-first-as */
-	if (CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS)) {
-		/* The `no` form is printed because by default this enforcing
-		 * is enabled, thus we need to print it inverted.
-		 * See peer_new().
-		 */
-		if (peergroup_flag_check(peer, PEER_FLAG_ENFORCE_FIRST_AS))
-			vty_out(vty, " no neighbor %s enforce-first-as\n", addr);
-	} else {
-		if (peergroup_flag_check(peer, PEER_FLAG_ENFORCE_FIRST_AS))
-			vty_out(vty, " neighbor %s enforce-first-as\n", addr);
-	}
+	/* enforce-first-as: converted to northbound, see
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B12).
+	 */
 
 	/* update-source, ip-transparent: converted to northbound, see
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B7).
@@ -18246,10 +18116,8 @@ void bgp_vty_init(void)
 	/* "router bgp" commands. */
 	install_element(CONFIG_NODE, &router_bgp_cmd);
 
-	/* "neighbor role" commands. */
-	install_element(BGP_NODE, &neighbor_role_cmd);
-	install_element(BGP_NODE, &neighbor_role_strict_cmd);
-	install_element(BGP_NODE, &no_neighbor_role_cmd);
+	/* "neighbor role" commands: converted to northbound, see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B12). */
 
 	/* "neighbor oad"/"neighbor aigp"/"neighbor graceful-shutdown"
 	 * commands: converted to northbound, see bgp_cli_neighbor_init()
@@ -18981,9 +18849,8 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE,
 			&no_neighbor_extended_optional_parameters_cmd);
 
-	/* "neighbor enforce-first-as" commands. */
-	install_element(BGP_NODE, &neighbor_enforce_first_as_cmd);
-	install_element(BGP_NODE, &no_neighbor_enforce_first_as_cmd);
+	/* "neighbor enforce-first-as" commands: converted to northbound, see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B12). */
 
 	/* "neighbor update-source" commands: converted to northbound,
 	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).

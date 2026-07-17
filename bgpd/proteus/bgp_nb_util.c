@@ -780,6 +780,144 @@ int bgp_nb_peer_group_local_as_destroy_apply(const struct lyd_node *dnode)
 	return NB_OK;
 }
 
+/* Shared 'local-role' container reader for both peer-group and neighbor
+ * (M4 batch B12). Mirrors bgp_nb_get_local_as()'s shape: local_role_dnode is
+ * the 'local-role' container itself, resolved by any of its descendants via
+ * yang_dnode_get_parent(dnode, "local-role"). strict_mode is an optional
+ * out-param (pass NULL to skip); it carries a YANG default of "false" and so
+ * is always materialized once the container exists, same reasoning as
+ * local-as's no-prepend/replace-as/dual-as. Returns false (role left at
+ * ROLE_UNDEFINED) if 'role' itself is absent -- unreachable via the CLI,
+ * whose role token is mandatory in every 'local-role' grammar, but checked
+ * for northbound-client parity and so a same-transaction destroy of 'role'
+ * (see the neighbor-scope destroy callback's comment) makes a
+ * still-pending strict-mode modify a safe no-op instead of resurrecting the
+ * role via stale data, matching bgp_nb_get_local_as()'s own defensive
+ * false return.
+ */
+bool bgp_nb_get_role(const struct lyd_node *local_role_dnode, uint8_t *role, bool *strict_mode)
+{
+	const char *role_str;
+
+	if (strict_mode)
+		*strict_mode = yang_dnode_get_bool(local_role_dnode, "strict-mode");
+
+	if (!yang_dnode_exists(local_role_dnode, "role")) {
+		*role = ROLE_UNDEFINED;
+		return false;
+	}
+
+	role_str = yang_dnode_get_string(local_role_dnode, "role");
+	if (strmatch(role_str, "provider"))
+		*role = ROLE_PROVIDER;
+	else if (strmatch(role_str, "rs-server"))
+		*role = ROLE_RS_SERVER;
+	else if (strmatch(role_str, "rs-client"))
+		*role = ROLE_RS_CLIENT;
+	else if (strmatch(role_str, "customer"))
+		*role = ROLE_CUSTOMER;
+	else
+		*role = ROLE_PEER;
+
+	return true;
+}
+
+/* Shared APPLY for the neighbor 'local-role' leaves (role and strict-mode,
+ * M4 batch B12): recompute the whole container and call peer_role_set(),
+ * the same "reread the container, not the trigger leaf" discipline as
+ * bgp_nb_neighbor_local_as_apply() above -- both neighbor_role_cli_cmd's
+ * bare and strict-mode variants (bgp_cli_neighbor.c) enqueue a MODIFY on
+ * 'role' together with an explicit MODIFY "true"/"false" on 'strict-mode'
+ * (strict-mode has a YANG default and so is modify-only, no .destroy, the
+ * same convention as every other default-bearing boolean in this file --
+ * see aigp/oad's CLI), so either leaf's own modify callback reaching this
+ * shared apply always finds both values already resolved on the dnode
+ * regardless of which one fired. A peer with no role configured at all is a
+ * no-op (see bgp_nb_get_role()'s doc comment) -- reached when a same-
+ * transaction 'role' destroy (the 'no' form) has already removed it by the
+ * time strict-mode's own modify-to-false runs, since destroys are applied
+ * before modifies within a commit (lib/northbound.c).
+ *
+ * bgp_capability_send() reproduces the unconditional
+ * CAPABILITY_ACTION_SET call every legacy 'neighbor X local-role ...' DEFPY
+ * makes after peer_role_set_vty() (bgp_vty.c, retired), regardless of the
+ * setter's return value (dynamic capability renegotiation without a full
+ * session reset, inventory section 1.17) -- peer_role_set() failure is
+ * still reported via NB_ERR_RESOURCE, matching the flog_err()-on-failure
+ * idiom used throughout this file (e.g. peer_ttl_security_hops_unset()).
+ */
+int bgp_nb_neighbor_role_apply(const struct lyd_node *dnode)
+{
+	struct peer *peer = bgp_nb_neighbor_lookup(dnode);
+	const struct lyd_node *local_role_dnode;
+	uint8_t role;
+	bool strict_mode;
+	int ret;
+
+	if (!peer)
+		return NB_OK;
+
+	local_role_dnode = yang_dnode_get_parent(dnode, "local-role");
+	if (!bgp_nb_get_role(local_role_dnode, &role, &strict_mode))
+		return NB_OK;
+
+	ret = peer_role_set(peer, role, strict_mode);
+	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
+			    CAPABILITY_ACTION_SET);
+	if (ret != CMD_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_role_set() failed", __func__);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+/* Peer-group-scope counterpart of the helper above: same shared "reread the
+ * container" logic, calling peer_role_set() on group->conf, which already
+ * carries PEER_STATUS_GROUP and so takes the fan-out-to-members branch
+ * inside peer_role_set() itself (bgpd.c) -- mirroring
+ * peer_and_group_lookup_vty() resolving a peer-group name to group->conf in
+ * the retired DEFPYs, same pattern already used for local-as
+ * (bgp_nb_peer_group_local_as_apply() above).
+ *
+ * bgp_capability_send() is called on group->conf->connection directly, NOT
+ * fanned out to live members via bgp_nb_capability_send_dynamic_peer_group()
+ * (the dedicated helper the capabilities/dynamic leaf uses, B8) -- legacy's
+ * neighbor_role_cmd/neighbor_role_strict_cmd/no_neighbor_role_cmd (bgp_vty.c,
+ * retired) never used that helper either, calling bgp_capability_send()
+ * unconditionally on whatever peer_and_group_lookup_vty() returned. Since
+ * bgp_capability_send() no-ops on a non-established connection
+ * (bgp_packet.c) and the peer-group template connection is never
+ * established, this call is a legacy no-op for peer-group scope -- faithfully
+ * reproduced as-is rather than "fixed" into a member fan-out, which would be
+ * a behavior change beyond this batch's replicate-legacy-exactly scope.
+ */
+int bgp_nb_peer_group_role_apply(const struct lyd_node *dnode)
+{
+	struct peer_group *group = bgp_nb_peer_group_lookup(dnode);
+	const struct lyd_node *local_role_dnode;
+	uint8_t role;
+	bool strict_mode;
+	int ret;
+
+	if (!group)
+		return NB_OK;
+
+	local_role_dnode = yang_dnode_get_parent(dnode, "local-role");
+	if (!bgp_nb_get_role(local_role_dnode, &role, &strict_mode))
+		return NB_OK;
+
+	ret = peer_role_set(group->conf, role, strict_mode);
+	bgp_capability_send(group->conf->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
+			    CAPABILITY_ACTION_SET);
+	if (ret != CMD_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_role_set() failed", __func__);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
 /* Shared remote-as reader for both peer-group and neighbor (both use the
  * same 'remote-as' container from the shared neighbor-session-parameters
  * grouping). Mirrors bgp_nb_instance_get_asn()'s plain/asdot handling and

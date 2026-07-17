@@ -27,6 +27,7 @@ bool bgp_nb_get_local_as(const struct lyd_node *local_as_dnode, as_t *as, const 
 bool bgp_nb_get_remote_as(const struct lyd_node *session_dnode, as_t *as,
 				  enum peer_asn_type *as_type, const char **as_str,
 				  char *as_str_buf, size_t as_str_buf_len);
+bool bgp_nb_get_role(const struct lyd_node *local_role_dnode, uint8_t *role, bool *strict_mode);
 bool bgp_nb_gr_process_blocked_by_instance(void);
 bool bgp_nb_graceful_shutdown_instance_blocked_by_process(void);
 bool bgp_nb_graceful_shutdown_process_blocked_by_instance(void);
@@ -49,11 +50,13 @@ int bgp_nb_neighbor_remote_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_validate(const struct lyd_node *dnode,
 						       char *errmsg, size_t errmsg_len);
+int bgp_nb_neighbor_role_apply(const struct lyd_node *dnode);
 struct peer_group *bgp_nb_peer_group_lookup(const struct lyd_node *dnode);
 int bgp_nb_peer_group_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_local_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_remote_as_apply(const struct lyd_node *dnode);
+int bgp_nb_peer_group_role_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_remote_as_delete_apply(const struct lyd_node *dnode);
 void bgp_nb_process_update_delay_apply(uint16_t delay, uint16_t establish_wait);
 void bgp_nb_reject_as_sets_reset_peers(struct bgp *bgp);

@@ -990,33 +990,55 @@ int instance_neighbor_aigp_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'neighbor X local-role <role> [strict-mode]' / 'no neighbor X local-role
+ * <role> [strict-mode]' (RFC 9234, M4 batch B12): reproduces
+ * neighbor_role_cmd/neighbor_role_strict_cmd/no_neighbor_role_cmd
+ * (bgp_vty.c, retired), which funnel into peer_role_set()/peer_role_unset()
+ * (bgpd.c). Both role and strict-mode route through the shared
+ * bgp_nb_neighbor_role_apply() (bgp_nb_util.c) -- see its doc comment for
+ * the full container-reread/capability-send design, matching local-as's
+ * (M4 batch B9) "every sibling leaf's modify calls the same shared apply"
+ * discipline.
+ */
 int instance_neighbor_local_role_role_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-role/role");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_neighbor_role_apply(args->dnode);
 }
 
+/* 'no neighbor X local-role ...': reproduces peer_role_unset(), which
+ * always resets the peer to ROLE_UNDEFINED/strict-mode-off regardless of
+ * the 'no' form's own role/strict-mode tokens (bgpd.c, ignored the same way
+ * legacy's DEFPY grammar accepts-but-ignores them). The CLI's 'no' form
+ * (bgp_cli_neighbor.c) enqueues this DESTROY together with an explicit
+ * MODIFY "false" on the sibling 'strict-mode' leaf (modify-only, no YANG
+ * default's .destroy exists per this project's Tier A convention) --
+ * destroys apply before modifies within a commit (lib/northbound.c), so by
+ * the time that sibling MODIFY's own bgp_nb_neighbor_role_apply() call
+ * runs, 'role' is already gone from the dnode and its reread is a safe
+ * no-op (see bgp_nb_get_role()'s doc comment), leaving this single
+ * peer_role_unset() call as the only real effect.
+ */
 int instance_neighbor_local_role_role_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-role/role");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct peer *peer;
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	ret = peer_role_unset(peer);
+	bgp_capability_send(peer->connection, AFI_IP, SAFI_UNICAST, CAPABILITY_CODE_ROLE,
+			    CAPABILITY_ACTION_UNSET);
+	if (ret != CMD_SUCCESS) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_role_unset() failed", __func__);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
@@ -1024,18 +1046,10 @@ int instance_neighbor_local_role_role_destroy(struct nb_cb_destroy_args *args)
 
 int instance_neighbor_local_role_strict_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/local-role/strict-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_neighbor_role_apply(args->dnode);
 }
 
 /* 'neighbor X oad' (bgp_vty.c, retired): legacy silently no-ops (leaves
@@ -1182,34 +1196,62 @@ int instance_neighbor_disable_connected_check_modify(struct nb_cb_modify_args *a
 	return NB_OK;
 }
 
+/* 'neighbor X enforce-first-as <enabled|disabled>' (M4 batch B12):
+ * reproduces neighbor_enforce_first_as_cmd/no_neighbor_enforce_first_as_cmd
+ * (bgp_vty.c, retired), which route through the generic peer_flag_set()/
+ * peer_flag_unset() (bgpd.c:5938/5943) exactly like the six B8
+ * capabilities container leaves -- inventory section 1.12 confirmed this leaf's
+ * "inherits the instance-level setting" wording describes the same
+ * profile-dependent-instance-default shape as B8's dynamic/software-version/
+ * link-local capabilities (bgp->flags-derived, seeded onto peers at
+ * creation by peer_new(), bgpd.c ~1792-1795, and re-seeded onto existing
+ * peers during config load by the interim bridge in bgp_nb_instance.c), not
+ * a bespoke second inheritance path: peer_flag_action_list's { PEER_FLAG_
+ * ENFORCE_FIRST_AS, 0, peer_change_reset_in } entry needs no extra
+ * renegotiation call beyond what peer_flag_set()/_unset() already performs,
+ * the same "verify no extra call is needed" resolution reached for the six
+ * B8 leaves.
+ */
 int instance_neighbor_enforce_first_as_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/enforce-first-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(peer, PEER_FLAG_ENFORCE_FIRST_AS);
+	else
+		peer_flag_unset(peer, PEER_FLAG_ENFORCE_FIRST_AS);
 
 	return NB_OK;
 }
 
+/* Same "revert to instance default, or inherit from peer-group" shape as
+ * bgp_nb_capability_flag_destroy()'s six B8 callers (bgp_nb_util.c) --
+ * instance_default here is bgp->flags' BGP_FLAG_ENFORCE_FIRST_AS, the
+ * already-converted instance-level leaf (bgp_nb_instance.c, seeded/re-seeded
+ * per the modify callback's comment above).
+ */
 int instance_neighbor_enforce_first_as_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/enforce-first-as");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	bgp_nb_capability_flag_destroy(peer, PEER_FLAG_ENFORCE_FIRST_AS,
+				       bgp && CHECK_FLAG(bgp->flags, BGP_FLAG_ENFORCE_FIRST_AS));
 
 	return NB_OK;
 }
