@@ -2452,7 +2452,9 @@ int bgp_nb_peer_group_af_condition_map_destroy(struct nb_cb_destroy_args *args, 
  * itself (bgp_cli_soo_parse()); this side re-derives the same struct
  * ecommunity legacy built via ecommunity_str2com() directly from the
  * already-typed leaves (bgp_nb_soo_encode(), below), no string re-parsing
- * here.
+ * here. bgp_nb_soo_encode() itself is un-static'd and shared with M6 B3's
+ * instance-level 'mac-vrf soo' (bgp_nb_evpn.c), which reuses the identical
+ * as2/as4/ipv4 choice shape for the site-of-origin extended community.
  *
  * The three case containers' create and their two leaves' modify all
  * reroute to the same "reread the soo container" idiom as
@@ -2468,7 +2470,7 @@ int bgp_nb_peer_group_af_condition_map_destroy(struct nb_cb_destroy_args *args, 
  * case switch (switching case leaves the enclosing presence container
  * alone).
  */
-static void bgp_nb_soo_encode(const struct lyd_node *soo_dnode, struct ecommunity_val *eval)
+void bgp_nb_soo_encode(const struct lyd_node *soo_dnode, struct ecommunity_val *eval)
 {
 	memset(eval, 0, sizeof(*eval));
 

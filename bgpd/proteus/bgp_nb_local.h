@@ -145,6 +145,9 @@ int bgp_nb_peer_group_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 int bgp_nb_peer_group_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+/* M6 B3: 'mac-vrf soo' (bgp_nb_evpn.c) reuses the as2/as4/ipv4 choice
+ * encoder shared with the per-AF soo above. */
+void bgp_nb_soo_encode(const struct lyd_node *soo_dnode, struct ecommunity_val *eval);
 /* M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
  * maximum-prefix-out + allowas-in + weight (neighbor + peer-group). */
 int bgp_nb_neighbor_af_default_originate_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,

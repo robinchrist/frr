@@ -139,6 +139,34 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_evpn_enable_resolve_overlay_index_cli_write,
 			}
 		},
+		/* M6 B3: instance-level l2vpn-evpn mac-vrf-soo + flooding.
+		 * mac-vrf-soo's cli_show is registered on each choice case's
+		 * local-admin leaf, mirroring M5 B3's per-AF soo registration
+		 * (the one point reached regardless of which case is set). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/mac-vrf-soo/as2/local-admin",
+			.cbs = {
+				.cli_show = instance_evpn_mac_vrf_soo_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/mac-vrf-soo/as4/local-admin",
+			.cbs = {
+				.cli_show = instance_evpn_mac_vrf_soo_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/mac-vrf-soo/ipv4/local-admin",
+			.cbs = {
+				.cli_show = instance_evpn_mac_vrf_soo_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/flooding",
+			.cbs = {
+				.cli_show = instance_evpn_flooding_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

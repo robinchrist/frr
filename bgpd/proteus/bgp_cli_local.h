@@ -35,6 +35,12 @@ void instance_evpn_enable_resolve_overlay_index_cli_write(struct vty *vty,
 							  const struct lyd_node *dnode,
 							  bool show_defaults);
 
+/* M6 B3: instance-level l2vpn-evpn mac-vrf-soo + flooding emitters. */
+void instance_evpn_mac_vrf_soo_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults);
+void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);
@@ -50,6 +56,15 @@ void neighbor_af_unsuppress_map_cli_write(struct vty *vty, const struct lyd_node
 void neighbor_af_advertise_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults);
 void neighbor_af_soo_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
+
+/* Site-of-origin ASN:NN_OR_IP-ADDRESS:NN token parser (bgp_cli_neighbor.c):
+ * shared by M5 B3's per-AF 'neighbor X soo' and M6 B3's instance-level
+ * 'mac-vrf soo', both of which parse the identical grammar into the same
+ * as2/as4/ipv4 choice shape. */
+enum bgp_cli_soo_case { BGP_CLI_SOO_AS2, BGP_CLI_SOO_AS4, BGP_CLI_SOO_IPV4 };
+bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case,
+		       char *global_admin_buf, size_t global_admin_buf_len,
+		       char *local_admin_buf, size_t local_admin_buf_len);
 
 /* M5 B4: per-AF plain PEER_FLAG_* boolean emitters, shared neighbor/
  * peer-group. */

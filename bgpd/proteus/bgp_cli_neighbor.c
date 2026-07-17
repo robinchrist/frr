@@ -4642,12 +4642,14 @@ void neighbor_af_advertise_map_cli_write(struct vty *vty, const struct lyd_node 
  * leaves' canonical string values directly. The northbound APPLY side
  * (bgp_nb_util.c, in bgpd) re-derives the same struct ecommunity straight
  * from those already-typed YANG leaves, no string re-parsing there.
+ *
+ * bgp_cli_soo_parse() is un-static'd and declared in bgp_cli_local.h,
+ * shared with M6 B3's instance-level 'mac-vrf soo' (bgp_cli_instance.c),
+ * which parses the identical ASN:NN_OR_IP-ADDRESS:NN token grammar.
  */
-enum bgp_cli_soo_case { BGP_CLI_SOO_AS2, BGP_CLI_SOO_AS4, BGP_CLI_SOO_IPV4 };
-
-static bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case,
-			      char *global_admin_buf, size_t global_admin_buf_len,
-			      char *local_admin_buf, size_t local_admin_buf_len)
+bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case,
+		       char *global_admin_buf, size_t global_admin_buf_len,
+		       char *local_admin_buf, size_t local_admin_buf_len)
 {
 	char prefix[INET_ADDRSTRLEN];
 	struct in_addr ip;
@@ -4677,8 +4679,23 @@ static bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case
 		return true;
 	}
 
-	if (!asn_str2asn(prefix, &as))
-		return false;
+	{
+		/* asn_str2asn() itself only rejects trailing garbage in the
+		 * asdot branch (it takes no 'next' pointer to check against);
+		 * a plain numeric prefix like "1:1" from a malformed token
+		 * such as "1:1:1" is silently accepted as AS 1 with the ":1"
+		 * dropped on the floor. Use the _parse() variant instead and
+		 * require it to consume 'prefix' in full, matching the
+		 * strtoul() end-pointer check already applied to the
+		 * local-admin half above.
+		 */
+		const char *rest;
+		bool found;
+
+		rest = asn_str2asn_parse(prefix, &as, &found);
+		if (!found || !rest || *rest != '\0')
+			return false;
+	}
 
 	*soo_case = (as > UINT16_MAX) ? BGP_CLI_SOO_AS4 : BGP_CLI_SOO_AS2;
 	if (*soo_case == BGP_CLI_SOO_AS4 && val > UINT16_MAX)

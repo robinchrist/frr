@@ -3840,35 +3840,10 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 
 #include "bgpd/bgp_evpn_vty_clippy.c"
 
-DEFPY(bgp_evpn_flood_control,
-      bgp_evpn_flood_control_cmd,
-      "[no$no] flooding <disable$disable|head-end-replication$her>",
-      NO_STR
-      "Specify handling for BUM packets\n"
-      "Do not flood any BUM packets\n"
-      "Flood BUM packets using head-end replication\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	enum vxlan_flood_control flood_ctrl;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (disable && !no)
-		flood_ctrl = VXLAN_FLOOD_DISABLED;
-	else if (her || no)
-		flood_ctrl = VXLAN_FLOOD_HEAD_END_REPL;
-	else
-		return CMD_WARNING;
-
-	if (bgp->vxlan_flood_ctrl == flood_ctrl)
-		return CMD_SUCCESS;
-
-	bgp->vxlan_flood_ctrl = flood_ctrl;
-	bgp_evpn_flood_control_change(bgp);
-
-	return CMD_SUCCESS;
-}
+/* Instance-level 'flooding <disable|head-end-replication>': converted to
+ * proteus/northbound in M6 batch B3; mgmtd owns the CLI and
+ * bgp_config_write_evpn_info's emission is gated off for it. The per-VNI
+ * 'flooding' (bgp_evpn_flood_control_vni_cmd) below stays native. */
 
 DEFPY (bgp_evpn_advertise_default_gw_vni,
        bgp_evpn_advertise_default_gw_vni_cmd,
@@ -4146,57 +4121,9 @@ DEFPY(bgp_evpn_advertise_svi_ip_vni,
 	return CMD_SUCCESS;
 }
 
-DEFPY(macvrf_soo_global, macvrf_soo_global_cmd,
-      "mac-vrf soo ASN:NN_OR_IP-ADDRESS:NN$soo",
-      "EVPN MAC-VRF\n"
-      "Site-of-Origin extended community\n"
-      "VPN extended community\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn = bgp_get_evpn();
-	struct ecommunity *ecomm_soo;
-
-	if (!bgp || !bgp_evpn || !bgp_evpn->evpn_info)
-		return CMD_WARNING;
-
-	if (bgp != bgp_evpn) {
-		vty_out(vty,
-			"%% Please configure MAC-VRF SoO in the EVPN underlay: %s\n",
-			bgp_evpn->name_pretty);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ecomm_soo = ecommunity_str2com(soo, ECOMMUNITY_SITE_ORIGIN, 0);
-	if (!ecomm_soo) {
-		vty_out(vty, "%% Malformed SoO extended community\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	ecommunity_str(ecomm_soo);
-
-	bgp_evpn_handle_global_macvrf_soo_change(bgp_evpn, ecomm_soo);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_macvrf_soo_global, no_macvrf_soo_global_cmd,
-      "no mac-vrf soo [ASN:NN_OR_IP-ADDRESS:NN$soo]",
-      NO_STR
-      "EVPN MAC-VRF\n"
-      "Site-of-Origin extended community\n"
-      "VPN extended community\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn = bgp_get_evpn();
-
-	if (!bgp || !bgp_evpn || !bgp_evpn->evpn_info)
-		return CMD_WARNING;
-
-	if (bgp_evpn)
-		bgp_evpn_handle_global_macvrf_soo_change(bgp_evpn,
-							 NULL /* new_soo */);
-
-	return CMD_SUCCESS;
-}
+/* 'mac-vrf soo': converted to proteus/northbound in M6 batch B3
+ * (instance-level site-of-origin); mgmtd owns the CLI and
+ * bgp_config_write_evpn_info's emission is gated off for it. */
 
 DEFUN_HIDDEN (bgp_evpn_advertise_vni_subnet,
 	      bgp_evpn_advertise_vni_subnet_cmd,
@@ -7835,7 +7762,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->evpn_info->advertise_svi_macip)
 		vty_out(vty, "  advertise-svi-ip\n");
 
-	if (bgp->evpn_info->soo) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->evpn_info->soo) {
 		char *ecom_str;
 
 		ecom_str = ecommunity_ecom2str(bgp->evpn_info->soo, ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
@@ -7886,7 +7813,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 			vty_out(vty, "  dup-addr-detection freeze permanent\n");
 	}
 
-	if (bgp->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
 		vty_out(vty, "  flooding disable\n");
 
 	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
@@ -8009,11 +7936,10 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &evpnrt5_network_cmd);
 	/* advertise-all-vni / advertise-default-gw / advertise-svi-ip /
 	 * enable-resolve-overlay-index converted to proteus/northbound (M6
-	 * batch B2); their CLI is installed by mgmtd (bgp_cli_instance.c). */
+	 * batch B2); mac-vrf-soo / flooding converted M6 batch B3; their CLI
+	 * is installed by mgmtd (bgp_cli_instance.c). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_autort_rfc8365_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_autort_rfc8365_cmd);
-	install_element(BGP_EVPN_NODE, &macvrf_soo_global_cmd);
-	install_element(BGP_EVPN_NODE, &no_macvrf_soo_global_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_type5_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_default_originate_cmd);
@@ -8021,7 +7947,6 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &dup_addr_detection_cmd);
 	install_element(BGP_EVPN_NODE, &dup_addr_detection_auto_recovery_cmd);
 	install_element(BGP_EVPN_NODE, &no_dup_addr_detection_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_flood_control_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_mac_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cmd);

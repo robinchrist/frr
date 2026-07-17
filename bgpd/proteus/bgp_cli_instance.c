@@ -425,6 +425,98 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/*
+ * M6 batch B3: instance-level 'mac-vrf soo' + 'flooding', mgmtd side.
+ * mac-vrf-soo reuses bgp_cli_soo_parse() (bgp_cli_neighbor.c, un-static'd)
+ * to turn the legacy ASN:NN_OR_IP-ADDRESS:NN token into a case name plus
+ * the two typed leaves, exactly like M5 B3's per-AF 'neighbor X soo' --
+ * only the base xpath differs ('./afi-safis/l2vpn-evpn/mac-vrf-soo/...'
+ * here, vs a peer/group base there). 'no mac-vrf soo [...]' destroys the
+ * whole presence container regardless of the optional trailing token,
+ * matching legacy's grammar (the token is accepted but never inspected on
+ * the negative form).
+ *
+ * flooding's grammar/logic is kept identical to the retired
+ * bgp_evpn_flood_control_cmd: 'flooding disable' and 'no flooding
+ * <either form>' are the only two effective states FRR ever stores
+ * (VXLAN_FLOOD_DISABLED / VXLAN_FLOOD_HEAD_END_REPL), so 'no' always
+ * destroys back to the YANG-default-less "unset" (which the backend
+ * resolves to head-end-replication), and the positive form writes
+ * whichever of the two enum values was given.
+ */
+DEFPY_YANG(
+	bgp_evpn_macvrf_soo, bgp_evpn_macvrf_soo_cli_cmd,
+	"mac-vrf soo ASN:NN_OR_IP-ADDRESS:NN$soo",
+	"EVPN MAC-VRF\n"
+	"Site-of-Origin extended community\n"
+	"VPN extended community\n")
+{
+	enum bgp_cli_soo_case soo_case;
+	char global_admin[INET_ADDRSTRLEN], local_admin[12];
+	char xpath[XPATH_MAXLEN];
+	const char *case_name;
+
+	if (!bgp_cli_soo_parse(soo, &soo_case, global_admin, sizeof(global_admin), local_admin,
+			       sizeof(local_admin))) {
+		vty_out(vty, "%% Malformed SoO extended community\n");
+		return CMD_WARNING;
+	}
+
+	switch (soo_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/mac-vrf-soo/%s/global-admin",
+		 case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, global_admin);
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/mac-vrf-soo/%s/local-admin",
+		 case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, local_admin);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_macvrf_soo, no_bgp_evpn_macvrf_soo_cli_cmd,
+	"no mac-vrf soo [ASN:NN_OR_IP-ADDRESS:NN]",
+	NO_STR
+	"EVPN MAC-VRF\n"
+	"Site-of-Origin extended community\n"
+	"VPN extended community\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/mac-vrf-soo", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_flood_control, bgp_evpn_flood_control_cli_cmd,
+	"[no$no] flooding <disable$disable|head-end-replication$her>",
+	NO_STR
+	"Specify handling for BUM packets\n"
+	"Do not flood any BUM packets\n"
+	"Flood BUM packets using head-end replication\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/flooding", NB_OP_DESTROY, NULL);
+	else if (disable)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/flooding", NB_OP_MODIFY,
+				      "disable");
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/flooding", NB_OP_MODIFY,
+				      "head-end-replication");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 DEFPY_YANG_NOSH(
 	router_bgp, router_bgp_cli_cmd,
 	"router bgp [ASNUM$instasn [<view|vrf>$view_vrf VIEWVRFNAME] [as-notation <dot|dot+|plain>$notation]]",
@@ -3000,6 +3092,40 @@ void instance_evpn_enable_resolve_overlay_index_cli_write(struct vty *vty,
 		vty_out(vty, "  enable-resolve-overlay-index\n");
 }
 
+/* M6 B3: instance-level l2vpn-evpn mac-vrf-soo + flooding emitters.
+ * mac-vrf-soo mirrors neighbor_af_soo_cli_write() (bgp_cli_neighbor.c):
+ * registered on each case's local-admin leaf (the one point reached
+ * regardless of which of the three cases is set), reprinting
+ * 'mac-vrf soo <global-admin>:<local-admin>'. flooding reproduces
+ * bgp_config_write_evpn_info()'s "only 'flooding disable' is ever written
+ * back" behavior -- head-end-replication (the unset default) emits
+ * nothing. */
+void instance_evpn_mac_vrf_soo_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	const struct lyd_node *soo = yang_dnode_get_parent(dnode, "mac-vrf-soo");
+	const char *case_name;
+
+	if (yang_dnode_exists(soo, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(soo, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(soo, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "  mac-vrf soo %s:%s\n", yang_dnode_get_string(soo, "%s/global-admin", case_name),
+		yang_dnode_get_string(soo, "%s/local-admin", case_name));
+}
+
+void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	if (strmatch(yang_dnode_get_string(dnode, NULL), "disable"))
+		vty_out(vty, "  flooding disable\n");
+}
+
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -4865,6 +4991,12 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_default_gw_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_svi_ip_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_enable_resolve_overlay_index_cli_cmd);
+
+	/* M6 B3: instance-level l2vpn-evpn mac-vrf-soo + flooding leaves
+	 * (mgmtd side). */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_macvrf_soo_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_macvrf_soo_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_flood_control_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);
