@@ -24,6 +24,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_updgrp.h"
 #include "bgpd/bgp_conditional_adv.h"
+#include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_fsm.h"
 #include "bgpd/bgp_open.h"
@@ -2065,4 +2066,542 @@ void bgp_nb_path_attribute_soft_clear(struct peer *peer)
 
 	FOREACH_AFI_SAFI (afi, safi)
 		peer_clear_soft(peer, afi, safi, BGP_CLEAR_SOFT_IN);
+}
+
+/*
+ * M5 batch B3: shared per-AF conditional-advertisement apply (neighbor +
+ * peer-group). Legacy's single 'neighbor X advertise-map NAME <exist-map|
+ * non-exist-map> NAME' DEFPY (bgp_vty.c, retired) always supplies all three
+ * values together, so -- the same "reread the container, not the trigger
+ * leaf" discipline as bgp_nb_get_local_as() -- every one of the container's
+ * three leaves' MODIFY callbacks reroutes here, recomputing the whole
+ * 'conditional-advertisement' container and calling peer_advertise_map_set()
+ * (bgp_conditional_adv.c), which is itself peer-group-aware (fans a template
+ * out to its members), exactly as the retired DEFUN relied on
+ * peer_and_group_lookup_vty() handing it either shape. advertise-map/
+ * condition-map are looked up permissively (route_map_lookup_by_name(),
+ * no existence error), matching B2's route-map/prefix-list attachment
+ * leaves -- a forward reference to a not-yet-defined route-map is legal.
+ */
+static int bgp_nb_af_advertise_map_set(struct peer *conf, afi_t afi, safi_t safi,
+				       const struct lyd_node *cond_adv_dnode)
+{
+	struct route_map *advertise_map, *condition_map;
+	const char *advertise_str, *condition_str;
+	bool condition;
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (!yang_dnode_exists(cond_adv_dnode, "advertise-map") ||
+	    !yang_dnode_exists(cond_adv_dnode, "condition-map") ||
+	    !yang_dnode_exists(cond_adv_dnode, "condition"))
+		/* Unreachable via the CLI (all three are mandatory in the one
+		 * DEFPY grammar) but checked for northbound-client parity,
+		 * matching bgp_nb_get_local_as()'s own defensive early return.
+		 */
+		return NB_OK;
+
+	advertise_str = yang_dnode_get_string(cond_adv_dnode, "advertise-map");
+	condition_str = yang_dnode_get_string(cond_adv_dnode, "condition-map");
+	condition = strmatch(yang_dnode_get_string(cond_adv_dnode, "condition"), "exist");
+
+	advertise_map = route_map_lookup_by_name(advertise_str);
+	condition_map = route_map_lookup_by_name(condition_str);
+
+	ret = peer_advertise_map_set(conf, afi, safi, advertise_str, advertise_map, condition_str,
+				     condition_map, condition);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_advertise_map_set() failed: %d",
+			 __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+/* Unconditional clear, matching legacy no_neighbor_advertise_map's 'no ...
+ * advertise-map NAME <exist-map|non-exist-map> NAME' grammar, whose trailing
+ * tokens are accepted but never inspected: peer_advertise_map_unset() only
+ * uses its name/map arguments on the 'set' path, so passing NULLs here is
+ * exactly what the retired DEFUN's negative form did. Idempotent when
+ * advertise-map is already absent (the function's own early return), so
+ * firing it from more than one of the container's three leaves' DESTROY in
+ * the same commit -- e.g. 'no neighbor X advertise-map ...' destroying the
+ * whole container at once -- is safe.
+ */
+static int bgp_nb_af_advertise_map_unset(struct peer *conf, afi_t afi, safi_t safi)
+{
+	int ret;
+
+	if (!conf)
+		return NB_OK;
+
+	ret = peer_advertise_map_unset(conf, afi, safi, NULL, NULL, NULL, NULL,
+				       CONDITION_NON_EXIST);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_advertise_map_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_advertise_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_set(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_advertise_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_unset(bgp_nb_neighbor_lookup(args->dnode), afi,
+						     safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_condition_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_set(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_condition_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_unset(bgp_nb_neighbor_lookup(args->dnode), afi,
+						     safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_condition_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_set(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_condition_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_advertise_map_unset(bgp_nb_neighbor_lookup(args->dnode), afi,
+						     safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_advertise_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_set(group ? group->conf : NULL, afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_advertise_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_unset(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_condition_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_set(group ? group->conf : NULL, afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_condition_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_unset(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_condition_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_set(group ? group->conf : NULL, afi, safi,
+						   yang_dnode_get_parent(args->dnode,
+									 "conditional-advertisement"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_condition_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_advertise_map_unset(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * M5 batch B3: shared per-AF site-of-origin (soo) apply (neighbor +
+ * peer-group). proteus-bgp models soo as a YANG 'choice' -- as2/as4/ipv4,
+ * the same three RFC 4360 subtype 0x03 encodings bgp_ecommunity.c's
+ * ecommunity_gettoken() distinguishes for the legacy 'neighbor X soo
+ * ASN:NN_OR_IP-ADDRESS:NN' token -- under a presence container, rather than
+ * the single opaque string the legacy CLI grammar accepts. bgp_ecommunity.c
+ * is bgpd-only (not linked into mgmtd), so the mgmtd-side CLI
+ * (bgp_cli_neighbor.c) parses that token into a case plus two typed leaves
+ * itself (bgp_cli_soo_parse()); this side re-derives the same struct
+ * ecommunity legacy built via ecommunity_str2com() directly from the
+ * already-typed leaves (bgp_nb_soo_encode(), below), no string re-parsing
+ * here.
+ *
+ * The three case containers' create and their two leaves' modify all
+ * reroute to the same "reread the soo container" idiom as
+ * advertise-map above (bgp_nb_af_soo_set()); a case container's own DESTROY
+ * is a no-op -- it fires only on a case switch (e.g. as2 -> ipv4), and
+ * northbound processes every DESTROY in a commit before any CREATE/MODIFY
+ * (the same "correctly process the change of a case inside a choice"
+ * ordering already relied on for local-as's plain/asdot switch), so the new
+ * case's own create/modify in the same commit supersedes it. The presence
+ * container's ('soo') own DESTROY is the one place that unconditionally
+ * clears peer->soo[afi][safi] and unsets PEER_FLAG_SOO, matching legacy's
+ * no_neighbor_soo -- reached only by a genuine 'no neighbor X soo', not a
+ * case switch (switching case leaves the enclosing presence container
+ * alone).
+ */
+static void bgp_nb_soo_encode(const struct lyd_node *soo_dnode, struct ecommunity_val *eval)
+{
+	memset(eval, 0, sizeof(*eval));
+
+	if (yang_dnode_exists(soo_dnode, "as2")) {
+		encode_route_target_as(yang_dnode_get_uint16(soo_dnode, "as2/global-admin"),
+				       yang_dnode_get_uint32(soo_dnode, "as2/local-admin"), eval,
+				       true);
+	} else if (yang_dnode_exists(soo_dnode, "as4")) {
+		encode_route_target_as4(yang_dnode_get_uint32(soo_dnode, "as4/global-admin"),
+					yang_dnode_get_uint16(soo_dnode, "as4/local-admin"), eval,
+					true);
+	} else if (yang_dnode_exists(soo_dnode, "ipv4")) {
+		struct in_addr ip;
+
+		yang_dnode_get_ipv4(&ip, soo_dnode, "ipv4/global-admin");
+		encode_route_target_ip(&ip, yang_dnode_get_uint16(soo_dnode, "ipv4/local-admin"),
+				       eval, true);
+	} else
+		return;
+
+	/* encode_route_target_{as,as4,ip}() (bgp_ecommunity.h) stamp
+	 * ECOMMUNITY_ROUTE_TARGET (RFC 4360 subtype 0x02); retag for
+	 * site-of-origin (subtype 0x03) -- the only difference between the
+	 * two grammars' wire encoding, so reuse rather than duplicate the
+	 * byte-layout logic.
+	 */
+	eval->val[1] = ECOMMUNITY_SITE_ORIGIN;
+}
+
+static int bgp_nb_af_soo_set(struct peer *conf, afi_t afi, safi_t safi,
+			     const struct lyd_node *dnode)
+{
+	const struct lyd_node *soo_dnode = yang_dnode_get_parent(dnode, "soo");
+	struct ecommunity_val eval;
+	struct ecommunity *ecomm_soo;
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (!yang_dnode_exists(soo_dnode, "as2") && !yang_dnode_exists(soo_dnode, "as4") &&
+	    !yang_dnode_exists(soo_dnode, "ipv4"))
+		/* Choice case destroyed from under us by a case switch in this
+		 * same commit; the new case's own create/modify (also in this
+		 * commit) will re-drive this with the new value.
+		 */
+		return NB_OK;
+
+	bgp_nb_soo_encode(soo_dnode, &eval);
+
+	ecomm_soo = ecommunity_new();
+	ecommunity_add_val(ecomm_soo, &eval, false, false);
+	ecommunity_str(ecomm_soo);
+
+	/* Same "only touch the stored value, and re-fire the flag, when it
+	 * actually changed" trick as legacy's neighbor_soo DEFPY (bgp_vty.c,
+	 * retired): peer_af_flag_set() is called unconditionally below either
+	 * way, but the unset+set pair around it forces a fresh flag
+	 * transition -- and hence peer_change_action() -- whenever the
+	 * encoded value actually changed, not only when the flag itself was
+	 * previously clear.
+	 */
+	if (!ecommunity_match(conf->soo[afi][safi], ecomm_soo)) {
+		ecommunity_free(&conf->soo[afi][safi]);
+		conf->soo[afi][safi] = ecomm_soo;
+		peer_af_flag_unset(conf, afi, safi, PEER_FLAG_SOO);
+	} else {
+		ecommunity_free(&ecomm_soo);
+	}
+
+	ret = peer_af_flag_set(conf, afi, safi, PEER_FLAG_SOO);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_af_flag_set() failed: %d",
+			 __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_af_soo_unset(struct peer *conf, afi_t afi, safi_t safi)
+{
+	int ret;
+
+	if (!conf)
+		return NB_OK;
+
+	ecommunity_free(&conf->soo[afi][safi]);
+
+	ret = peer_af_flag_unset(conf, afi, safi, PEER_FLAG_SOO);
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_af_flag_unset() failed: %d",
+			 __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_soo_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	/* No-op: the mandatory choice case's own create and its two leaves'
+	 * modify (same commit, see bgp_nb_af_soo_set()'s doc comment above)
+	 * already do the real work once all three exist in the target tree.
+	 */
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_soo_unset(bgp_nb_neighbor_lookup(args->dnode), afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_soo_set(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					 args->dnode);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	/* No-op: fires only on a case switch, see the doc comment above. */
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_soo_set(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					 args->dnode);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_soo_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_soo_unset(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_soo_set(group ? group->conf : NULL, afi, safi, args->dnode);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_soo_set(group ? group->conf : NULL, afi, safi, args->dnode);
+	}
+
+	return NB_OK;
 }

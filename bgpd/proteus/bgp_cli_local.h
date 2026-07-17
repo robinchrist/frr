@@ -30,6 +30,12 @@ void neighbor_af_filter_dir_cli_write(struct vty *vty, const struct lyd_node *dn
 void neighbor_af_unsuppress_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults);
 
+/* M5 B3: per-AF conditional-advertisement + site-of-origin emitters, shared
+ * neighbor/peer-group. */
+void neighbor_af_advertise_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults);
+void neighbor_af_soo_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,

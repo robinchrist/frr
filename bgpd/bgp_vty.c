@@ -5154,65 +5154,11 @@ DEFPY (neighbor_accept_own,
 	return bgp_vty_return(vty, ret);
 }
 
-/* "neighbor soo" */
-DEFPY (neighbor_soo,
-       neighbor_soo_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor soo ASN:NN_OR_IP-ADDRESS:NN$soo",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Set the Site-of-Origin (SoO) extended community\n"
-       "VPN extended community\n")
-{
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-	struct ecommunity *ecomm_soo;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ecomm_soo = ecommunity_str2com(soo, ECOMMUNITY_SITE_ORIGIN, 0);
-	if (!ecomm_soo) {
-		vty_out(vty, "%% Malformed SoO extended community\n");
-		return CMD_WARNING;
-	}
-	ecommunity_str(ecomm_soo);
-
-	if (!ecommunity_match(peer->soo[afi][safi], ecomm_soo)) {
-		ecommunity_free(&peer->soo[afi][safi]);
-		peer->soo[afi][safi] = ecomm_soo;
-		peer_af_flag_unset(peer, afi, safi, PEER_FLAG_SOO);
-	} else {
-		ecommunity_free(&ecomm_soo);
-	}
-
-	return bgp_vty_return(vty,
-			      peer_af_flag_set(peer, afi, safi, PEER_FLAG_SOO));
-}
-
-DEFPY (no_neighbor_soo,
-       no_neighbor_soo_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor soo [ASN:NN_OR_IP-ADDRESS:NN$soo]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Set the Site-of-Origin (SoO) extended community\n"
-       "VPN extended community\n")
-{
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	ecommunity_free(&peer->soo[afi][safi]);
-
-	return bgp_vty_return(
-		vty, peer_af_flag_unset(peer, afi, safi, PEER_FLAG_SOO));
-}
+/* "neighbor soo": fully converted to mgmtd for all nine proteus AFs (M5
+ * batch B3, bgpd/proteus/bgp_cli_neighbor.c) -- unlike every other M4/M5
+ * family, soo had no still-native AF and no hidden BGP_NODE alias, so
+ * nothing keeps this DEFPY pair reachable; removed per the per-milestone
+ * rule. */
 
 /* "neighbor allowas-in" */
 DEFPY (neighbor_allowas_in,
@@ -16355,10 +16301,9 @@ static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 	addr = peer->host;
 	filter = &peer->filter[afi][safi];
 
-	/* distribute-list/prefix-list/route-map/unsuppress-map/filter-list:
-	 * emitted by mgmtd for the nine proteus AFs (M5 B2); still native for
-	 * encap/flowspec/unreachability/link-state. advertise-map (below)
-	 * stays fully native pending M5 B3. */
+	/* distribute-list/prefix-list/route-map/unsuppress-map/filter-list/
+	 * advertise-map: emitted by mgmtd for the nine proteus AFs (M5 B2,
+	 * M5 B3); still native for encap/flowspec/unreachability/link-state. */
 	if (!bgp_af_activate_is_proteus(afi, safi)) {
 		/* distribute-list. */
 		if (peergroup_filter_check(peer, afi, safi, PEER_FT_DISTRIBUTE_LIST, FILTER_IN))
@@ -16390,21 +16335,17 @@ static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 		/* unsuppress-map */
 		if (peergroup_filter_check(peer, afi, safi, PEER_FT_UNSUPPRESS_MAP, 0))
 			vty_out(vty, "  neighbor %s unsuppress-map %s\n", addr, filter->usmap.name);
-	}
 
-	/* advertise-map : always applied in OUT direction*/
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_ADVERTISE_MAP,
-				   CONDITION_NON_EXIST))
-		vty_out(vty,
-			"  neighbor %s advertise-map %s non-exist-map %s\n",
-			addr, filter->advmap.aname, filter->advmap.cname);
+		/* advertise-map : always applied in OUT direction*/
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_ADVERTISE_MAP,
+					   CONDITION_NON_EXIST))
+			vty_out(vty, "  neighbor %s advertise-map %s non-exist-map %s\n", addr,
+				filter->advmap.aname, filter->advmap.cname);
 
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_ADVERTISE_MAP,
-				   CONDITION_EXIST))
-		vty_out(vty, "  neighbor %s advertise-map %s exist-map %s\n",
-			addr, filter->advmap.aname, filter->advmap.cname);
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_ADVERTISE_MAP, CONDITION_EXIST))
+			vty_out(vty, "  neighbor %s advertise-map %s exist-map %s\n", addr,
+				filter->advmap.aname, filter->advmap.cname);
 
-	if (!bgp_af_activate_is_proteus(afi, safi)) {
 		/* filter-list. */
 		if (peergroup_filter_check(peer, afi, safi, PEER_FT_FILTER_LIST, FILTER_IN))
 			vty_out(vty, "  neighbor %s filter-list %s in\n", addr,
@@ -16832,8 +16773,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ACCEPT_OWN))
 		vty_out(vty, "  neighbor %s accept-own\n", addr);
 
-	/* soo */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_SOO)) {
+	/* soo: emitted by mgmtd for the nine proteus AFs (M5 B3); still native
+	 * for encap/flowspec/unreachability/link-state. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_SOO)) {
 		char *soo_str = ecommunity_ecom2str(
 			peer->soo[afi][safi], ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
 
@@ -18684,16 +18627,13 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_unsuppress_map_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_unsuppress_map_hidden_cmd);
 
-	/* "neighbor advertise-map" commands. */
+	/* "neighbor advertise-map" commands. The eight proteus AFs with a
+	 * legacy advertise-map surface (ipv4/ipv6 {unicast,multicast,
+	 * labeled-unicast,vpn}; l2vpn evpn never had one) are converted to
+	 * mgmtd (M5 batch B3: neighbor_advertise_map_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias stays
+	 * native. */
 	install_element(BGP_NODE, &neighbor_advertise_map_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_advertise_map_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_advertise_map_cmd);
 
 	/* neighbor maximum-prefix-out commands. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_out_cmd);
@@ -18859,25 +18799,10 @@ void bgp_vty_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_accept_own_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_accept_own_cmd);
 
-	/* "neighbor soo" */
-	install_element(BGP_IPV4_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_soo_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_soo_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_soo_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_soo_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_soo_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_soo_cmd);
+	/* "neighbor soo": all nine proteus AFs converted to mgmtd (M5 batch
+	 * B3: neighbor_soo_cli_cmd/no_neighbor_soo_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c). soo has no hidden BGP_NODE alias
+	 * to keep native. */
 
 	/* "neighbor dampening" commands. */
 	install_element(BGP_NODE, &neighbor_damp_cmd);

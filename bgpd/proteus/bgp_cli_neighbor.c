@@ -8,6 +8,7 @@
  * in this file for why.
  */
 #include <zebra.h>
+#include <errno.h>
 #include "command.h"
 #include "northbound.h"
 #include "northbound_cli.h"
@@ -4516,6 +4517,311 @@ void neighbor_af_unsuppress_map_cli_write(struct vty *vty, const struct lyd_node
 	vty_out(vty, "  neighbor %s unsuppress-map %s\n", addr, yang_dnode_get_string(dnode, NULL));
 }
 
+/*
+ * M5 batch B3: per-AF conditional-advertisement (advertise-map) + site-of-
+ * origin (soo), neighbor + peer-group -- reusing B1/B2's xpath-building
+ * pattern (container from vty->node via bgp_afi_safi_container_name(), peer/
+ * group xpath from bgp_cli_peer_or_group_xpath()).
+ *
+ * advertise-map is installed only on the eight proteus AFs the legacy
+ * neighbor_advertise_map DEFPY reached (ipv4/ipv6 {unicast,multicast,
+ * labeled-unicast,vpn}; never l2vpn evpn -- see bgp_cli_neighbor_init()).
+ * soo is installed on all nine (legacy neighbor_soo_cmd included
+ * BGP_EVPN_NODE).
+ */
+static int bgp_cli_neighbor_advertise_map(struct vty *vty, const char *peer,
+					  const char *advertise_str, const char *exist,
+					  const char *condition_str, bool no)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/filters/conditional-advertisement",
+				xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		/* Trailing advertise-map/exist-map/condition-map tokens are
+		 * accepted but never inspected, exactly like legacy's
+		 * no-form (the bracketed '[no$no]' single-DEFPY grammar
+		 * shares argv slots with the positive form): destroy the
+		 * whole non-presence container at once, same pattern as 'no
+		 * neighbor X local-as ...' destroying 'local-as/asdot'.
+		 */
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+	} else {
+		bool exist_flag = !strcmp(exist, "exist-map");
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/advertise-map", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, advertise_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/condition", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+				      exist_flag ? "exist" : "non-exist");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/condition-map", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, condition_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_advertise_map, neighbor_advertise_map_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer advertise-map RMAP_NAME$advertise_str <exist-map|non-exist-map>$exist RMAP_NAME$condition_str",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Route-map to conditionally advertise routes\n"
+	"Name of advertise map\n"
+	"Advertise routes only if prefixes in exist-map are installed in BGP table\n"
+	"Advertise routes only if prefixes in non-exist-map are not installed in BGP table\n"
+	"Name of the exist or non exist map\n")
+{
+	return bgp_cli_neighbor_advertise_map(vty, peer, advertise_str, exist, condition_str, !!no);
+}
+
+/* Shared conditional-advertisement emitter, both neighbor and peer-group.
+ * dnode is the container's condition-map leaf -- the one registration point
+ * in bgp_cli_common.c's node table for all three leaves, since the CLI
+ * always sets/destroys them together as a unit. Reproduces
+ * bgp_config_write_filter()'s (bgp_vty.c) two-space '  neighbor <addr>
+ * advertise-map <name> <exist-map|non-exist-map> <name>' line, always in
+ * the OUT direction like legacy. */
+void neighbor_af_advertise_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	const struct lyd_node *cond_adv = yang_dnode_get_parent(dnode, "conditional-advertisement");
+	const struct lyd_node *nbr = yang_dnode_get_parent(dnode, "neighbor");
+	const char *addr;
+	bool exist;
+
+	if (nbr)
+		addr = yang_dnode_get_string(nbr, "address");
+	else
+		addr = yang_dnode_get_string(yang_dnode_get_parent(dnode, "peer-group"), "name");
+
+	exist = strmatch(yang_dnode_get_string(cond_adv, "condition"), "exist");
+
+	vty_out(vty, "  neighbor %s advertise-map %s %s %s\n", addr,
+		yang_dnode_get_string(cond_adv, "advertise-map"),
+		exist ? "exist-map" : "non-exist-map",
+		yang_dnode_get_string(cond_adv, "condition-map"));
+}
+
+/*
+ * soo (site-of-origin): proteus-bgp models it as a YANG 'choice' -- as2/
+ * as4/ipv4, the same three RFC 4360 subtype 0x03 encodings
+ * bgp_ecommunity.c's ecommunity_gettoken() distinguishes for the legacy
+ * 'neighbor X soo ASN:NN_OR_IP-ADDRESS:NN' token -- under a presence
+ * container, rather than the single opaque string the legacy grammar
+ * accepts. bgp_ecommunity.c is bgpd-only (bgpd/subdir.am; not among
+ * mgmtd/subdir.am's sources), so this mgmtd-side CLI can't call
+ * ecommunity_str2com() to validate/decode the token; bgp_cli_soo_parse()
+ * below is a small independent re-implementation of just its AS-vs-IP
+ * branch (SITE_ORIGIN is already the known type here, so the rt/soo/color
+ * keyword branch never triggers), producing the case plus the two typed
+ * leaves' canonical string values directly. The northbound APPLY side
+ * (bgp_nb_util.c, in bgpd) re-derives the same struct ecommunity straight
+ * from those already-typed YANG leaves, no string re-parsing there.
+ */
+enum bgp_cli_soo_case { BGP_CLI_SOO_AS2, BGP_CLI_SOO_AS4, BGP_CLI_SOO_IPV4 };
+
+static bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case,
+			      char *global_admin_buf, size_t global_admin_buf_len,
+			      char *local_admin_buf, size_t local_admin_buf_len)
+{
+	char prefix[INET_ADDRSTRLEN];
+	struct in_addr ip;
+	const char *colon;
+	char *endptr;
+	unsigned long val;
+	as_t as;
+
+	colon = strrchr(token, ':');
+	if (!colon || colon == token || (size_t)(colon - token) >= sizeof(prefix))
+		return false;
+
+	memcpy(prefix, token, (size_t)(colon - token));
+	prefix[colon - token] = '\0';
+
+	errno = 0;
+	val = strtoul(colon + 1, &endptr, 10);
+	if (*endptr != '\0' || errno || val > UINT32_MAX)
+		return false;
+
+	if (inet_pton(AF_INET, prefix, &ip) == 1) {
+		if (val > UINT16_MAX)
+			return false;
+		*soo_case = BGP_CLI_SOO_IPV4;
+		snprintf(global_admin_buf, global_admin_buf_len, "%s", prefix);
+		snprintf(local_admin_buf, local_admin_buf_len, "%lu", val);
+		return true;
+	}
+
+	if (!asn_str2asn(prefix, &as))
+		return false;
+
+	*soo_case = (as > UINT16_MAX) ? BGP_CLI_SOO_AS4 : BGP_CLI_SOO_AS2;
+	if (*soo_case == BGP_CLI_SOO_AS4 && val > UINT16_MAX)
+		return false;
+
+	snprintf(global_admin_buf, global_admin_buf_len, "%u", as);
+	snprintf(local_admin_buf, local_admin_buf_len, "%lu", val);
+
+	return true;
+}
+
+static int bgp_cli_neighbor_soo(struct vty *vty, const char *peer, const char *soo_token)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	enum bgp_cli_soo_case soo_case;
+	char global_admin[INET_ADDRSTRLEN], local_admin[12];
+	const char *case_name;
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (!bgp_cli_soo_parse(soo_token, &soo_case, global_admin, sizeof(global_admin),
+			       local_admin, sizeof(local_admin))) {
+		vty_out(vty, "%% Malformed SoO extended community\n");
+		return CMD_WARNING;
+	}
+
+	switch (soo_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/soo/%s/global-admin", xpath,
+				 container, case_name);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, global_admin);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/soo/%s/local-admin", xpath, container,
+				 case_name);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, local_admin);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_soo, neighbor_soo_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer soo ASN:NN_OR_IP-ADDRESS:NN$soo",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set the Site-of-Origin (SoO) extended community\n"
+	"VPN extended community\n")
+{
+	return bgp_cli_neighbor_soo(vty, peer, soo);
+}
+
+DEFPY_YANG(
+	no_neighbor_soo, no_neighbor_soo_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer soo [ASN:NN_OR_IP-ADDRESS:NN]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set the Site-of-Origin (SoO) extended community\n"
+	"VPN extended community\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	/* Trailing SoO token is accepted but ignored, exactly like legacy's
+	 * no_neighbor_soo DEFPY (bgp_vty.c, retired): this always fully
+	 * unsets soo, destroying the whole presence container at once.
+	 */
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/soo", xpath, container);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Shared soo emitter, both neighbor and peer-group. dnode is any one of the
+ * three cases' local-admin leaf (bgp_cli_common.c registers all three --
+ * only whichever case is actually configured ever exists in the datastore,
+ * so exactly one registration fires per neighbor/group). Reproduces
+ * bgp_config_write_peer_af()'s (bgp_vty.c) two-space '  neighbor <addr> soo
+ * <ASN|IP>:<NN>' line, in the same textual form
+ * ecommunity_ecom2str(ECOMMUNITY_FORMAT_ROUTE_MAP) legacy printed (no
+ * 'RT:'/'SoO:' prefix). */
+void neighbor_af_soo_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	const struct lyd_node *soo = yang_dnode_get_parent(dnode, "soo");
+	const struct lyd_node *nbr = yang_dnode_get_parent(dnode, "neighbor");
+	const char *addr;
+	const char *case_name;
+
+	if (nbr)
+		addr = yang_dnode_get_string(nbr, "address");
+	else
+		addr = yang_dnode_get_string(yang_dnode_get_parent(dnode, "peer-group"), "name");
+
+	if (yang_dnode_exists(soo, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(soo, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(soo, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "  neighbor %s soo %s:%s\n", addr,
+		yang_dnode_get_string(soo, "%s/global-admin", case_name),
+		yang_dnode_get_string(soo, "%s/local-admin", case_name));
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -4783,4 +5089,36 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_IPV6M_NODE, &no_neighbor_unsuppress_map_cli_cmd);
 	install_element(BGP_IPV6L_NODE, &no_neighbor_unsuppress_map_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &no_neighbor_unsuppress_map_cli_cmd);
+
+	/* per-AF conditional-advertisement (advertise-map) and site-of-origin
+	 * (soo), neighbor + peer-group (M5 batch B3). advertise-map matches
+	 * legacy's eight-AF install set (never l2vpn evpn); soo matches
+	 * legacy's nine-AF set (including BGP_EVPN_NODE). */
+	install_element(BGP_IPV4_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_advertise_map_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_soo_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_soo_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_neighbor_soo_cli_cmd);
 }

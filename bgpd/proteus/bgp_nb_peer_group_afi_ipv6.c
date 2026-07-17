@@ -801,232 +801,78 @@ int instance_peer_group_afi_safis_ipv6_unicast_accept_own_modify(struct nb_cb_mo
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as2/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as2_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as2/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_as4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/as4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/ipv4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_soo_ipv4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/soo/ipv4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_weight_modify(struct nb_cb_modify_args *args)
@@ -1377,103 +1223,37 @@ int instance_peer_group_afi_safis_ipv6_unicast_filters_unsuppress_map_destroy(
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_advertise_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_unicast_filters_conditional_advertisement_condition_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_activate_modify(struct nb_cb_modify_args *args)
@@ -2249,232 +2029,78 @@ int instance_peer_group_afi_safis_ipv6_multicast_accept_own_modify(struct nb_cb_
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as2/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as2_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as2/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_as4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/as4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/ipv4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_soo_ipv4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/soo/ipv4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_weight_modify(struct nb_cb_modify_args *args)
@@ -2828,103 +2454,37 @@ int instance_peer_group_afi_safis_ipv6_multicast_filters_unsuppress_map_destroy(
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_advertise_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_multicast_filters_conditional_advertisement_condition_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_activate_modify(struct nb_cb_modify_args *args)
@@ -3705,235 +3265,81 @@ int instance_peer_group_afi_safis_ipv6_labeled_unicast_accept_own_modify(
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as2/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as2_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as2/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_as4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/as4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/ipv4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_soo_ipv4_local_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/soo/ipv4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_weight_modify(struct nb_cb_modify_args *args)
@@ -4296,103 +3702,37 @@ int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_unsuppress_map_de
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_advertise_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_labeled_unicast_filters_conditional_advertisement_condition_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_activate_modify(struct nb_cb_modify_args *args)
@@ -5151,227 +4491,73 @@ int instance_peer_group_afi_safis_ipv6_vpn_accept_own_modify(struct nb_cb_modify
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_create(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_global_admin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as2/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as2_local_admin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as2/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_global_admin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_as4_local_admin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/as4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_create(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_case_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_global_admin_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/ipv4/global-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_soo_ipv4_local_admin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/soo/ipv4/local-admin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_soo_leaf_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_weight_modify(struct nb_cb_modify_args *args)
@@ -5721,101 +4907,35 @@ int instance_peer_group_afi_safis_ipv6_vpn_filters_unsuppress_map_destroy(
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_advertise_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/advertise-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_advertise_map_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/condition");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_condition_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/conditional-advertisement/condition-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_condition_map_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }

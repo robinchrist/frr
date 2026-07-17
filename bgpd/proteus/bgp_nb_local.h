@@ -88,6 +88,36 @@ int bgp_nb_peer_group_af_unsuppress_map_modify(struct nb_cb_modify_args *args, a
 					       safi_t safi);
 int bgp_nb_peer_group_af_unsuppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 						safi_t safi);
+/* M5 batch B3: per-AF conditional-advertisement + site-of-origin (neighbor
+ * + peer-group). */
+int bgp_nb_neighbor_af_advertise_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_advertise_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi);
+int bgp_nb_neighbor_af_condition_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_condition_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_condition_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_condition_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi);
+int bgp_nb_peer_group_af_advertise_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi);
+int bgp_nb_peer_group_af_advertise_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_peer_group_af_condition_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_condition_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_condition_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi);
+int bgp_nb_peer_group_af_condition_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_neighbor_af_soo_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_soo_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);
