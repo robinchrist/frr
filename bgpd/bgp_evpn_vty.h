@@ -36,6 +36,21 @@ extern void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn);
 extern void evpn_set_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn);
 extern void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn);
 
+/* Per-VRF-instance role setters (vty-free), shared with the proteus/
+ * northbound instance-level 'l2vpn-evpn' sub-leaf callbacks (bgp_nb_evpn.c,
+ * M6 batch B7: 'rd' and 'default-originate'; 'advertise ipv4/ipv6 unicast'
+ * was scouted but reject-stubbed, see the doc comment on the
+ * still-installed bgp_evpn_advertise_type5_cmd in bgp_evpn_vty.c).
+ * rd_pretty is copied (XSTRDUP'd internally), so a function-scope buffer is
+ * fine at the call site. evpn_process_default_originate_cmd() is the
+ * un-static'd former DEFPY-local helper: 'add' true/false mirrors the
+ * retired bgp_evpn_default_originate_cmd / no_ pair.
+ */
+extern void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
+				  const char *rd_pretty);
+extern void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf);
+extern void evpn_process_default_originate_cmd(struct bgp *bgp_vrf, afi_t afi, bool add);
+
 /* Loop over all extended-communities in 'rtl' and return true if 'ecomtarget'
  * matches one of them; un-static'd (was bgp_evpn_vty.c-local) for the
  * proteus/northbound 'ead-es-route-target export' list callbacks

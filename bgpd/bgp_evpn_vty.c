@@ -2239,8 +2239,8 @@ static void evpn_unconfigure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bg
 /*
  * Configure RD for VRF
  */
-static void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
-				  const char *rd_pretty)
+void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
+			   const char *rd_pretty)
 {
 	/* If we have already advertise type-5 routes with a different RD, we
 	 * have to delete and withdraw them first
@@ -2264,7 +2264,7 @@ static void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 /*
  * Unconfigure RD for VRF
  */
-static void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
+void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
 {
 	/* If we have already advertise type-5 routes with a different RD, we
 	 * have to delete and withdraw them first
@@ -3626,8 +3626,7 @@ void evpn_unset_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn)
 /*
  * evpn - enable advertisement of default g/w
  */
-static void evpn_process_default_originate_cmd(struct bgp *bgp_vrf,
-					       afi_t afi, bool add)
+void evpn_process_default_originate_cmd(struct bgp *bgp_vrf, afi_t afi, bool add)
 {
 	safi_t safi = SAFI_UNICAST; /* ipv4/ipv6 unicast */
 
@@ -3932,38 +3931,15 @@ DEFPY_ATTR(no_bgp_evpn_advertise_autort_rfc8365,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_evpn_default_originate,
-       bgp_evpn_default_originate_cmd,
-       "default-originate <ipv4$ipv4 | ipv6$ipv6>",
-       "originate a default route\n"
-       "ipv4 address family\n"
-       "ipv6 address family\n")
-{
-	afi_t afi = ipv4 ? AFI_IP : AFI_IP6;
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-	evpn_process_default_originate_cmd(bgp_vrf, afi, true);
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_default_originate,
-       no_bgp_evpn_default_originate_cmd,
-       "no default-originate <ipv4$ipv4 | ipv6$ipv6>",
-       NO_STR
-       "withdraw a default route\n"
-       "ipv4 address family\n"
-       "ipv6 address family\n")
-{
-	afi_t afi = ipv4 ? AFI_IP : AFI_IP6;
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-	evpn_process_default_originate_cmd(bgp_vrf, afi, false);
-	return CMD_SUCCESS;
-}
+/* 'default-originate <ipv4|ipv6>' / 'no default-originate <ipv4|ipv6>'
+ * (bgp_evpn_default_originate_cmd / no_bgp_evpn_default_originate_cmd):
+ * converted to proteus/northbound in M6 batch B7; mgmtd owns the CLI
+ * (bgp_cli_instance.c) and bgp_config_write_evpn_info's two lines are
+ * gated off for it. evpn_process_default_originate_cmd() is un-static'd
+ * (bgp_evpn_vty.h) for the new callbacks (bgp_nb_evpn.c) -- it already
+ * took a plain (afi, add) pair and was self-guarded/idempotent
+ * (evpn_default_originate_set() bail-out), so it needed no further
+ * extraction. */
 
 /* M6 batch B4: 'dup-addr-detection [max-moves ... time ...]' and
  * 'dup-addr-detection freeze <permanent|N>' (the two optional/value-bearing
@@ -4053,6 +4029,39 @@ DEFPY (no_dup_addr_detection,
  * new callback (bgp_nb_evpn.c), which reproduces the legacy positive form's
  * bgp_lookup_by_vrf_id(vpn->tenant_vrf_id) guard (silently no-ops, matching
  * legacy's soft CMD_WARNING, when the VNI has no tenant VRF attached). */
+
+/* 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]' /
+ * 'no advertise <ipv4|ipv6> unicast [route-map WORD]'
+ * (bgp_evpn_advertise_type5_cmd / no_bgp_evpn_advertise_type5_cmd): SCOUTED
+ * for M6 batch B7 but reject-stubbed. proteus-bgp-evpn.yang models
+ * 'route-map' as `type leafref { path "/rmap:route-map/rmap:name"; }` with
+ * default require-instance semantics, but the legacy grammar has always
+ * allowed the referenced route-map to be defined *after* this line (FRR's
+ * classic CLI resolves route-map names lazily via
+ * route_map_lookup_by_name(), tolerating NULL until the route-map is
+ * created later in the same file or interactively) -- a config shape this
+ * topotest suite's own r2/frr.conf uses (rmap4/rmap6 are defined at the
+ * bottom of the file, after the 'router bgp ... vrf ...' blocks that
+ * reference them). A first implementation converting 'enabled'/
+ * 'gateway-ip'/'route-map' to mgmtd (bgp_nb_evpn.c) hit exactly this:
+ * mgmtd's candidate-config leafref validation rejects the forward
+ * reference outright ("Invalid leafref value 'rmap4' - no target instance
+ * ...") and, worse, that one rejected line aborted the rest of that
+ * router's config-load transaction, silently dropping unrelated later
+ * lines too (bgp_evpn_rt5's r2 lost its second VRF's rd/route-target/
+ * advertise entirely, not just the route-map-bearing one) --
+ * bgp_evpn_rt5/test_bgp_evpn.py::test_protocols_convergence and
+ * bgp_evpn_rt5_addpath's route-map test both failed against a stash
+ * baseline that passed cleanly. DO-NOT-MODIFY-YANG applies (this batch's
+ * hard rule), so 'route-map' can't be retyped to a plain string here; per
+ * the batch's mis-shaped-row precedent (B4/B5), the whole family stays a
+ * reject-stub rather than shipping a real regression, and 'enabled'/
+ * 'gateway-ip' stay bundled with it since legacy's single command line
+ * can't be split into a converted and a native DEFUN at the same node
+ * without a grammar collision (same reasoning as the advertise-pip
+ * reject-stub below). Flag for a future YANG fix (add
+ * 'require-instance false;', matching the existing bfd 'profile' leaf's
+ * documented LIMITATION in proteus-bgp.yang) before reattempting. */
 
 DEFUN (bgp_evpn_advertise_type5,
        bgp_evpn_advertise_type5_cmd,
@@ -6184,90 +6193,15 @@ DEFUN_NOSH (exit_vni,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_vrf_rd,
-       bgp_evpn_vrf_rd_cmd,
-       "rd ASN:NN_OR_IP-ADDRESS:NN",
-       EVPN_RT_DIST_HELP_STR
-       EVPN_ASN_IP_HELP_STR)
-{
-	int ret;
-	struct prefix_rd prd;
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	ret = str2prefix_rd(argv[1]->arg, &prd);
-	if (!ret) {
-		vty_out(vty, "%% Malformed Route Distinguisher\n");
-		return CMD_WARNING;
-	}
-
-	/* If same as existing value, there is nothing more to do. */
-	if (bgp_evpn_vrf_rd_matches_existing(bgp_vrf, &prd))
-		return CMD_SUCCESS;
-
-	/* Configure or update the RD. */
-	evpn_configure_vrf_rd(bgp_vrf, &prd, argv[1]->arg);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_evpn_vrf_rd,
-       no_bgp_evpn_vrf_rd_cmd,
-       "no rd ASN:NN_OR_IP-ADDRESS:NN",
-       NO_STR
-       EVPN_RT_DIST_HELP_STR
-       EVPN_ASN_IP_HELP_STR)
-{
-	int ret;
-	struct prefix_rd prd;
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	ret = str2prefix_rd(argv[2]->arg, &prd);
-	if (!ret) {
-		vty_out(vty, "%% Malformed Route Distinguisher\n");
-		return CMD_WARNING;
-	}
-
-	/* Check if we should disallow. */
-	if (!is_vrf_rd_configured(bgp_vrf)) {
-		vty_out(vty, "%% RD is not configured for this VRF\n");
-		return CMD_WARNING;
-	}
-
-	if (!bgp_evpn_vrf_rd_matches_existing(bgp_vrf, &prd)) {
-		vty_out(vty,
-			"%% RD specified does not match configuration for this VRF\n");
-		return CMD_WARNING;
-	}
-
-	evpn_unconfigure_vrf_rd(bgp_vrf);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_evpn_vrf_rd_without_val,
-       no_bgp_evpn_vrf_rd_without_val_cmd,
-       "no rd",
-       NO_STR
-       EVPN_RT_DIST_HELP_STR)
-{
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	/* Check if we should disallow. */
-	if (!is_vrf_rd_configured(bgp_vrf)) {
-		vty_out(vty, "%% RD is not configured for this VRF\n");
-		return CMD_WARNING;
-	}
-
-	evpn_unconfigure_vrf_rd(bgp_vrf);
-	return CMD_SUCCESS;
-}
+/* Per-VRF-instance 'rd ASN:NN_OR_IP-ADDRESS:NN' / 'no rd [...]'
+ * (bgp_evpn_vrf_rd_cmd / no_bgp_evpn_vrf_rd_cmd / no_bgp_evpn_vrf_rd_without_val_cmd):
+ * converted to proteus/northbound in M6 batch B7; mgmtd owns the CLI and
+ * bgp_config_write_evpn_info's rd line is gated off below. Unlike the
+ * per-VNI form (M6 B6), the legacy positive form here carried no
+ * EVPN_ENABLED(bgp) guard, so bgp_nb_evpn_vrf_rd_set() (bgp_nb_evpn.c)
+ * reproduces that -- no soft guard at all. evpn_configure_vrf_rd() /
+ * evpn_unconfigure_vrf_rd() are un-static'd (bgp_evpn_vty.h) for the new
+ * callbacks. */
 
 /* Per-VNI 'rd ASN:NN_OR_IP-ADDRESS:NN' / 'no rd [...]'
  * (bgp_evpn_vni_rd_cmd / no_bgp_evpn_vni_rd_cmd / no_bgp_evpn_vni_rd_without_val_cmd):
@@ -7510,6 +7444,17 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
 		vty_out(vty, "  flooding disable\n");
 
+	/* 'advertise ipv4/ipv6 unicast [...]' stays native/ungated -- scouted
+	 * for M6 B7 but reject-stubbed (route-map leafref forward-reference
+	 * regression, see the doc comment on the retired-in-name-only
+	 * bgp_evpn_advertise_type5_cmd DEFUN above). 'default-originate
+	 * ipv4/ipv6' / 'rd' are mgmtd-owned once the AF is proteus (M6 B7);
+	 * 'advertise-pip' stays native/ungated too -- its YANG 'enabled' leaf
+	 * has no default to convert onto (same B4/B5-style gap), and its
+	 * ip/mac sub-values aren't separable from 'enabled' at the
+	 * CLI-grammar level either (see the reject-stub doc comment on the
+	 * advertise-pip callbacks, bgp_nb_evpn.c).
+	 */
 	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
 		if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv4 unicast route-map %s\n",
@@ -7555,11 +7500,15 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 			vty_out(vty, "  advertise ipv6 unicast gateway-ip\n");
 	}
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4))
-		vty_out(vty, "  default-originate ipv4\n");
+	if (!bgp_evpn_flag_is_proteus(afi, safi)) {
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+			      BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV4))
+			vty_out(vty, "  default-originate ipv4\n");
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6))
-		vty_out(vty, "  default-originate ipv6\n");
+		if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+			      BGP_L2VPN_EVPN_DEFAULT_ORIGINATE_IPV6))
+			vty_out(vty, "  default-originate ipv6\n");
+	}
 
 	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
 		if (!bgp->evpn_info->advertise_pip)
@@ -7580,7 +7529,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 				vty_out(vty, "  advertise-pip\n");
 		}
 	}
-	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_RD_CFGD))
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && CHECK_FLAG(bgp->vrf_flags, BGP_VRF_RD_CFGD))
 		vty_out(vty, "  rd %s\n", bgp->vrf_prd_pretty);
 
 	/* import route-target */
@@ -7632,14 +7581,16 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &evpnrt5_network_cmd);
 	/* advertise-all-vni / advertise-default-gw / advertise-svi-ip /
 	 * enable-resolve-overlay-index converted to proteus/northbound (M6
-	 * batch B2); mac-vrf-soo / flooding converted M6 batch B3; their CLI
-	 * is installed by mgmtd (bgp_cli_instance.c). */
+	 * batch B2); mac-vrf-soo / flooding converted M6 batch B3; rd (per-VNI)
+	 * converted M6 batch B6; default-originate and rd (per-VRF-instance)
+	 * converted M6 batch B7; their CLI is installed by mgmtd
+	 * (bgp_cli_instance.c). advertise ipv4/ipv6 unicast stays native --
+	 * see the reject-stub doc comment above (route-map leafref
+	 * forward-reference regression). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_autort_rfc8365_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_autort_rfc8365_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_type5_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_default_originate_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_default_originate_cmd);
 	install_element(BGP_EVPN_NODE, &dup_addr_detection_cmd);
 	install_element(BGP_EVPN_NODE, &no_dup_addr_detection_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_mac_cmd);
@@ -7719,9 +7670,9 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_without_val_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_auto_rt_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_auto_rt_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rd_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rd_cmd);
-	install_element(BGP_NODE, &no_bgp_evpn_vrf_rd_without_val_cmd);
+	/* per-VRF-instance 'rd': converted to proteus/northbound (M6 batch
+	 * B7); mgmtd owns the CLI. route-target/auto-route-target below stay
+	 * native pending B9's remodel. */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_auto_rt_cmd);

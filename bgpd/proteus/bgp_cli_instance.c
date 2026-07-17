@@ -668,6 +668,97 @@ DEFPY_YANG_HIDDEN(
 }
 
 /*
+ * M6 batch B7: per-VRF-instance role (mgmtd side), installed at
+ * BGP_EVPN_NODE like the instance-level B2/B3 commands above (context base
+ * is the instance's own xpath, not per-VNI's).
+ *
+ * 'rd' is the VRF-level twin of B6's per-VNI 'rd': same
+ * bgp_cli_soo_parse()-based as2/as4/ipv4 case routing, base xpath
+ * './afi-safis/l2vpn-evpn/rd/...' instead of the per-VNI form's relative
+ * './rd/...'. 'no rd [...]' destroys the whole presence container
+ * regardless of the optional trailing token, same as every other 'no ...
+ * [value]' form in this file.
+ *
+ * 'default-originate <ipv4|ipv6>' is a plain [no]-prefixed Tier A boolean
+ * pair, same MODIFY-true/DESTROY shape as advertise-svi-ip above.
+ *
+ * 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]' was
+ * scouted for this batch but reject-stubbed -- see the doc comment on
+ * bgp_evpn_advertise_type5_cmd (still installed, bgp_evpn_vty.c) and on
+ * the matching reject-stub callbacks (bgp_nb_evpn.c): its 'route-map'
+ * leaf is a real YANG leafref, and legacy's lazy route-map binding allows
+ * configs where the route-map is defined *after* this line, which mgmtd's
+ * candidate-config leafref validation rejects outright.
+ */
+DEFPY_YANG(
+	bgp_evpn_vrf_rd, bgp_evpn_vrf_rd_cli_cmd,
+	"rd ASN:NN_OR_IP-ADDRESS:NN$rd",
+	EVPN_RT_DIST_HELP_STR
+	EVPN_ASN_IP_HELP_STR)
+{
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	char xpath[XPATH_MAXLEN];
+	const char *case_name;
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed Route Distinguisher\n");
+		return CMD_WARNING;
+	}
+
+	switch (rd_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/rd/%s/administrator", case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, administrator);
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/rd/%s/assigned-number", case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, assigned_number);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vrf_rd, no_bgp_evpn_vrf_rd_cli_cmd,
+	"no rd [ASN:NN_OR_IP-ADDRESS:NN]",
+	NO_STR
+	EVPN_RT_DIST_HELP_STR
+	EVPN_ASN_IP_HELP_STR)
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/rd", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_default_originate, bgp_evpn_default_originate_cli_cmd,
+	"[no$no] default-originate <ipv4$ipv4|ipv6$ipv6>",
+	NO_STR
+	"originate a default route\n"
+	"ipv4 address family\n"
+	"ipv6 address family\n")
+{
+	const char *xpath = ipv4 ? "./afi-safis/l2vpn-evpn/default-originate/ipv4"
+				 : "./afi-safis/l2vpn-evpn/default-originate/ipv6";
+
+	if (no)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * M6 batch B4: 'dup-addr-detection max-moves ... time ...' and
  * 'dup-addr-detection freeze <permanent|N>' (dup_addr_detection_cmd /
  * dup_addr_detection_auto_recovery_cmd's value-bearing sub-forms). The bare
@@ -3526,6 +3617,46 @@ void instance_evpn_vni_advertise_subnet_cli_write(struct vty *vty, const struct 
 		vty_out(vty, "   advertise-subnet\n");
 }
 
+/* M6 batch B7: instance-level (per-VRF-instance role) 'rd'/'default-originate'
+ * emitters, reproducing bgp_config_write_evpn_info()'s (bgp_evpn_vty.c)
+ * lines at the two-space instance-AF indent -- 'rd' mirrors the per-VNI
+ * form above (M6 B6): registered on each choice case's assigned-number
+ * leaf. 'advertise ipv4/ipv6 unicast' has no emitter here -- it stays
+ * native, see the reject-stub doc comment on its retired-in-name-only
+ * DEFPYs above.
+ */
+void instance_evpn_rd_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	const struct lyd_node *rd = yang_dnode_get_parent(dnode, "rd");
+	const char *case_name;
+
+	if (yang_dnode_exists(rd, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(rd, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(rd, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "  rd %s:%s\n", yang_dnode_get_string(rd, "%s/administrator", case_name),
+		yang_dnode_get_string(rd, "%s/assigned-number", case_name));
+}
+
+void instance_evpn_default_originate_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  default-originate ipv4\n");
+}
+
+void instance_evpn_default_originate_ipv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  default-originate ipv6\n");
+}
+
 /* M6 batch B4: reproduces bgp_config_write_evpn_info()'s max-moves/time and
  * freeze lines (bgp_evpn_vty.c) for the mgmtd-owned sub-forms; 'enabled'
  * (the still-native bare toggle) is printed separately by that same legacy
@@ -5462,6 +5593,13 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_svi_ip_vni_cli_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_vni_subnet_cli_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_advertise_vni_subnet_cli_cmd);
+
+	/* M6 B7: instance-level (per-VRF-instance role) 'rd'/'default-originate'
+	 * (mgmtd side); 'advertise ipv4/ipv6 unicast' stays native -- see the
+	 * reject-stub doc comment above its retired-in-name-only DEFPYs. */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rd_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rd_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_default_originate_cli_cmd);
 
 	/* M6 B2: instance-level l2vpn-evpn advertise-flag leaves (mgmtd side). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_all_vni_cli_cmd);

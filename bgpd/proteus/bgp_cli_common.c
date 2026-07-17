@@ -253,6 +253,43 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_evpn_vni_advertise_subnet_cli_write,
 			}
 		},
+		/* M6 B7: instance-level (per-VRF-instance role) 'rd'/
+		 * 'default-originate'. 'rd's cli_show is registered on each
+		 * choice case's assigned-number leaf, same idiom as the
+		 * per-VNI form above. 'advertise ipv4/ipv6 unicast' has no
+		 * entry here -- it stays native (bgp_evpn_vty.c's
+		 * bgp_config_write_evpn_info), see the reject-stub doc
+		 * comment in bgp_cli_instance.c. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/rd/as2/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/rd/as4/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/rd/ipv4/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/default-originate/ipv4",
+			.cbs = {
+				.cli_show = instance_evpn_default_originate_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/default-originate/ipv6",
+			.cbs = {
+				.cli_show = instance_evpn_default_originate_ipv6_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

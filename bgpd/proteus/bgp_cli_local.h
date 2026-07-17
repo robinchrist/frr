@@ -73,6 +73,15 @@ void instance_evpn_vni_advertise_svi_ip_cli_write(struct vty *vty, const struct 
 void instance_evpn_vni_advertise_subnet_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 
+/* M6 B7: instance-level (per-VRF-instance role) 'rd'/'default-originate'
+ * emitters ('advertise ipv4/ipv6 unicast' stays native, no emitter here --
+ * see the reject-stub doc comment in bgp_cli_instance.c). */
+void instance_evpn_rd_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
+void instance_evpn_default_originate_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults);
+void instance_evpn_default_originate_ipv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);
