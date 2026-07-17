@@ -5242,3 +5242,251 @@ int bgp_nb_af_aggregate_suppress_map_destroy(struct nb_cb_destroy_args *args, af
 				       bgp_nb_af_aggregate_origin(entry_dnode),
 				       yang_dnode_get_bool(entry_dnode, "matching-med-only"), NULL);
 }
+
+/*
+ * M5 batch B11: instance-AF 'redistribute' (af-redistribute in
+ * proteus-bgp.yang), the two unicast-only instance AFs -- ipv4-unicast and
+ * ipv6-unicast; bgp_config_write_redistribute() (bgp_vty.c) returns
+ * immediately for every other SAFI, and af-redistribute is only 'uses'
+ * there. A keyed list (key 'protocol instance') with two option children
+ * (metric, route-map).
+ *
+ * Unlike B9/B10's monolithic bgp_static_set()/bgp_aggregate_set(), legacy
+ * already exposes per-field setters here -- bgp_redist_add()/_set()/
+ * _rmap_set()/_metric_set()/_unset() (bgp_zebra.c), all already
+ * afi-parameterized and vty-free, no refactor needed. CREATE reads whatever
+ * metric/route-map siblings are already present in the same dnode subtree
+ * (the CLI always enqueues the list CREATE and both option leaves together,
+ * the B9/B10 idiom) and applies them with a single bgp_redistribute_set()
+ * call, mirroring the legacy combined DEFUNs (e.g.
+ * bgp_redistribute_ipv4_rmap_metric()). Each leaf's own MODIFY/DESTROY then
+ * looks up the already-created 'struct bgp_redist' and calls only its own
+ * setter, so a later standalone 'redistribute PROTO metric N' reconfigure
+ * causes exactly one zebra re-register cycle, not a replay of every sibling.
+ * bgp_redistribute_rmap_unset()/_metric_unset() (bgp_zebra.c) are new tiny
+ * counterparts to the existing _set() calls, for a leaf DESTROY that keeps
+ * the redistribute entry itself (unlike bgp_redistribute_unset(), which
+ * tears the whole entry down on list DESTROY).
+ *
+ * proto_redistnum() (lib/log.c) is the vty-free protocol-name lookup legacy
+ * DEFUNs already used via route type validation; the "Invalid route type"
+ * rejection they did with vty_out() becomes a NB_EV_VALIDATE error here.
+ * YANG's protocol enum is one shared list for both AFs -- the grouping's
+ * description notes the v4-only/v6-only protocols (rip/ospf vs ripng/ospf6)
+ * aren't cross-checked in the model itself ("FRR rejects the wrong ones at
+ * load time") -- so a wrong-AF protocol (e.g. 'redistribute rip' under
+ * ipv6-unicast) is exactly this VALIDATE rejection.
+ */
+static uint8_t bgp_nb_af_redistribute_type(const struct lyd_node *entry_dnode, afi_t afi)
+{
+	return proto_redistnum(afi, yang_dnode_get_string(entry_dnode, "protocol"));
+}
+
+static unsigned short bgp_nb_af_redistribute_instance(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_get_uint16(entry_dnode, "instance");
+}
+
+static bool bgp_nb_af_redistribute_have_metric(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "metric");
+}
+
+static uint32_t bgp_nb_af_redistribute_metric(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "metric") ?
+		       yang_dnode_get_uint32(entry_dnode, "metric") : 0;
+}
+
+static const char *bgp_nb_af_redistribute_rmap(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "route-map") ?
+		       yang_dnode_get_string(entry_dnode, "route-map") : NULL;
+}
+
+/* Apply the full metric/route-map option set for one already-added
+ * 'struct bgp_redist' with a single bgp_redistribute_set() call, matching
+ * the legacy combined DEFUNs' one-call-per-command shape. */
+static void bgp_nb_af_redistribute_apply(struct bgp *bgp, struct bgp_redist *red, afi_t afi,
+					 uint8_t type, unsigned short instance,
+					 bool have_metric, uint32_t metric, const char *rmap)
+{
+	bool changed = false;
+
+	if (have_metric)
+		changed |= bgp_redistribute_metric_set(bgp, red, afi, type, metric);
+	else
+		changed |= bgp_redistribute_metric_unset(red);
+
+	if (rmap)
+		changed |= bgp_redistribute_rmap_set(red, rmap, route_map_lookup_by_name(rmap));
+	else
+		changed |= bgp_redistribute_rmap_unset(red);
+
+	bgp_redistribute_set(bgp, afi, type, instance, changed);
+}
+
+int bgp_nb_af_redistribute_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	struct bgp_redist *red;
+	uint8_t type;
+	unsigned short instance;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		type = proto_redistnum(afi, yang_dnode_get_string(args->dnode, "protocol"));
+		if (type == ZEBRA_ROUTE_ERROR || type == ZEBRA_ROUTE_BGP) {
+			snprintf(args->errmsg, args->errmsg_len, "Invalid route type");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			return NB_OK;
+
+		type = bgp_nb_af_redistribute_type(args->dnode, afi);
+		instance = bgp_nb_af_redistribute_instance(args->dnode);
+
+		red = bgp_redist_add(bgp, afi, type, instance);
+		bgp_nb_af_redistribute_apply(bgp, red, afi, type, instance,
+					     bgp_nb_af_redistribute_have_metric(args->dnode),
+					     bgp_nb_af_redistribute_metric(args->dnode),
+					     bgp_nb_af_redistribute_rmap(args->dnode));
+		break;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_redistribute_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_redistribute_unset(bgp, afi, bgp_nb_af_redistribute_type(args->dnode, afi),
+			       bgp_nb_af_redistribute_instance(args->dnode));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_redistribute_metric_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+	struct bgp *bgp;
+	struct bgp_redist *red;
+	uint8_t type;
+	unsigned short instance;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "redistribute");
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	type = bgp_nb_af_redistribute_type(entry_dnode, afi);
+	instance = bgp_nb_af_redistribute_instance(entry_dnode);
+	red = bgp_redist_add(bgp, afi, type, instance);
+
+	if (bgp_redistribute_metric_set(bgp, red, afi, type, yang_dnode_get_uint32(args->dnode, NULL)))
+		bgp_redistribute_set(bgp, afi, type, instance, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_redistribute_metric_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+	struct bgp *bgp;
+	struct bgp_redist *red;
+	uint8_t type;
+	unsigned short instance;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "redistribute");
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	type = bgp_nb_af_redistribute_type(entry_dnode, afi);
+	instance = bgp_nb_af_redistribute_instance(entry_dnode);
+	red = bgp_redist_lookup(bgp, afi, type, instance);
+	if (!red)
+		return NB_OK;
+
+	if (bgp_redistribute_metric_unset(red))
+		bgp_redistribute_set(bgp, afi, type, instance, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_redistribute_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+	struct bgp *bgp;
+	struct bgp_redist *red;
+	uint8_t type;
+	unsigned short instance;
+	const char *rmap;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "redistribute");
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	type = bgp_nb_af_redistribute_type(entry_dnode, afi);
+	instance = bgp_nb_af_redistribute_instance(entry_dnode);
+	red = bgp_redist_add(bgp, afi, type, instance);
+
+	rmap = yang_dnode_get_string(args->dnode, NULL);
+	if (bgp_redistribute_rmap_set(red, rmap, route_map_lookup_by_name(rmap)))
+		bgp_redistribute_set(bgp, afi, type, instance, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_redistribute_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+	struct bgp *bgp;
+	struct bgp_redist *red;
+	uint8_t type;
+	unsigned short instance;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "redistribute");
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	type = bgp_nb_af_redistribute_type(entry_dnode, afi);
+	instance = bgp_nb_af_redistribute_instance(entry_dnode);
+	red = bgp_redist_lookup(bgp, afi, type, instance);
+	if (!red)
+		return NB_OK;
+
+	if (bgp_redistribute_rmap_unset(red))
+		bgp_redistribute_set(bgp, afi, type, instance, true);
+
+	return NB_OK;
+}

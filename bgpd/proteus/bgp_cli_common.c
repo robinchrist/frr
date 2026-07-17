@@ -180,6 +180,20 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_aggregate_address_cli_write,
 			}
 		},
+		/* M5 B11: instance-AF 'redistribute' list, ipv4-unicast/
+		 * ipv6-unicast only (af-redistribute is unicast-only). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/redistribute",
+			.cbs = {
+				.cli_show = afi_safis_redistribute_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/redistribute",
+			.cbs = {
+				.cli_show = afi_safis_redistribute_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {

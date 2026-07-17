@@ -336,6 +336,17 @@ int bgp_nb_af_aggregate_suppress_map_modify(struct nb_cb_modify_args *args, afi_
 					    safi_t safi);
 int bgp_nb_af_aggregate_suppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 					     safi_t safi);
+/* M5 batch B11: instance-AF 'redistribute' (ipv4-unicast/ipv6-unicast
+ * only -- af-redistribute is unicast-only). */
+int bgp_nb_af_redistribute_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_redistribute_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_redistribute_metric_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_redistribute_metric_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					  safi_t safi);
+int bgp_nb_af_redistribute_route_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					    safi_t safi);
+int bgp_nb_af_redistribute_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi);
 
 #ifdef __cplusplus
 }

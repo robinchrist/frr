@@ -323,6 +323,11 @@ void afi_safis_network_ipv6_cli_write(struct vty *vty, const struct lyd_node *dn
 void afi_safis_aggregate_address_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults);
 
+/* M5 B11: instance-AF 'redistribute' list emitter (shared by ipv4-unicast/
+ * ipv6-unicast -- af-redistribute is one grouping used by both). */
+void afi_safis_redistribute_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

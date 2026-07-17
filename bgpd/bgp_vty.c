@@ -15399,247 +15399,15 @@ ALIAS_HIDDEN(
 	"Route map reference\n"
 	"Pointer to route-map entries\n")
 
-DEFUN (bgp_redistribute_ipv6,
-       bgp_redistribute_ipv6_cmd,
-       "redistribute " FRR_IP6_REDIST_STR_BGPD,
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	uint8_t type;
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_redist_add(bgp, AFI_IP6, type, 0);
-	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, false);
-}
-
-DEFUN (bgp_redistribute_ipv6_rmap,
-       bgp_redistribute_ipv6_rmap_cmd,
-       "redistribute " FRR_IP6_REDIST_STR_BGPD " route-map RMAP_NAME",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD
-       "Route map reference\n"
-       "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_word = 3;
-	uint8_t type;
-	struct bgp_redist *red;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
-	changed =
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
-}
-
-DEFUN (bgp_redistribute_ipv6_metric,
-       bgp_redistribute_ipv6_metric_cmd,
-       "redistribute " FRR_IP6_REDIST_STR_BGPD " metric (0-4294967295)",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD
-       "Metric for redistributed routes\n"
-       "Default metric\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_number = 3;
-	uint8_t type;
-	uint32_t metric;
-	struct bgp_redist *red;
-	bool changed;
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	metric = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
-	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP6, type, metric);
-	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
-}
-
-DEFUN (bgp_redistribute_ipv6_rmap_metric,
-       bgp_redistribute_ipv6_rmap_metric_cmd,
-       "redistribute " FRR_IP6_REDIST_STR_BGPD " route-map RMAP_NAME metric (0-4294967295)",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD
-       "Route map reference\n"
-       "Pointer to route-map entries\n"
-       "Metric for redistributed routes\n"
-       "Default metric\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_word = 3;
-	int idx_number = 5;
-	uint8_t type;
-	uint32_t metric;
-	struct bgp_redist *red;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	metric = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
-	changed =
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP6, type,
-						metric);
-	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
-}
-
-DEFPY(bgp_redistribute_ipv6_table, bgp_redistribute_ipv6_table_cmd,
-      "redistribute table-direct (1-65535)$table_id [{metric$metric (0-4294967295)$metric_val|route-map WORD$rmap}]",
-      "Redistribute information from another routing protocol\n"
-      "Non-main Kernel Routing Table - Direct\n"
-      "Table ID\n"
-      "Metric for redistributed routes\n"
-      "Default metric\n"
-      "Route map reference\n"
-      "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bool changed = false;
-	struct route_map *route_map = NULL;
-	struct bgp_redist *red;
-
-	if (rmap)
-		route_map = route_map_lookup_warn_noexist(vty, rmap);
-
-	if (bgp->vrf_id != VRF_DEFAULT) {
-		vty_out(vty,
-			"%% Only default BGP instance can use 'table-direct'\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	if (table_id == RT_TABLE_MAIN || table_id == RT_TABLE_LOCAL) {
-		vty_out(vty, "%% 'table-direct', can not use %" PRIu64 " routing table\n",
-			table_id);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	red = bgp_redist_add(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT, table_id);
-	if (rmap)
-		changed = bgp_redistribute_rmap_set(red, rmap, route_map);
-	if (metric)
-		changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP6,
-						       ZEBRA_ROUTE_TABLE_DIRECT,
-						       metric_val);
-	return bgp_redistribute_set(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT,
-				    table_id, changed);
-}
-
-DEFPY(no_bgp_redistribute_ipv6_table, no_bgp_redistribute_ipv6_table_cmd,
-      "no redistribute table-direct (1-65535)$table_id [{metric (0-4294967295)|route-map WORD}]",
-      NO_STR
-      "Redistribute information from another routing protocol\n"
-      "Non-main Kernel Routing Table - Direct\n"
-      "Table ID\n"
-      "Metric for redistributed routes\n"
-      "Default metric\n"
-      "Route map reference\n"
-      "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (bgp->vrf_id != VRF_DEFAULT) {
-		vty_out(vty,
-			"%% Only default BGP instance can use 'table-direct'\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	if (table_id == RT_TABLE_MAIN || table_id == RT_TABLE_LOCAL) {
-		vty_out(vty, "%% 'table-direct', can not use %" PRIu64 " routing table\n",
-			table_id);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_redistribute_unset(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT, table_id);
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_redistribute_ipv6_metric_rmap,
-       bgp_redistribute_ipv6_metric_rmap_cmd,
-       "redistribute " FRR_IP6_REDIST_STR_BGPD " metric (0-4294967295) route-map RMAP_NAME",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD
-       "Metric for redistributed routes\n"
-       "Default metric\n"
-       "Route map reference\n"
-       "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_number = 3;
-	int idx_word = 5;
-	uint8_t type;
-	uint32_t metric;
-	struct bgp_redist *red;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	metric = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
-	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP6, SAFI_UNICAST,
-						metric);
-	changed |=
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
-}
-
-DEFUN (no_bgp_redistribute_ipv6,
-       no_bgp_redistribute_ipv6_cmd,
-       "no redistribute " FRR_IP6_REDIST_STR_BGPD " [{metric (0-4294967295)|route-map RMAP_NAME}]",
-       NO_STR
-       "Redistribute information from another routing protocol\n"
-       FRR_IP6_REDIST_HELP_STR_BGPD
-       "Metric for redistributed routes\n"
-       "Default metric\n"
-       "Route map reference\n"
-       "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 2;
-	uint8_t type;
-
-	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_redistribute_unset(bgp, AFI_IP6, type, 0);
-	return CMD_SUCCESS;
-}
+/* bgp_redistribute_ipv6[_rmap|_metric|_rmap_metric|_metric_rmap], the
+ * numbered table-direct pair (bgp_redistribute_ipv6_table/
+ * no_bgp_redistribute_ipv6_table) and no_bgp_redistribute_ipv6: converted to
+ * northbound, see 'instance_afi_safis_redistribute_cli_cmd'/
+ * '_instance_cli_cmd' in bgp_cli_instance.c (M5 batch B11). Deleted outright
+ * (not just uninstalled) -- unlike the ipv4 forms, these had no BGP_NODE
+ * hidden-alias fallback, so once their BGP_IPV6_NODE install_element() calls
+ * are removed they have no reachable install site left (B7/B9 precedent).
+ */
 
 /* neighbor tcp-mss: converted to northbound, see
  * 'neighbor_tcp_mss_cli_cmd' in bgp_cli.c (M4 batch B3).
@@ -15912,6 +15680,19 @@ DEFPY(no_neighbor_ls_remote_link_id,
 	return CMD_SUCCESS;
 }
 
+/* M5 batch B11: instance-AF 'redistribute' (af-redistribute in
+ * proteus-bgp.yang) is mgmtd-owned for the two unicast-only instance AFs;
+ * their lines are emitted by afi_safis_redistribute_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c) instead. Every other (afi, safi) either
+ * falls through the 'Unicast redistribution only' check below or is a
+ * non-proteus AF (encap/flowspec/unreachability/link-state). */
+static bool bgp_af_redistribute_is_proteus(afi_t afi, safi_t safi)
+{
+	if (safi != SAFI_UNICAST)
+		return false;
+	return afi == AFI_IP || afi == AFI_IP6;
+}
+
 static void bgp_config_write_redistribute(struct vty *vty, struct bgp *bgp,
 					  afi_t afi, safi_t safi)
 {
@@ -15919,6 +15700,9 @@ static void bgp_config_write_redistribute(struct vty *vty, struct bgp *bgp,
 
 	/* Unicast redistribution only.  */
 	if (safi != SAFI_UNICAST)
+		return;
+
+	if (bgp_af_redistribute_is_proteus(afi, safi))
 		return;
 
 	for (i = 0; i < ZEBRA_ROUTE_MAX; i++) {
@@ -18340,28 +18124,14 @@ void bgp_vty_init(void)
 			&bgp_redistribute_ipv4_ospf_rmap_metric_hidden_cmd);
 	install_element(BGP_NODE,
 			&bgp_redistribute_ipv4_ospf_metric_rmap_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_redistribute_ipv4_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_rmap_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_metric_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_rmap_metric_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_metric_rmap_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_redistribute_ipv4_ospf_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_rmap_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_metric_cmd);
-	install_element(BGP_IPV4_NODE,
-			&bgp_redistribute_ipv4_ospf_rmap_metric_cmd);
-	install_element(BGP_IPV4_NODE,
-			&bgp_redistribute_ipv4_ospf_metric_rmap_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_redistribute_ipv6_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_rmap_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_metric_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_rmap_metric_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_metric_rmap_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_table_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_redistribute_ipv6_table_cmd);
+	/* BGP_IPV4_NODE/BGP_IPV6_NODE 'redistribute' installs retired in M5
+	 * batch B11 -- mgmtd now owns both (instance_afi_safis_redistribute_
+	 * cli_cmd/_instance_cli_cmd, bgp_cli_instance.c). The ipv4 DEFUNs stay
+	 * reachable via the BGP_NODE hidden aliases installed above (bare
+	 * 'redistribute ...' under 'router bgp' always meant ipv4-unicast,
+	 * matching the bare-BGP_NODE precedent B6-B10 established); ipv6 had
+	 * no such fallback, so its DEFUNs are deleted outright below (B7/B9
+	 * precedent for commands left with no reachable install site). */
 
 	/* redistribute show commands */
 	install_element(VIEW_NODE, &show_bgp_redistribute_cmd);

@@ -3830,6 +3830,137 @@ void afi_safis_aggregate_address_cli_write(struct vty *vty, const struct lyd_nod
 	vty_out(vty, "\n");
 }
 
+/*
+ * M5 batch B11: instance-AF 'redistribute' (af-redistribute in
+ * proteus-bgp.yang), the two unicast-only instance AFs (ipv4-unicast,
+ * ipv6-unicast). A keyed list (key 'protocol instance') with two option
+ * children (metric, route-map); collapses legacy's bgp_redistribute_ipv4-
+ * and bgp_redistribute_ipv6-family DEFUNs (bgp_vty.c) into one grammar shared by both
+ * AFs -- af-redistribute is the same grouping for both containers, and the
+ * v4-only/v6-only protocols (rip/ospf vs ripng/ospf6) aren't cross-checked
+ * against afi in the model itself; the apply-side proto_redistnum()
+ * NB_EV_VALIDATE rejects a wrong-AF protocol (e.g. 'redistribute rip' under
+ * ipv6-unicast), matching the grouping's own "FRR rejects the wrong ones at
+ * load time" description. A second grammar covers the instance-numbered
+ * form ('redistribute <ospf|table|table-direct> (1-65535)'), matching
+ * af-redistribute's description verbatim; legacy only ever exposed a subset
+ * of this per AF (ipv4: numbered ospf/table/table-direct; ipv6: numbered
+ * table-direct only, via the separate bgp_redistribute_ipv6_table DEFPY) --
+ * offering the full set symmetrically on both AFs is a side effect of
+ * following the shared af-redistribute grouping and its own instance-number
+ * description, the same kind of AF-set widening B9/B10 accepted for
+ * network/aggregate-address's ipv6-multicast coverage, not a deliberate
+ * behavior change.
+ *
+ * One CREATE plus a MODIFY-or-DESTROY on each of metric/route-map, always
+ * issued together (B9/B10 idiom) so a re-typed 'redistribute' line rewrites
+ * both options from scratch.
+ */
+static int bgp_cli_redistribute_apply(struct vty *vty, const char *no, const char *proto,
+				      const char *instance_str, const char *metric_str,
+				      const char *rmap)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/redistribute[protocol='%s'][instance='%s']",
+			   VTY_CURR_XPATH, container, proto, instance_str ? instance_str : "0");
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/metric", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, metric_str ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      metric_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, rmap ? NB_OP_MODIFY : NB_OP_DESTROY, rmap);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_redistribute, instance_afi_safis_redistribute_cli_cmd,
+	"[no] redistribute <babel|connected|eigrp|isis|kernel|nhrp|openfabric|ospf|ospf6|rip|ripng|sharp|static>$proto \
+	[{metric (0-4294967295)$metric|route-map RMAP_NAME$rmap}]",
+	NO_STR
+	"Redistribute information from another routing protocol\n"
+	"Babel routing protocol (Babel)\n"
+	"Connected routes (directly attached subnet or host)\n"
+	"Enhanced Interior Gateway Routing Protocol (EIGRP)\n"
+	"Intermediate System to Intermediate System (IS-IS)\n"
+	"Kernel routes (not installed via the zebra RIB)\n"
+	"Next Hop Resolution Protocol (NHRP)\n"
+	"OpenFabric Routing Protocol\n"
+	"Open Shortest Path First (OSPFv2)\n"
+	"Open Shortest Path First (IPv6) (OSPFv3)\n"
+	"Routing Information Protocol (RIP)\n"
+	"Routing Information Protocol next-generation (IPv6) (RIPng)\n"
+	"Super Happy Advanced Routing Protocol (SHARP)\n"
+	"Statically configured routes\n"
+	"Metric for redistributed routes\n"
+	"Default metric\n"
+	"Route map reference\n"
+	"Pointer to route-map entries\n")
+{
+	return bgp_cli_redistribute_apply(vty, no, proto, NULL, metric_str, rmap);
+}
+
+DEFPY_YANG(
+	instance_afi_safis_redistribute_instance, instance_afi_safis_redistribute_instance_cli_cmd,
+	"[no] redistribute <ospf|table|table-direct>$proto (1-65535)$instance \
+	[{metric (0-4294967295)$metric|route-map RMAP_NAME$rmap}]",
+	NO_STR
+	"Redistribute information from another routing protocol\n"
+	"Open Shortest Path First (OSPFv2)\n"
+	"Non-main Kernel Routing Table\n"
+	"Non-main Kernel Routing Table - Direct\n"
+	"Instance ID/Table ID\n"
+	"Metric for redistributed routes\n"
+	"Default metric\n"
+	"Route map reference\n"
+	"Pointer to route-map entries\n")
+{
+	return bgp_cli_redistribute_apply(vty, no, proto, instance_str, metric_str, rmap);
+}
+
+/* One 'redistribute PROTO [INSTANCE] [metric M] [route-map NAME]' line per
+ * list entry, matching bgp_config_write_redistribute()'s field order
+ * (bgp_vty.c, retired for these two AFs in M5 batch B11). Shared by both
+ * ipv4-unicast and ipv6-unicast -- af-redistribute models identical leaves
+ * for both. */
+void afi_safis_redistribute_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	uint16_t instance = yang_dnode_get_uint16(dnode, "instance");
+
+	vty_out(vty, "  redistribute %s", yang_dnode_get_string(dnode, "protocol"));
+
+	if (instance)
+		vty_out(vty, " %u", instance);
+
+	if (yang_dnode_exists(dnode, "metric"))
+		vty_out(vty, " metric %u", yang_dnode_get_uint32(dnode, "metric"));
+
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+
+	vty_out(vty, "\n");
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -4073,4 +4204,11 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
 	install_element(BGP_IPV6M_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
 	install_element(BGP_IPV6L_NODE, &instance_afi_safis_aggregate_address_ipv6_cli_cmd);
+
+	/* M5 B11: instance-AF 'redistribute' (ipv4-unicast/ipv6-unicast only
+	 * -- af-redistribute is unicast-only). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_redistribute_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_redistribute_instance_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_redistribute_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_redistribute_instance_cli_cmd);
 }

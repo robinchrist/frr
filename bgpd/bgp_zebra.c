@@ -2380,6 +2380,44 @@ bool bgp_redistribute_metric_set(struct bgp *bgp, struct bgp_redist *red,
 	return true;
 }
 
+/* Clear a redistribute entry's route-map without tearing down the entry
+ * itself, the counterpart to bgp_redistribute_rmap_set() for northbound leaf
+ * DESTROY (M5 batch B11) -- lifted from _bgp_redistribute_unset()'s inline
+ * route-map field clearing below, which additionally deletes the whole
+ * 'struct bgp_redist'.
+ */
+bool bgp_redistribute_rmap_unset(struct bgp_redist *red)
+{
+	if (!red->rmap.name)
+		return false;
+
+	XFREE(MTYPE_ROUTE_MAP_NAME, red->rmap.name);
+	route_map_counter_decrement(red->rmap.map);
+	red->rmap.map = NULL;
+
+	return true;
+}
+
+/* Clear a redistribute entry's metric override without tearing down the
+ * entry itself, the counterpart to bgp_redistribute_metric_set() for
+ * northbound leaf DESTROY (M5 batch B11). Unlike metric_set(), which
+ * rewrites already-redistributed paths' MED in place, clearing the override
+ * relies on bgp_redistribute_set()'s "changed" re-register cycle (caller's
+ * responsibility) to have zebra resend the routes so their MED is
+ * recomputed without an override, rather than guessing at a replacement
+ * value here.
+ */
+bool bgp_redistribute_metric_unset(struct bgp_redist *red)
+{
+	if (!red->redist_metric_flag)
+		return false;
+
+	red->redist_metric_flag = 0;
+	red->redist_metric = 0;
+
+	return true;
+}
+
 /* Unset redistribution.  */
 int bgp_redistribute_unreg(struct bgp *bgp, afi_t afi, int type,
 			   unsigned short instance)
