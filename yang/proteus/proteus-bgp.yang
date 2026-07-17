@@ -12,20 +12,11 @@ module proteus-bgp {
   import proteus-types {
     prefix pt;
   }
-  import proteus-filter {
-    prefix filter;
-  }
-  import proteus-bgp-filter {
-    prefix bgpfilter;
-  }
   import proteus-bfd {
     prefix bfd;
   }
   import proteus-interface {
     prefix intf;
-  }
-  import proteus-route-map {
-    prefix rmap;
   }
   import proteus-bgp-evpn {
     prefix evpn;
@@ -46,9 +37,13 @@ module proteus-bgp {
      -- the tree a user actually configures is invisible in any single
      file. This module states the whole configuration tree directly,
      top-down, in one place (with EVPN's field definitions split into
-     proteus-bgp-evpn.yang and route-maps into proteus-route-map.yang,
-     both pulled in with plain import + uses / leafref -- never
-     'augment').
+     proteus-bgp-evpn.yang, pulled in with plain import + uses -- never
+     'augment'). Policy-attachment names (route-map, prefix-list,
+     access-list, AS-path filter-list, distribute-list) are plain
+     strings, not leafrefs: like legacy FRR they are free-form,
+     forward-reference-tolerant references to entities owned by
+     frr-route-map / frr-filter (lib), which may be defined after the
+     attachment or by another daemon.
 
      Coverage: the full config surface that bgpd's own
      bgp_config_write() emits (bgpd/bgp_vty.c), i.e. everything the
@@ -865,9 +860,7 @@ module proteus-bgp {
         default "false";
       }
       leaf route-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
         description
           "Advertise the default only if the route-map permits.";
       }
@@ -976,9 +969,7 @@ module proteus-bgp {
            with count -- one CLI slot (the 'must').";
       }
       leaf route-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
         description
           "Restrict allowas-in to routes the route-map permits.";
       }
@@ -1012,12 +1003,11 @@ module proteus-bgp {
 
     /*
      * The 'filters' container is deliberately NOT part of this
-     * grouping: its distribute-list/prefix-list leaves are leafrefs
-     * whose target family (IPv4 vs. IPv6 access-/prefix-lists)
-     * depends on the address family the grouping lands in. Every AF
-     * container pairs 'uses neighbor-af' with the matching
-     * 'uses neighbor-af-filters-<family>' grouping (defined right
-     * after this one).
+     * grouping: it is split one grouping per address family so each
+     * family's distribute-list/prefix-list CLI wording stays with its
+     * own family. Every AF container pairs 'uses neighbor-af' with the
+     * matching 'uses neighbor-af-filters-<family>' grouping (defined
+     * right after this one).
      */
 
     container attribute-unchanged {
@@ -1081,13 +1071,12 @@ module proteus-bgp {
   }
 
   /*
-   * The per-AF 'filters' container, one grouping per address family
-   * so the distribute-list/prefix-list leafrefs can point at the
-   * right family's access-/prefix-lists. The family-independent tail
-   * (AS-path filter-lists, route-maps, conditional advertisement)
-   * lives in neighbor-af-filters-common; l2vpn-evpn gets a variant
-   * whose distribute/prefix leaves stay plain strings -- neither
-   * family's list is the right leafref target for EVPN routes.
+   * The per-AF 'filters' container, one grouping per address family so
+   * each family's distribute-list/prefix-list CLI wording stays with
+   * its own family. The family-independent tail (AS-path filter-lists,
+   * route-maps, conditional advertisement) lives in
+   * neighbor-af-filters-common; l2vpn-evpn gets its own variant. All
+   * policy-name leaves are plain strings (see the module description).
    */
 
   grouping neighbor-af-filters-common {
@@ -1096,39 +1085,27 @@ module proteus-bgp {
        (bgp_config_write_filter in bgpd/bgp_vty.c).";
 
     leaf filter-list-in {
-      type leafref {
-        path "/bgpfilter:as-path-access-list/"
-           + "bgpfilter:name";
-      }
+      type string;
       description
         "'neighbor X filter-list NAME in' (AS-path filter).";
     }
     leaf filter-list-out {
-      type leafref {
-        path "/bgpfilter:as-path-access-list/"
-           + "bgpfilter:name";
-      }
+      type string;
       description
         "'neighbor X filter-list NAME out'.";
     }
     leaf route-map-in {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "'neighbor X route-map NAME in'.";
     }
     leaf route-map-out {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "'neighbor X route-map NAME out'.";
     }
     leaf unsuppress-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "'neighbor X unsuppress-map NAME': advertise
          aggregate-suppressed routes the map permits.";
@@ -1138,9 +1115,7 @@ module proteus-bgp {
         "'neighbor X advertise-map NAME <exist-map|non-exist-map>
          NAME' (conditional advertisement, always outbound).";
       leaf advertise-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
       }
       leaf condition {
         type enumeration {
@@ -1156,9 +1131,7 @@ module proteus-bgp {
         }
       }
       leaf condition-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
       }
     }
   }
@@ -1184,34 +1157,22 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        type leafref {
-          path "/filter:access-lists/filter:ipv4/"
-             + "filter:access-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        type leafref {
-          path "/filter:access-lists/filter:ipv4/"
-             + "filter:access-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        type leafref {
-          path "/filter:prefix-lists/filter:ipv4/"
-             + "filter:prefix-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        type leafref {
-          path "/filter:prefix-lists/filter:ipv4/"
-             + "filter:prefix-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X prefix-list NAME out'.";
       }
@@ -1240,34 +1201,22 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        type leafref {
-          path "/filter:access-lists/filter:ipv6/"
-             + "filter:access-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        type leafref {
-          path "/filter:access-lists/filter:ipv6/"
-             + "filter:access-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        type leafref {
-          path "/filter:prefix-lists/filter:ipv6/"
-             + "filter:prefix-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        type leafref {
-          path "/filter:prefix-lists/filter:ipv6/"
-             + "filter:prefix-list/filter:name";
-        }
+        type string;
         description
           "'neighbor X prefix-list NAME out'.";
       }
@@ -1296,27 +1245,21 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        // No leafref: under l2vpn evpn FRR accepts any list name and
-        // neither the IPv4 nor the IPv6 access-list tree is the
-        // right target, so the reference stays unchecked.
         type string;
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        // No leafref: see distribute-list-in.
         type string;
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        // No leafref: see distribute-list-in.
         type string;
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        // No leafref: see distribute-list-in.
         type string;
         description
           "'neighbor X prefix-list NAME out'.";
@@ -1363,9 +1306,7 @@ module proteus-bgp {
     }
 
     leaf table-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "'table-map NAME': route-map filtering/modifying what BGP
          downloads to the RIB (bgp_config_write_table_map in
@@ -1415,9 +1356,8 @@ module proteus-bgp {
 
     /*
      * The 'distance' container is NOT part of this grouping: its
-     * per-prefix override list carries a family-typed prefix and an
-     * access-list leafref, so every AF container pairs
-     * 'uses af-route-selection' with the matching
+     * per-prefix override list carries a family-typed prefix, so every
+     * AF container pairs 'uses af-route-selection' with the matching
      * 'uses af-distance-<family>' below.
      */
   }
@@ -1476,10 +1416,7 @@ module proteus-bgp {
           mandatory true;
         }
         leaf access-list {
-          type leafref {
-            path "/filter:access-lists/filter:ipv4/"
-               + "filter:access-list/filter:name";
-          }
+          type string;
         }
       }
     }
@@ -1513,10 +1450,7 @@ module proteus-bgp {
           mandatory true;
         }
         leaf access-list {
-          type leafref {
-            path "/filter:access-lists/filter:ipv6/"
-               + "filter:access-list/filter:name";
-          }
+          type string;
         }
       }
     }
@@ -1589,9 +1523,7 @@ module proteus-bgp {
           "'metric (0-4294967295)'.";
       }
       leaf route-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
       }
     }
   }
@@ -1638,9 +1570,7 @@ module proteus-bgp {
         "Suppress the more-specific contributors.";
     }
     leaf route-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "Apply to the aggregate route's attributes.";
     }
@@ -1659,9 +1589,7 @@ module proteus-bgp {
          MED.";
     }
     leaf suppress-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "Suppress only the contributors the route-map matches.";
     }
@@ -1881,17 +1809,13 @@ module proteus-bgp {
         "'label (0-1048575)': MPLS label carried in the VPN NLRI.";
     }
     leaf route-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
     }
   }
 
   grouping network-options {
     leaf route-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
     }
     leaf label-index {
       type uint32 {
@@ -1942,9 +1866,7 @@ module proteus-bgp {
          // auto-creates the target instance if it doesn't exist.";
     }
     leaf import-vrf-route-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "'import vrf route-map NAME'
          (af_import_vrf_route_map_cmd): filter applied to
@@ -1969,9 +1891,7 @@ module proteus-bgp {
          // see the module description.";
 
       leaf route-map-import {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
         must "not(../../import-vrf-route-map)" {
           error-message
             "route-map vpn import and import vrf route-map occupy
@@ -1984,9 +1904,7 @@ module proteus-bgp {
            routes leaked from the VPN table into this AF.";
       }
       leaf route-map-export {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
         description
           "'route-map vpn export NAME': filter applied to routes
            leaked from this AF to the VPN table.";
