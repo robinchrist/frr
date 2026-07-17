@@ -206,6 +206,53 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_evpn_ead_es_route_target_export_ipv4_cli_write,
 			}
 		},
+		/* M6 B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/
+		 * 'advertise-svi-ip'/'advertise-subnet'. 'rd's cli_show is
+		 * registered on each choice case's assigned-number leaf, the
+		 * same "one point reached regardless of which case is set"
+		 * idiom as mac-vrf-soo above. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/rd/as2/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/rd/as4/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/rd/ipv4/assigned-number",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rd_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/flooding",
+			.cbs = {
+				.cli_show = instance_evpn_vni_flooding_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/advertise-default-gw",
+			.cbs = {
+				.cli_show = instance_evpn_vni_advertise_default_gw_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/advertise-svi-ip",
+			.cbs = {
+				.cli_show = instance_evpn_vni_advertise_svi_ip_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/advertise-subnet",
+			.cbs = {
+				.cli_show = instance_evpn_vni_advertise_subnet_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

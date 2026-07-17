@@ -2285,8 +2285,8 @@ static void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf)
 /*
  * Configure RD for a VNI (vty handler)
  */
-static void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
-			      struct prefix_rd *rd, const char *rd_pretty)
+void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
+		       struct prefix_rd *rd, const char *rd_pretty)
 {
 	/* If the VNI is "live", we need to delete and withdraw this VNI's
 	 * local routes with the prior RD first. Then, after updating RD,
@@ -2309,7 +2309,7 @@ static void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Unconfigure RD for a VNI (vty handler)
  */
-static void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
+void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	/* If the VNI is "live", we need to delete and withdraw this VNI's
 	 * local routes with the prior RD first. Then, after resetting RD
@@ -3661,8 +3661,8 @@ static void evpn_process_default_originate_cmd(struct bgp *bgp_vrf,
 /*
  * evpn - enable advertisement of default g/w
  */
-static void evpn_set_advertise_subnet(struct bgp *bgp,
-				      struct bgpevpn *vpn)
+void evpn_set_advertise_subnet(struct bgp *bgp,
+			       struct bgpevpn *vpn)
 {
 	if (vpn->advertise_subnet)
 		return;
@@ -3674,7 +3674,7 @@ static void evpn_set_advertise_subnet(struct bgp *bgp,
 /*
  * evpn - disable advertisement of default g/w
  */
-static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn)
+void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	if (!vpn->advertise_subnet)
 		return;
@@ -3787,6 +3787,59 @@ static const char *bgp_evpn_autort_mode_str(enum bgp_evpn_autort_cfgd autort)
 	return NULL;
 }
 
+/* True once this VNI has at least one still-native line to emit: a manually
+ * configured (non-auto) import/export route-target, or an explicit
+ * auto-route-target mode for either direction. VNI route-targets stay
+ * native pending M6 B9's remodel. */
+static bool bgp_evpn_vni_has_native_rt_cfg(struct bgpevpn *vpn)
+{
+	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
+
+	return bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_import) ||
+	       rt_config->autort_cfgd_import != BGP_EVPN_AUTORT_NOT_CFGD ||
+	       bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_export) ||
+	       rt_config->autort_cfgd_export != BGP_EVPN_AUTORT_NOT_CFGD;
+}
+
+/* True once any of this VNI's converted sub-leaves (rd, flooding,
+ * advertise-default-gw/svi-ip/subnet -- M6 B6) is set. Mirrors
+ * bgp_evpn_vni_dnode_has_cfg() (bgp_cli_instance.c, M6 B1) against bgpd's
+ * own struct state instead of the mgmtd datastore: whenever this is true,
+ * mgmtd's instance_evpn_vni_cli_write is already emitting this vni's
+ * 'vni N' / 'exit-vni' frame with the converted content nested inside, so
+ * write_vni_config below must not also emit a (now content-free) frame of
+ * its own for it -- unless bgp_evpn_vni_has_native_rt_cfg() is also true,
+ * in which case both sides emit their own complete frame (see
+ * write_vni_config's doc comment).
+ */
+static bool bgp_evpn_vni_has_converted_cfg(struct bgpevpn *vpn)
+{
+	return is_rd_configured(vpn) || vpn->vxlan_flood_ctrl != VXLAN_FLOOD_INHERIT_GLOBAL ||
+	       vpn->advertise_gw_macip || vpn->advertise_svi_macip || vpn->advertise_subnet;
+}
+
+/*
+ * M6 batch B6: per-VNI 'rd', 'flooding', 'advertise-default-gw',
+ * 'advertise-svi-ip' and 'advertise-subnet' all moved to mgmtd
+ * (bgp_nb_evpn.c / bgp_cli_instance.c); only the route-target/
+ * auto-route-target lines below stay native pending B9's remodel.
+ *
+ * Dual-emission: mgmtd's instance_evpn_vni_cli_write (bgp_cli_instance.c)
+ * emits the 'vni N' / 'exit-vni' frame once bgp_evpn_vni_dnode_has_cfg()
+ * sees a converted child -- the same condition as
+ * bgp_evpn_vni_has_converted_cfg() above, mirrored against the mgmtd
+ * datastore instead of this struct. This native emitter therefore stays
+ * fully silent for a vni with converted content and no native RT
+ * configuration (mgmtd's frame already says everything there is to say),
+ * but still emits its OWN complete 'vni N' ... 'exit-vni' frame whenever a
+ * native RT line exists, even alongside a converted-content vni -- two
+ * separate blocks for the same list entry in the merged running-config,
+ * tolerated by vtysh's merge the same way dual 'address-family' blocks
+ * already are (re-entering the same list-entry context, not erroring).
+ * The one case both predicates return false for -- a vni with literally
+ * nothing configured -- still gets its bare frame from here, exactly as
+ * before B1: mgmtd's has-cfg guard never renders for it.
+ */
 static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
@@ -3794,48 +3847,33 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 	const char *autort_mode_str;
 	char rt_buf[RT_ADDRSTRLEN];
 
-	if (is_vni_configured(vpn)) {
-		vty_out(vty, "  vni %u\n", vpn->vni);
-		if (is_rd_configured(vpn))
-			vty_out(vty, "   rd %s\n", vpn->prd_pretty);
+	if (!is_vni_configured(vpn))
+		return;
 
-		if (!vpn->bgp_vrf ||
-		    (vpn->bgp_vrf && (vpn->vxlan_flood_ctrl != vpn->bgp_vrf->vxlan_flood_ctrl))) {
-			if (vpn->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
-				vty_out(vty, "   flooding disable\n");
-			else if (vpn->vxlan_flood_ctrl == VXLAN_FLOOD_HEAD_END_REPL)
-				vty_out(vty, "   flooding head-end-replication\n");
-		}
+	if (!bgp_evpn_vni_has_native_rt_cfg(vpn) && bgp_evpn_vni_has_converted_cfg(vpn))
+		return;
 
-		frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
-			bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-			vty_out(vty, "   route-target import %s\n", rt_buf);
-		}
+	vty_out(vty, "  vni %u\n", vpn->vni);
 
-		autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_import);
-		if (autort_mode_str)
-			vty_out(vty, "   auto-route-target import %s\n", autort_mode_str);
-
-		frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
-			bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-			vty_out(vty, "   route-target export %s\n", rt_buf);
-		}
-
-		autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_export);
-		if (autort_mode_str)
-			vty_out(vty, "   auto-route-target export %s\n", autort_mode_str);
-
-		if (vpn->advertise_gw_macip)
-			vty_out(vty, "   advertise-default-gw\n");
-
-		if (vpn->advertise_svi_macip)
-			vty_out(vty, "   advertise-svi-ip\n");
-
-		if (vpn->advertise_subnet)
-			vty_out(vty, "   advertise-subnet\n");
-
-		vty_out(vty, "  exit-vni\n");
+	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "   route-target import %s\n", rt_buf);
 	}
+
+	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_import);
+	if (autort_mode_str)
+		vty_out(vty, "   auto-route-target import %s\n", autort_mode_str);
+
+	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
+		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
+		vty_out(vty, "   route-target export %s\n", rt_buf);
+	}
+
+	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_export);
+	if (autort_mode_str)
+		vty_out(vty, "   auto-route-target export %s\n", autort_mode_str);
+
+	vty_out(vty, "  exit-vni\n");
 }
 
 #include "bgpd/bgp_evpn_vty_clippy.c"
@@ -3843,41 +3881,13 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 /* Instance-level 'flooding <disable|head-end-replication>': converted to
  * proteus/northbound in M6 batch B3; mgmtd owns the CLI and
  * bgp_config_write_evpn_info's emission is gated off for it. The per-VNI
- * 'flooding' (bgp_evpn_flood_control_vni_cmd) below stays native. */
+ * 'flooding' (bgp_evpn_flood_control_vni_cmd) converted in M6 batch B6
+ * (see the comment above write_vni_config, above). */
 
-DEFPY (bgp_evpn_advertise_default_gw_vni,
-       bgp_evpn_advertise_default_gw_vni_cmd,
-       "advertise-default-gw",
-       "Advertise default g/w mac-ip routes in EVPN for a VNI\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	evpn_set_advertise_default_gw(bgp, vpn);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_advertise_default_vni_gw,
-       no_bgp_evpn_advertise_default_gw_vni_cmd,
-       "no advertise-default-gw",
-       NO_STR
-       "Withdraw default g/w mac-ip routes from EVPN for a VNI\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	evpn_unset_advertise_default_gw(bgp, vpn);
-
-	return CMD_SUCCESS;
-}
-
+/* Per-VNI 'advertise-default-gw' / 'no advertise-default-gw'
+ * (bgp_evpn_advertise_default_gw_vni_cmd / no_bgp_evpn_advertise_default_gw_vni_cmd):
+ * converted to proteus/northbound in M6 batch B6; mgmtd owns the CLI and
+ * write_vni_config's emission is gated off for it. */
 
 /* advertise-default-gw / advertise-all-vni: converted to proteus/northbound
  * in M6 batch B2 (instance-level flag leaves); mgmtd owns the CLI and
@@ -4026,68 +4036,23 @@ DEFPY (no_dup_addr_detection,
 }
 
 /* Instance-level advertise-svi-ip: converted to proteus/northbound in M6
- * batch B2. The per-VNI 'advertise-svi-ip' (bgp_evpn_advertise_svi_ip_vni)
- * below stays native until M6 batch B6. */
-
-DEFPY(bgp_evpn_advertise_svi_ip_vni,
-      bgp_evpn_advertise_svi_ip_vni_cmd,
-      "[no$no] advertise-svi-ip",
-      NO_STR
-      "Advertise svi mac-ip routes in EVPN for a VNI\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (no)
-		evpn_set_advertise_svi_macip(bgp, vpn, 0);
-	else
-		evpn_set_advertise_svi_macip(bgp, vpn, 1);
-
-	return CMD_SUCCESS;
-}
+ * batch B2. The per-VNI 'advertise-svi-ip' (bgp_evpn_advertise_svi_ip_vni_cmd)
+ * converted to proteus/northbound in M6 batch B6; mgmtd owns the CLI and
+ * write_vni_config's emission is gated off for it. */
 
 /* 'mac-vrf soo': converted to proteus/northbound in M6 batch B3
  * (instance-level site-of-origin); mgmtd owns the CLI and
  * bgp_config_write_evpn_info's emission is gated off for it. */
 
-DEFUN_HIDDEN (bgp_evpn_advertise_vni_subnet,
-	      bgp_evpn_advertise_vni_subnet_cmd,
-	      "advertise-subnet",
-	      "Advertise the subnet corresponding to VNI\n")
-{
-	struct bgp *bgp_vrf = NULL;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	bgp_vrf = bgp_lookup_by_vrf_id(vpn->tenant_vrf_id);
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	evpn_set_advertise_subnet(bgp, vpn);
-	return CMD_SUCCESS;
-}
-
-DEFUN_HIDDEN (no_bgp_evpn_advertise_vni_subnet,
-	      no_bgp_evpn_advertise_vni_subnet_cmd,
-	      "no advertise-subnet",
-	      NO_STR
-	      "Advertise All local VNIs\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	evpn_unset_advertise_subnet(bgp, vpn);
-	return CMD_SUCCESS;
-}
+/* 'advertise-subnet' / 'no advertise-subnet' (bgp_evpn_advertise_vni_subnet_cmd /
+ * no_bgp_evpn_advertise_vni_subnet_cmd): converted to proteus/northbound in
+ * M6 batch B6; mgmtd owns the CLI (kept DEFPY_YANG_HIDDEN, matching
+ * legacy's DEFUN_HIDDEN) and write_vni_config's emission is gated off for
+ * it. evpn_set_advertise_subnet()
+ * / evpn_unset_advertise_subnet() are un-static'd (bgp_evpn_vty.h) for the
+ * new callback (bgp_nb_evpn.c), which reproduces the legacy positive form's
+ * bgp_lookup_by_vrf_id(vpn->tenant_vrf_id) guard (silently no-ops, matching
+ * legacy's soft CMD_WARNING, when the VNI has no tenant VRF attached). */
 
 DEFUN (bgp_evpn_advertise_type5,
        bgp_evpn_advertise_type5_cmd,
@@ -6148,44 +6113,9 @@ ALIAS_HIDDEN(show_bgp_l2vpn_evpn_import_rt, show_bgp_evpn_import_rt_cmd,
 	     "show bgp evpn import-rt",
 	     SHOW_STR BGP_STR EVPN_HELP_STR "Show import route target\n")
 
-DEFPY(bgp_evpn_flood_control_vni,
-      bgp_evpn_flood_control_vni_cmd,
-      "[no$no] flooding <disable$disable|head-end-replication$her>",
-      NO_STR
-      "Specify handling for BUM packets\n"
-      "Do not flood any BUM packets\n"
-      "Flood BUM packets using head-end replication\n")
-{
-	struct bgpevpn *evpn = NULL;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	enum vxlan_flood_control flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
-
-	if (vty->node == BGP_EVPN_VNI_NODE)
-		evpn = VTY_GET_CONTEXT_SUB(bgpevpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!evpn)
-		return CMD_WARNING;
-
-	if (no) {
-		flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
-	} else {
-		if (disable)
-			flood_ctrl = VXLAN_FLOOD_DISABLED;
-		else if (her)
-			flood_ctrl = VXLAN_FLOOD_HEAD_END_REPL;
-	}
-
-	if (evpn->vxlan_flood_ctrl == flood_ctrl)
-		return CMD_SUCCESS;
-
-	evpn->vxlan_flood_ctrl = flood_ctrl;
-	bgp_evpn_flood_control_change(bgp);
-
-	return CMD_SUCCESS;
-}
+/* Per-VNI 'flooding <disable|head-end-replication>' (bgp_evpn_flood_control_vni_cmd):
+ * converted to proteus/northbound in M6 batch B6; mgmtd owns the CLI and
+ * write_vni_config's emission is gated off for it below. */
 
 DEFUN_NOSH (bgp_evpn_vni,
             bgp_evpn_vni_cmd,
@@ -6339,111 +6269,12 @@ DEFUN (no_bgp_evpn_vrf_rd_without_val,
 	return CMD_SUCCESS;
 }
 
-DEFUN (bgp_evpn_vni_rd,
-       bgp_evpn_vni_rd_cmd,
-       "rd ASN:NN_OR_IP-ADDRESS:NN",
-       EVPN_RT_DIST_HELP_STR
-       EVPN_ASN_IP_HELP_STR)
-{
-	struct prefix_rd prd;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	ret = str2prefix_rd(argv[1]->arg, &prd);
-	if (!ret) {
-		vty_out(vty, "%% Malformed Route Distinguisher\n");
-		return CMD_WARNING;
-	}
-
-	/* If same as existing value, there is nothing more to do. */
-	if (bgp_evpn_rd_matches_existing(vpn, &prd))
-		return CMD_SUCCESS;
-
-	/* Configure or update the RD. */
-	evpn_configure_rd(bgp, vpn, &prd, argv[1]->arg);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_evpn_vni_rd,
-       no_bgp_evpn_vni_rd_cmd,
-       "no rd ASN:NN_OR_IP-ADDRESS:NN",
-       NO_STR
-       EVPN_RT_DIST_HELP_STR
-       EVPN_ASN_IP_HELP_STR)
-{
-	struct prefix_rd prd;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	ret = str2prefix_rd(argv[2]->arg, &prd);
-	if (!ret) {
-		vty_out(vty, "%% Malformed Route Distinguisher\n");
-		return CMD_WARNING;
-	}
-
-	/* Check if we should disallow. */
-	if (!is_rd_configured(vpn)) {
-		vty_out(vty, "%% RD is not configured for this VNI\n");
-		return CMD_WARNING;
-	}
-
-	if (!bgp_evpn_rd_matches_existing(vpn, &prd)) {
-		vty_out(vty,
-			"%% RD specified does not match configuration for this VNI\n");
-		return CMD_WARNING;
-	}
-
-	evpn_unconfigure_rd(bgp, vpn);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_evpn_vni_rd_without_val,
-       no_bgp_evpn_vni_rd_without_val_cmd,
-       "no rd",
-       NO_STR
-       EVPN_RT_DIST_HELP_STR)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	/* Check if we should disallow. */
-	if (!is_rd_configured(vpn)) {
-		vty_out(vty, "%% RD is not configured for this VNI\n");
-		return CMD_WARNING;
-	}
-
-	evpn_unconfigure_rd(bgp, vpn);
-	return CMD_SUCCESS;
-}
+/* Per-VNI 'rd ASN:NN_OR_IP-ADDRESS:NN' / 'no rd [...]'
+ * (bgp_evpn_vni_rd_cmd / no_bgp_evpn_vni_rd_cmd / no_bgp_evpn_vni_rd_without_val_cmd):
+ * converted to proteus/northbound in M6 batch B6; mgmtd owns the CLI and
+ * write_vni_config's rd line is gated off below. evpn_configure_rd() /
+ * evpn_unconfigure_rd() are un-static'd (bgp_evpn_vty.h) for the new
+ * callbacks (bgp_nb_evpn.c). */
 
 /*
  * Loop over all extended-communities in the route-target list rtl and
@@ -7879,10 +7710,10 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_flood_control_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rd_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_without_val_cmd);
+	/* per-VNI 'rd', 'flooding', 'advertise-default-gw', 'advertise-svi-ip'
+	 * and 'advertise-subnet': converted to proteus/northbound (M6 batch
+	 * B6); mgmtd owns the CLI. route-target/auto-route-target below stay
+	 * native pending B9's remodel. */
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rt_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_without_val_cmd);
@@ -7899,12 +7730,4 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_cmd);
 	/* ead-es-route-target export / ead-es-frag evi-limit: converted to
 	 * proteus/northbound (M6 batch B5); mgmtd owns the CLI. */
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_svi_ip_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE,
-			&bgp_evpn_advertise_default_gw_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE,
-			&no_bgp_evpn_advertise_default_gw_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_vni_subnet_cmd);
-	install_element(BGP_EVPN_VNI_NODE,
-			&no_bgp_evpn_advertise_vni_subnet_cmd);
 }

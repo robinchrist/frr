@@ -520,6 +520,154 @@ DEFPY_YANG(
 }
 
 /*
+ * M6 batch B6: per-VNI 'rd', 'flooding', 'advertise-default-gw',
+ * 'advertise-svi-ip' and 'advertise-subnet' (mgmtd side, all installed at
+ * BGP_EVPN_VNI_NODE -- reached only after 'vni N' pushes the vni entry's own
+ * xpath as the current context base, M6 B1).
+ *
+ * 'rd ASN:NN_OR_IP-ADDRESS:NN' reuses bgp_cli_soo_parse() (same
+ * ASN:NN_OR_IP-ADDRESS:NN token grammar, same as2-vs-as4-vs-ipv4 magnitude
+ * split as str2prefix_rd()) to route the token to the matching as2/as4/ipv4
+ * case's two leaves -- 'administrator'/'assigned-number' rather than
+ * soo/RT's 'global-admin'/'local-admin', but the same byte widths per case
+ * (RD types 0/1/2 use the identical AS-vs-IP administrator / 4-vs-2-byte
+ * assigned-number split as RFC 4360 extended communities). 'no rd [...]'
+ * destroys the whole presence container regardless of the optional
+ * trailing token, matching mac-vrf-soo's 'no' form (M6 B3) rather than
+ * legacy's own value-matching negative-form guard (bgp_nb_evpn.c's doc
+ * comment on bgp_nb_evpn_vni_rd_set() has the detail).
+ *
+ * 'flooding' keeps the identical grammar/logic as the AF-level form above:
+ * 'flooding disable'/'flooding head-end-replication' write the given case,
+ * 'no flooding <either form>' always destroys back to the per-VNI-only
+ * "inherit" tri-state (VXLAN_FLOOD_INHERIT_GLOBAL, bgp_nb_evpn.c), which has
+ * no AF-level equivalent (that leaf's DESTROY instead restores
+ * head-end-replication).
+ *
+ * 'advertise-default-gw'/'advertise-svi-ip'/'advertise-subnet' are plain
+ * Tier A booleans, same MODIFY-true/DESTROY shape as their instance-level
+ * counterparts above (M6 B2); 'advertise-subnet' keeps DEFPY_YANG_HIDDEN,
+ * matching legacy's DEFUN_HIDDEN.
+ */
+DEFPY_YANG(
+	bgp_evpn_vni_rd, bgp_evpn_vni_rd_cli_cmd,
+	"rd ASN:NN_OR_IP-ADDRESS:NN$rd",
+	EVPN_RT_DIST_HELP_STR
+	EVPN_ASN_IP_HELP_STR)
+{
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	char xpath[XPATH_MAXLEN];
+	const char *case_name;
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed Route Distinguisher\n");
+		return CMD_WARNING;
+	}
+
+	switch (rd_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	snprintf(xpath, sizeof(xpath), "./rd/%s/administrator", case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, administrator);
+
+	snprintf(xpath, sizeof(xpath), "./rd/%s/assigned-number", case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, assigned_number);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vni_rd, no_bgp_evpn_vni_rd_cli_cmd,
+	"no rd [ASN:NN_OR_IP-ADDRESS:NN]",
+	NO_STR
+	EVPN_RT_DIST_HELP_STR
+	EVPN_ASN_IP_HELP_STR)
+{
+	nb_cli_enqueue_change(vty, "./rd", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_flood_control_vni, bgp_evpn_flood_control_vni_cli_cmd,
+	"[no$no] flooding <disable$disable|head-end-replication$her>",
+	NO_STR
+	"Specify handling for BUM packets\n"
+	"Do not flood any BUM packets\n"
+	"Flood BUM packets using head-end replication\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./flooding", NB_OP_DESTROY, NULL);
+	else if (disable)
+		nb_cli_enqueue_change(vty, "./flooding", NB_OP_MODIFY, "disable");
+	else
+		nb_cli_enqueue_change(vty, "./flooding", NB_OP_MODIFY, "head-end-replication");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_advertise_default_gw_vni, bgp_evpn_advertise_default_gw_vni_cli_cmd,
+	"advertise-default-gw",
+	"Advertise default g/w mac-ip routes in EVPN for a VNI\n")
+{
+	nb_cli_enqueue_change(vty, "./advertise-default-gw", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_advertise_default_gw_vni, no_bgp_evpn_advertise_default_gw_vni_cli_cmd,
+	"no advertise-default-gw",
+	NO_STR
+	"Withdraw default g/w mac-ip routes from EVPN for a VNI\n")
+{
+	nb_cli_enqueue_change(vty, "./advertise-default-gw", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_advertise_svi_ip_vni, bgp_evpn_advertise_svi_ip_vni_cli_cmd,
+	"[no$no] advertise-svi-ip",
+	NO_STR
+	"Advertise svi mac-ip routes in EVPN for a VNI\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./advertise-svi-ip", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./advertise-svi-ip", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG_HIDDEN(
+	bgp_evpn_advertise_vni_subnet, bgp_evpn_advertise_vni_subnet_cli_cmd,
+	"advertise-subnet",
+	"Advertise the subnet corresponding to VNI\n")
+{
+	nb_cli_enqueue_change(vty, "./advertise-subnet", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG_HIDDEN(
+	no_bgp_evpn_advertise_vni_subnet, no_bgp_evpn_advertise_vni_subnet_cli_cmd,
+	"no advertise-subnet",
+	NO_STR
+	"Advertise All local VNIs\n")
+{
+	nb_cli_enqueue_change(vty, "./advertise-subnet", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
  * M6 batch B4: 'dup-addr-detection max-moves ... time ...' and
  * 'dup-addr-detection freeze <permanent|N>' (dup_addr_detection_cmd /
  * dup_addr_detection_auto_recovery_cmd's value-bearing sub-forms). The bare
@@ -3303,6 +3451,81 @@ void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dn
 		vty_out(vty, "  flooding disable\n");
 }
 
+/* M6 batch B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/
+ * 'advertise-svi-ip'/'advertise-subnet' emitters, reproducing
+ * write_vni_config()'s (bgp_evpn_vty.c) per-VNI lines at their three-space
+ * indent -- nested one level under the two-space 'vni N' header/'exit-vni'
+ * trailer emitted by instance_evpn_vni_cli_write()/_end() above. 'rd'
+ * mirrors mac-vrf-soo above: registered on each choice case's
+ * assigned-number leaf, reprinting '<administrator>:<assigned-number>'
+ * (RD-specific field names, not soo/RT's global-admin/local-admin).
+ *
+ * 'flooding' differs from the AF-level emitter above: legacy's
+ * write_vni_config() writes BOTH 'flooding disable' and 'flooding
+ * head-end-replication' as real per-VNI overrides (unlike the AF level,
+ * where head-end-replication is the compiled default and so never needs
+ * writing back) -- because the per-VNI leaf's own unset state means
+ * "inherit the address-family/tenant-VRF setting", a third state distinct
+ * from head-end-replication. Legacy additionally suppressed the line
+ * entirely when the per-VNI value equalled the VNI's tenant-VRF bgp
+ * instance's own flood_ctrl (a redundant-override dedup); that comparison
+ * has no clean northbound equivalent (it would require this cli_show to
+ * cross-reference a different bgp instance's own AF-level leaf) and is not
+ * reproduced here -- a documented, narrow verbosity difference (an
+ * explicit per-VNI override that happens to match its tenant VRF's own
+ * flooding setting now always renders, where legacy suppressed it),
+ * harmless for config-apply correctness since re-applying the same value
+ * is idempotent either way.
+ */
+void instance_evpn_vni_rd_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	const struct lyd_node *rd = yang_dnode_get_parent(dnode, "rd");
+	const char *case_name;
+
+	if (yang_dnode_exists(rd, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(rd, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(rd, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "   rd %s:%s\n", yang_dnode_get_string(rd, "%s/administrator", case_name),
+		yang_dnode_get_string(rd, "%s/assigned-number", case_name));
+}
+
+void instance_evpn_vni_flooding_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	if (strmatch(yang_dnode_get_string(dnode, NULL), "disable"))
+		vty_out(vty, "   flooding disable\n");
+	else
+		vty_out(vty, "   flooding head-end-replication\n");
+}
+
+void instance_evpn_vni_advertise_default_gw_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "   advertise-default-gw\n");
+}
+
+void instance_evpn_vni_advertise_svi_ip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "   advertise-svi-ip\n");
+}
+
+void instance_evpn_vni_advertise_subnet_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "   advertise-subnet\n");
+}
+
 /* M6 batch B4: reproduces bgp_config_write_evpn_info()'s max-moves/time and
  * freeze lines (bgp_evpn_vty.c) for the mgmtd-owned sub-forms; 'enabled'
  * (the still-native bare toggle) is printed separately by that same legacy
@@ -5228,6 +5451,17 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cli_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cli_cmd);
+
+	/* M6 B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/
+	 * 'advertise-svi-ip'/'advertise-subnet' (mgmtd side). */
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rd_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rd_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_flood_control_vni_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_default_gw_vni_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_advertise_default_gw_vni_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_svi_ip_vni_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_vni_subnet_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_advertise_vni_subnet_cli_cmd);
 
 	/* M6 B2: instance-level l2vpn-evpn advertise-flag leaves (mgmtd side). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_all_vni_cli_cmd);

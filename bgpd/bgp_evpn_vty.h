@@ -26,6 +26,16 @@ extern void evpn_unset_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn
 extern void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn, uint32_t set);
 extern void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set);
 
+/* Per-VNI RD configure/unconfigure (vty-free) and the subnet-advertisement
+ * setters, shared with the proteus/northbound 'vni N' sub-leaf callbacks
+ * (bgp_nb_evpn.c, M6 batch B6). rd_pretty is copied (XSTRDUP'd internally),
+ * so a function-scope buffer is fine at the call site. */
+extern void evpn_configure_rd(struct bgp *bgp, struct bgpevpn *vpn, struct prefix_rd *rd,
+			      const char *rd_pretty);
+extern void evpn_unconfigure_rd(struct bgp *bgp, struct bgpevpn *vpn);
+extern void evpn_set_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn);
+extern void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn);
+
 /* Loop over all extended-communities in 'rtl' and return true if 'ecomtarget'
  * matches one of them; un-static'd (was bgp_evpn_vty.c-local) for the
  * proteus/northbound 'ead-es-route-target export' list callbacks

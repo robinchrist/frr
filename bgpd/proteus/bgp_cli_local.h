@@ -60,6 +60,19 @@ void instance_evpn_ead_es_route_target_export_ipv4_cli_write(struct vty *vty,
 							      const struct lyd_node *dnode,
 							      bool show_defaults);
 
+/* M6 B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/'advertise-svi-ip'/
+ * 'advertise-subnet' emitters. */
+void instance_evpn_vni_rd_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults);
+void instance_evpn_vni_flooding_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void instance_evpn_vni_advertise_default_gw_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						       bool show_defaults);
+void instance_evpn_vni_advertise_svi_ip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults);
+void instance_evpn_vni_advertise_subnet_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);
