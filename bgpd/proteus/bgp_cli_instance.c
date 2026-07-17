@@ -261,6 +261,84 @@ DEFPY_YANG_NOSH(
 	return CMD_SUCCESS;
 }
 
+/*
+ * Milestone 6 batch B1: parallel mgmtd-side 'vni N' ... 'exit-vni' sub-node.
+ *
+ * Unlike the M5 B0 address-family entries (node-only, non-presence
+ * containers), 'vni N' performs a REAL keyed-list CREATE on entry -- the M3
+ * route-map DEFPY_YANG_NOSH pattern -- because the vni list entry is a
+ * genuine object (evpn_create_update_vni). The legacy bgp_evpn_vni
+ * DEFUN_NOSH in bgp_evpn_vty.c stays native so unconverted VNI subcommands
+ * (rd, route-target, ...) attach to bgpd's bgpevpn mid-load during the
+ * coexistence window; evpn_create_update_vni() is idempotent by VNI id, so
+ * both paths converge. 'no vni N' is a plain DEFPY_YANG whose backend
+ * destroy tolerates an already-gone VNI. vtysh dual-routes 'vni'/'exit-vni'
+ * (NOSH) via vtysh/vtysh.c and 'no vni' (non-NOSH) via the generated table.
+ */
+
+static struct cmd_node bgp_evpn_vni_node = {
+	.name = "bgp evpn vni",
+	.node = BGP_EVPN_VNI_NODE,
+	.parent_node = BGP_EVPN_NODE,
+	.prompt = "%s(config-router-af-vni)# ",
+};
+
+DEFPY_YANG_NOSH(
+	bgp_evpn_vni, bgp_evpn_vni_cli_cmd,
+	"vni " CMD_VNI_RANGE,
+	"VXLAN Network Identifier\n"
+	"VNI number\n")
+{
+	char xpath[XPATH_MAXLEN + 64];
+	int rv;
+
+	if (vty->xpath_index == 0) {
+		vty_out(vty, "%% Not in a BGP EVPN address-family context\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(xpath, sizeof(xpath), "%s/afi-safis/l2vpn-evpn/vni[vni-id='%s']", VTY_CURR_XPATH,
+		 vni_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+	rv = nb_cli_apply_changes(vty, NULL);
+	if (rv == CMD_SUCCESS)
+		VTY_PUSH_XPATH(BGP_EVPN_VNI_NODE, xpath);
+
+	return rv;
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vni, no_bgp_evpn_vni_cli_cmd,
+	"no vni " CMD_VNI_RANGE,
+	NO_STR
+	"VXLAN Network Identifier\n"
+	"VNI number\n")
+{
+	char xpath[XPATH_MAXLEN + 64];
+
+	snprintf(xpath, sizeof(xpath), "%s/afi-safis/l2vpn-evpn/vni[vni-id='%s']", VTY_CURR_XPATH,
+		 vni_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG_NOSH(
+	exit_vni, exit_vni_cli_cmd,
+	"exit-vni",
+	"Exit from VNI mode\n")
+{
+	/* Only installed at BGP_EVPN_VNI_NODE; drop back to BGP_EVPN_NODE and
+	 * pop the vni xpath pushed on entry (mirrors exit_address_family). */
+	if (vty->node == BGP_EVPN_VNI_NODE) {
+		vty->node = BGP_EVPN_NODE;
+		if (vty->xpath_index > 0)
+			vty->xpath_index--;
+	}
+	return CMD_SUCCESS;
+}
+
 DEFPY_YANG_NOSH(
 	router_bgp, router_bgp_cli_cmd,
 	"router bgp [ASNUM$instasn [<view|vrf>$view_vrf VIEWVRFNAME] [as-notation <dot|dot+|plain>$notation]]",
@@ -2702,6 +2780,50 @@ void instance_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
 	vty_out(vty, "!\n");
 }
 
+/* M6 B1: a 'vni N' list entry that carries no converted (non-key,
+ * non-default) child leaf is emitted in full -- 'vni N' ... 'exit-vni'
+ * plus every sub-line -- natively by bgpd's write_vni_config during the
+ * coexistence window (only the node-entry create/destroy is converted in
+ * B1, not the sub-leaves). mgmtd must stay silent for such an entry so the
+ * two daemons' running-config folds to one byte-identical vni block instead
+ * of a duplicate/empty frame. Returns true once a sub-leaf converts (B6+)
+ * and materializes real content under the entry. */
+static bool bgp_evpn_vni_dnode_has_cfg(const struct lyd_node *dnode)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(dnode), child) {
+		if (lysc_is_key(child->schema))
+			continue;
+		if (!yang_dnode_is_default_recursive(child))
+			return true;
+	}
+	return false;
+}
+
+/* True if an instance afi-safis/<af> container has anything mgmtd should
+ * render, treating a content-free 'vni N' entry (bgpd-owned during M6
+ * coexistence) as nothing. Keeps afi_safi_cli_write from emitting an empty
+ * 'address-family l2vpn evpn' wrapper around a vni entry whose sub-lines
+ * are still bgpd's. For the eight non-evpn families this reduces to the
+ * pre-existing "materialized => has a non-default child" invariant, so
+ * their emission is unchanged. */
+static bool afi_safi_dnode_has_output(const struct lyd_node *dnode)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(dnode), child) {
+		if (yang_dnode_is_default_recursive(child))
+			continue;
+		if (child->schema->nodetype == LYS_LIST &&
+		    strmatch(child->schema->name, "vni") &&
+		    !bgp_evpn_vni_dnode_has_cfg(child))
+			continue;
+		return true;
+	}
+	return false;
+}
+
 /* Header/trailer for a proteus afi-safis/<af> container. Registered on the
  * nine instance afi-safis containers (M5 B0); reused for the neighbor and
  * peer-group afi-safis containers as those per-AF leaves convert (B1+).
@@ -2710,7 +2832,8 @@ void instance_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
  * bgpd and mgmtd emissions into one block by matching header text -- the
  * per-AF analog of instance_cli_write()'s 'router bgp' header. Fires only
  * once a child leaf materializes the non-presence container, so B0 (no
- * per-AF leaves) emits nothing. */
+ * per-AF leaves) emits nothing; skips a container whose only content is a
+ * still-native 'vni N' entry (M6 B1) via afi_safi_dnode_has_output(). */
 void afi_safi_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
 	const char *header = bgp_afi_safi_cli_header(dnode->schema->name);
@@ -2718,12 +2841,44 @@ void afi_safi_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
 	if (!header)
 		return;
 
+	if (!afi_safi_dnode_has_output(dnode))
+		return;
+
 	vty_out(vty, " !\n address-family %s\n", header);
 }
 
 void afi_safi_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
 {
+	if (!bgp_afi_safi_cli_header(dnode->schema->name))
+		return;
+
+	if (!afi_safi_dnode_has_output(dnode))
+		return;
+
 	vty_out(vty, " exit-address-family\n");
+}
+
+/* M6 B1: 'vni N' ... 'exit-vni' frame for a converted vni list entry.
+ * Gated identically to afi_safi_dnode_has_output()'s vni handling: while
+ * the entry has no converted sub-leaf (B1) bgpd's write_vni_config emits
+ * the whole block, so mgmtd emits nothing and the running-config stays
+ * byte-identical. Once sub-leaves convert (B6+) this renders the two-space
+ * 'vni N' header and 'exit-vni' trailer that write_vni_config used, with
+ * the converted sub-leaves nested between via the datastore DFS. */
+void instance_evpn_vni_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	if (!bgp_evpn_vni_dnode_has_cfg(dnode))
+		return;
+
+	vty_out(vty, "  vni %s\n", yang_dnode_get_string(dnode, "vni-id"));
+}
+
+void instance_evpn_vni_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
+{
+	if (!bgp_evpn_vni_dnode_has_cfg(dnode))
+		return;
+
+	vty_out(vty, "  exit-vni\n");
 }
 
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -4576,6 +4731,13 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_FLOWSPECV6_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4U_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV6U_NODE, &exit_address_family_cli_cmd);
+
+	/* M6 B1: 'vni N' ... 'exit-vni' sub-node (mgmtd side). */
+	install_node(&bgp_evpn_vni_node);
+	install_default(BGP_EVPN_VNI_NODE);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);

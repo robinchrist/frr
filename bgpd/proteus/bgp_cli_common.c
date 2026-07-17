@@ -103,6 +103,17 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show_end = afi_safi_cli_write_end,
 			}
 		},
+		/* M6 B1: 'vni N' ... 'exit-vni' list-entry frame. Gated to stay
+		 * silent while the entry has no converted sub-leaf (bgpd's
+		 * write_vni_config still owns the whole block during the M6
+		 * coexistence window). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni",
+			.cbs = {
+				.cli_show = instance_evpn_vni_cli_write,
+				.cli_show_end = instance_evpn_vni_cli_write_end,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

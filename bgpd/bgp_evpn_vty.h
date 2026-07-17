@@ -10,6 +10,11 @@ extern void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp,
 				       afi_t afi, safi_t safi);
 extern void bgp_ethernetvpn_init(void);
 
+/* VNI create/delete cores (vty-free), shared with the proteus/northbound vni
+ * list create/destroy callbacks (bgp_nb_evpn.c). */
+extern struct bgpevpn *evpn_create_update_vni(struct bgp *bgp, vni_t vni);
+extern void evpn_delete_vni(struct bgp *bgp, struct bgpevpn *vpn);
+
 #define L2VPN_HELP_STR        "Layer 2 Virtual Private Network\n"
 #define EVPN_HELP_STR        "Ethernet Virtual Private Network\n"
 #define VNI_HELP_STR "VXLAN Network Identifier\n"

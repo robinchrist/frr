@@ -2026,7 +2026,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_evpn, address_family_evpn_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI_RANGE,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI_RANGE,
 	"VXLAN Network Identifier\n"
 	"VNI number\n")
 {
@@ -2655,7 +2655,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_address_family, exit_address_family_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, exit_vni, exit_vni_cmd, "exit-vni", "Exit from VNI mode\n")
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_vni, exit_vni_cmd, "exit-vni", "Exit from VNI mode\n")
 {
 	if (vty->node == BGP_EVPN_VNI_NODE)
 		vty->node = BGP_EVPN_NODE;

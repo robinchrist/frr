@@ -27,6 +27,9 @@
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
+#include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_private.h"
+#include "bgpd/bgp_evpn_vty.h"
 #include "bgpd/proteus/bgp_nb_local.h"
 
 
@@ -731,34 +734,56 @@ int instance_afi_safis_l2vpn_evpn_flooding_destroy(struct nb_cb_destroy_args *ar
 	return NB_OK;
 }
 
+/* 'vni N' ... 'exit-vni' sub-block create (M6 batch B1). Real keyed-list
+ * create: mirrors the legacy bgp_evpn_vni DEFUN_NOSH, calling the same
+ * (now shared) evpn_create_update_vni() core. Idempotent by VNI id -- the
+ * legacy DEFUN_NOSH stays native during the coexistence window, so both
+ * paths may create the same VNI in one file load; whichever runs second
+ * just re-marks the already-created bgpevpn as configured. */
 int instance_afi_safis_l2vpn_evpn_vni_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	vni_t vni;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	vni = yang_dnode_get_uint32(args->dnode, "vni-id");
+
+	if (!evpn_create_update_vni(bgp, vni))
+		return NB_ERR_RESOURCE;
 
 	return NB_OK;
 }
 
+/* 'no vni N' destroy (M6 batch B1). Tolerates an already-gone VNI as a
+ * silent no-op (the common case once mgmtd's northbound destroy and bgpd's
+ * legacy no_bgp_evpn_vni DEFUN both run for the same line during the
+ * coexistence window), mirroring the M3/M4 lifecycle-destroy pattern. */
 int instance_afi_safis_l2vpn_evpn_vni_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+	struct bgpevpn *vpn;
+	vni_t vni;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	vni = yang_dnode_get_uint32(args->dnode, "vni-id");
+
+	vpn = bgp_evpn_lookup_vni(bgp, vni);
+	if (!vpn || !is_vni_configured(vpn))
+		return NB_OK;
+
+	evpn_delete_vni(bgp, vpn);
 
 	return NB_OK;
 }

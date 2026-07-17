@@ -20,6 +20,10 @@ void afi_safi_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
 void afi_safi_cli_write_end(struct vty *vty, const struct lyd_node *dnode);
 const char *bgp_afi_safi_container_name(int node);
 
+/* M6 B1: 'vni N' ... 'exit-vni' list-entry frame (instance l2vpn-evpn). */
+void instance_evpn_vni_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
+void instance_evpn_vni_cli_write_end(struct vty *vty, const struct lyd_node *dnode);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);
