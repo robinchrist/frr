@@ -29,6 +29,7 @@
 #include "bgpd/bgp_addpath.h"
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_evpn_mh.h"
 #include "bgpd/bgp_evpn_private.h"
 #include "bgpd/bgp_evpn_vty.h"
 #include "bgpd/proteus/bgp_nb_local.h"
@@ -482,19 +483,23 @@ int instance_afi_safis_l2vpn_evpn_enable_resolve_overlay_index_modify(struct nb_
 	return NB_OK;
 }
 
+/* 'ead-es-frag evi-limit (1-1000)' (M6 batch B5, bgp_evpn_ead_es_frag_evi_limit_cmd).
+ * bgp_mh_info (== bm->mh_info) is a single process-wide struct, not
+ * per-bgp-instance state -- like every other multihoming leaf in this
+ * container -- so unlike the rest of bgp_nb_evpn.c's callbacks there is no
+ * bgp instance to look up here. No YANG default (evi_per_es_frag's compiled
+ * default BGP_EVPN_MAX_EVI_PER_ES_FRAG is a plain numeric constant, same
+ * no-default-leaf shape as B4's dup-addr-detection max-moves/time), so
+ * DESTROY restores that constant directly, mirroring legacy's own
+ * 'no ead-es-frag evi-limit' branch.
+ */
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_frag_evi_limit_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_mh_info->evi_per_es_frag = yang_dnode_get_uint16(args->dnode, NULL);
 
 	return NB_OK;
 }
@@ -502,33 +507,92 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_frag_evi_limit_modify(
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_frag_evi_limit_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_mh_info->evi_per_es_frag = BGP_EVPN_MAX_EVI_PER_ES_FRAG;
 
 	return NB_OK;
+}
+
+/* 'ead-es-route-target export RT' (M6 batch B5, bgp_evpn_ead_es_rt_cmd /
+ * no_bgp_evpn_ead_es_rt_cmd). proteus-bgp-evpn.yang's ead-es-route-target-export
+ * container 'uses pt:route-target-set' (as2/as4/ipv4 keyed lists, same
+ * shape B9 will give the VRF/VNI route-target subtrees) -- unlike those,
+ * this container was already correctly modeled here (a plain manual RT
+ * set; EAD-ES export has no 'auto'/wildcard grammar to remodel), so it
+ * converts in this batch rather than deferring to B9.
+ *
+ * Every list entry's keys (global-admin + local-admin) ARE the RT's whole
+ * value, so a create/destroy needs no separate leaf-modify callback --
+ * encode the entry into a struct ecommunity_val with
+ * encode_route_target_{as,as4,ip}() (bgp_ecommunity.h; the same helpers
+ * bgp_nb_soo_encode() already pulls in for the M5/M6 soo choice), wrap it
+ * in a throwaway struct ecommunity, and hand it to
+ * bgp_evpn_mh_config_ead_export_rt() (bgp_evpn_mh.c) -- the exact setter
+ * legacy's two DEFUNs already used, reused rather than reimplemented.
+ * That setter matches by value (bgp_evpn_rt_matches_existing(), un-static'd
+ * from bgp_evpn_vty.c for this), not by YANG list identity, and its own
+ * del=true branch asserts on no match; bgp_nb_ead_es_rt_apply() guards
+ * both directions explicitly so a create racing an already-present value or
+ * a destroy of an already-absent one (replay/abort edge cases) is a silent
+ * no-op instead.
+ */
+static struct bgp *bgp_nb_ead_es_rt_owner(const struct lyd_node *dnode)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+
+	if (!bgp || !EVPN_ENABLED(bgp))
+		/* Legacy's hard CMD_WARNING ("only supported under EVPN
+		 * VRF"); this softens to a silent no-op, matching
+		 * advertise-svi-ip's own EVPN_ENABLED guard placement (M6
+		 * batch B2).
+		 */
+		return NULL;
+
+	return bgp;
+}
+
+static void bgp_nb_ead_es_rt_apply(const struct lyd_node *dnode, struct ecommunity_val *eval,
+				   bool del)
+{
+	struct bgp *bgp = bgp_nb_ead_es_rt_owner(dnode);
+	struct ecommunity *ecom;
+	bool exists;
+
+	if (!bgp)
+		return;
+
+	ecom = ecommunity_new();
+	ecommunity_add_val(ecom, eval, false, false);
+	ecommunity_str(ecom);
+
+	exists = bgp_evpn_rt_matches_existing(bgp_mh_info->ead_es_export_rtl, ecom);
+
+	if (del && !exists) {
+		ecommunity_free(&ecom);
+		return;
+	}
+	if (!del && exists) {
+		ecommunity_free(&ecom);
+		return;
+	}
+
+	bgp_evpn_mh_config_ead_export_rt(bgp, ecom, del);
 }
 
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	encode_route_target_as(yang_dnode_get_uint16(args->dnode, "global-admin"),
+			       yang_dnode_get_uint32(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, false);
 
 	return NB_OK;
 }
@@ -536,16 +600,15 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_cre
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	encode_route_target_as(yang_dnode_get_uint16(args->dnode, "global-admin"),
+			       yang_dnode_get_uint32(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, true);
 
 	return NB_OK;
 }
@@ -553,16 +616,15 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as2_des
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	encode_route_target_as4(yang_dnode_get_uint32(args->dnode, "global-admin"),
+				yang_dnode_get_uint16(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, false);
 
 	return NB_OK;
 }
@@ -570,16 +632,15 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_cre
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	encode_route_target_as4(yang_dnode_get_uint32(args->dnode, "global-admin"),
+				yang_dnode_get_uint16(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, true);
 
 	return NB_OK;
 }
@@ -587,16 +648,16 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_as4_des
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+	struct in_addr ip;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	yang_dnode_get_ipv4(&ip, args->dnode, "global-admin");
+	encode_route_target_ip(&ip, yang_dnode_get_uint16(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, false);
 
 	return NB_OK;
 }
@@ -604,20 +665,38 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_cr
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct ecommunity_val eval;
+	struct in_addr ip;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	memset(&eval, 0, sizeof(eval));
+	yang_dnode_get_ipv4(&ip, args->dnode, "global-admin");
+	encode_route_target_ip(&ip, yang_dnode_get_uint16(args->dnode, "local-admin"), &eval, true);
+	bgp_nb_ead_es_rt_apply(args->dnode, &eval, true);
 
 	return NB_OK;
 }
 
+/* 'use-es-l3nhg' / 'disable-ead-evi-rx' / 'disable-ead-evi-tx' left
+ * unimplemented (M6 batch B5): all three are default-on/off *compiled*
+ * constants (BGP_EVPN_MH_USE_ES_L3NHG_DEF, BGP_EVPN_MH_EAD_EVI_RX_DEF,
+ * BGP_EVPN_MH_EAD_EVI_TX_DEF, all 'true' in bgp_evpn_mh.h), the same shape
+ * as B4's dup-addr-detection/enabled -- but proteus-bgp-evpn.yang's three
+ * leaves carry no 'default' statement, unlike every other default-on/off
+ * boolean across proteus-bgp.yang / proteus-bgp-evpn.yang. Without that
+ * statement DESTROY cannot resolve back to the compiled default the doc's
+ * Tier A scheme (and the legacy emitter's own "write whichever form
+ * differs from the compiled default" logic) assumes exists on the wire.
+ * This is a YANG modeling gap (YANG files are out of scope for conversion
+ * batches), not a missing callback body -- reported upstream per the batch
+ * brief rather than silently worked around. bgp_mh_info->host_routes_use_l3nhg
+ * / enable_ead_evi_rx / enable_ead_evi_tx stay reachable only through the
+ * still-native bare 'use-es-l3nhg' / 'disable-ead-evi-rx' / 'disable-ead-evi-tx'
+ * toggles (bgp_evpn_vty.c); bgp_config_write_evpn_info()'s corresponding
+ * lines stay native and ungated, same as dup-addr-detection/enabled's.
+ */
 int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {

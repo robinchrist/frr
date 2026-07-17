@@ -594,6 +594,106 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/*
+ * M6 batch B5: instance-level EVPN multihoming, mgmtd side.
+ * 'ead-es-frag evi-limit' keeps legacy's single-DEFPY 'no'-with-mandatory-
+ * value grammar (bgp_evpn_ead_es_frag_evi_limit_cmd): both directions
+ * always carry the '(1-1000)' token, even though 'no' ignores it, same as
+ * flooding's/dup-addr-detection freeze's 'no' forms above.
+ *
+ * 'ead-es-route-target export RT' reuses bgp_cli_soo_parse() (same
+ * ASN:NN_OR_IP-ADDRESS:NN token grammar as 'mac-vrf soo' and the per-(peer,
+ * afi,safi) 'soo' above) to route the token to the matching as2/as4/ipv4
+ * keyed-list entry under multihoming/ead-es-route-target-export. Every
+ * configured RT is its own list entry (key = global-admin + local-admin),
+ * so 'export RT' / 'no ... export RT' map directly to a single list-entry
+ * CREATE/DESTROY -- no separate leaf writes needed, unlike mac-vrf-soo's
+ * presence-container choice shape.
+ */
+DEFPY_YANG(
+	bgp_evpn_ead_es_frag_evi_limit, bgp_evpn_ead_es_frag_evi_limit_cli_cmd,
+	"[no$no] ead-es-frag evi-limit (1-1000)$limit",
+	NO_STR
+	"EAD ES fragment config\n"
+	"EVIs per-fragment\n"
+	"limit\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty,
+				      "./afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit",
+				      NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty,
+				      "./afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit",
+				      NB_OP_MODIFY, limit_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+static const char *bgp_cli_ead_es_rt_case_name(enum bgp_cli_soo_case rt_case)
+{
+	switch (rt_case) {
+	case BGP_CLI_SOO_AS2:
+		return "as2";
+	case BGP_CLI_SOO_AS4:
+		return "as4";
+	case BGP_CLI_SOO_IPV4:
+	default:
+		return "ipv4";
+	}
+}
+
+DEFPY_YANG(
+	bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cli_cmd,
+	"ead-es-route-target export RT$rt",
+	"EAD ES Route Target\n"
+	"export\n"
+	"Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+{
+	enum bgp_cli_soo_case rt_case;
+	char global_admin[INET_ADDRSTRLEN], local_admin[12];
+	char *xpath;
+
+	if (!bgp_cli_soo_parse(rt, &rt_case, global_admin, sizeof(global_admin), local_admin,
+			       sizeof(local_admin))) {
+		vty_out(vty, "%% Malformed Route Target list\n");
+		return CMD_WARNING;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP,
+			   "./afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/%s[global-admin='%s'][local-admin='%s']",
+			   bgp_cli_ead_es_rt_case_name(rt_case), global_admin, local_admin);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cli_cmd,
+	"no ead-es-route-target export RT$rt",
+	NO_STR
+	"EAD ES Route Target\n"
+	"export\n" EVPN_ASN_IP_HELP_STR)
+{
+	enum bgp_cli_soo_case rt_case;
+	char global_admin[INET_ADDRSTRLEN], local_admin[12];
+	char *xpath;
+
+	if (!bgp_cli_soo_parse(rt, &rt_case, global_admin, sizeof(global_admin), local_admin,
+			       sizeof(local_admin))) {
+		vty_out(vty, "%% Malformed Route Target list\n");
+		return CMD_WARNING;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP,
+			   "./afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/%s[global-admin='%s'][local-admin='%s']",
+			   bgp_cli_ead_es_rt_case_name(rt_case), global_admin, local_admin);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 DEFPY_YANG_NOSH(
 	router_bgp, router_bgp_cli_cmd,
 	"router bgp [ASNUM$instasn [<view|vrf>$view_vrf VIEWVRFNAME] [as-notation <dot|dot+|plain>$notation]]",
@@ -3230,6 +3330,47 @@ void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct ly
 	}
 }
 
+/* M6 batch B5: multihoming ead-es-frag-evi-limit + ead-es-route-target-export
+ * emitters, reproducing bgp_config_write_evpn_info()'s two lines
+ * (bgp_evpn_vty.c). ead-es-route-target-export's three case-list emitters
+ * are registered one per as2/as4/ipv4 list (bgp_cli_common.c) and fire once
+ * per configured RT, same as afi_safis_network_ipv4_cli_write()'s per-entry
+ * shape (M5 B9).
+ */
+void instance_evpn_multihoming_ead_es_frag_evi_limit_cli_write(struct vty *vty,
+								const struct lyd_node *dnode,
+								bool show_defaults)
+{
+	vty_out(vty, "  ead-es-frag evi-limit %u\n", yang_dnode_get_uint16(dnode, NULL));
+}
+
+void instance_evpn_ead_es_route_target_export_as2_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, "  ead-es-route-target export %u:%u\n",
+		yang_dnode_get_uint16(dnode, "global-admin"),
+		yang_dnode_get_uint32(dnode, "local-admin"));
+}
+
+void instance_evpn_ead_es_route_target_export_as4_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults)
+{
+	vty_out(vty, "  ead-es-route-target export %u:%u\n",
+		yang_dnode_get_uint32(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+void instance_evpn_ead_es_route_target_export_ipv4_cli_write(struct vty *vty,
+							      const struct lyd_node *dnode,
+							      bool show_defaults)
+{
+	vty_out(vty, "  ead-es-route-target export %s:%u\n",
+		yang_dnode_get_string(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -5109,6 +5250,13 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_freeze_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_freeze_cli_cmd);
+
+	/* M6 B5: instance-level l2vpn-evpn multihoming ead-es-frag-evi-limit
+	 * + ead-es-route-target-export leaves (mgmtd side); use-es-l3nhg/
+	 * disable-ead-evi-rx/-tx stay native (bgp_evpn_vty.c). */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);

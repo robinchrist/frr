@@ -176,6 +176,36 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_evpn_dup_addr_detection_cli_write,
 			}
 		},
+		/* M6 B5: instance-level l2vpn-evpn multihoming
+		 * ead-es-frag-evi-limit + ead-es-route-target-export; the
+		 * latter's three case lists each fire once per configured
+		 * RT, same shape as the 'network' lists below. use-es-l3nhg/
+		 * disable-ead-evi-rx/-tx stay native (bgp_evpn_vty.c, see
+		 * bgp_nb_evpn.c's reject-stub doc comment). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit",
+			.cbs = {
+				.cli_show = instance_evpn_multihoming_ead_es_frag_evi_limit_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as2",
+			.cbs = {
+				.cli_show = instance_evpn_ead_es_route_target_export_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/as4",
+			.cbs = {
+				.cli_show = instance_evpn_ead_es_route_target_export_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/ipv4",
+			.cbs = {
+				.cli_show = instance_evpn_ead_es_route_target_export_ipv4_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

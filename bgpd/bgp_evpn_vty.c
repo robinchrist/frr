@@ -6449,7 +6449,7 @@ DEFUN (no_bgp_evpn_vni_rd_without_val,
  * Loop over all extended-communities in the route-target list rtl and
  * return 1 if we find ecomtarget
  */
-static bool bgp_evpn_rt_matches_existing(struct list *rtl, struct ecommunity *ecomtarget)
+bool bgp_evpn_rt_matches_existing(struct list *rtl, struct ecommunity *ecomtarget)
 {
 	struct listnode *node;
 	struct ecommunity *ecom;
@@ -7270,90 +7270,12 @@ DEFPY_ATTR(no_bgp_evpn_vrf_rt_auto,
 	return CMD_SUCCESS;
 }
 
-DEFPY(bgp_evpn_ead_ess_frag_evi_limit, bgp_evpn_ead_es_frag_evi_limit_cmd,
-      "[no$no] ead-es-frag evi-limit (1-1000)$limit",
-      NO_STR
-      "EAD ES fragment config\n"
-      "EVIs per-fragment\n"
-      "limit\n")
-{
-	bgp_mh_info->evi_per_es_frag =
-		no ? BGP_EVPN_MAX_EVI_PER_ES_FRAG : limit;
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(bgp_evpn_ead_es_rt, bgp_evpn_ead_es_rt_cmd,
-      "ead-es-route-target export RT",
-      "EAD ES Route Target\n"
-      "export\n"
-      "Route target (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct ecommunity *ecomadd = NULL;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	/* Add/update the export route-target */
-	ecomadd = ecommunity_str2com(argv[2]->arg, ECOMMUNITY_ROUTE_TARGET, 0);
-	if (!ecomadd) {
-		vty_out(vty, "%% Malformed Route Target list\n");
-		return CMD_WARNING;
-	}
-	ecommunity_str(ecomadd);
-
-	/* Do nothing if we already have this export route-target */
-	if (!bgp_evpn_rt_matches_existing(bgp_mh_info->ead_es_export_rtl,
-					  ecomadd))
-		bgp_evpn_mh_config_ead_export_rt(bgp, ecomadd, false);
-	else
-		ecommunity_free(&ecomadd);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN(no_bgp_evpn_ead_es_rt, no_bgp_evpn_ead_es_rt_cmd,
-      "no ead-es-route-target export RT",
-      NO_STR
-      "EAD ES Route Target\n"
-      "export\n" EVPN_ASN_IP_HELP_STR)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct ecommunity *ecomdel = NULL;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	ecomdel = ecommunity_str2com(argv[3]->arg, ECOMMUNITY_ROUTE_TARGET, 0);
-	if (!ecomdel) {
-		vty_out(vty, "%% Malformed Route Target list\n");
-		return CMD_WARNING;
-	}
-	ecommunity_str(ecomdel);
-
-	if (!bgp_evpn_rt_matches_existing(bgp_mh_info->ead_es_export_rtl,
-					  ecomdel)) {
-		ecommunity_free(&ecomdel);
-		vty_out(vty,
-			"%% RT specified does not match EAD-ES RT configuration\n");
-		return CMD_WARNING;
-	}
-	bgp_evpn_mh_config_ead_export_rt(bgp, ecomdel, true);
-
-	ecommunity_free(&ecomdel);
-	return CMD_SUCCESS;
-}
+/* 'ead-es-frag evi-limit (1-1000)' and 'ead-es-route-target export RT':
+ * converted to proteus/northbound in M6 batch B5; mgmtd owns the CLI and
+ * bgp_config_write_evpn_info's emission is gated off for both below.
+ * bgp_evpn_rt_matches_existing() (still used by bgp_nb_evpn.c's converted
+ * callbacks) and bgp_evpn_mh_config_ead_export_rt() stay exported.
+ */
 
 DEFPY (bgp_evpn_vni_rt,
        bgp_evpn_vni_rt_cmd,
@@ -7701,7 +7623,13 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->resolve_overlay_index)
 		vty_out(vty, "  enable-resolve-overlay-index\n");
 
-	if (bgp_mh_info->evi_per_es_frag != BGP_EVPN_MAX_EVI_PER_ES_FRAG)
+	/* 'ead-es-frag evi-limit' is mgmtd-owned once the AF is proteus (M6
+	 * B5); the still-native use-es-l3nhg/disable-ead-evi-* lines below
+	 * stay ungated (see the doc comment on their reject-stub callbacks,
+	 * bgp_nb_evpn.c).
+	 */
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    bgp_mh_info->evi_per_es_frag != BGP_EVPN_MAX_EVI_PER_ES_FRAG)
 		vty_out(vty, "  ead-es-frag evi-limit %u\n", bgp_mh_info->evi_per_es_frag);
 
 	if (bgp_mh_info->host_routes_use_l3nhg != BGP_EVPN_MH_USE_ES_L3NHG_DEF) {
@@ -7766,8 +7694,10 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 			vty_out(vty, "  advertise ipv4 unicast gateway-ip\n");
 	}
 
-	/* EAD ES export route-target */
-	if (listcount(bgp_mh_info->ead_es_export_rtl)) {
+	/* EAD ES export route-target: mgmtd-owned once the AF is proteus (M6
+	 * B5).
+	 */
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && listcount(bgp_mh_info->ead_es_export_rtl)) {
 		struct ecommunity *ecom;
 		char *ecom_str;
 		struct listnode *node;
@@ -7967,9 +7897,8 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_auto_rt_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cmd);
+	/* ead-es-route-target export / ead-es-frag evi-limit: converted to
+	 * proteus/northbound (M6 batch B5); mgmtd owns the CLI. */
 	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_advertise_svi_ip_vni_cmd);
 	install_element(BGP_EVPN_VNI_NODE,
 			&bgp_evpn_advertise_default_gw_vni_cmd);

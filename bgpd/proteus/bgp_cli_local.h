@@ -45,6 +45,21 @@ void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dn
 void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults);
 
+/* M6 B5: instance-level l2vpn-evpn multihoming ead-es-frag-evi-limit +
+ * ead-es-route-target-export emitters. */
+void instance_evpn_multihoming_ead_es_frag_evi_limit_cli_write(struct vty *vty,
+								const struct lyd_node *dnode,
+								bool show_defaults);
+void instance_evpn_ead_es_route_target_export_as2_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults);
+void instance_evpn_ead_es_route_target_export_as4_cli_write(struct vty *vty,
+							     const struct lyd_node *dnode,
+							     bool show_defaults);
+void instance_evpn_ead_es_route_target_export_ipv4_cli_write(struct vty *vty,
+							      const struct lyd_node *dnode,
+							      bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);

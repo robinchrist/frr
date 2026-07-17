@@ -26,6 +26,14 @@ extern void evpn_unset_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn
 extern void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn, uint32_t set);
 extern void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set);
 
+/* Loop over all extended-communities in 'rtl' and return true if 'ecomtarget'
+ * matches one of them; un-static'd (was bgp_evpn_vty.c-local) for the
+ * proteus/northbound 'ead-es-route-target export' list callbacks
+ * (bgp_nb_evpn.c, M6 batch B5), which need the same duplicate-add/
+ * missing-delete guards as the legacy bgp_evpn_ead_es_rt_cmd /
+ * no_bgp_evpn_ead_es_rt_cmd DEFUNs it was written for. */
+extern bool bgp_evpn_rt_matches_existing(struct list *rtl, struct ecommunity *ecomtarget);
+
 #define L2VPN_HELP_STR        "Layer 2 Virtual Private Network\n"
 #define EVPN_HELP_STR        "Ethernet Virtual Private Network\n"
 #define VNI_HELP_STR "VXLAN Network Identifier\n"
