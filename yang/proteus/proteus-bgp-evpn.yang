@@ -12,9 +12,6 @@ module proteus-bgp-evpn {
   import proteus-types {
     prefix pt;
   }
-  import proteus-route-map {
-    prefix rmap;
-  }
 
   organization
     "frr-proteus";
@@ -35,7 +32,11 @@ module proteus-bgp-evpn {
      bgp_config_write_network_evpn() (bgpd/bgp_route.c) emit -- i.e.
      the whole persistable 'address-family l2vpn evpn' surface.
      Per-neighbor EVPN settings need nothing here: proteus-bgp.yang's
-     neighbor-af grouping covers every family. Zebra-side Ethernet
+     neighbor-af grouping covers every family. Policy-attachment
+     names (route-map) are plain strings, not leafrefs, matching
+     proteus-bgp.yang: free-form, forward-reference-tolerant
+     references to entities that may be defined after the attachment
+     or owned by another daemon. Zebra-side Ethernet
      Segment (multihoming) config -- 'evpn mh es-id' on interfaces --
      is out of scope entirely: it is zebra's surface, not bgpd's (the
      bgpd-side MH knobs like ead-es-frag ARE modeled below).";
@@ -67,78 +68,112 @@ module proteus-bgp-evpn {
        settable at the address-family level and per VNI.";
   }
 
-  grouping vni-route-targets {
+  typedef auto-route-target-mode {
+    type enumeration {
+      enum add-always {
+        description
+          "Always add the automatic route-target, even when manual
+           route-targets are configured.";
+      }
+      enum add-never {
+        description
+          "Never add the automatic route-target.";
+      }
+      enum add-if-no-manual {
+        description
+          "Add the automatic route-target only when no manual
+           route-target is configured. This is also the behavior when
+           no mode is configured at all; the explicit form differs
+           only in round-tripping through the written
+           configuration.";
+      }
+    }
     description
-      "Per-VNI route-target configuration (bgp_evpn_vni_rt_cmd: one
-       'route-target <import|export|both> RT' line per entry). Fully
-       qualified route targets only -- the per-VNI grammar has no
-       'auto' or wildcard form, hence no such fields here.";
-
-    container route-target-import {
-      description
-        "'route-target import <RT>' entries.";
-      uses pt:route-target-set;
-    }
-    container route-target-export {
-      description
-        "'route-target export <RT>' entries.";
-      uses pt:route-target-set;
-    }
-    container route-target-both {
-      description
-        "'route-target both <RT>' entries.";
-      uses pt:route-target-set;
-    }
+      "When to add the automatically derived route-target (AS:VNI)
+       alongside any manually configured ones:
+       'auto-route-target <both|import|export>
+       <add-always|add-never|add-if-no-manual>'.";
   }
 
-  grouping vrf-route-targets {
+  grouping evpn-route-target {
     description
-      "Per-VRF-instance route-target configuration
-       (bgp_evpn_vrf_rt_cmd; the 'auto' sentinel comes via
-       bgp_evpn_vrf_rt_auto_cmd and is the explicit 'auto' leaf, not
-       a value). Only *import* may use the wildcard form '*:NN'
-       (BGP_VRF_RT_WILD); export is always fully qualified, and
-       'both' -- being import+export in one line -- is therefore
-       fully qualified too, hence only import has wildcard/auto
-       fields at all.";
+      "The route-target configuration of one VRF or VNI as a single
+       direction-primary tree: everything about import route targets
+       (manual, wildcard, automatic) lives under route-target/import
+       and everything about export route targets under
+       route-target/export. The CLI 'both' direction of
+       'route-target <both|import|export> RTLIST...' and
+       'auto-route-target <both|import|export> ...' is a plain input
+       alias for configuring import and export at once -- only
+       import and export exist here, and the configuration is
+       written back per direction, never as 'both'.";
 
-    container route-target-import {
+    container route-target {
       description
-        "'route-target import ...' configuration.";
-      uses pt:route-target-set;
-      leaf-list wildcard {
-        type uint32;
+        "Route targets attached to and matched by this VRF or
+         VNI.";
+
+      container import {
         description
-          "'route-target import *:NN' entries: only the local
-           administrator is given, any global administrator
-           matches.";
+          "Import route targets: which route targets received
+           routes must carry to be imported.";
+        container rts {
+          description
+            "'route-target import <RT>...' entries, one per listed
+             route target. The deprecated 'route-target import
+             auto' form is not a route-target value: it is an alias
+             for 'auto-route-target import add-always' (the sibling
+             auto container).";
+          uses pt:route-target-set;
+        }
+        leaf-list wildcard-rts {
+          type uint32;
+          description
+            "'route-target import *:NN' entries: only the local
+             administrator is given, a route target with any global
+             administrator matches. Wildcards are import-only -- an
+             advertised route must carry fully qualified route
+             targets, so the export side has no counterpart.";
+        }
+        container auto {
+          description
+            "The automatically derived import route-target (AS:VNI):
+             'auto-route-target import <mode>'.";
+          leaf mode {
+            type auto-route-target-mode;
+            description
+              "When to add the automatically derived import
+               route-target. Absent means add-if-no-manual without
+               writing anything back.";
+          }
+        }
       }
-      leaf auto {
-        type boolean;
-        default "false";
+      container export {
         description
-          "'route-target import auto': derive the import RT from
-           AS:VNI (or per RFC 8365 with autort-rfc8365-compatible).
-           FRR stores a 'both auto' input as the import and export
-           flags and writes two lines back -- set both auto leaves
-           for that.";
+          "Export route targets: which route targets advertised
+           routes carry; fully qualified only.";
+        container rts {
+          description
+            "'route-target export <RT>...' entries, one per listed
+             route target. The deprecated 'route-target export
+             auto' form is not a route-target value: it is an alias
+             for 'auto-route-target export add-always' (the sibling
+             auto container).";
+          uses pt:route-target-set;
+        }
+        container auto {
+          description
+            "The automatically derived export route-target (AS:VNI):
+             'auto-route-target export <mode>'.";
+          leaf mode {
+            type auto-route-target-mode;
+            description
+              "When to add the automatically derived export
+               route-target. Absent means add-if-no-manual without
+               writing anything back.";
+          }
+        }
       }
-    }
-    container route-target-export {
-      description
-        "'route-target export ...' configuration.";
-      uses pt:route-target-set;
-      leaf auto {
-        type boolean;
-        default "false";
-        description
-          "'route-target export auto'.";
-      }
-    }
-    container route-target-both {
-      description
-        "'route-target both <RT>' entries.";
-      uses pt:route-target-set;
     }
   }
 
@@ -163,9 +198,7 @@ module proteus-bgp-evpn {
         "Advertise the gateway IP overlay index.";
     }
     leaf route-map {
-      type leafref {
-        path "/rmap:route-map/rmap:name";
-      }
+      type string;
       description
         "Filter/transform the advertised routes.";
     }
@@ -189,15 +222,6 @@ module proteus-bgp-evpn {
       description
         "'advertise-all-vni'. Default instance only.
          (bgp_evpn_advertise_all_vni_cmd)";
-    }
-
-    leaf autort-rfc8365-compatible {
-      type boolean;
-      default "false";
-      description
-        "'autort rfc8365-compatible': derive automatic RTs per
-         RFC 8365 (AS part from the 3-byte VNI namespace).
-         (bgp_evpn_advertise_autort_rfc8365_cmd)";
     }
 
     leaf advertise-default-gw {
@@ -257,23 +281,25 @@ module proteus-bgp-evpn {
       }
       leaf use-es-l3nhg {
         type boolean;
+        default "true";
         description
           "'[no] use-es-l3nhg': use L3 nexthop groups for ES-attached
            host routes (default on; FRR writes whichever form differs
-           from it) (bgp_evpn_use_es_l3nhg_cmd).";
+           from it).";
       }
       leaf disable-ead-evi-rx {
         type boolean;
+        default "false";
         description
           "'[no] disable-ead-evi-rx': don't require EAD-per-EVI
-           routes for remote ES-PE activation (default off)
-           (bgp_evpn_ead_evi_rx_disable_cmd).";
+           routes for remote ES-PE activation (default off).";
       }
       leaf disable-ead-evi-tx {
         type boolean;
+        default "false";
         description
           "'[no] disable-ead-evi-tx': don't advertise EAD-per-EVI
-           routes (default off) (bgp_evpn_ead_evi_tx_disable_cmd).";
+           routes (default off).";
       }
     }
 
@@ -283,6 +309,7 @@ module proteus-bgp-evpn {
          (dup_addr_detection_cmd / dup_addr_detection_auto_recovery_cmd).";
       leaf enabled {
         type boolean;
+        default "true";
         description
           "'no dup-addr-detection' when false (default on; only the
            negative form is written).";
@@ -357,7 +384,7 @@ module proteus-bgp-evpn {
            (bgp_evpn_flood_control_vni_cmd).";
       }
 
-      uses vni-route-targets;
+      uses evpn-route-target;
 
       leaf advertise-default-gw {
         type boolean;
@@ -391,7 +418,39 @@ module proteus-bgp-evpn {
       uses pt:route-distinguisher;
     }
 
-    uses vrf-route-targets;
+    uses evpn-route-target {
+      augment "route-target/import/auto" {
+        description
+          "The VRF-level automatic route-target additionally has an
+           encoding switch, orthogonal to the add-mode: it only
+           changes how the automatic route-target is encoded, and
+           both can be configured at the same time (two lines per
+           direction). The per-VNI grammar has no rfc8365 form.";
+        leaf rfc8365-compatible {
+          type boolean;
+          default "false";
+          description
+            "'auto-route-target import rfc8365-compatible': encode
+             the automatic import route-target per RFC 8365 (the AS
+             part comes from the 3-byte VNI namespace, with the
+             VXLAN encapsulation bits set in the local administrator
+             field). The deprecated 'autort rfc8365-compatible'
+             alias sets this for both directions at once.";
+        }
+      }
+      augment "route-target/export/auto" {
+        description
+          "See the import-side augment: the same encoding switch for
+           the export direction.";
+        leaf rfc8365-compatible {
+          type boolean;
+          default "false";
+          description
+            "'auto-route-target export rfc8365-compatible': encode
+             the automatic export route-target per RFC 8365.";
+        }
+      }
+    }
 
     container advertise-ipv4-unicast {
       description
@@ -425,22 +484,40 @@ module proteus-bgp-evpn {
     container advertise-pip {
       description
         "'[no] advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]':
-         primary-IP/system-IP advertisement on type-5 routes
-         (bgp_evpn_advertise_pip_ip_mac_cmd). Per-VRF instance only;
-         FRR default is on, so enabled=false renders
+         primary-IP/system-IP advertisement on type-5 routes.
+         Per-VRF instance only. One atomic command: it always
+         enables or disables PIP and sets or clears the static
+         ip/mac values in the same line, so the static values only
+         exist while PIP is enabled (and a MAC only together with an
+         IP). Default is on, so enabled=false renders
          'no advertise-pip'.";
       leaf enabled {
         type boolean;
+        default "true";
+        description
+          "Advertise the primary IP as the type-5 nexthop; false
+           renders 'no advertise-pip'.";
       }
       leaf ip {
         type inet:ipv4-address-no-zone;
+        must "../enabled = 'true'" {
+          error-message
+            "a static PIP address requires advertise-pip to be
+             enabled ('advertise-pip ip ...' is one command)";
+        }
         description
-          "Static PIP address.";
+          "Static PIP address ('advertise-pip ip A.B.C.D').";
       }
       leaf mac {
         type yang:mac-address;
+        must "../ip" {
+          error-message
+            "a static PIP router MAC requires a static PIP address
+             ('advertise-pip ip ... mac ...' is one command)";
+        }
         description
-          "Static PIP router MAC.";
+          "Static PIP router MAC
+           ('advertise-pip ip A.B.C.D mac X:X:X:X:X:X').";
       }
     }
 
@@ -511,9 +588,7 @@ module proteus-bgp-evpn {
           "'routermac WORD'.";
       }
       leaf route-map {
-        type leafref {
-          path "/rmap:route-map/rmap:name";
-        }
+        type string;
         description
           "Optional trailing 'route-map NAME'.";
       }

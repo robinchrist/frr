@@ -10847,12 +10847,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/autort-rfc8365-compatible",
-			.cbs = {
-				.modify = instance_afi_safis_l2vpn_evpn_autort_rfc8365_compatible_modify,
-			}
-		},
-		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-default-gw",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_advertise_default_gw_modify,
@@ -10966,28 +10960,24 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify,
-				.destroy = instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_destroy,
 			}
 		},
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify,
-				.destroy = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_destroy,
 			}
 		},
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify,
-				.destroy = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_destroy,
 			}
 		},
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify,
-				.destroy = instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_destroy,
 			}
 		},
 		{
@@ -11111,66 +11101,66 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-import/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as2",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-import/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-import/ipv4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/ipv4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-export/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/wildcard-rts",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-export/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/auto/mode",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_destroy,
+				.modify = instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_modify,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-export/ipv4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as2",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-both/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-both/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/ipv4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target-both/ipv4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/auto/mode",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_destroy,
+				.modify = instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_modify,
+				.destroy = instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_destroy,
 			}
 		},
 		{
@@ -11270,85 +11260,78 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-import/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as2",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_import_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_as2_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-import/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_import_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_as4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-import/ipv4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/ipv4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-import/wildcard",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/wildcard-rts",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-import/auto",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/mode",
 			.cbs = {
-				.modify = instance_afi_safis_l2vpn_evpn_route_target_import_auto_modify,
+				.modify = instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_modify,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-export/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/rfc8365-compatible",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_export_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_as2_destroy,
+				.modify = instance_afi_safis_l2vpn_evpn_route_target_import_auto_rfc8365_compatible_modify,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-export/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as2",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_export_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_as4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-export/ipv4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as4",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_destroy,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-export/auto",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/ipv4",
 			.cbs = {
-				.modify = instance_afi_safis_l2vpn_evpn_route_target_export_auto_modify,
+				.create = instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_create,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-both/as2",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/mode",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_both_as2_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_both_as2_destroy,
+				.modify = instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_modify,
+				.destroy = instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-both/as4",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/rfc8365-compatible",
 			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_both_as4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_both_as4_destroy,
-			}
-		},
-		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target-both/ipv4",
-			.cbs = {
-				.create = instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_create,
-				.destroy = instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_destroy,
+				.modify = instance_afi_safis_l2vpn_evpn_route_target_export_auto_rfc8365_compatible_modify,
 			}
 		},
 		{
@@ -11405,7 +11388,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/enabled",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_modify,
-				.destroy = instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_destroy,
 			}
 		},
 		{

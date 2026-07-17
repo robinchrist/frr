@@ -444,9 +444,10 @@ module proteus-types {
    * grouping 'route-target-set' for an RT list (one keyed list per
    * encoding -- the components are the keys, so duplicates are
    * structurally impossible). The wildcard form '*:NN' (only the
-   * local administrator given; FRR's EVPN VRF route-target *import*
-   * only, BGP_VRF_RT_WILD) carries a single integer and is modeled
-   * at its one usage site as a plain uint32 leaf-list, not here.
+   * local administrator given; EVPN VRF/VNI route-target *import*
+   * only) carries a single integer and is modeled at its usage
+   * site (proteus-bgp-evpn.yang's evpn-route-target grouping) as
+   * the plain uint32 wildcard-rts leaf-list, not here.
    */
 
   grouping route-target {

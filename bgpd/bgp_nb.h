@@ -4266,7 +4266,6 @@ int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_destroy(struct nb_cb
 int instance_afi_safis_ipv6_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv6_vpn_retain_route_target_all_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_all_vni_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_autort_rfc8365_compatible_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_default_gw_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_svi_ip_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_create(struct nb_cb_create_args *args);
@@ -4306,18 +4305,11 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_cr
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_destroy(
 	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
 	struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_destroy(
-	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
 	struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_destroy(
-	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_destroy(
-	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_destroy(
@@ -4350,32 +4342,41 @@ int instance_afi_safis_l2vpn_evpn_vni_rd_raw_modify(struct nb_cb_modify_args *ar
 int instance_afi_safis_l2vpn_evpn_vni_rd_raw_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_vni_flooding_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_vni_flooding_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as2_destroy(
-	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_as4_destroy(
-	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_create(
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_create(
 	struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_import_ipv4_destroy(
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_destroy(
 	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as2_destroy(
-	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_as4_destroy(
-	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_create(
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_create(
 	struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_export_ipv4_destroy(
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_destroy(
 	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as2_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_as4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_vni_route_target_both_ipv4_destroy(
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_destroy(
 	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_vni_advertise_default_gw_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_vni_advertise_svi_ip_modify(struct nb_cb_modify_args *args);
@@ -4398,30 +4399,42 @@ int instance_afi_safis_l2vpn_evpn_rd_mac_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_rd_mac_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_rd_raw_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_rd_raw_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_as2_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_as4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_ipv4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_create(
-	struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_destroy(
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_destroy(
 	struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_import_auto_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_as2_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_as4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_ipv4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_export_auto_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_as2_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_as2_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_as4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_as4_destroy(struct nb_cb_destroy_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_create(struct nb_cb_create_args *args);
-int instance_afi_safis_l2vpn_evpn_route_target_both_ipv4_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_import_auto_rfc8365_compatible_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_create(struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_create(
+	struct nb_cb_create_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_afi_safis_l2vpn_evpn_route_target_export_auto_rfc8365_compatible_modify(
+	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_enabled_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_gateway_ip_modify(
@@ -4441,7 +4454,6 @@ int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_destroy(
 int instance_afi_safis_l2vpn_evpn_default_originate_ipv4_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_default_originate_ipv6_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_modify(struct nb_cb_modify_args *args);
