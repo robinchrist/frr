@@ -42,119 +42,42 @@ int instance_peer_group_afi_safis_ipv4_unicast_activate_destroy(struct nb_cb_des
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_best_selected_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_tx_best_selected_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_disable_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/disable-rx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP, SAFI_UNICAST, PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_rx_paths_limit_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_addpath_rx_paths_limit_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_unicast_orf_prefix_list_modify(
@@ -793,119 +716,44 @@ int instance_peer_group_afi_safis_ipv4_multicast_activate_destroy(struct nb_cb_d
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_destroy(struct nb_cb_destroy_args *args)
+int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_best_selected_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_tx_best_selected_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_disable_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/disable-rx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP, SAFI_MULTICAST,
+						PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_rx_paths_limit_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_addpath_rx_paths_limit_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_multicast_orf_prefix_list_modify(
@@ -1551,120 +1399,44 @@ int instance_peer_group_afi_safis_ipv4_labeled_unicast_activate_destroy(
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_tx_best_selected_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_disable_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/disable-rx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP, SAFI_LABELED_UNICAST,
+						PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_addpath_rx_paths_limit_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_peer_group_afi_safis_ipv4_labeled_unicast_orf_prefix_list_modify(
@@ -2322,118 +2094,43 @@ int instance_peer_group_afi_safis_ipv4_vpn_activate_destroy(struct nb_cb_destroy
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_best_selected_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_tx_best_selected_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/tx-best-selected");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_peer_group_afi_safis_ipv4_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_afi_safis_ipv4_vpn_addpath_disable_rx_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/disable-rx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP, SAFI_MPLS_VPN,
+						PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_rx_paths_limit_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_addpath_rx_paths_limit_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/rx-paths-limit");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_peer_group_afi_safis_ipv4_vpn_orf_prefix_list_modify(struct nb_cb_modify_args *args)

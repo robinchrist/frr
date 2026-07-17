@@ -4039,3 +4039,327 @@ int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t a
 
 	return NB_OK;
 }
+
+/*
+ * M5 batch B7: addpath TX/RX knobs (proteus-bgp.yang's neighbor-af/addpath
+ * container, 712-761: 'tx' three-way enumeration all-paths/best-per-as/
+ * best-selected (no default) + its companion 'tx-best-selected' path count
+ * (uint8 1..6, no default, YANG 'must ../tx = best-selected' pairs the
+ * two), 'disable-rx' boolean (default false, Tier A plain flag), and
+ * 'rx-paths-limit' uint16 1..65535 (no default)).
+ *
+ * tx (+tx-best-selected): legacy's three independent DEFUN/DEFPY pairs
+ * (neighbor_addpath_tx_all_paths, neighbor_addpath_tx_bestpath_per_as,
+ * neighbor_addpath_tx_best_selected_paths, bgp_vty.c, retired) all funnel
+ * into the single bgp_addpath_set_peer_type() (bgp_addpath.c:408), which
+ * already stores the choice as peer->addpath_type[afi][safi] -- an enum,
+ * not a flag -- and owns peer-group member fan-out/session-reset/
+ * deterministic-med side effects itself, so no new mutual-exclusion
+ * bookkeeping is needed here, unlike remove-private-as's four independent
+ * flags (M5 B5). Both leaves' MODIFY/DESTROY reroute to a single "reread
+ * the addpath container, call bgp_addpath_set_peer_type() with whatever it
+ * now says" helper, the B6 default-originate idiom: 'tx' absent (or
+ * destroyed) -> BGP_ADDPATH_NONE, matching every legacy "no addpath-tx-..."
+ * command's outcome (each of which also ultimately called
+ * bgp_addpath_set_peer_type(..., NONE, 0)); 'tx' = best-selected with
+ * 'tx-best-selected' absent -> paths=0, matching legacy's 'no
+ * addpath-tx-best-selected [(1-6)]' (which keeps type BEST_SELECTED but
+ * zeroes the count -- an existing legacy quirk reproduced as-is here since
+ * the reread always re-derives 'paths' from whatever is left in the tree,
+ * with no special-casing needed). The legacy "not currently configured to
+ * transmit X" guard on the tx-all-paths/tx-bestpath-per-as negative forms
+ * (comparing addpath_type against the exact variant being torn down before
+ * allowing the destroy) is dropped: the enum-typed YANG leaf has exactly
+ * one "off" state, the same simplification B5 made for remove-private-as/
+ * orf-prefix-list's four/two-way negative forms.
+ */
+static void bgp_nb_af_addpath_tx_apply(struct peer *conf, afi_t afi, safi_t safi,
+					const struct lyd_node *addpath_dnode)
+{
+	enum bgp_addpath_strat type = BGP_ADDPATH_NONE;
+	uint16_t paths = 0;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return;
+
+	if (yang_dnode_exists(addpath_dnode, "tx")) {
+		const char *tx = yang_dnode_get_string(addpath_dnode, "tx");
+
+		if (strmatch(tx, "all-paths"))
+			type = BGP_ADDPATH_ALL;
+		else if (strmatch(tx, "best-per-as"))
+			type = BGP_ADDPATH_BEST_PER_AS;
+		else if (strmatch(tx, "best-selected")) {
+			type = BGP_ADDPATH_BEST_SELECTED;
+			if (yang_dnode_exists(addpath_dnode, "tx-best-selected"))
+				paths = yang_dnode_get_uint8(addpath_dnode, "tx-best-selected");
+		}
+	}
+
+	bgp_addpath_set_peer_type(conf, afi, safi, type, paths);
+}
+
+int bgp_nb_neighbor_af_addpath_tx_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_addpath_tx_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_addpath_tx_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_addpath_tx_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_addpath_tx_best_selected_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_addpath_tx_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_addpath_tx_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_tx_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_addpath_tx_apply(group ? group->conf : NULL, afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_tx_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					    safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_addpath_tx_apply(group ? group->conf : NULL, afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_tx_best_selected_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_addpath_tx_apply(group ? group->conf : NULL, afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(struct nb_cb_destroy_args *args,
+							  afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_addpath_tx_apply(group ? group->conf : NULL, afi, safi,
+					   yang_dnode_get_parent(args->dnode, "addpath"));
+	}
+
+	return NB_OK;
+}
+
+/*
+ * rx-paths-limit (proteus-bgp.yang's neighbor-af/addpath/rx-paths-limit
+ * leaf, uint16 1..65535, no default) drives PEER_FLAG_ADDPATH_RX_PATHS_LIMIT
+ * plus the numeric paths_limit.send field legacy set inline (no dedicated
+ * setter -- neighbor_addpath_paths_limit/no_..., bgp_vty.c, retired -- both
+ * called peer_af_flag_set_vty()/_unset_vty() directly and then poked
+ * peer->addpath_paths_limit[afi][safi].send by hand), plus the same
+ * unconditional bgp_capability_send() dynamic-capability renegotiation both
+ * legacy DEFPYs issued on whatever peer_and_group_lookup_vty() returned (no
+ * peer-group member fan-out, the same replicate-legacy-exactly reasoning as
+ * capability orf prefix-list's identical call, M5 B5). Both the set and
+ * default paths below issue CAPABILITY_ACTION_SET (never _UNSET) -- an
+ * existing legacy quirk (both neighbor_addpath_paths_limit and
+ * no_neighbor_addpath_paths_limit called bgp_capability_send() with
+ * CAPABILITY_ACTION_SET) reproduced byte-for-byte.
+ */
+static int bgp_nb_af_addpath_rx_paths_limit_set(struct peer *conf, afi_t afi, safi_t safi,
+						uint16_t paths_limit)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	ret = peer_af_flag_set(conf, afi, safi, PEER_FLAG_ADDPATH_RX_PATHS_LIMIT);
+	conf->addpath_paths_limit[afi][safi].send = paths_limit;
+
+	bgp_capability_send(conf->connection, afi, safi, CAPABILITY_CODE_PATHS_LIMIT,
+			    CAPABILITY_ACTION_SET);
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_af_flag_set() failed: %d",
+			 __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_af_addpath_rx_paths_limit_default(struct peer *conf, afi_t afi, safi_t safi)
+{
+	if (!conf)
+		return NB_OK;
+
+	bgp_nb_af_flag_destroy(conf, afi, safi, PEER_FLAG_ADDPATH_RX_PATHS_LIMIT, false);
+	conf->addpath_paths_limit[afi][safi].send = 0;
+
+	bgp_capability_send(conf->connection, afi, safi, CAPABILITY_CODE_PATHS_LIMIT,
+			    CAPABILITY_ACTION_SET);
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_addpath_rx_paths_limit_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_addpath_rx_paths_limit_set(bgp_nb_neighbor_lookup(args->dnode),
+							    afi, safi,
+							    yang_dnode_get_uint16(args->dnode,
+										  NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_addpath_rx_paths_limit_default(bgp_nb_neighbor_lookup(args->dnode),
+								afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_addpath_rx_paths_limit_set(group ? group->conf : NULL, afi, safi,
+							    yang_dnode_get_uint16(args->dnode,
+										  NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_addpath_rx_paths_limit_default(group ? group->conf : NULL, afi,
+								safi);
+	}
+
+	return NB_OK;
+}

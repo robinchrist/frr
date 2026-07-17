@@ -227,6 +227,29 @@ int bgp_nb_neighbor_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, 
 int bgp_nb_neighbor_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+/* M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/rx-paths-limit
+ * (neighbor + peer-group). */
+int bgp_nb_neighbor_af_addpath_tx_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_addpath_tx_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_addpath_tx_best_selected_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi);
+int bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_peer_group_af_addpath_tx_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_addpath_tx_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					    safi_t safi);
+int bgp_nb_peer_group_af_addpath_tx_best_selected_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi);
+int bgp_nb_peer_group_af_addpath_tx_best_selected_destroy(struct nb_cb_destroy_args *args,
+							  afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_addpath_rx_paths_limit_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi);
+int bgp_nb_neighbor_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi);
+int bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi);
+int bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi);
 int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);

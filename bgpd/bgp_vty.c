@@ -5241,45 +5241,14 @@ DEFPY (neighbor_encapsulation_srv6_or_mpls,
 	return CMD_WARNING_CONFIG_FAILED;
 }
 
-/* disable-addpath-rx */
-DEFUN(neighbor_disable_addpath_rx,
-      neighbor_disable_addpath_rx_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD> disable-addpath-rx",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Do not accept additional paths\n")
-{
-	char *peer_str = argv[1]->arg;
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	return peer_af_flag_set_vty(vty, peer_str, afi, safi, PEER_FLAG_DISABLE_ADDPATH_RX);
-}
-
-DEFUN(no_neighbor_disable_addpath_rx,
-      no_neighbor_disable_addpath_rx_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD> disable-addpath-rx",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Do not accept additional paths\n")
-{
-	char *peer_str = argv[2]->arg;
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	return peer_af_flag_unset_vty(vty, peer_str, afi, safi, PEER_FLAG_DISABLE_ADDPATH_RX);
-}
+/* "neighbor disable-addpath-rx"/"no ..." commands: converted to
+ * northbound, see neighbor_disable_addpath_rx_cli_cmd in
+ * bgp_cli_neighbor.c (M5 batch B7). Neither DEFUN had a hidden BGP_NODE
+ * alias or a bare BGP_NODE install, so once every per-AF install_element()
+ * was removed (bgp_cli_neighbor_init() above installs the northbound
+ * replacement on the same nine AFs instead) nothing kept these reachable;
+ * removed outright rather than left as dead code.
+ */
 
 DEFUN (neighbor_addpath_tx_all_paths,
        neighbor_addpath_tx_all_paths_cmd,
@@ -5340,44 +5309,13 @@ ALIAS_HIDDEN(no_neighbor_addpath_tx_all_paths,
 	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
 	     "Use addpath to advertise all paths to a neighbor\n")
 
-DEFPY (neighbor_addpath_tx_best_selected_paths,
-       neighbor_addpath_tx_best_selected_paths_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-tx-best-selected (1-6)$paths",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Use addpath to advertise best selected paths to a neighbor\n"
-       "The number of best paths\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	bgp_addpath_set_peer_type(peer, bgp_node_afi(vty), bgp_node_safi(vty),
-				  BGP_ADDPATH_BEST_SELECTED, paths);
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_neighbor_addpath_tx_best_selected_paths,
-       no_neighbor_addpath_tx_best_selected_paths_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor addpath-tx-best-selected [(1-6)]",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Use addpath to advertise best selected paths to a neighbor\n"
-       "The number of best paths\n")
-{
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	bgp_addpath_set_peer_type(peer, bgp_node_afi(vty), bgp_node_safi(vty),
-				  BGP_ADDPATH_BEST_SELECTED, 0);
-	return CMD_SUCCESS;
-}
+/* "neighbor addpath-tx-best-selected (1-6)"/"no ..." commands: converted
+ * to northbound, see neighbor_addpath_tx_best_selected_paths_cli_cmd in
+ * bgp_cli_neighbor.c (M5 batch B7). Neither DEFPY had a hidden BGP_NODE
+ * alias or a bare BGP_NODE install, so once every per-AF install_element()
+ * was removed nothing kept these reachable; removed outright rather than
+ * left as dead code, same reasoning as disable-addpath-rx above.
+ */
 
 DEFUN (neighbor_addpath_tx_bestpath_per_as,
        neighbor_addpath_tx_bestpath_per_as_cmd,
@@ -16519,38 +16457,41 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		}
 	}
 
-	/* addpath TX knobs */
-	if (peergroup_af_addpath_check(peer, afi, safi)) {
-		switch (peer->addpath_type[afi][safi]) {
-		case BGP_ADDPATH_ALL:
-			vty_out(vty, "  neighbor %s addpath-tx-all-paths\n",
-				addr);
-			break;
-		case BGP_ADDPATH_BEST_PER_AS:
-			vty_out(vty,
-				"  neighbor %s addpath-tx-bestpath-per-AS\n",
-				addr);
-			break;
-		case BGP_ADDPATH_BEST_SELECTED:
-			if (peer->addpath_best_selected[afi][safi])
+	/* addpath TX knobs + disable-rx + rx-paths-limit: emitted by mgmtd
+	 * for the nine proteus AFs (M5 B7). */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		if (peergroup_af_addpath_check(peer, afi, safi)) {
+			switch (peer->addpath_type[afi][safi]) {
+			case BGP_ADDPATH_ALL:
+				vty_out(vty, "  neighbor %s addpath-tx-all-paths\n",
+					addr);
+				break;
+			case BGP_ADDPATH_BEST_PER_AS:
 				vty_out(vty,
-					"  neighbor %s addpath-tx-best-selected %u\n",
-					addr,
-					peer->addpath_best_selected[afi][safi]);
-			break;
-		case BGP_ADDPATH_MAX:
-		case BGP_ADDPATH_NONE:
-			break;
+					"  neighbor %s addpath-tx-bestpath-per-AS\n",
+					addr);
+				break;
+			case BGP_ADDPATH_BEST_SELECTED:
+				if (peer->addpath_best_selected[afi][safi])
+					vty_out(vty,
+						"  neighbor %s addpath-tx-best-selected %u\n",
+						addr,
+						peer->addpath_best_selected[afi][safi]);
+				break;
+			case BGP_ADDPATH_MAX:
+			case BGP_ADDPATH_NONE:
+				break;
+			}
 		}
+
+		if (CHECK_FLAG(peer->af_flags[afi][safi], PEER_FLAG_DISABLE_ADDPATH_RX))
+			vty_out(vty, "  neighbor %s disable-addpath-rx\n", addr);
+
+		if (CHECK_FLAG(peer->af_flags[afi][safi],
+			       PEER_FLAG_ADDPATH_RX_PATHS_LIMIT))
+			vty_out(vty, "  neighbor %s addpath-rx-paths-limit %u\n", addr,
+				peer->addpath_paths_limit[afi][safi].send);
 	}
-
-	if (CHECK_FLAG(peer->af_flags[afi][safi], PEER_FLAG_DISABLE_ADDPATH_RX))
-		vty_out(vty, "  neighbor %s disable-addpath-rx\n", addr);
-
-	if (CHECK_FLAG(peer->af_flags[afi][safi],
-		       PEER_FLAG_ADDPATH_RX_PATHS_LIMIT))
-		vty_out(vty, "  neighbor %s addpath-rx-paths-limit %u\n", addr,
-			peer->addpath_paths_limit[afi][safi].send);
 
 	/* ORF capability: emitted by mgmtd for the nine proteus AFs (M5 B5). */
 	if (!bgp_af_activate_is_proteus(afi, safi) &&
@@ -18074,145 +18015,23 @@ void bgp_vty_init(void)
 	install_element(BGP_FLOWSPECV6_NODE,
 			&no_neighbor_route_server_client_cmd);
 
-	/* "neighbor disable-addpath-rx" commands. */
-	install_element(BGP_IPV4_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_disable_addpath_rx_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_disable_addpath_rx_cmd);
-
-	/* "neighbor addpath-tx-all-paths" commands.*/
+	/* "neighbor disable-addpath-rx", "neighbor addpath-tx-all-paths",
+	 * "neighbor addpath-tx-best-selected", "neighbor
+	 * addpath-tx-bestpath-per-AS" and "neighbor addpath-rx-paths-limit"
+	 * commands: converted to northbound, see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c, M5 batch B7). tx-all-paths and
+	 * tx-bestpath-per-AS keep their hidden BGP_NODE aliases native;
+	 * addpath-rx-paths-limit keeps its bare non-hidden BGP_NODE install
+	 * (operating on the default ipv4-unicast AF, same as
+	 * maximum-prefix-out's B6 precedent). disable-addpath-rx and
+	 * addpath-tx-best-selected had neither a hidden alias nor a bare
+	 * install, so their DEFUN/DEFPY bodies are removed outright below. */
 	install_element(BGP_NODE, &neighbor_addpath_tx_all_paths_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_addpath_tx_all_paths_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_all_paths_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
-
-	/* "neighbor addpath-tx-best-selected" commands.*/
-	install_element(BGP_IPV4_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV4_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_best_selected_paths_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_addpath_tx_best_selected_paths_cmd);
-
-	/* "neighbor addpath-tx-bestpath-per-AS" commands.*/
-	install_element(BGP_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_hidden_cmd);
-	install_element(BGP_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_hidden_cmd);
-	install_element(BGP_IPV4_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV4_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_bestpath_per_as_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_addpath_tx_bestpath_per_as_cmd);
-
-	/* "neighbor addpath-rx-paths-limit" commands.*/
+	install_element(BGP_NODE, &neighbor_addpath_tx_bestpath_per_as_hidden_cmd);
+	install_element(BGP_NODE, &no_neighbor_addpath_tx_bestpath_per_as_hidden_cmd);
 	install_element(BGP_NODE, &neighbor_addpath_paths_limit_cmd);
 	install_element(BGP_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_addpath_paths_limit_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_addpath_paths_limit_cmd);
 
 	/* "neighbor sender-as-path-loop-detection" commands: converted to
 	 * northbound, see bgp_cli_neighbor_init() (bgp_cli_neighbor.c,

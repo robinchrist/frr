@@ -5891,6 +5891,271 @@ void neighbor_af_weight_cli_write(struct vty *vty, const struct lyd_node *dnode,
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
+/*
+ * M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/rx-paths-limit,
+ * neighbor + peer-group -- reusing B1's xpath-building pattern (container
+ * from vty->node via bgp_afi_safi_container_name(), peer/group xpath from
+ * bgp_cli_peer_or_group_xpath()).
+ *
+ * Legacy installed all five DEFUN/DEFPY pairs
+ * (neighbor_addpath_tx_all_paths, neighbor_addpath_tx_best_selected_paths,
+ * neighbor_addpath_tx_bestpath_per_as, neighbor_disable_addpath_rx,
+ * neighbor_addpath_paths_limit, bgp_vty.c) on the same uniform nine-AF set
+ * (ipv4/ipv6 {unicast,multicast,labeled-unicast,vpn} and l2vpn evpn), unlike
+ * B6's per-family asymmetric reach -- so every install set below matches
+ * exactly. tx-all-paths and tx-bestpath-per-as keep their hidden BGP_NODE
+ * aliases native (untouched); tx-best-selected and disable-addpath-rx had no
+ * such alias and no bare BGP_NODE install, so once every per-AF
+ * install_element() is removed for them here their legacy DEFUN/DEFPY bodies
+ * become entirely unreachable and are deleted outright, unlike B6's
+ * "every DEFUN body stays defined since something keeps it reachable"
+ * precedent -- there is nothing left keeping these two reachable.
+ * rx-paths-limit's bare non-hidden BGP_NODE install (operating on the
+ * default ipv4-unicast AF, same as maximum-prefix-out's B6 precedent) stays
+ * native.
+ */
+
+/*
+ * addpath-tx-all-paths / addpath-tx-bestpath-per-AS: two of legacy's three
+ * mutually-exclusive tx variants, each a bare keyword with no argument.
+ * Legacy's negative forms additionally guarded on the peer's *current*
+ * addpath_type before allowing the destroy ("%% Peer not currently
+ * configured to transmit ..."); dropped here since the enum-typed YANG leaf
+ * has exactly one "off" state regardless of which variant set it, the same
+ * simplification B5 made for remove-private-as/orf-prefix-list's negative
+ * forms.
+ */
+DEFPY_YANG(
+	neighbor_addpath_tx_all_paths, neighbor_addpath_tx_all_paths_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-tx-all-paths",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Use addpath to advertise all paths to a neighbor\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/addpath/tx", xpath, container);
+
+	if (no)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "all-paths");
+
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_addpath_tx_bestpath_per_as, neighbor_addpath_tx_bestpath_per_as_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-tx-bestpath-per-AS",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Use addpath to advertise the bestpath per each neighboring AS\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/addpath/tx", xpath, container);
+
+	if (no)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "best-per-as");
+
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/*
+ * addpath-tx-best-selected (1-6): the positive form sets both 'tx' and
+ * 'tx-best-selected' together (paths is mandatory in the legacy grammar);
+ * the negative form's optional trailing count is accepted but ignored,
+ * destroying only 'tx-best-selected' -- not 'tx' -- reproducing legacy's own
+ * quirk (no_neighbor_addpath_tx_best_selected_paths, bgp_vty.c, kept type
+ * BGP_ADDPATH_BEST_SELECTED and merely zeroed the path count) without any
+ * special-casing: bgp_nb_af_addpath_tx_apply() (bgp_nb_util.c) always
+ * rereads 'tx' fresh, so leaving it untouched here naturally preserves it.
+ */
+DEFPY_YANG(
+	neighbor_addpath_tx_best_selected_paths, neighbor_addpath_tx_best_selected_paths_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-tx-best-selected [(1-6)]$paths",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Use addpath to advertise best selected paths to a neighbor\n"
+	"The number of best paths\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/addpath", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/tx-best-selected", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	} else {
+		if (!paths_str) {
+			vty_out(vty, "%% Must specify the number of best paths\n");
+			XFREE(MTYPE_TMP, xpath_base);
+			return CMD_WARNING;
+		}
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/tx", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "best-selected");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/tx-best-selected", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, paths_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the 'addpath' container xpath: 'tx'/'tx-best-selected' are
+ * always emitted together on one line, the same shape as
+ * bgp_config_write_peer_af()'s legacy switch (bgp_vty.c). */
+void neighbor_af_addpath_tx_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	const char *name = bgp_cli_neighbor_or_group_name(dnode);
+	const char *tx;
+
+	if (!yang_dnode_exists(dnode, "tx"))
+		return;
+
+	tx = yang_dnode_get_string(dnode, "tx");
+
+	if (strmatch(tx, "all-paths"))
+		vty_out(vty, "  neighbor %s addpath-tx-all-paths\n", name);
+	else if (strmatch(tx, "best-per-as"))
+		vty_out(vty, "  neighbor %s addpath-tx-bestpath-per-AS\n", name);
+	else if (strmatch(tx, "best-selected") && yang_dnode_exists(dnode, "tx-best-selected"))
+		vty_out(vty, "  neighbor %s addpath-tx-best-selected %u\n", name,
+			yang_dnode_get_uint8(dnode, "tx-best-selected"));
+}
+
+/* disable-addpath-rx: Tier A boolean flag, reusing bgp_cli_neighbor_af_flag_modify(). */
+DEFPY_YANG(
+	neighbor_disable_addpath_rx, neighbor_disable_addpath_rx_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable-addpath-rx",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Do not accept additional paths\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "addpath/disable-rx",
+					       no ? "false" : "true");
+}
+
+void neighbor_af_addpath_disable_rx_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s disable-addpath-rx\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+/*
+ * addpath-rx-paths-limit (1-65535): plain independent leaf, collapsing
+ * legacy's neighbor_addpath_paths_limit/no_... DEFPY pair.
+ */
+DEFPY_YANG(
+	neighbor_addpath_paths_limit, neighbor_addpath_paths_limit_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-rx-paths-limit [(1-65535)]$paths_limit",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Paths Limit for Addpath to receive from the peer\n"
+	"Maximum number of paths\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/addpath/rx-paths-limit", xpath,
+				 container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	} else {
+		if (!paths_limit_str) {
+			vty_out(vty, "%% Must specify the paths limit\n");
+			XFREE(MTYPE_TMP, xpath_child);
+			return CMD_WARNING;
+		}
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, paths_limit_str);
+	}
+	XFREE(MTYPE_TMP, xpath_child);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+void neighbor_af_addpath_rx_paths_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	vty_out(vty, "  neighbor %s addpath-rx-paths-limit %u\n",
+		bgp_cli_neighbor_or_group_name(dnode), yang_dnode_get_uint16(dnode, NULL));
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -6376,4 +6641,57 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_IPV6L_NODE, &neighbor_weight_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &neighbor_weight_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_weight_cli_cmd);
+
+	/* addpath tx/tx-best-selected/disable-rx/rx-paths-limit, neighbor +
+	 * peer-group (M5 batch B7): legacy reached all nine proteus AFs
+	 * uniformly for every one of the five commands. */
+	install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_disable_addpath_rx_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_addpath_paths_limit_cli_cmd);
 }
