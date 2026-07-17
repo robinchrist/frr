@@ -16,6 +16,8 @@
 #include "vrf.h"
 #include "asn.h"
 
+#include "frrdistance.h"
+
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
 #include "bgpd/bgp_damp.h"
@@ -4280,6 +4282,222 @@ void afi_safis_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode
 			half, reuse, suppress, max);
 }
 
+/*
+ * M5 batch B13: instance-AF 'distance bgp (1-255) (1-255) (1-255)'
+ * (af-distance-ipv4/-ipv6's distance/{ebgp,ibgp,local} in proteus-bgp.yang),
+ * across all eight instance AFs that 'uses' af-distance. The container's
+ * 'must' enforces "all three together or none", so the positive form always
+ * MODIFYs ebgp/ibgp/local together and the negative form always DESTROYs all
+ * three (the 'no' form's optional values, kept for legacy grammar parity,
+ * are ignored -- a keyed container has no per-value delete). afi/safi are
+ * derived from the enclosing AF node via bgp_afi_safi_container_name().
+ */
+DEFPY_YANG(
+	instance_afi_safis_distance_bgp, instance_afi_safis_distance_bgp_cli_cmd,
+	"distance bgp (1-255)$ebgp (1-255)$ibgp (1-255)$local",
+	"Define an administrative distance\n"
+	"BGP distance\n"
+	"Distance for routes external to the AS\n"
+	"Distance for routes internal to the AS\n"
+	"Distance for local routes\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/distance", VTY_CURR_XPATH, container);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ebgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, ebgp_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, ibgp_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, local_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_no_distance_bgp, instance_afi_safis_no_distance_bgp_cli_cmd,
+	"no distance bgp [(1-255) (1-255) (1-255)]",
+	NO_STR
+	"Define an administrative distance\n"
+	"BGP distance\n"
+	"Distance for routes external to the AS\n"
+	"Distance for routes internal to the AS\n"
+	"Distance for local routes\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/distance", VTY_CURR_XPATH, container);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ebgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/ibgp", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/local", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the 'distance' container xpath: bgp_config_write_distance()'s
+ * admin-triple line (retired for these eight AFs in M5 batch B13). Emitted
+ * only when the stored triple differs from the compiled-in defaults, exactly
+ * as the legacy emitter suppressed the all-default case. */
+void afi_safis_distance_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults)
+{
+	uint8_t ebgp, ibgp, local;
+
+	if (!yang_dnode_exists(dnode, "ebgp"))
+		return;
+
+	ebgp = yang_dnode_get_uint8(dnode, "ebgp");
+	ibgp = yang_dnode_get_uint8(dnode, "ibgp");
+	local = yang_dnode_get_uint8(dnode, "local");
+
+	if (ebgp != ZEBRA_EBGP_DISTANCE_DEFAULT || ibgp != ZEBRA_IBGP_DISTANCE_DEFAULT ||
+	    local != ZEBRA_IBGP_DISTANCE_DEFAULT)
+		vty_out(vty, "  distance bgp %u %u %u\n", ebgp, ibgp, local);
+}
+
+/*
+ * M5 batch B13: instance-AF per-prefix 'distance (1-255) PREFIX
+ * [ACCESSLIST_NAME]' (af-distance-*'s distance/prefix list), a keyed list
+ * (key 'prefix') with a mandatory 'distance' and an optional 'access-list'
+ * name (a policy-attachment name: plain string, never a leafref). Two DEFPYs
+ * -- IPv4 and IPv6 -- mirror legacy's two grammars; each collapses to one
+ * CREATE on the list entry plus a MODIFY of 'distance' and a MODIFY/DESTROY
+ * of 'access-list' (the B9 keyed-list idiom). The 'no' form's typed distance,
+ * kept for legacy grammar parity, is ignored -- the entry is keyed by prefix
+ * alone.
+ */
+DEFPY_YANG(
+	instance_afi_safis_distance_source, instance_afi_safis_distance_source_cli_cmd,
+	"[no] distance (1-255)$distance A.B.C.D/M$prefix [WORD$acl]",
+	NO_STR
+	"Define an administrative distance\n"
+	"Administrative distance\n"
+	"IP source prefix\n"
+	"Access list name\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/distance/prefix[prefix='%s']",
+			   VTY_CURR_XPATH, container, prefix_str);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/distance", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, distance_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/access-list", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, acl ? NB_OP_MODIFY : NB_OP_DESTROY, acl);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_distance_source_ipv6, instance_afi_safis_distance_source_ipv6_cli_cmd,
+	"[no] distance (1-255)$distance X:X::X:X/M$prefix [WORD$acl]",
+	NO_STR
+	"Define an administrative distance\n"
+	"Administrative distance\n"
+	"IP source prefix\n"
+	"Access list name\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/distance/prefix[prefix='%s']",
+			   VTY_CURR_XPATH, container, prefix_str);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/distance", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, distance_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/access-list", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, acl ? NB_OP_MODIFY : NB_OP_DESTROY, acl);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+/* Registered on the 'distance/prefix' list xpath, one line per entry in
+ * bgp_config_write_distance()'s field order (distance, prefix, access-list);
+ * the trailing '%s' is the access-list name or empty, byte-for-byte matching
+ * the legacy '  distance %d %pBD %s\n' rendering (empty leaves a trailing
+ * space). */
+void afi_safis_distance_prefix_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	vty_out(vty, "  distance %u %s %s\n", yang_dnode_get_uint8(dnode, "distance"),
+		yang_dnode_get_string(dnode, "prefix"),
+		yang_dnode_exists(dnode, "access-list")
+			? yang_dnode_get_string(dnode, "access-list")
+			: "");
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -4590,4 +4808,41 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_table_map_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_dampening_cli_cmd);
+
+	/* M5 B13: instance-AF 'distance bgp ...' (all eight AFs) + per-prefix
+	 * 'distance (1-255) PREFIX [ACCESSLIST]' (IPv4 grammar on the four IPv4
+	 * AFs, IPv6 grammar on the four IPv6 AFs), all eight instance AFs that
+	 * 'uses' af-distance (ipv4/ipv6 x unicast/multicast/labeled-unicast/vpn
+	 * -- l2vpn-evpn does not use the grouping and is excluded). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_distance_source_cli_cmd);
+
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_distance_source_cli_cmd);
+
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_distance_source_cli_cmd);
+
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_distance_source_cli_cmd);
+
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_distance_source_ipv6_cli_cmd);
+
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_distance_source_ipv6_cli_cmd);
+
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_distance_source_ipv6_cli_cmd);
+
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_distance_source_ipv6_cli_cmd);
 }

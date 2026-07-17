@@ -342,6 +342,106 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_dampening_cli_write,
 			}
 		},
+		/* M5 B13: instance-AF 'distance bgp ...' + per-prefix
+		 * 'distance (1-255) PREFIX [ACCESSLIST]', all eight instance
+		 * AFs that 'uses' af-distance-ipv4/-ipv6 (ipv4/ipv6 x
+		 * unicast/multicast/labeled-unicast/vpn). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance",
+			.cbs = {
+				.cli_show = afi_safis_distance_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix",
+			.cbs = {
+				.cli_show = afi_safis_distance_prefix_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {

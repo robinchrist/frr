@@ -16577,6 +16577,23 @@ static bool bgp_af_route_selection_is_proteus(afi_t afi, safi_t safi)
 	       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
 }
 
+/* M5 batch B13: instance-AF 'distance bgp ...' + per-prefix 'distance
+ * (1-255) PREFIX [ACCESSLIST]' (af-distance-ipv4/-ipv6 in proteus-bgp.yang)
+ * is mgmtd-owned for the eight instance AFs that 'uses' the grouping --
+ * ipv4/ipv6 x unicast/multicast/labeled-unicast/vpn; both forms are emitted
+ * by afi_safis_distance_cli_write()/afi_safis_distance_prefix_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c) instead. Same AF set as
+ * af-route-selection above (the two groupings share the eight non-EVPN AF
+ * containers), kept a separate predicate since they are separate groupings
+ * retired in separate batches. */
+static bool bgp_af_distance_is_proteus(afi_t afi, safi_t safi)
+{
+	if (afi != AFI_IP && afi != AFI_IP6)
+		return false;
+	return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
+	       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
+}
+
 /* Address family based peer configuration display.  */
 static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 				    safi_t safi)
@@ -16639,7 +16656,11 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 			vty_out(vty, "  distribute bgp-fabric-link-state\n");
 	}
 
-	bgp_config_write_distance(vty, bgp, afi, safi);
+	/* 'distance ...': emitted by mgmtd for the eight proteus AFs (M5 B13);
+	 * still native for l2vpn-evpn/encap/flowspec/unreachability/
+	 * link-state. */
+	if (!bgp_af_distance_is_proteus(afi, safi))
+		bgp_config_write_distance(vty, bgp, afi, safi);
 
 	bgp_config_write_network(vty, bgp, afi, safi);
 

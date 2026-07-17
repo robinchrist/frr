@@ -374,6 +374,23 @@ int bgp_nb_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args,
 						 safi_t safi);
 int bgp_nb_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 						  safi_t safi);
+/* M5 batch B13: instance-AF 'distance bgp ...' triple + per-prefix 'distance
+ * (1-255) PREFIX [ACCESSLIST]' (af-distance-ipv4/-ipv6 in proteus-bgp.yang),
+ * the same eight instance AFs that 'uses' the grouping. */
+int bgp_nb_af_distance_ebgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_ebgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_ibgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_ibgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_local_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_local_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_prefix_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_prefix_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_distance_prefix_distance_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi);
+int bgp_nb_af_distance_prefix_access_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_af_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi);
 
 #ifdef __cplusplus
 }

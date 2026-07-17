@@ -18280,27 +18280,24 @@ static void bgp_distance_free(struct bgp_distance *bdistance)
 	XFREE(MTYPE_BGP_DISTANCE, bdistance);
 }
 
-static int bgp_distance_set(struct vty *vty, const char *distance_str,
-			    const char *ip_str, const char *access_list_str)
+/* Per-prefix distance override, vty-free core (M5 batch B13). afi/safi are
+ * passed in (the northbound callbacks know them statically; the legacy
+ * DEFUNs derive them from the vty AF sub-node via the _vty wrapper below).
+ * The override table (bgp_distance_table) is process-global, not
+ * per-instance, so no 'struct bgp *' is needed here. Returns 0 on success,
+ * -1 with errmsg on a malformed prefix. */
+int bgp_distance_prefix_set(afi_t afi, safi_t safi, uint8_t distance,
+			    const char *ip_str, const char *access_list_str,
+			    char *errmsg, size_t errmsg_len)
 {
-	int ret;
-	afi_t afi;
-	safi_t safi;
 	struct prefix p;
-	uint8_t distance;
 	struct bgp_dest *dest;
 	struct bgp_distance *bdistance;
 
-	afi = bgp_node_afi(vty);
-	safi = bgp_node_safi(vty);
-
-	ret = str2prefix(ip_str, &p);
-	if (ret == 0) {
-		vty_out(vty, "Malformed prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+	if (str2prefix(ip_str, &p) == 0) {
+		snprintf(errmsg, errmsg_len, "Malformed prefix");
+		return -1;
 	}
-
-	distance = atoi(distance_str);
 
 	/* Get BGP distance node. */
 	dest = bgp_node_get(bgp_distance_table[afi][safi], &p);
@@ -18321,42 +18318,61 @@ static int bgp_distance_set(struct vty *vty, const char *distance_str,
 		bdistance->access_list =
 			XSTRDUP(MTYPE_AS_LIST, access_list_str);
 
+	return 0;
+}
+
+/* Legacy CLI wrapper: derive afi/safi from the vty's AF sub-node and route
+ * errors to vty_out(), for the still-native per-prefix 'distance (1-255)
+ * PREFIX [ACCESSLIST]' DEFUNs (only the bare BGP_NODE ipv4-unicast fallback
+ * survives M5 batch B13). */
+static int bgp_distance_set_vty(struct vty *vty, const char *distance_str,
+				const char *ip_str, const char *access_list_str)
+{
+	char errmsg[128] = {};
+
+	if (bgp_distance_prefix_set(bgp_node_afi(vty), bgp_node_safi(vty),
+				    atoi(distance_str), ip_str, access_list_str,
+				    errmsg, sizeof(errmsg)) < 0) {
+		vty_out(vty, "%s\n", errmsg);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
 	return CMD_SUCCESS;
 }
 
-static int bgp_distance_unset(struct vty *vty, const char *distance_str,
-			      const char *ip_str, const char *access_list_str)
+/* Per-prefix distance override removal, vty-free core (M5 batch B13).
+ * match_distance != 0 enforces legacy's "distance must match configured"
+ * and "can't find prefix" guards (the still-native CLI); match_distance ==
+ * 0 deletes by prefix unconditionally and treats an already-absent entry as
+ * a no-op (northbound delete-by-key, the B9 precedent). Returns 0 on
+ * success/no-op, -1 with errmsg otherwise. */
+int bgp_distance_prefix_unset(afi_t afi, safi_t safi, uint8_t match_distance,
+			      const char *ip_str, char *errmsg, size_t errmsg_len)
 {
-	int ret;
-	afi_t afi;
-	safi_t safi;
 	struct prefix p;
-	int distance;
 	struct bgp_dest *dest;
 	struct bgp_distance *bdistance;
 
-	afi = bgp_node_afi(vty);
-	safi = bgp_node_safi(vty);
-
-	ret = str2prefix(ip_str, &p);
-	if (ret == 0) {
-		vty_out(vty, "Malformed prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+	if (str2prefix(ip_str, &p) == 0) {
+		snprintf(errmsg, errmsg_len, "Malformed prefix");
+		return -1;
 	}
 
 	dest = bgp_node_lookup(bgp_distance_table[afi][safi], &p);
 	if (!dest) {
-		vty_out(vty, "Can't find specified prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		if (match_distance) {
+			snprintf(errmsg, errmsg_len, "Can't find specified prefix");
+			return -1;
+		}
+		return 0;
 	}
 
 	bdistance = bgp_dest_get_bgp_distance_info(dest);
-	distance = atoi(distance_str);
 
-	if (bdistance->distance != distance) {
-		vty_out(vty, "Distance does not match configured\n");
+	if (match_distance && bdistance->distance != match_distance) {
+		snprintf(errmsg, errmsg_len, "Distance does not match configured");
 		bgp_dest_unlock_node(dest);
-		return CMD_WARNING_CONFIG_FAILED;
+		return -1;
 	}
 
 	XFREE(MTYPE_AS_LIST, bdistance->access_list);
@@ -18366,6 +18382,21 @@ static int bgp_distance_unset(struct vty *vty, const char *distance_str,
 	dest = bgp_dest_unlock_node(dest);
 	assert(dest);
 	bgp_dest_unlock_node(dest);
+
+	return 0;
+}
+
+static int bgp_distance_unset_vty(struct vty *vty, const char *distance_str,
+				  const char *ip_str)
+{
+	char errmsg[128] = {};
+
+	if (bgp_distance_prefix_unset(bgp_node_afi(vty), bgp_node_safi(vty),
+				      atoi(distance_str), ip_str, errmsg,
+				      sizeof(errmsg)) < 0) {
+		vty_out(vty, "%s\n", errmsg);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
 
 	return CMD_SUCCESS;
 }
@@ -18494,6 +18525,24 @@ static void bgp_announce_routes_distance_update(struct bgp *bgp,
 	}
 }
 
+/* Set the 'distance bgp' admin-distance triple for one AF (vty-free core,
+ * M5 batch B13). Re-announces the AF's routes only when a value actually
+ * changes, matching legacy bgp_distance()'s own guard; the 'no' form is this
+ * same core with ebgp/ibgp/local all zero. */
+void bgp_distance_admin_set(struct bgp *bgp, afi_t afi, safi_t safi,
+			    uint8_t ebgp, uint8_t ibgp, uint8_t local)
+{
+	if (bgp->distance_ebgp[afi][safi] == ebgp &&
+	    bgp->distance_ibgp[afi][safi] == ibgp &&
+	    bgp->distance_local[afi][safi] == local)
+		return;
+
+	bgp->distance_ebgp[afi][safi] = ebgp;
+	bgp->distance_ibgp[afi][safi] = ibgp;
+	bgp->distance_local[afi][safi] = local;
+	bgp_announce_routes_distance_update(bgp, afi, safi);
+}
+
 DEFUN (bgp_distance,
        bgp_distance_cmd,
        "distance bgp (1-255) (1-255) (1-255)",
@@ -18507,23 +18556,11 @@ DEFUN (bgp_distance,
 	int idx_number = 2;
 	int idx_number_2 = 3;
 	int idx_number_3 = 4;
-	int distance_ebgp = atoi(argv[idx_number]->arg);
-	int distance_ibgp = atoi(argv[idx_number_2]->arg);
-	int distance_local = atoi(argv[idx_number_3]->arg);
-	afi_t afi;
-	safi_t safi;
 
-	afi = bgp_node_afi(vty);
-	safi = bgp_node_safi(vty);
-
-	if (bgp->distance_ebgp[afi][safi] != distance_ebgp
-	    || bgp->distance_ibgp[afi][safi] != distance_ibgp
-	    || bgp->distance_local[afi][safi] != distance_local) {
-		bgp->distance_ebgp[afi][safi] = distance_ebgp;
-		bgp->distance_ibgp[afi][safi] = distance_ibgp;
-		bgp->distance_local[afi][safi] = distance_local;
-		bgp_announce_routes_distance_update(bgp, afi, safi);
-	}
+	bgp_distance_admin_set(bgp, bgp_node_afi(vty), bgp_node_safi(vty),
+			       atoi(argv[idx_number]->arg),
+			       atoi(argv[idx_number_2]->arg),
+			       atoi(argv[idx_number_3]->arg));
 	return CMD_SUCCESS;
 }
 
@@ -18538,20 +18575,9 @@ DEFUN (no_bgp_distance,
        "Distance for local routes\n")
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	afi_t afi;
-	safi_t safi;
 
-	afi = bgp_node_afi(vty);
-	safi = bgp_node_safi(vty);
-
-	if (bgp->distance_ebgp[afi][safi] != 0
-	    || bgp->distance_ibgp[afi][safi] != 0
-	    || bgp->distance_local[afi][safi] != 0) {
-		bgp->distance_ebgp[afi][safi] = 0;
-		bgp->distance_ibgp[afi][safi] = 0;
-		bgp->distance_local[afi][safi] = 0;
-		bgp_announce_routes_distance_update(bgp, afi, safi);
-	}
+	bgp_distance_admin_set(bgp, bgp_node_afi(vty), bgp_node_safi(vty), 0, 0,
+			       0);
 	return CMD_SUCCESS;
 }
 
@@ -18565,8 +18591,8 @@ DEFUN (bgp_distance_source,
 {
 	int idx_number = 1;
 	int idx_ipv4_prefixlen = 2;
-	bgp_distance_set(vty, argv[idx_number]->arg,
-			 argv[idx_ipv4_prefixlen]->arg, NULL);
+	bgp_distance_set_vty(vty, argv[idx_number]->arg,
+			     argv[idx_ipv4_prefixlen]->arg, NULL);
 	return CMD_SUCCESS;
 }
 
@@ -18580,8 +18606,8 @@ DEFUN (no_bgp_distance_source,
 {
 	int idx_number = 2;
 	int idx_ipv4_prefixlen = 3;
-	bgp_distance_unset(vty, argv[idx_number]->arg,
-			   argv[idx_ipv4_prefixlen]->arg, NULL);
+	bgp_distance_unset_vty(vty, argv[idx_number]->arg,
+			       argv[idx_ipv4_prefixlen]->arg);
 	return CMD_SUCCESS;
 }
 
@@ -18596,8 +18622,8 @@ DEFUN (bgp_distance_source_access_list,
 	int idx_number = 1;
 	int idx_ipv4_prefixlen = 2;
 	int idx_word = 3;
-	bgp_distance_set(vty, argv[idx_number]->arg,
-			 argv[idx_ipv4_prefixlen]->arg, argv[idx_word]->arg);
+	bgp_distance_set_vty(vty, argv[idx_number]->arg,
+			     argv[idx_ipv4_prefixlen]->arg, argv[idx_word]->arg);
 	return CMD_SUCCESS;
 }
 
@@ -18612,59 +18638,16 @@ DEFUN (no_bgp_distance_source_access_list,
 {
 	int idx_number = 2;
 	int idx_ipv4_prefixlen = 3;
-	int idx_word = 4;
-	bgp_distance_unset(vty, argv[idx_number]->arg,
-			   argv[idx_ipv4_prefixlen]->arg, argv[idx_word]->arg);
+	bgp_distance_unset_vty(vty, argv[idx_number]->arg,
+			       argv[idx_ipv4_prefixlen]->arg);
 	return CMD_SUCCESS;
 }
 
-DEFUN (ipv6_bgp_distance_source,
-       ipv6_bgp_distance_source_cmd,
-       "distance (1-255) X:X::X:X/M",
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n")
-{
-	bgp_distance_set(vty, argv[1]->arg, argv[2]->arg, NULL);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_ipv6_bgp_distance_source,
-       no_ipv6_bgp_distance_source_cmd,
-       "no distance (1-255) X:X::X:X/M",
-       NO_STR
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n")
-{
-	bgp_distance_unset(vty, argv[2]->arg, argv[3]->arg, NULL);
-	return CMD_SUCCESS;
-}
-
-DEFUN (ipv6_bgp_distance_source_access_list,
-       ipv6_bgp_distance_source_access_list_cmd,
-       "distance (1-255) X:X::X:X/M WORD",
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n"
-       "Access list name\n")
-{
-	bgp_distance_set(vty, argv[1]->arg, argv[2]->arg, argv[3]->arg);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_ipv6_bgp_distance_source_access_list,
-       no_ipv6_bgp_distance_source_access_list_cmd,
-       "no distance (1-255) X:X::X:X/M WORD",
-       NO_STR
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n"
-       "Access list name\n")
-{
-	bgp_distance_unset(vty, argv[2]->arg, argv[3]->arg, argv[4]->arg);
-	return CMD_SUCCESS;
-}
+/* The IPv6 per-prefix 'distance' DEFUNs (ipv6_bgp_distance_source and its
+ * access-list/no variants) were converted to proteus/northbound in M5 batch
+ * B13 (bgp_cli_instance.c) and, unlike the IPv4 forms, had no bare BGP_NODE
+ * install to keep them reachable -- so they are removed outright, per the
+ * B9/B11 precedent for commands left with no install site. */
 
 DEFUN (bgp_damp_set,
        bgp_damp_set_cmd,
@@ -19259,41 +19242,21 @@ void bgp_route_init(void)
 			&show_ip_bgp_vpn_neighbor_prefix_counts_cmd);
 #endif /* KEEP_OLD_VPN_COMMANDS */
 
+	/* 'distance bgp ...' and per-prefix 'distance (1-255) PREFIX
+	 * [ACCESSLIST]': converted to northbound for the eight proteus AFs
+	 * (M5 batch B13), see bgp_cli_instance_init() (bgp_cli_instance.c).
+	 * The bare BGP_NODE installs keep the IPv4 DEFUNs reachable (bare
+	 * 'distance ...' under 'router bgp' always meant ipv4-unicast,
+	 * matching the bare-BGP_NODE precedent B6-B12 established); the
+	 * per-AF IPV4/IPV4M/IPV6/IPV6M installs are retired, and the IPv6
+	 * per-prefix DEFUNs -- which had no bare fallback -- are deleted
+	 * outright above. */
 	install_element(BGP_NODE, &bgp_distance_cmd);
 	install_element(BGP_NODE, &no_bgp_distance_cmd);
 	install_element(BGP_NODE, &bgp_distance_source_cmd);
 	install_element(BGP_NODE, &no_bgp_distance_source_cmd);
 	install_element(BGP_NODE, &bgp_distance_source_access_list_cmd);
 	install_element(BGP_NODE, &no_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_distance_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_distance_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_distance_source_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_distance_source_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV4_NODE, &no_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_distance_cmd);
-	install_element(BGP_IPV4M_NODE, &no_bgp_distance_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_distance_source_cmd);
-	install_element(BGP_IPV4M_NODE, &no_bgp_distance_source_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_distance_cmd);
-	install_element(BGP_IPV6_NODE, &no_bgp_distance_cmd);
-	install_element(BGP_IPV6_NODE, &ipv6_bgp_distance_source_cmd);
-	install_element(BGP_IPV6_NODE, &no_ipv6_bgp_distance_source_cmd);
-	install_element(BGP_IPV6_NODE,
-			&ipv6_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_ipv6_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV6M_NODE, &bgp_distance_cmd);
-	install_element(BGP_IPV6M_NODE, &no_bgp_distance_cmd);
-	install_element(BGP_IPV6M_NODE, &ipv6_bgp_distance_source_cmd);
-	install_element(BGP_IPV6M_NODE, &no_ipv6_bgp_distance_source_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&ipv6_bgp_distance_source_access_list_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_ipv6_bgp_distance_source_access_list_cmd);
 
 	/* BGP dampening: converted to northbound for the eight proteus AFs
 	 * (M5 batch B12), see bgp_cli_instance_init() (bgp_cli_instance.c);

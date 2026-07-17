@@ -241,179 +241,59 @@ int instance_afi_safis_ipv6_unicast_dampening_max_suppress_time_destroy(
 
 int instance_afi_safis_ipv6_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_local_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_local_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_prefix_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_prefix_distance_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix/distance");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_distance_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
-int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_modify(struct nb_cb_modify_args *args)
+int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_export_vpn_modify(struct nb_cb_modify_args *args)
@@ -1407,180 +1287,60 @@ int instance_afi_safis_ipv6_multicast_dampening_max_suppress_time_destroy(
 
 int instance_afi_safis_ipv6_multicast_distance_ebgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_ibgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_local_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_local_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_prefix_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_create(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_prefix_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
-int instance_afi_safis_ipv6_multicast_distance_prefix_distance_modify(struct nb_cb_modify_args *args)
+int instance_afi_safis_ipv6_multicast_distance_prefix_distance_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix/distance");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_distance_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_prefix_access_list_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_multicast_distance_prefix_access_list_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-multicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_network_create(struct nb_cb_create_args *args)
@@ -1780,181 +1540,61 @@ int instance_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_destroy(
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_ebgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_ebgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_ibgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_ibgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_local_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_local_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_create(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
-int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_destroy(struct nb_cb_destroy_args *args)
+int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_distance_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix/distance");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_distance_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_access_list_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_access_list_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as2_create(struct nb_cb_create_args *args)
@@ -2362,178 +2002,58 @@ int instance_afi_safis_ipv6_vpn_dampening_max_suppress_time_destroy(
 
 int instance_afi_safis_ipv6_vpn_distance_ebgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_ebgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/ebgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ebgp_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_ibgp_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_ibgp_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/ibgp");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_ibgp_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_local_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_local_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/local");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_local_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_prefix_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_create(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_prefix_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_prefix_distance_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix/distance");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_distance_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
-int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args)
+int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/distance/prefix/access-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_distance_prefix_access_list_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_afi_safis_ipv6_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args)

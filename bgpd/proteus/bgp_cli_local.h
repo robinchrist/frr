@@ -338,6 +338,16 @@ void afi_safis_table_map_cli_write(struct vty *vty, const struct lyd_node *dnode
 void afi_safis_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				   bool show_defaults);
 
+/* M5 B13: instance-AF 'distance bgp ...' triple + per-prefix 'distance
+ * (1-255) PREFIX [ACCESSLIST]' emitters (shared by all eight instance AFs --
+ * af-distance-ipv4/-ipv6 are one grouping shape used by all of them). The
+ * container emitter renders the admin triple; the prefix-list emitter is
+ * registered on the 'distance/prefix' list and renders one line per entry. */
+void afi_safis_distance_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults);
+void afi_safis_distance_prefix_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

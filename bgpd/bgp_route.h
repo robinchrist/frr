@@ -971,6 +971,18 @@ extern void bgp_table_map_set(struct bgp *bgp, afi_t afi, safi_t safi, const cha
 extern void bgp_table_map_unset(struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi);
 extern void bgp_config_write_distance(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi);
+/* M5 batch B13: vty-free cores for the northbound 'distance' callbacks
+ * (bgpd/proteus/bgp_nb_util.c), split out of the legacy DEFUN bodies
+ * (bgp_route.c). The 'distance bgp' admin triple is per-instance
+ * (bgp->distance_*); the per-prefix override lives in the process-global
+ * bgp_distance_table[afi][safi], so it needs no 'struct bgp *'. */
+extern void bgp_distance_admin_set(struct bgp *bgp, afi_t afi, safi_t safi,
+				   uint8_t ebgp, uint8_t ibgp, uint8_t local);
+extern int bgp_distance_prefix_set(afi_t afi, safi_t safi, uint8_t distance,
+				   const char *ip_str, const char *access_list_str,
+				   char *errmsg, size_t errmsg_len);
+extern int bgp_distance_prefix_unset(afi_t afi, safi_t safi, uint8_t match_distance,
+				     const char *ip_str, char *errmsg, size_t errmsg_len);
 
 extern void bgp_aggregate_delete(struct bgp *bgp, const struct prefix *p,
 				 afi_t afi, safi_t safi,

@@ -5857,3 +5857,216 @@ int bgp_nb_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *arg
 
 	return NB_OK;
 }
+
+/*
+ * M5 batch B13: instance-AF 'distance bgp (1-255) (1-255) (1-255)'
+ * (af-distance-ipv4/-ipv6's distance/{ebgp,ibgp,local} in proteus-bgp.yang),
+ * across the eight instance AFs that 'uses' af-distance (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast/vpn; l2vpn-evpn does not use the
+ * grouping -- M6). The container's 'must' enforces the legacy "all three
+ * together or none" rule, so all three leaves' MODIFY/DESTROY reroute to a
+ * single "reread the whole distance container, call bgp_distance_admin_set()"
+ * helper (the B12 idiom): a MODIFY reapplies the full ebgp/ibgp/local triple
+ * from the datastore, and a DESTROY of any leaf (the whole triple always
+ * goes together) resets all three to zero. bgp_distance_admin_set()
+ * (bgp_route.c, the vty-free core split from the legacy DEFUN) re-announces
+ * the AF's routes exactly once per real change, matching legacy.
+ */
+static void bgp_nb_af_distance_admin_apply(struct bgp *bgp, afi_t afi, safi_t safi,
+					   const struct lyd_node *dnode)
+{
+	if (!bgp)
+		/* instance deleted underneath in this same commit */
+		return;
+
+	if (yang_dnode_exists(dnode, "ebgp"))
+		bgp_distance_admin_set(bgp, afi, safi, yang_dnode_get_uint8(dnode, "ebgp"),
+				       yang_dnode_get_uint8(dnode, "ibgp"),
+				       yang_dnode_get_uint8(dnode, "local"));
+	else
+		bgp_distance_admin_set(bgp, afi, safi, 0, 0, 0);
+}
+
+int bgp_nb_af_distance_ebgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_ebgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_ibgp_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_ibgp_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_local_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_local_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_distance_admin_apply(bgp_nb_instance_lookup(args->dnode), afi, safi,
+				       yang_dnode_get_parent(args->dnode, "distance"));
+
+	return NB_OK;
+}
+
+/*
+ * M5 batch B13: instance-AF per-prefix 'distance (1-255) PREFIX
+ * [ACCESSLIST_NAME]' (af-distance-*'s distance/prefix list in
+ * proteus-bgp.yang), a keyed list (key 'prefix') with a mandatory 'distance'
+ * child and an optional 'access-list' name (a policy-attachment name: plain
+ * string, never a leafref). Reuses the B9 keyed-list idiom: the list CREATE
+ * plus each option leaf's MODIFY/DESTROY all reread the whole entry and
+ * reissue one full bgp_distance_prefix_set() (bgp_route.c's vty-free core),
+ * which unconditionally overwrites the distance and access-list, so a
+ * re-typed 'distance ...' line always rewrites the entry from scratch. The
+ * whole-entry DESTROY calls bgp_distance_prefix_unset() with match_distance
+ * == 0 (delete-by-key, bypassing legacy's "distance must match" guard, as
+ * B9 did for keyed-list deletes). The override table is process-global, so
+ * no bgp instance lookup is needed. Per-prefix distance changes do not
+ * re-announce routes -- matching legacy, whose per-prefix setters never
+ * did.
+ */
+static const char *bgp_nb_af_distance_prefix_acl(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "access-list")
+		       ? yang_dnode_get_string(entry_dnode, "access-list")
+		       : NULL;
+}
+
+static int bgp_nb_af_distance_prefix_set(const struct lyd_node *entry_dnode, afi_t afi,
+					 safi_t safi, uint8_t distance, const char *acl)
+{
+	const char *prefix_str = yang_dnode_get_string(entry_dnode, "prefix");
+	char errmsg[128] = {};
+
+	if (bgp_distance_prefix_set(afi, safi, distance, prefix_str, acl, errmsg,
+				    sizeof(errmsg)) < 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_distance_prefix_set() failed for %s: %s", __func__,
+			 prefix_str, errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_prefix_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_distance_prefix_set(args->dnode, afi, safi,
+					     yang_dnode_get_uint8(args->dnode, "distance"),
+					     bgp_nb_af_distance_prefix_acl(args->dnode));
+}
+
+int bgp_nb_af_distance_prefix_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const char *prefix_str;
+	char errmsg[128] = {};
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(args->dnode, "prefix");
+
+	if (bgp_distance_prefix_unset(afi, safi, 0, prefix_str, errmsg, sizeof(errmsg)) < 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_distance_prefix_unset() failed for %s: %s", __func__,
+			 prefix_str, errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_distance_prefix_distance_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "prefix");
+
+	return bgp_nb_af_distance_prefix_set(entry_dnode, afi, safi,
+					     yang_dnode_get_uint8(args->dnode, NULL),
+					     bgp_nb_af_distance_prefix_acl(entry_dnode));
+}
+
+int bgp_nb_af_distance_prefix_access_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "prefix");
+
+	return bgp_nb_af_distance_prefix_set(entry_dnode, afi, safi,
+					     yang_dnode_get_uint8(entry_dnode, "distance"),
+					     yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	/* The access-list leaf being destroyed may already be unlinked at
+	 * APPLY time (B9 lesson), so pass NULL explicitly rather than
+	 * rereading it from the entry. */
+	entry_dnode = yang_dnode_get_parent(args->dnode, "prefix");
+
+	return bgp_nb_af_distance_prefix_set(entry_dnode, afi, safi,
+					     yang_dnode_get_uint8(entry_dnode, "distance"), NULL);
+}
