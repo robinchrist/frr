@@ -167,6 +167,15 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_evpn_flooding_cli_write,
 			}
 		},
+		/* M6 B4: instance-level l2vpn-evpn dup-addr-detection max-moves/
+		 * time/freeze; 'enabled' is printed by the still-native legacy
+		 * emitter (bgp_config_write_evpn_info), not through mgmtd. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection",
+			.cbs = {
+				.cli_show = instance_evpn_dup_addr_detection_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

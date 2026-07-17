@@ -41,6 +41,10 @@ void instance_evpn_mac_vrf_soo_cli_write(struct vty *vty, const struct lyd_node 
 void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults);
 
+/* M6 B4: instance-level l2vpn-evpn dup-addr-detection emitter. */
+void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);

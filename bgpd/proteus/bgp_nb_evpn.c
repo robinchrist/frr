@@ -718,6 +718,16 @@ int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_destroy(
 	return NB_OK;
 }
 
+/* 'enabled' left unimplemented (M6 batch B4): proteus-bgp-evpn.yang's
+ * dup-addr-detection/enabled leaf has no 'default "true"' statement, unlike
+ * every other default-on boolean in the proteus-bgp modules, so the Tier A
+ * "destroy resolves to the true default" mechanics its own description
+ * assumes don't exist on the wire. This is a YANG modeling gap (YANG files
+ * are out of scope for this batch), not a missing callback body -- reported
+ * upstream rather than silently worked around. bgp->evpn_info->dup_addr_detect
+ * stays reachable only through the still-native bare 'dup-addr-detection' /
+ * 'no dup-addr-detection' toggle (bgp_evpn_vty.c).
+ */
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
@@ -750,18 +760,55 @@ int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_destroy(struct nb_c
 	return NB_OK;
 }
 
+/* max-moves/time/freeze (M6 batch B4, dup_addr_detection_cmd /
+ * dup_addr_detection_auto_recovery_cmd): none of the three carry a YANG
+ * default (same no-default numeric-leaf shape as B8's per-neighbor
+ * dampening half-life/reuse-threshold/etc.), so every leaf's MODIFY/DESTROY
+ * reroutes to a single "reread the whole dup-addr-detection container,
+ * reapply to bgp->evpn_info, notify zebra" helper -- a reread after any one
+ * leaf's change still recomputes a fully consistent set, and unset leaves
+ * fall back to the same EVPN_DAD_DEFAULT_* legacy itself used. Configuring
+ * any of the three also (re)asserts dup_addr_detect, mirroring both legacy
+ * DEFPYs' own unconditional 'bgp_vrf->evpn_info->dup_addr_detect = true'
+ * side effect -- the field is otherwise only ever turned off by the
+ * still-native bare 'no dup-addr-detection' (dup_addr_detect's own leaf is
+ * not convertible this batch, see above).
+ */
+static void bgp_nb_dup_addr_detection_apply(struct bgp *bgp, const struct lyd_node *dnode)
+{
+	if (!bgp || !bgp->evpn_info)
+		return;
+
+	bgp->evpn_info->dup_addr_detect = true;
+
+	bgp->evpn_info->dad_max_moves = yang_dnode_exists(dnode, "max-moves")
+						 ? yang_dnode_get_uint16(dnode, "max-moves")
+						 : EVPN_DAD_DEFAULT_MAX_MOVES;
+	bgp->evpn_info->dad_time = yang_dnode_exists(dnode, "time")
+					    ? yang_dnode_get_uint16(dnode, "time")
+					    : EVPN_DAD_DEFAULT_TIME;
+
+	if (yang_dnode_exists(dnode, "freeze")) {
+		const char *freeze = yang_dnode_get_string(dnode, "freeze");
+
+		bgp->evpn_info->dad_freeze = true;
+		bgp->evpn_info->dad_freeze_time =
+			strmatch(freeze, "permanent") ? 0 : strtoul(freeze, NULL, 10);
+	} else {
+		bgp->evpn_info->dad_freeze = false;
+		bgp->evpn_info->dad_freeze_time = 0;
+	}
+
+	bgp_zebra_dup_addr_detection(bgp);
+}
+
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/max-moves");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }
@@ -769,80 +816,55 @@ int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(struct nb_
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/max-moves");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_time_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_time_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_freeze_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/freeze");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_freeze_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/freeze");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
 
 	return NB_OK;
 }

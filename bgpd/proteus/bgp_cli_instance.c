@@ -21,6 +21,8 @@
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
 #include "bgpd/bgp_damp.h"
+#include "bgpd/bgp_attr.h"
+#include "bgpd/bgp_evpn_private.h"
 #include "bgpd/proteus/bgp_cli_local.h"
 #include "bgpd/proteus/bgp_cli_instance_clippy.c"
 
@@ -514,6 +516,81 @@ DEFPY_YANG(
 	else
 		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/flooding", NB_OP_MODIFY,
 				      "head-end-replication");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * M6 batch B4: 'dup-addr-detection max-moves ... time ...' and
+ * 'dup-addr-detection freeze <permanent|N>' (dup_addr_detection_cmd /
+ * dup_addr_detection_auto_recovery_cmd's value-bearing sub-forms). The bare
+ * enable/disable toggle ('dup-addr-detection' / 'no dup-addr-detection'
+ * with no trailing tokens) stays on the native command pair in
+ * bgp_evpn_vty.c -- proteus-bgp-evpn.yang's dup-addr-detection/enabled leaf
+ * has no YANG default to convert onto (see bgp_nb_evpn.c). max-moves and
+ * time are legacy's one paired DEFPY line and always issued together here
+ * (matching B8 dampening's "always rewrite from scratch" idiom); freeze is
+ * the separate auto-recovery DEFPY. 'no' forms destroy regardless of the
+ * value given, same as legacy's own 'freeze permanent' vs 'freeze N'
+ * value-match guard being dropped in favor of plain NB_OP_DESTROY (the
+ * token is accepted but ignored, matching flooding's 'no' form above).
+ */
+DEFPY_YANG(
+	bgp_evpn_dup_addr_detection, bgp_evpn_dup_addr_detection_cli_cmd,
+	"dup-addr-detection max-moves (2-1000)$max_moves time (2-1800)$time",
+	"Duplicate address detection\n"
+	"Max allowed moves before address detected as duplicate\n"
+	"Num of max allowed moves (2-1000) default 5\n"
+	"Duplicate address detection time\n"
+	"Time in seconds (2-1800) default 180\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/max-moves",
+			      NB_OP_MODIFY, max_moves_str);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/time", NB_OP_MODIFY,
+			      time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_dup_addr_detection, no_bgp_evpn_dup_addr_detection_cli_cmd,
+	"no dup-addr-detection max-moves (2-1000)$max_moves time (2-1800)$time",
+	NO_STR
+	"Duplicate address detection\n"
+	"Max allowed moves before address detected as duplicate\n"
+	"Num of max allowed moves (2-1000) default 5\n"
+	"Duplicate address detection time\n"
+	"Time in seconds (2-1800) default 180\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/max-moves",
+			      NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/time", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_dup_addr_detection_freeze, bgp_evpn_dup_addr_detection_freeze_cli_cmd,
+	"dup-addr-detection freeze <permanent$permanent|(30-3600)$freeze_time>",
+	"Duplicate address detection\n"
+	"Duplicate address detection freeze\n"
+	"Duplicate address detection permanent freeze\n"
+	"Duplicate address detection freeze time (30-3600)\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/freeze",
+			      NB_OP_MODIFY, permanent ? permanent : freeze_time_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_dup_addr_detection_freeze, no_bgp_evpn_dup_addr_detection_freeze_cli_cmd,
+	"no dup-addr-detection freeze [<permanent|(30-3600)>]",
+	NO_STR
+	"Duplicate address detection\n"
+	"Duplicate address detection freeze\n"
+	"Duplicate address detection permanent freeze\n"
+	"Duplicate address detection freeze time (30-3600)\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/freeze",
+			      NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -3126,6 +3203,33 @@ void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dn
 		vty_out(vty, "  flooding disable\n");
 }
 
+/* M6 batch B4: reproduces bgp_config_write_evpn_info()'s max-moves/time and
+ * freeze lines (bgp_evpn_vty.c) for the mgmtd-owned sub-forms; 'enabled'
+ * (the still-native bare toggle) is printed separately by that same legacy
+ * emitter, ungated -- see the comment there.
+ */
+void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	uint16_t max_moves = yang_dnode_exists(dnode, "max-moves")
+				      ? yang_dnode_get_uint16(dnode, "max-moves")
+				      : EVPN_DAD_DEFAULT_MAX_MOVES;
+	uint16_t time = yang_dnode_exists(dnode, "time") ? yang_dnode_get_uint16(dnode, "time")
+							  : EVPN_DAD_DEFAULT_TIME;
+
+	if (max_moves != EVPN_DAD_DEFAULT_MAX_MOVES || time != EVPN_DAD_DEFAULT_TIME)
+		vty_out(vty, "  dup-addr-detection max-moves %u time %u\n", max_moves, time);
+
+	if (yang_dnode_exists(dnode, "freeze")) {
+		const char *freeze = yang_dnode_get_string(dnode, "freeze");
+
+		if (strmatch(freeze, "permanent"))
+			vty_out(vty, "  dup-addr-detection freeze permanent\n");
+		else
+			vty_out(vty, "  dup-addr-detection freeze %s\n", freeze);
+	}
+}
+
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -4997,6 +5101,14 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_macvrf_soo_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_macvrf_soo_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_flood_control_cli_cmd);
+
+	/* M6 B4: instance-level l2vpn-evpn dup-addr-detection max-moves/time/
+	 * freeze leaves (mgmtd side); the bare enable/disable toggle stays
+	 * native (bgp_evpn_vty.c). */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_freeze_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_freeze_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);
