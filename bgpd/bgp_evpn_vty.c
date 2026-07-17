@@ -1960,7 +1960,7 @@ DEFUN(evpnrt5_network,
 	int idx_ethtag = 5;
 	int idx_routermac = 13;
 
-	return bgp_static_set(vty, false, argv[idx_ipv4_prefixlen]->arg,
+	return bgp_static_set_vty(vty, false, argv[idx_ipv4_prefixlen]->arg,
 			      argv[idx_route_distinguisher]->arg,
 			      argv[idx_label]->arg, AFI_L2VPN, SAFI_EVPN, NULL,
 			      0, 0, BGP_EVPN_IP_PREFIX_ROUTE,
@@ -1993,7 +1993,7 @@ DEFUN(no_evpnrt5_network,
 	int idx_esi = 10;
 	int idx_gwip = 12;
 
-	return bgp_static_set(vty, true, argv[idx_ipv4_prefixlen]->arg,
+	return bgp_static_set_vty(vty, true, argv[idx_ipv4_prefixlen]->arg,
 			      argv[idx_ext_community]->arg,
 			      argv[idx_label]->arg, AFI_L2VPN, SAFI_EVPN, NULL,
 			      0, 0, BGP_EVPN_IP_PREFIX_ROUTE, argv[idx_esi]->arg,

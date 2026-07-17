@@ -3457,6 +3457,169 @@ void instance_route_reflector_allow_outbound_policy_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
+/*
+ * M5 batch B9: instance-AF 'network' (af-network-ipv4/-ipv6 in
+ * proteus-bgp.yang), the six ipv4/ipv6 x unicast/multicast/labeled-unicast
+ * containers. A keyed list (key 'prefix') with three option children
+ * (route-map, label-index, ipv4-only backdoor); collapses legacy's
+ * bgp_network/ipv6_bgp_network DEFPYs (bgp_route.c) into one CREATE on the
+ * list entry plus one MODIFY/DESTROY per option child, always issued
+ * together (never partial) so a re-typed 'network' line always rewrites
+ * every option from scratch, matching bgp_static_set()'s own "unconditional
+ * overwrite" semantics for route-map/backdoor. ipv4-vpn/ipv6-vpn (M7) and
+ * l2vpn-evpn (M6) are out of scope; bgp_afi_safi_container_name() guards
+ * against any other unmodeled AF node.
+ */
+DEFPY_YANG(
+	instance_afi_safis_network, instance_afi_safis_network_cli_cmd,
+	"[no] network \
+	<A.B.C.D/M$prefix|A.B.C.D$address [mask A.B.C.D$netmask]> \
+	[{route-map RMAP_NAME$map_name|label-index (0-1048560)$label_index| \
+	backdoor$backdoor}]",
+	NO_STR
+	"Specify a network to announce via BGP\n"
+	"IPv4 prefix\n"
+	"Network number\n"
+	"Network mask\n"
+	"Network mask\n"
+	"Route-map to modify the attributes\n"
+	"Name of the route map\n"
+	"Label index to associate with the prefix\n"
+	"Label index value\n"
+	"Specify a BGP backdoor route\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char addr_prefix_str[BUFSIZ];
+	const char *prefix_use;
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (address_str) {
+		if (!netmask_str2prefix_str(address_str, netmask_str, addr_prefix_str,
+					    sizeof(addr_prefix_str))) {
+			vty_out(vty, "%% Inconsistent address and mask\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		prefix_use = addr_prefix_str;
+	} else {
+		prefix_use = prefix_str;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/network[prefix='%s']", VTY_CURR_XPATH,
+			   container, prefix_use);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, map_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      map_name);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/label-index", xpath);
+		nb_cli_enqueue_change(vty, xpath_child,
+				      label_index_str ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      label_index_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/backdoor", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, backdoor ? "true" : "false");
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_network_ipv6, instance_afi_safis_network_ipv6_cli_cmd,
+	"[no] network X:X::X:X/M$prefix \
+	[{route-map RMAP_NAME$map_name|label-index (0-1048560)$label_index}]",
+	NO_STR
+	"Specify a network to announce via BGP\n"
+	"IPv6 prefix\n"
+	"Route-map to modify the attributes\n"
+	"Name of the route map\n"
+	"Label index to associate with the prefix\n"
+	"Label index value\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/network[prefix='%s']", VTY_CURR_XPATH,
+			   container, prefix_str);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, map_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      map_name);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/label-index", xpath);
+		nb_cli_enqueue_change(vty, xpath_child,
+				      label_index_str ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      label_index_str);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+/* One 'network PFX [label-index N] [route-map NAME] [backdoor]' line per
+ * ipv4 list entry, matching bgp_config_write_network()'s field order
+ * (bgp_route.c, retired for these six AFs in M5 batch B9). */
+void afi_safis_network_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	vty_out(vty, "  network %s", yang_dnode_get_string(dnode, "prefix"));
+
+	if (yang_dnode_exists(dnode, "label-index"))
+		vty_out(vty, " label-index %u", yang_dnode_get_uint32(dnode, "label-index"));
+
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+
+	if (yang_dnode_get_bool(dnode, "backdoor"))
+		vty_out(vty, " backdoor");
+
+	vty_out(vty, "\n");
+}
+
+/* ipv6 counterpart: no 'backdoor' child (af-network-ipv6 doesn't model it). */
+void afi_safis_network_ipv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	vty_out(vty, "  network %s", yang_dnode_get_string(dnode, "prefix"));
+
+	if (yang_dnode_exists(dnode, "label-index"))
+		vty_out(vty, " label-index %u", yang_dnode_get_uint32(dnode, "label-index"));
+
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+
+	vty_out(vty, "\n");
+}
+
 void bgp_cli_instance_init(void)
 {
 	install_node(&bgp_node);
@@ -3682,4 +3845,13 @@ void bgp_cli_instance_init(void)
 	install_element(CONFIG_NODE, &bgp_send_extra_data_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
+
+	/* M5 B9: instance-AF 'network' (ipv4/ipv6 x
+	 * unicast/multicast/labeled-unicast). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_network_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &instance_afi_safis_network_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &instance_afi_safis_network_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &instance_afi_safis_network_ipv6_cli_cmd);
 }

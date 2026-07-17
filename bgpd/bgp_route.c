@@ -8903,13 +8903,13 @@ void bgp_static_withdraw(struct bgp *bgp, const struct prefix *p, afi_t afi,
 
 /* Configure static BGP network.  When user don't run zebra, static
    route should be installed as valid.  */
-int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
+int bgp_static_set(struct bgp *bgp, bool negate, const char *ip_str,
 		   const char *rd_str, const char *label_str, afi_t afi,
 		   safi_t safi, const char *rmap, int backdoor,
 		   uint32_t label_index, int evpn_type, const char *esi,
-		   const char *gwip, const char *ethtag, const char *routermac)
+		   const char *gwip, const char *ethtag, const char *routermac,
+		   char *errmsg, size_t errmsg_len)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	int ret;
 	struct prefix p;
 	struct bgp_static *bgp_static;
@@ -8924,12 +8924,12 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 	/* Convert IP prefix string to struct prefix. */
 	ret = str2prefix(ip_str, &p);
 	if (!ret) {
-		vty_out(vty, "%% Malformed prefix\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "Malformed prefix");
+		return -1;
 	}
 	if (afi == AFI_IP6 && IN6_IS_ADDR_LINKLOCAL(&p.u.prefix6)) {
-		vty_out(vty, "%% Malformed prefix (link-local address)\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "Malformed prefix (link-local address)");
+		return -1;
 	}
 
 	apply_mask(&p);
@@ -8937,15 +8937,15 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 	if (afi == AFI_L2VPN &&
 	    (bgp_build_evpn_prefix(evpn_type, ethtag != NULL ? atol(ethtag) : 0,
 				   &p))) {
-		vty_out(vty, "%% L2VPN prefix could not be forged\n");
-		return CMD_WARNING_CONFIG_FAILED;
+		snprintf(errmsg, errmsg_len, "L2VPN prefix could not be forged");
+		return -1;
 	}
 
 	if (safi == SAFI_MPLS_VPN || safi == SAFI_EVPN) {
 		ret = str2prefix_rd(rd_str, &prd);
 		if (!ret) {
-			vty_out(vty, "%% Malformed rd\n");
-			return CMD_WARNING_CONFIG_FAILED;
+			snprintf(errmsg, errmsg_len, "Malformed rd");
+			return -1;
 		}
 
 		if (label_str) {
@@ -8958,28 +8958,28 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 
 	if (safi == SAFI_EVPN) {
 		if (esi && str2esi(esi, NULL) == 0) {
-			vty_out(vty, "%% Malformed ESI\n");
-			return CMD_WARNING_CONFIG_FAILED;
+			snprintf(errmsg, errmsg_len, "Malformed ESI");
+			return -1;
 		}
 		if (routermac && prefix_str2mac(routermac, NULL) == 0) {
-			vty_out(vty, "%% Malformed Router MAC\n");
-			return CMD_WARNING_CONFIG_FAILED;
+			snprintf(errmsg, errmsg_len, "Malformed Router MAC");
+			return -1;
 		}
 		if (gwip) {
 			memset(&gw_ip, 0, sizeof(gw_ip));
 			ret = str2prefix(gwip, &gw_ip);
 			if (!ret) {
-				vty_out(vty, "%% Malformed GatewayIp\n");
-				return CMD_WARNING_CONFIG_FAILED;
+				snprintf(errmsg, errmsg_len, "Malformed GatewayIp");
+				return -1;
 			}
 			if ((gw_ip.family == AF_INET &&
 			     is_evpn_prefix_ipaddr_v6((struct prefix_evpn *)&p)) ||
 			    (gw_ip.family == AF_INET6 &&
 			     is_evpn_prefix_ipaddr_v4(
 				     (struct prefix_evpn *)&p))) {
-				vty_out(vty,
-					"%% GatewayIp family differs with IP prefix\n");
-				return CMD_WARNING_CONFIG_FAILED;
+				snprintf(errmsg, errmsg_len,
+					"GatewayIp family differs with IP prefix");
+				return -1;
 			}
 		}
 	}
@@ -8993,8 +8993,9 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 			if (!bgp_dest_has_bgp_path_info_data(pdest))
 				bgp_dest_set_bgp_table_info(pdest, bgp_table_init(bgp, afi, safi));
 		} else if (!pdest) {
-			vty_out(vty, "%% Can't find static route RD specified %s\n", rd_str);
-			return CMD_WARNING_CONFIG_FAILED;
+			snprintf(errmsg, errmsg_len, "Can't find static route RD specified %s",
+				rd_str);
+			return -1;
 		}
 		table = bgp_dest_get_bgp_table_info(pdest);
 	} else {
@@ -9006,26 +9007,26 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 		dest = bgp_node_lookup(table, &p);
 
 		if (!dest) {
-			vty_out(vty, "%% Can't find static route specified\n");
-			return CMD_WARNING_CONFIG_FAILED;
+			snprintf(errmsg, errmsg_len, "Can't find static route specified");
+			return -1;
 		}
 
 		bgp_static = bgp_dest_get_bgp_static_info(dest);
 		if (bgp_static) {
 			if ((label_index != BGP_INVALID_LABEL_INDEX) &&
 			    (label_index != bgp_static->label_index)) {
-				vty_out(vty,
-					"%% label-index doesn't match static route\n");
+				snprintf(errmsg, errmsg_len,
+					"label-index doesn't match static route");
 				bgp_dest_unlock_node(dest);
-				return CMD_WARNING_CONFIG_FAILED;
+				return -1;
 			}
 
 			if ((rmap && bgp_static->rmap.name) &&
 			    strcmp(rmap, bgp_static->rmap.name)) {
-				vty_out(vty,
-					"%% route-map name doesn't match static route\n");
+				snprintf(errmsg, errmsg_len,
+					"route-map name doesn't match static route");
 				bgp_dest_unlock_node(dest);
-				return CMD_WARNING_CONFIG_FAILED;
+				return -1;
 			}
 
 			/* Update BGP RIB. */
@@ -9052,9 +9053,9 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 			/* Configuration change. */
 			/* Label index cannot be changed. */
 			if (bgp_static->label_index != label_index) {
-				vty_out(vty, "%% cannot change label-index\n");
+				snprintf(errmsg, errmsg_len, "cannot change label-index");
 				bgp_dest_unlock_node(dest);
-				return CMD_WARNING_CONFIG_FAILED;
+				return -1;
 			}
 
 			/* Check previous routes are installed into BGP.  */
@@ -9140,6 +9141,33 @@ int bgp_static_set(struct vty *vty, bool negate, const char *ip_str,
 
 		if (!bgp_static->backdoor)
 			bgp_static_update(bgp, &p, bgp_static, afi, safi);
+	}
+
+	return 0;
+}
+
+/* vty-facing wrapper: resolves the bgp instance from the vty context and
+ * turns bgp_static_set()'s errmsg/-1 into the CLI's vty_out()/
+ * CMD_WARNING_CONFIG_FAILED idiom, for the legacy VPN/EVPN 'network'
+ * DEFUNs (bgp_mplsvpn.c, bgp_evpn_vty.c) plus the ipv4-unicast bgp_network
+ * DEFPY, which stays reachable only via the bare BGP_NODE install now that
+ * the eight proteus 'network' AFs are mgmtd-owned (M5 batch B9). */
+int bgp_static_set_vty(struct vty *vty, bool negate, const char *ip_str,
+		       const char *rd_str, const char *label_str, afi_t afi,
+		       safi_t safi, const char *rmap, int backdoor,
+		       uint32_t label_index, int evpn_type, const char *esi,
+		       const char *gwip, const char *ethtag, const char *routermac)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	char errmsg[256];
+	int ret;
+
+	ret = bgp_static_set(bgp, negate, ip_str, rd_str, label_str, afi, safi,
+			     rmap, backdoor, label_index, evpn_type, esi, gwip,
+			     ethtag, routermac, errmsg, sizeof(errmsg));
+	if (ret) {
+		vty_out(vty, "%% %s\n", errmsg);
+		return CMD_WARNING_CONFIG_FAILED;
 	}
 
 	return CMD_SUCCESS;
@@ -9406,6 +9434,12 @@ DEFUN (no_bgp_table_map,
 				   argv[idx_word]->arg);
 }
 
+/* Reachable only via the bare BGP_NODE install now (M5 batch B9): the eight
+ * proteus 'network' AFs (ipv4/ipv6 x unicast/multicast/labeled-unicast) are
+ * mgmtd-owned (bgpd/proteus/bgp_cli_common.c). 'network ...' typed directly
+ * under 'router bgp' has no other AF context to fall back to -- it always
+ * meant ipv4-unicast (bgp_node_safi()'s default case), so this stays native
+ * for that one entry point, matching B6-B8's bare-BGP_NODE precedent. */
 DEFPY(bgp_network,
 	bgp_network_cmd,
 	"[no] network \
@@ -9438,29 +9472,10 @@ DEFPY(bgp_network,
 		}
 	}
 
-	return bgp_static_set(vty, no,
+	return bgp_static_set_vty(vty, no,
 			      address_str ? addr_prefix_str : prefix_str, NULL,
 			      NULL, AFI_IP, bgp_node_safi(vty), map_name,
 			      backdoor ? 1 : 0,
-			      label_index ? (uint32_t)label_index
-					  : BGP_INVALID_LABEL_INDEX,
-			      0, NULL, NULL, NULL, NULL);
-}
-
-DEFPY(ipv6_bgp_network,
-	ipv6_bgp_network_cmd,
-	"[no] network X:X::X:X/M$prefix \
-	[{route-map RMAP_NAME$map_name|label-index (0-1048560)$label_index}]",
-	NO_STR
-	"Specify a network to announce via BGP\n"
-	"IPv6 prefix\n"
-	"Route-map to modify the attributes\n"
-	"Name of the route map\n"
-	"Label index to associate with the prefix\n"
-	"Label index value\n")
-{
-	return bgp_static_set(vty, no, prefix_str, NULL, NULL, AFI_IP6,
-			      bgp_node_safi(vty), map_name, 0,
 			      label_index ? (uint32_t)label_index
 					  : BGP_INVALID_LABEL_INDEX,
 			      0, NULL, NULL, NULL, NULL);
@@ -19046,6 +19061,21 @@ static void bgp_config_write_network_evpn(struct vty *vty, struct bgp *bgp,
 
 /* Configuration of static route announcement and aggregate
    information. */
+/* M5 batch B9: the six instance-AF 'network' families (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast -- af-network-ipv4/-ipv6 in
+ * proteus-bgp.yang) are mgmtd-owned; their 'network ...' lines are emitted
+ * by afi_safis_network_ipv4_cli_write()/afi_safis_network_ipv6_cli_write()
+ * in bgpd/proteus/bgp_cli_instance.c instead. The ipv4-vpn/ipv6-vpn
+ * (af-network-vpn-*, M7) and l2vpn-evpn (M6) AFs dispatch to their own
+ * emitters above and never reach this predicate. */
+static bool bgp_af_network_is_proteus(afi_t afi, safi_t safi)
+{
+	if (afi != AFI_IP && afi != AFI_IP6)
+		return false;
+	return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
+	       safi == SAFI_LABELED_UNICAST;
+}
+
 void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 			      safi_t safi)
 {
@@ -19064,28 +19094,31 @@ void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 		return;
 	}
 
-	/* Network configuration. */
-	for (dest = bgp_table_top(bgp->static_routes[afi][safi]); dest;
-	     dest = bgp_route_next(dest)) {
-		bgp_static = bgp_dest_get_bgp_static_info(dest);
-		if (bgp_static == NULL)
-			continue;
+	/* Network configuration: emitted by mgmtd for the six proteus AFs
+	 * (M5 B9); still native for encap/flowspec/unreachability/link-state. */
+	if (!bgp_af_network_is_proteus(afi, safi)) {
+		for (dest = bgp_table_top(bgp->static_routes[afi][safi]); dest;
+		     dest = bgp_route_next(dest)) {
+			bgp_static = bgp_dest_get_bgp_static_info(dest);
+			if (bgp_static == NULL)
+				continue;
 
-		p = bgp_dest_get_prefix(dest);
+			p = bgp_dest_get_prefix(dest);
 
-		vty_out(vty, "  network %pFX", p);
+			vty_out(vty, "  network %pFX", p);
 
-		if (bgp_static->label_index != BGP_INVALID_LABEL_INDEX)
-			vty_out(vty, " label-index %u",
-				bgp_static->label_index);
+			if (bgp_static->label_index != BGP_INVALID_LABEL_INDEX)
+				vty_out(vty, " label-index %u",
+					bgp_static->label_index);
 
-		if (bgp_static->rmap.name)
-			vty_out(vty, " route-map %s", bgp_static->rmap.name);
+			if (bgp_static->rmap.name)
+				vty_out(vty, " route-map %s", bgp_static->rmap.name);
 
-		if (bgp_static->backdoor)
-			vty_out(vty, " backdoor");
+			if (bgp_static->backdoor)
+				vty_out(vty, " backdoor");
 
-		vty_out(vty, "\n");
+			vty_out(vty, "\n");
+		}
 	}
 
 	/* Aggregate-address configuration. */
@@ -19172,19 +19205,16 @@ void bgp_route_init(void)
 
 	/* IPv4 unicast configuration.  */
 	install_element(BGP_IPV4_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV4_NODE, &bgp_network_cmd);
 	install_element(BGP_IPV4_NODE, &no_bgp_table_map_cmd);
 
 	install_element(BGP_IPV4_NODE, &aggregate_addressv4_cmd);
 
 	/* IPv4 multicast configuration.  */
 	install_element(BGP_IPV4M_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV4M_NODE, &bgp_network_cmd);
 	install_element(BGP_IPV4M_NODE, &no_bgp_table_map_cmd);
 	install_element(BGP_IPV4M_NODE, &aggregate_addressv4_cmd);
 
 	/* IPv4 labeled-unicast configuration.  */
-	install_element(BGP_IPV4L_NODE, &bgp_network_cmd);
 	install_element(BGP_IPV4L_NODE, &aggregate_addressv4_cmd);
 
 	install_element(VIEW_NODE, &show_ip_bgp_instance_all_cmd);
@@ -19228,15 +19258,11 @@ void bgp_route_init(void)
 
 	/* New config IPv6 BGP commands.  */
 	install_element(BGP_IPV6_NODE, &bgp_table_map_cmd);
-	install_element(BGP_IPV6_NODE, &ipv6_bgp_network_cmd);
 	install_element(BGP_IPV6_NODE, &no_bgp_table_map_cmd);
 
 	install_element(BGP_IPV6_NODE, &aggregate_addressv6_cmd);
 
-	install_element(BGP_IPV6M_NODE, &ipv6_bgp_network_cmd);
-
 	/* IPv6 labeled unicast address family. */
-	install_element(BGP_IPV6L_NODE, &ipv6_bgp_network_cmd);
 	install_element(BGP_IPV6L_NODE, &aggregate_addressv6_cmd);
 
 	install_element(BGP_NODE, &bgp_distance_cmd);

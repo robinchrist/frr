@@ -14,6 +14,7 @@
 #include "lib/yang_wrappers.h"
 #include "lib/frrevent.h"
 #include "lib/bfd.h"
+#include "lib/prefix.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
@@ -4740,4 +4741,210 @@ int bgp_nb_peer_group_af_dampening_max_suppress_time_destroy(struct nb_cb_destro
 	}
 
 	return NB_OK;
+}
+
+/* M5 batch B9: instance-AF 'network' (af-network-ipv4/-ipv6 in
+ * proteus-bgp.yang), the first instance-AF keyed-list conversion --
+ * six containers (ipv4/ipv6 x unicast/multicast/labeled-unicast; ipv4/ipv6
+ * -vpn use the separate RD-keyed af-network-vpn-* grouping, M7). Legacy is
+ * a single dual-purpose setter, bgp_static_set() (bgp_route.c), taking a
+ * negate flag instead of split set/unset entry points; it was refactored
+ * to take a resolved 'struct bgp *' plus an errmsg buffer instead of a vty
+ * (bgp_static_set_vty() in bgp_route.c is the new vty-facing wrapper for
+ * the still-native VPN/EVPN 'network' DEFUNs and the bare-BGP_NODE
+ * 'network' DEFPY) so it can be called directly from APPLY.
+ *
+ * route-map and label-index are independent no-default leaves (modify +
+ * destroy); backdoor (ipv4 only) is a Tier A default-false boolean
+ * (modify only). None of the three has a legacy setter of its own --
+ * bgp_static_set() always takes the full option set at once -- so every
+ * leaf callback rereads the other two from the sibling entry and reissues
+ * a full bgp_static_set() call, the same "reread the whole container, call
+ * the one legacy setter" idiom B6/B7/B8 established for
+ * default-originate/addpath/dampening. destroy of an individual leaf
+ * passes that leaf's "off" value explicitly rather than rereading it (the
+ * dnode being destroyed may already be unlinked by APPLY time); destroy of
+ * the whole list entry passes rmap=NULL/label_index=BGP_INVALID_LABEL_INDEX
+ * so bgp_static_set()'s legacy "does the given rmap/label-index still
+ * match?" guards (meant for a mismatched CLI 'no network ... route-map X')
+ * are unconditionally bypassed, the same simplification B5/B7 made for
+ * negative-form matching guards that don't apply to a keyed-list delete by
+ * key.
+ */
+static const char *bgp_nb_af_network_rmap(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "route-map") ?
+		       yang_dnode_get_string(entry_dnode, "route-map") : NULL;
+}
+
+static uint32_t bgp_nb_af_network_label_index(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "label-index") ?
+		       yang_dnode_get_uint32(entry_dnode, "label-index") :
+		       BGP_INVALID_LABEL_INDEX;
+}
+
+static bool bgp_nb_af_network_backdoor(const struct lyd_node *entry_dnode, afi_t afi)
+{
+	return afi == AFI_IP && yang_dnode_get_bool(entry_dnode, "backdoor");
+}
+
+static int bgp_nb_af_network_set(const struct lyd_node *entry_dnode, afi_t afi, safi_t safi,
+				 const char *rmap, uint32_t label_index, bool backdoor)
+{
+	struct bgp *bgp;
+	const char *prefix_str;
+	char errmsg[256];
+	int ret;
+
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(entry_dnode, "prefix");
+
+	ret = bgp_static_set(bgp, false, prefix_str, NULL, NULL, afi, safi, rmap,
+			     backdoor ? 1 : 0, label_index, 0, NULL, NULL, NULL, NULL,
+			     errmsg, sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_static_set() failed for %s: %s", __func__, prefix_str,
+			 errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_network_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	struct prefix p;
+	const char *prefix_str;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		/* Prefix syntax is already YANG-typed (inet:ipv4-prefix /
+		 * inet:ipv6-prefix); only bgp_static_set()'s semantic
+		 * link-local rejection needs an explicit check here,
+		 * mirroring instance_peer_group_listen_range_create(). */
+		if (afi == AFI_IP6) {
+			prefix_str = yang_dnode_get_string(args->dnode, "prefix");
+			if (str2prefix(prefix_str, &p) && IN6_IS_ADDR_LINKLOCAL(&p.u.prefix6)) {
+				snprintf(args->errmsg, args->errmsg_len,
+					 "Malformed prefix (link-local address)");
+				return NB_ERR_VALIDATION;
+			}
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_network_set(args->dnode, afi, safi,
+					     bgp_nb_af_network_rmap(args->dnode),
+					     bgp_nb_af_network_label_index(args->dnode),
+					     bgp_nb_af_network_backdoor(args->dnode, afi));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_network_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	const char *prefix_str;
+	char errmsg[256];
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(args->dnode, "prefix");
+
+	ret = bgp_static_set(bgp, true, prefix_str, NULL, NULL, afi, safi, NULL, 0,
+			     BGP_INVALID_LABEL_INDEX, 0, NULL, NULL, NULL, NULL, errmsg,
+			     sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: bgp_static_set() failed for %s: %s", __func__, prefix_str,
+			 errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_network_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+
+	return bgp_nb_af_network_set(entry_dnode, afi, safi,
+				     yang_dnode_get_string(args->dnode, NULL),
+				     bgp_nb_af_network_label_index(entry_dnode),
+				     bgp_nb_af_network_backdoor(entry_dnode, afi));
+}
+
+int bgp_nb_af_network_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+
+	return bgp_nb_af_network_set(entry_dnode, afi, safi, NULL,
+				     bgp_nb_af_network_label_index(entry_dnode),
+				     bgp_nb_af_network_backdoor(entry_dnode, afi));
+}
+
+int bgp_nb_af_network_label_index_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+
+	return bgp_nb_af_network_set(entry_dnode, afi, safi, bgp_nb_af_network_rmap(entry_dnode),
+				     yang_dnode_get_uint32(args->dnode, NULL),
+				     bgp_nb_af_network_backdoor(entry_dnode, afi));
+}
+
+int bgp_nb_af_network_label_index_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+
+	return bgp_nb_af_network_set(entry_dnode, afi, safi, bgp_nb_af_network_rmap(entry_dnode),
+				     BGP_INVALID_LABEL_INDEX,
+				     bgp_nb_af_network_backdoor(entry_dnode, afi));
+}
+
+int bgp_nb_af_network_backdoor_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *entry_dnode;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+
+	return bgp_nb_af_network_set(entry_dnode, afi, safi, bgp_nb_af_network_rmap(entry_dnode),
+				     bgp_nb_af_network_label_index(entry_dnode),
+				     yang_dnode_get_bool(args->dnode, NULL));
 }

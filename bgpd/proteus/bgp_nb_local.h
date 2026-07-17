@@ -309,6 +309,16 @@ void bgp_nb_reject_as_sets_reset_peers(struct bgp *bgp);
 bool bgp_nb_update_delay_instance_blocked_by_process(void);
 bool bgp_nb_update_delay_process_blocked_by_instance(void);
 void bgp_nb_update_graceful_restart_capability(struct peer *peer);
+/* M5 batch B9: instance-AF 'network' (ipv4/ipv6 x
+ * unicast/multicast/labeled-unicast). */
+int bgp_nb_af_network_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_network_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_network_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_network_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_network_label_index_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_network_label_index_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					  safi_t safi);
+int bgp_nb_af_network_backdoor_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 
 #ifdef __cplusplus
 }

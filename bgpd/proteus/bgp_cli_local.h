@@ -311,6 +311,13 @@ void process_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_no
 void process_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults);
 
+/* M5 B9: instance-AF 'network' list emitters (ipv4 with backdoor, ipv6
+ * without). */
+void afi_safis_network_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+void afi_safis_network_ipv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

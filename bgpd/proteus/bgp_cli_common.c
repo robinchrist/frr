@@ -103,6 +103,45 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show_end = afi_safi_cli_write_end,
 			}
 		},
+		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
+		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
+		 * separate RD-keyed af-network-vpn-* grouping (M7). */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-multicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-labeled-unicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/network",
+			.cbs = {
+				.cli_show = afi_safis_network_ipv6_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/router-id",
 			.cbs = {
