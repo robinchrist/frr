@@ -24,6 +24,12 @@ const char *bgp_afi_safi_container_name(int node);
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);
 
+/* M5 B2: per-AF policy-attachment emitters, shared neighbor/peer-group. */
+void neighbor_af_filter_dir_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+void neighbor_af_unsuppress_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,

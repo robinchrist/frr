@@ -636,6 +636,581 @@ int bgp_nb_peer_group_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t
 	return NB_OK;
 }
 
+/*
+ * M5 batch B2: shared per-AF policy-attachment apply, parameterized by
+ * afi/safi (and, for the four directional families, the FILTER_IN/
+ * FILTER_OUT or RMAP_IN/RMAP_OUT direction) -- the B1 delegator template
+ * applied to route-map/prefix-list/filter-list/distribute-list in|out and
+ * unsuppress-map (single, no direction). These are plain string leaves
+ * (policy NAMES, not the policies themselves) stored in
+ * peer->filter[afi][safi] (bgp_config_write_filter(), bgp_vty.c); no M3
+ * route-map dependency. Every generated per-container stub
+ * (instance_{neighbor,peer_group}_afi_safis_<af>_filters_<leaf>_
+ * {modify,destroy}) is a one-line call into the neighbor/peer-group
+ * wrapper below with its compile-time afi/safi/direction, exactly like
+ * B1's activate. Like bgp_nb_af_activate_set()/_default(), a NULL peer/
+ * group (deleted underneath by an earlier leaf in the same commit) is a
+ * silent no-op, never an error.
+ */
+
+int bgp_nb_neighbor_af_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					int direct)
+{
+	struct peer *peer;
+	struct route_map *map;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			/* peer deleted underneath in this same commit */
+			return NB_OK;
+
+		map = route_map_lookup_by_name(yang_dnode_get_string(args->dnode, NULL));
+		ret = peer_route_map_set(peer, afi, safi, direct,
+					 yang_dnode_get_string(args->dnode, NULL), map);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_route_map_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+					 int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_route_map_unset(peer, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_route_map_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					  int direct)
+{
+	struct peer_group *group;
+	struct route_map *map;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		map = route_map_lookup_by_name(yang_dnode_get_string(args->dnode, NULL));
+		ret = peer_route_map_set(group->conf, afi, safi, direct,
+					 yang_dnode_get_string(args->dnode, NULL), map);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_route_map_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+					   int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_route_map_unset(group->conf, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_route_map_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					  int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_prefix_list_set(peer, afi, safi, direct,
+					   yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_prefix_list_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+					   int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_prefix_list_unset(peer, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_prefix_list_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					    int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_prefix_list_set(group->conf, afi, safi, direct,
+					   yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_prefix_list_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi, int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_prefix_list_unset(group->conf, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_prefix_list_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_filter_list_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					  int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_aslist_set(peer, afi, safi, direct,
+				      yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_aslist_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_filter_list_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+					   int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_aslist_unset(peer, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_aslist_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_filter_list_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					    int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_aslist_set(group->conf, afi, safi, direct,
+				      yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_aslist_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_filter_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi, int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_aslist_unset(group->conf, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_aslist_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_distribute_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi, int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_distribute_set(peer, afi, safi, direct,
+					  yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_distribute_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_distribute_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi, int direct)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_distribute_unset(peer, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_distribute_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_distribute_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi, int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_distribute_set(group->conf, afi, safi, direct,
+					  yang_dnode_get_string(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_distribute_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_distribute_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						 safi_t safi, int direct)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_distribute_unset(group->conf, afi, safi, direct);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_distribute_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_unsuppress_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer *peer;
+	struct route_map *map;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		map = route_map_lookup_by_name(yang_dnode_get_string(args->dnode, NULL));
+		ret = peer_unsuppress_map_set(peer, afi, safi,
+					      yang_dnode_get_string(args->dnode, NULL), map);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_unsuppress_map_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_unsuppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					      safi_t safi)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+
+		ret = peer_unsuppress_map_unset(peer, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_unsuppress_map_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_unsuppress_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+					       safi_t safi)
+{
+	struct peer_group *group;
+	struct route_map *map;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		map = route_map_lookup_by_name(yang_dnode_get_string(args->dnode, NULL));
+		ret = peer_unsuppress_map_set(group->conf, afi, safi,
+					      yang_dnode_get_string(args->dnode, NULL), map);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_unsuppress_map_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_unsuppress_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						safi_t safi)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+
+		ret = peer_unsuppress_map_unset(group->conf, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_unsuppress_map_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
 /* Shared "reread the whole bfd container and reconfigure" apply for both
  * neighbor and peer-group (both share the 'bfd' container from the
  * neighbor-session-parameters grouping, M4 batch B10). The datastore is

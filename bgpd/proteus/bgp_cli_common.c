@@ -882,6 +882,980 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = neighbor_af_activate_cli_write,
 			}
 		},
+		/* M5 B2: per-AF policy attachments (route-map/prefix-list/filter-list/
+		 * distribute-list in|out, unsuppress-map) for neighbor and peer-group. */
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/distribute-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/distribute-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/filters/unsuppress-map",
+			.cbs = {
+				.cli_show = neighbor_af_unsuppress_map_cli_write,
+			}
+		},
 		{
 			.xpath = NULL,
 		},

@@ -16326,6 +16326,26 @@ static void bgp_vpn_policy_config_write_afi(struct vty *vty, struct bgp *bgp,
 	}
 }
 
+/* M5 batch B1: the nine address families whose per-neighbor 'activate' line
+ * is now emitted by mgmtd (bgpd/proteus, neighbor_af_activate_cli_write()).
+ * bgp_config_write_peer_af() skips the activate emission for these; every
+ * other per-AF neighbor line it writes stays native during M5. M5 batch B2
+ * reuses this same set to gate distribute-list/prefix-list/route-map/
+ * unsuppress-map/filter-list in bgp_config_write_filter() below -- those
+ * five families are converted for all nine proteus AFs (including
+ * l2vpn-evpn, which the legacy CLI never exposed a command for but which a
+ * non-CLI northbound client could still populate), so the gate must match
+ * B1's set exactly, not just the legacy per-family install_element() list. */
+static bool bgp_af_activate_is_proteus(afi_t afi, safi_t safi)
+{
+	if (afi == AFI_L2VPN)
+		return safi == SAFI_EVPN;
+	if (afi == AFI_IP || afi == AFI_IP6)
+		return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
+		       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
+	return false;
+}
+
 static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 				    afi_t afi, safi_t safi)
 {
@@ -16335,42 +16355,42 @@ static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 	addr = peer->host;
 	filter = &peer->filter[afi][safi];
 
-	/* distribute-list. */
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_DISTRIBUTE_LIST,
-				   FILTER_IN))
-		vty_out(vty, "  neighbor %s distribute-list %s in\n", addr,
-			filter->dlist[FILTER_IN].name);
+	/* distribute-list/prefix-list/route-map/unsuppress-map/filter-list:
+	 * emitted by mgmtd for the nine proteus AFs (M5 B2); still native for
+	 * encap/flowspec/unreachability/link-state. advertise-map (below)
+	 * stays fully native pending M5 B3. */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		/* distribute-list. */
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_DISTRIBUTE_LIST, FILTER_IN))
+			vty_out(vty, "  neighbor %s distribute-list %s in\n", addr,
+				filter->dlist[FILTER_IN].name);
 
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_DISTRIBUTE_LIST,
-				   FILTER_OUT))
-		vty_out(vty, "  neighbor %s distribute-list %s out\n", addr,
-			filter->dlist[FILTER_OUT].name);
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_DISTRIBUTE_LIST, FILTER_OUT))
+			vty_out(vty, "  neighbor %s distribute-list %s out\n", addr,
+				filter->dlist[FILTER_OUT].name);
 
-	/* prefix-list. */
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_PREFIX_LIST,
-				   FILTER_IN))
-		vty_out(vty, "  neighbor %s prefix-list %s in\n", addr,
-			filter->plist[FILTER_IN].name);
+		/* prefix-list. */
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_PREFIX_LIST, FILTER_IN))
+			vty_out(vty, "  neighbor %s prefix-list %s in\n", addr,
+				filter->plist[FILTER_IN].name);
 
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_PREFIX_LIST,
-				   FILTER_OUT))
-		vty_out(vty, "  neighbor %s prefix-list %s out\n", addr,
-			filter->plist[FILTER_OUT].name);
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_PREFIX_LIST, FILTER_OUT))
+			vty_out(vty, "  neighbor %s prefix-list %s out\n", addr,
+				filter->plist[FILTER_OUT].name);
 
-	/* route-map. */
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_ROUTE_MAP, RMAP_IN))
-		vty_out(vty, "  neighbor %s route-map %s in\n", addr,
-			filter->map[RMAP_IN].name);
+		/* route-map. */
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_ROUTE_MAP, RMAP_IN))
+			vty_out(vty, "  neighbor %s route-map %s in\n", addr,
+				filter->map[RMAP_IN].name);
 
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_ROUTE_MAP,
-				   RMAP_OUT))
-		vty_out(vty, "  neighbor %s route-map %s out\n", addr,
-			filter->map[RMAP_OUT].name);
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_ROUTE_MAP, RMAP_OUT))
+			vty_out(vty, "  neighbor %s route-map %s out\n", addr,
+				filter->map[RMAP_OUT].name);
 
-	/* unsuppress-map */
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_UNSUPPRESS_MAP, 0))
-		vty_out(vty, "  neighbor %s unsuppress-map %s\n", addr,
-			filter->usmap.name);
+		/* unsuppress-map */
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_UNSUPPRESS_MAP, 0))
+			vty_out(vty, "  neighbor %s unsuppress-map %s\n", addr, filter->usmap.name);
+	}
 
 	/* advertise-map : always applied in OUT direction*/
 	if (peergroup_filter_check(peer, afi, safi, PEER_FT_ADVERTISE_MAP,
@@ -16384,16 +16404,16 @@ static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 		vty_out(vty, "  neighbor %s advertise-map %s exist-map %s\n",
 			addr, filter->advmap.aname, filter->advmap.cname);
 
-	/* filter-list. */
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_FILTER_LIST,
-				   FILTER_IN))
-		vty_out(vty, "  neighbor %s filter-list %s in\n", addr,
-			filter->aslist[FILTER_IN].name);
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		/* filter-list. */
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_FILTER_LIST, FILTER_IN))
+			vty_out(vty, "  neighbor %s filter-list %s in\n", addr,
+				filter->aslist[FILTER_IN].name);
 
-	if (peergroup_filter_check(peer, afi, safi, PEER_FT_FILTER_LIST,
-				   FILTER_OUT))
-		vty_out(vty, "  neighbor %s filter-list %s out\n", addr,
-			filter->aslist[FILTER_OUT].name);
+		if (peergroup_filter_check(peer, afi, safi, PEER_FT_FILTER_LIST, FILTER_OUT))
+			vty_out(vty, "  neighbor %s filter-list %s out\n", addr,
+				filter->aslist[FILTER_OUT].name);
+	}
 }
 
 /* BGP peer configuration display function. */
@@ -16544,20 +16564,6 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	/* send-nexthop-characteristics: converted to northbound, see
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B13).
 	 */
-}
-
-/* M5 batch B1: the nine address families whose per-neighbor 'activate' line
- * is now emitted by mgmtd (bgpd/proteus, neighbor_af_activate_cli_write()).
- * bgp_config_write_peer_af() skips the activate emission for these; every
- * other per-AF neighbor line it writes stays native during M5. */
-static bool bgp_af_activate_is_proteus(afi_t afi, safi_t safi)
-{
-	if (afi == AFI_L2VPN)
-		return safi == SAFI_EVPN;
-	if (afi == AFI_IP || afi == AFI_IP6)
-		return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
-		       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
-	return false;
 }
 
 /* BGP peer configuration display function. */
@@ -18631,93 +18637,37 @@ void bgp_vty_init(void)
 	 * (bgp_cli_neighbor.c).
 	 */
 
-	/* "neighbor distribute" commands. */
+	/* "neighbor distribute" commands. The eight proteus AFs with a
+	 * distribute-list surface (ipv4/ipv6 {unicast,multicast,
+	 * labeled-unicast,vpn}; l2vpn evpn never had one) are converted to
+	 * mgmtd (M5 batch B2: neighbor_distribute_list_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias stays
+	 * native. */
 	install_element(BGP_NODE, &neighbor_distribute_list_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_distribute_list_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_distribute_list_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_distribute_list_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_distribute_list_cmd);
 
-	/* "neighbor prefix-list" commands. */
+	/* "neighbor prefix-list" commands (see the note above; flowspec has
+	 * no proteus per-AF surface and stays native). */
 	install_element(BGP_NODE, &neighbor_prefix_list_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_prefix_list_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_prefix_list_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_prefix_list_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_prefix_list_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_prefix_list_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_prefix_list_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_prefix_list_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_prefix_list_cmd);
 
-	/* "neighbor filter-list" commands. */
+	/* "neighbor filter-list" commands (see the note above). */
 	install_element(BGP_NODE, &neighbor_filter_list_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_filter_list_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_filter_list_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_filter_list_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_filter_list_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_filter_list_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_filter_list_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_filter_list_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_filter_list_cmd);
 
-	/* "neighbor route-map" commands. */
+	/* "neighbor route-map" commands. The nine proteus AFs (including
+	 * l2vpn evpn, unlike the other four families above) are converted to
+	 * mgmtd; encap/flowspec/unreachability/link-state stay native. */
 	install_element(BGP_NODE, &neighbor_route_map_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_route_map_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_route_map_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_map_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_route_map_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_map_cmd);
@@ -18726,30 +18676,13 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV4U_NODE, &no_neighbor_route_map_cmd);
 	install_element(BGP_IPV6U_NODE, &neighbor_route_map_cmd);
 	install_element(BGP_IPV6U_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_route_map_cmd);
 	install_element(BGP_LS_NODE, &neighbor_route_map_cmd);
 	install_element(BGP_LS_NODE, &no_neighbor_route_map_cmd);
 
-	/* "neighbor unsuppress-map" commands. */
+	/* "neighbor unsuppress-map" commands (see the distribute-list note
+	 * above). */
 	install_element(BGP_NODE, &neighbor_unsuppress_map_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_unsuppress_map_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_unsuppress_map_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_unsuppress_map_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_unsuppress_map_cmd);
 
 	/* "neighbor advertise-map" commands. */
 	install_element(BGP_NODE, &neighbor_advertise_map_hidden_cmd);
