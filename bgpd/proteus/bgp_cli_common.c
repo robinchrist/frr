@@ -4453,6 +4453,114 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening",
+			.cbs = {
+				.cli_show = neighbor_af_dampening_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}

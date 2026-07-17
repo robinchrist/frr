@@ -16850,12 +16850,18 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	/* BGP flag dampening. */
 	if (CHECK_FLAG(bgp->af_flags[afi][safi], BGP_CONFIG_DAMPENING))
 		bgp_config_write_damp(vty, bgp, afi, safi);
-	for (ALL_LIST_ELEMENTS_RO(bgp->group, node, group))
-		if (group->conf->damp[afi][safi])
-			bgp_config_write_peer_damp(vty, group->conf, afi, safi);
-	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer))
-		if (peer_is_config_node(peer) && peer->damp[afi][safi])
-			bgp_config_write_peer_damp(vty, peer, afi, safi);
+	/* Per-neighbor dampening: emitted by mgmtd for the nine proteus AFs
+	 * (M5 B8, neighbor_af_dampening_cli_write() in
+	 * bgpd/proteus/bgp_cli_neighbor.c); still native for
+	 * encap/flowspec/unreachability/link-state. */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		for (ALL_LIST_ELEMENTS_RO(bgp->group, node, group))
+			if (group->conf->damp[afi][safi])
+				bgp_config_write_peer_damp(vty, group->conf, afi, safi);
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer))
+			if (peer_is_config_node(peer) && peer->damp[afi][safi])
+				bgp_config_write_peer_damp(vty, peer, afi, safi);
+	}
 
 	for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group))
 		bgp_config_write_peer_af(vty, bgp, group->conf, afi, safi);
@@ -18233,21 +18239,17 @@ void bgp_vty_init(void)
 	 * bgpd/proteus/bgp_cli_neighbor.c). soo has no hidden BGP_NODE alias
 	 * to keep native. */
 
-	/* "neighbor dampening" commands. */
+	/* "neighbor dampening": all six ipv4/ipv6 {unicast,multicast,
+	 * labeled-unicast} per-AF installs converted to mgmtd (M5 batch B8:
+	 * neighbor_damp_cli_cmd in bgpd/proteus/bgp_cli_neighbor.c, matching
+	 * B6's weight precedent for asymmetric install reach -- legacy never
+	 * reached vpnv4/vpnv6/l2vpn-evpn). The bare BGP_NODE install stays
+	 * native: bgp_afi_safi_container_name() cannot map BGP_NODE to a
+	 * proteus container, so 'neighbor X dampening' typed directly under
+	 * 'router bgp' (defaulting to ipv4 unicast via bgp_node_afi/safi())
+	 * has nothing else to keep it reachable. */
 	install_element(BGP_NODE, &neighbor_damp_cmd);
 	install_element(BGP_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_damp_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_damp_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_damp_cmd);
 	install_element(VIEW_NODE, &show_ip_bgp_neighbor_damp_param_cmd);
 
 	/* address-family commands. */

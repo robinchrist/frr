@@ -250,6 +250,42 @@ int bgp_nb_peer_group_af_addpath_rx_paths_limit_modify(struct nb_cb_modify_args 
 						       safi_t safi);
 int bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 							safi_t safi);
+int bgp_nb_neighbor_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi);
+int bgp_nb_neighbor_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_neighbor_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_neighbor_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args,
+							 afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args,
+							    afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args,
+							  afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_peer_group_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi,
+						    safi_t safi);
+int bgp_nb_peer_group_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						     safi_t safi);
+int bgp_nb_peer_group_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args,
+							  afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args,
+							      afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args,
+							    afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args,
+							     afi_t afi, safi_t safi);
 int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);

@@ -9,6 +9,7 @@
  */
 #include <zebra.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "command.h"
 #include "northbound.h"
 #include "northbound_cli.h"
@@ -19,6 +20,7 @@
 
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_cli.h"
+#include "bgpd/bgp_damp.h"
 #include "bgpd/proteus/bgp_cli_local.h"
 #include "bgpd/proteus/bgp_cli_neighbor_clippy.c"
 
@@ -6156,6 +6158,140 @@ void neighbor_af_addpath_rx_paths_limit_cli_write(struct vty *vty, const struct 
 		bgp_cli_neighbor_or_group_name(dnode), yang_dnode_get_uint16(dnode, NULL));
 }
 
+/*
+ * neighbor X dampening [(1-45) [(1-20000) (1-20000) (1-255)]] / no ... :
+ * collapses legacy's neighbor_damp/no_neighbor_damp DEFPY pair (bgp_vty.c,
+ * retained for the still-native BGP_NODE hidden alias only -- legacy
+ * installed this pair on BGP_NODE plus the six ipv4/ipv6
+ * {unicast,multicast,labeled-unicast} nodes, never vpnv4/vpnv6/l2vpn-evpn,
+ * matching B6's weight precedent for asymmetric install reach). The
+ * positive form always issues a concrete MODIFY of 'enabled' plus all four
+ * number leaves -- reproducing legacy's own default-filling ('dampening'
+ * bare -> DEFAULT_HALF_LIFE/_REUSE/_SUPPRESS/half*4; 'dampening H' -> given
+ * half-life, defaults for the rest, both computed here exactly as legacy's
+ * own DEFUN body did) -- never a partial update, the same "always rewrite
+ * from scratch" idiom B6 established for maximum-prefix. The negative form
+ * destroys the whole container in one shot, same as B6's maximum-prefix
+ * teardown.
+ */
+DEFPY_YANG(
+	neighbor_damp, neighbor_damp_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer dampening"
+	" [(1-45)$half [(1-20000)$reuse (1-20000)$suppress (1-255)$max]]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable neighbor route-flap dampening\n"
+	"Half-life time for the penalty\n"
+	"Value to start reusing a route\n"
+	"Value to start suppressing a route\n"
+	"Maximum duration to suppress a stable route\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	char half_buf[24], reuse_buf[24], suppress_buf[24], max_buf[24];
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/dampening", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_base);
+		ret = nb_cli_apply_changes(vty, NULL);
+		return ret;
+	}
+
+	if (!half)
+		half = DEFAULT_HALF_LIFE;
+	if (!reuse) {
+		reuse = DEFAULT_REUSE;
+		suppress = DEFAULT_SUPPRESS;
+		max = half * 4;
+	}
+	if (suppress < reuse) {
+		vty_out(vty, "%% Suppress value cannot be less than reuse value\n");
+		XFREE(MTYPE_TMP, xpath_base);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(half_buf, sizeof(half_buf), "%lld", (long long)half);
+	snprintf(reuse_buf, sizeof(reuse_buf), "%lld", (long long)reuse);
+	snprintf(suppress_buf, sizeof(suppress_buf), "%lld", (long long)suppress);
+	snprintf(max_buf, sizeof(max_buf), "%lld", (long long)max);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enabled", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/half-life", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, half_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/reuse-threshold", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, reuse_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/suppress-threshold", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, suppress_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/max-suppress-time", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, max_buf);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath, reproducing
+ * bgp_config_write_peer_damp()'s three-way rendering: bare 'dampening' when
+ * every number matches the legacy defaults, 'dampening <half>' when only
+ * half-life differs, else the full four-number form. */
+void neighbor_af_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults)
+{
+	const char *name = bgp_cli_neighbor_or_group_name(dnode);
+	int64_t half, reuse, suppress, max;
+
+	if (!yang_dnode_exists(dnode, "enabled") || !yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	half = yang_dnode_exists(dnode, "half-life") ? yang_dnode_get_uint8(dnode, "half-life")
+						     : DEFAULT_HALF_LIFE;
+	reuse = yang_dnode_exists(dnode, "reuse-threshold")
+			? yang_dnode_get_uint16(dnode, "reuse-threshold")
+			: DEFAULT_REUSE;
+	suppress = yang_dnode_exists(dnode, "suppress-threshold")
+			   ? yang_dnode_get_uint16(dnode, "suppress-threshold")
+			   : DEFAULT_SUPPRESS;
+	max = yang_dnode_exists(dnode, "max-suppress-time")
+			  ? yang_dnode_get_uint8(dnode, "max-suppress-time")
+			  : half * 4;
+
+	if (half == DEFAULT_HALF_LIFE && reuse == DEFAULT_REUSE && suppress == DEFAULT_SUPPRESS &&
+	    max == half * 4)
+		vty_out(vty, "  neighbor %s dampening\n", name);
+	else if (reuse == DEFAULT_REUSE && suppress == DEFAULT_SUPPRESS && max == half * 4)
+		vty_out(vty, "  neighbor %s dampening %" PRId64 "\n", name, half);
+	else
+		vty_out(vty, "  neighbor %s dampening %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64
+			     "\n",
+			name, half, reuse, suppress, max);
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -6694,4 +6830,16 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_addpath_paths_limit_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_addpath_paths_limit_cli_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+
+	/* per-neighbor dampening (M5 batch B8): legacy reached only the six
+	 * ipv4/ipv6 {unicast,multicast,labeled-unicast} nodes (plus the
+	 * hidden BGP_NODE alias, which bgp_afi_safi_container_name() cannot
+	 * map to a proteus container and is intentionally left
+	 * unconverted), never vpnv4/vpnv6/l2vpn-evpn. */
+	install_element(BGP_IPV4_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_damp_cli_cmd);
 }

@@ -405,156 +405,59 @@ int instance_neighbor_afi_safis_ipv6_unicast_attribute_unchanged_med_modify(
 					      PEER_FLAG_MED_UNCHANGED);
 }
 
-int instance_neighbor_afi_safis_ipv6_unicast_dampening_enabled_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv6_unicast_dampening_enabled_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_enabled_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_half_life_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_half_life_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_reuse_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_reuse_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_suppress_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_suppress_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(args, AFI_IP6,
+								       SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_max_suppress_time_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_dampening_max_suppress_time_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_filters_distribute_list_in_modify(
@@ -1083,154 +986,59 @@ int instance_neighbor_afi_safis_ipv6_multicast_attribute_unchanged_med_modify(
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_enabled_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_enabled_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_half_life_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_half_life_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_reuse_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_modify(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_reuse_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_suppress_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_modify(args, AFI_IP6,
+								      SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_suppress_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(args, AFI_IP6,
+								       SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_max_suppress_time_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_modify(args, AFI_IP6,
+								     SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_dampening_max_suppress_time_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(args, AFI_IP6,
+								      SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_filters_distribute_list_in_modify(
@@ -1765,154 +1573,61 @@ int instance_neighbor_afi_safis_ipv6_labeled_unicast_attribute_unchanged_med_mod
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_enabled_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_enabled_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_half_life_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_modify(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_half_life_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_modify(args, AFI_IP6,
+								   SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_reuse_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(args, AFI_IP6,
+								    SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_modify(args, AFI_IP6,
+								      SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_suppress_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(args, AFI_IP6,
+								       SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_modify(args, AFI_IP6,
+								     SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_dampening_max_suppress_time_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(args, AFI_IP6,
+								      SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_filters_distribute_list_in_modify(
@@ -2437,152 +2152,57 @@ int instance_neighbor_afi_safis_ipv6_vpn_attribute_unchanged_med_modify(
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_enabled_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_half_life_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv6_vpn_dampening_half_life_destroy(struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv6_vpn_dampening_half_life_destroy(
+	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_half_life_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_reuse_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_reuse_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_suppress_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_modify(args, AFI_IP6,
+								      SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_suppress_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(args, AFI_IP6,
+								       SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_max_suppress_time_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_modify(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_dampening_max_suppress_time_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(args, AFI_IP6,
+								      SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_filters_distribute_list_in_modify(

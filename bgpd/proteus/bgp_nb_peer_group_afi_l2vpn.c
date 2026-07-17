@@ -406,156 +406,61 @@ int instance_peer_group_afi_safis_l2vpn_evpn_attribute_unchanged_med_modify(
 						PEER_FLAG_MED_UNCHANGED);
 }
 
-int instance_peer_group_afi_safis_l2vpn_evpn_dampening_enabled_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_afi_safis_l2vpn_evpn_dampening_enabled_modify(
+	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_enabled_modify(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_half_life_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_half_life_modify(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_half_life_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/half-life");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_half_life_destroy(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_reuse_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_reuse_threshold_modify(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_reuse_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/reuse-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_reuse_threshold_destroy(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_suppress_threshold_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_suppress_threshold_modify(args, AFI_L2VPN,
+									SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_suppress_threshold_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/suppress-threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_suppress_threshold_destroy(args, AFI_L2VPN,
+									 SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_max_suppress_time_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_max_suppress_time_modify(args, AFI_L2VPN, SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_dampening_max_suppress_time_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/dampening/max-suppress-time");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_peer_group_af_dampening_max_suppress_time_destroy(args, AFI_L2VPN,
+									SAFI_EVPN);
 }
 
 int instance_peer_group_afi_safis_l2vpn_evpn_filters_distribute_list_in_modify(

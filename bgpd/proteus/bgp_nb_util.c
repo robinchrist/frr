@@ -27,6 +27,7 @@
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_zebra.h"
 #include "bgpd/bgp_fsm.h"
+#include "bgpd/bgp_damp.h"
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
@@ -4359,6 +4360,383 @@ int bgp_nb_peer_group_af_addpath_rx_paths_limit_destroy(struct nb_cb_destroy_arg
 		group = bgp_nb_peer_group_lookup(args->dnode);
 		return bgp_nb_af_addpath_rx_paths_limit_default(group ? group->conf : NULL, afi,
 								safi);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * Per-neighbor dampening (proteus-bgp.yang's neighbor-af/dampening
+ * container, M5 batch B8) replaces legacy's neighbor_damp/no_neighbor_damp
+ * DEFPY pair (bgp_vty.c, retained for the still-native BGP_NODE hidden alias
+ * only -- legacy installed this pair on BGP_NODE plus the six ipv4/ipv6
+ * {unicast,multicast,labeled-unicast} nodes, never vpnv4/vpnv6/l2vpn-evpn,
+ * so the mgmtd install set mirrors that asymmetric reach, matching B6's
+ * weight precedent). The container's four number leaves form a "must"
+ * all-or-nothing set independent of 'enabled'; legacy's own DEFPY always
+ * filled in concrete defaults for every field it didn't receive on the
+ * command line (bare 'dampening' -> DEFAULT_HALF_LIFE/_REUSE/_SUPPRESS/
+ * half*4; 'dampening H' -> given half-life, defaults for the rest), so the
+ * CLI (bgp_cli_neighbor.c) reproduces that by always issuing a concrete
+ * MODIFY for all four number leaves plus 'enabled' on the positive form --
+ * never a partial update -- the same "always rewrite from scratch" idiom B6
+ * established for maximum-prefix/default-originate. All five leaves'
+ * MODIFY/DESTROY reroute to a single "reread the whole dampening container,
+ * call bgp_peer_damp_enable()/_disable()" helper: if 'enabled' is absent or
+ * false the peer's dampening is torn down regardless of what the numeric
+ * leaves say (matching the negative CLI form, which destroys the whole
+ * container in one shot, same as B6's maximum-prefix); otherwise every
+ * numeric leaf is read back with the same default-filling legacy itself
+ * applied, so a reread after any single leaf's MODIFY/DESTROY still
+ * recomputes a fully consistent set. Units: the YANG leaves are minutes
+ * (matching the legacy CLI grammar's (1-45)/(1-255) ranges byte-for-byte);
+ * the *60 conversion to bgp_peer_damp_enable()'s seconds parameters happens
+ * here, exactly where legacy's own DEFUN did it.
+ */
+static void bgp_nb_af_dampening_apply(struct peer *conf, afi_t afi, safi_t safi,
+				      const struct lyd_node *dnode)
+{
+	bool enabled;
+	time_t half, max;
+	unsigned int reuse, suppress;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return;
+
+	enabled = yang_dnode_exists(dnode, "enabled") && yang_dnode_get_bool(dnode, "enabled");
+	if (!enabled) {
+		bgp_peer_damp_disable(conf, afi, safi);
+		return;
+	}
+
+	half = yang_dnode_exists(dnode, "half-life") ? yang_dnode_get_uint8(dnode, "half-life")
+						     : DEFAULT_HALF_LIFE;
+	if (yang_dnode_exists(dnode, "reuse-threshold")) {
+		reuse = yang_dnode_get_uint16(dnode, "reuse-threshold");
+		suppress = yang_dnode_get_uint16(dnode, "suppress-threshold");
+		max = yang_dnode_exists(dnode, "max-suppress-time")
+			      ? yang_dnode_get_uint8(dnode, "max-suppress-time")
+			      : half * 4;
+	} else {
+		reuse = DEFAULT_REUSE;
+		suppress = DEFAULT_SUPPRESS;
+		max = half * 4;
+	}
+
+	bgp_peer_damp_enable(conf, afi, safi, half * 60, reuse, suppress, max * 60);
+}
+
+int bgp_nb_neighbor_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args,
+							 afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args,
+							    afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args,
+							  afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_dampening_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_half_life_modify(struct nb_cb_modify_args *args, afi_t afi,
+						    safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_half_life_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						     safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_reuse_threshold_modify(struct nb_cb_modify_args *args,
+							  afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_reuse_threshold_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_suppress_threshold_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_suppress_threshold_destroy(struct nb_cb_destroy_args *args,
+							      afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_max_suppress_time_modify(struct nb_cb_modify_args *args,
+							    afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_dampening_max_suppress_time_destroy(struct nb_cb_destroy_args *args,
+							     afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_dampening_apply(group ? group->conf : NULL, afi, safi,
+					  yang_dnode_get_parent(args->dnode, "dampening"));
 	}
 
 	return NB_OK;

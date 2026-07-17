@@ -90,6 +90,10 @@ void neighbor_af_addpath_disable_rx_cli_write(struct vty *vty, const struct lyd_
 void neighbor_af_addpath_rx_paths_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 
+/* M5 batch B8: per-neighbor dampening emitter, shared neighbor/peer-group. */
+void neighbor_af_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
