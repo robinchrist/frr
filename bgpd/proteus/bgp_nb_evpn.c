@@ -33,16 +33,52 @@
 #include "bgpd/proteus/bgp_nb_local.h"
 
 
+/* 'advertise-all-vni' (M6 batch B2). THE risky EVPN flag: toggles whether
+ * bgpd consumes zebra's VXLAN VNI state (bgp_zebra_advertise_all_vni via
+ * evpn_set/unset_advertise_all_vni). Two hazards reproduced from the legacy
+ * bgp_evpn_advertise_all_vni_cmd:
+ *   1. Single-EVPN-owning-instance guard, at NB_EV_VALIDATE: enabling is
+ *      rejected when a different bgp instance already owns EVPN
+ *      (bgp_get_evpn() != this bgp), mirroring the legacy
+ *      CMD_WARNING_CONFIG_FAILED "Please unconfigure EVPN in ...".
+ *   2. Fire the zebra advertise toggle exactly once per commit: the APPLY
+ *      body no-ops when the flag already holds the requested value, so a
+ *      re-apply of the same value never re-issues bgp_zebra_advertise_all_vni
+ *      (nor the set_evpn / cleanup side effects). */
 int instance_afi_safis_l2vpn_evpn_advertise_all_vni_modify(struct nb_cb_modify_args *args)
 {
+	struct bgp *bgp;
+	struct bgp *bgp_evpn;
+	bool enable;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-all-vni");
-		return NB_ERR_VALIDATION;
+		if (!yang_dnode_get_bool(args->dnode, NULL))
+			break;
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_evpn = bgp_get_evpn();
+		if (bgp_evpn && bgp_evpn != bgp) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Please unconfigure EVPN in %s", bgp_evpn->name_pretty);
+			return NB_ERR_VALIDATION;
+		}
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		enable = yang_dnode_get_bool(args->dnode, NULL);
+		if (bgp->advertise_all_vni == enable)
+			break;
+		if (enable)
+			evpn_set_advertise_all_vni(bgp);
+		else
+			evpn_unset_advertise_all_vni(bgp);
 		break;
 	}
 
@@ -65,33 +101,59 @@ int instance_afi_safis_l2vpn_evpn_autort_rfc8365_compatible_modify(struct nb_cb_
 	return NB_OK;
 }
 
+/* 'advertise-default-gw' (M6 batch B2, instance-level, vpn=NULL). The legacy
+ * bgp_evpn_advertise_default_gw_cmd only honors the positive form under an
+ * EVPN-enabled instance (its EVPN_ENABLED guard returned CMD_WARNING, i.e.
+ * ignored the line without aborting the load); the negative form is
+ * unconditional. Both setters are self-guarded/idempotent. The role guard is
+ * kept at APPLY (not VALIDATE) because advertise-all-vni, which sets
+ * EVPN_ENABLED, is applied before this leaf within the same commit (schema
+ * order); a VALIDATE-time check would see the pre-apply state and wrongly
+ * reject a config that enables both at once. */
 int instance_afi_safis_l2vpn_evpn_advertise_default_gw_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-default-gw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL)) {
+		if (!EVPN_ENABLED(bgp))
+			return NB_OK;
+		evpn_set_advertise_default_gw(bgp, NULL);
+	} else {
+		evpn_unset_advertise_default_gw(bgp, NULL);
 	}
 
 	return NB_OK;
 }
 
+/* 'advertise-svi-ip' (M6 batch B2, instance-level, vpn=NULL). Same
+ * EVPN_ENABLED positive-only role guard as advertise-default-gw (legacy
+ * bgp_evpn_advertise_svi_ip_cmd returned CMD_WARNING when not enabled);
+ * evpn_set_advertise_svi_macip() is self-guarded/idempotent for both the
+ * set (1) and unset (0) forms. */
 int instance_afi_safis_l2vpn_evpn_advertise_svi_ip_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-svi-ip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL)) {
+		if (!EVPN_ENABLED(bgp))
+			return NB_OK;
+		evpn_set_advertise_svi_macip(bgp, NULL, 1);
+	} else {
+		evpn_set_advertise_svi_macip(bgp, NULL, 0);
 	}
 
 	return NB_OK;
@@ -321,18 +383,28 @@ int instance_afi_safis_l2vpn_evpn_mac_vrf_soo_ipv4_local_admin_modify(struct nb_
 	return NB_OK;
 }
 
+/* 'enable-resolve-overlay-index' (M6 batch B2). The legacy
+ * bgp_evpn_enable_resolve_overlay_index_cmd guards BOTH set and unset on
+ * bgp == bgp_get_evpn() (returning CMD_WARNING otherwise, i.e. ignoring the
+ * line). bgp_evpn_set_unset_resolve_overlay_index() is self-guarded/idempotent
+ * (no-op when already in the requested state), so a re-apply of the same value
+ * re-walks nothing. Role guard at APPLY for the same schema-order reason as
+ * advertise-default-gw. */
 int instance_afi_safis_l2vpn_evpn_enable_resolve_overlay_index_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/enable-resolve-overlay-index");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (bgp != bgp_get_evpn())
+		return NB_OK;
+
+	bgp_evpn_set_unset_resolve_overlay_index(bgp, yang_dnode_get_bool(args->dnode, NULL));
 
 	return NB_OK;
 }

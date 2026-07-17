@@ -339,6 +339,92 @@ DEFPY_YANG_NOSH(
 	return CMD_SUCCESS;
 }
 
+/*
+ * Milestone 6 batch B2: instance-level l2vpn-evpn advertise-flag leaves,
+ * mgmtd side. All four are Tier-A default-false booleans (YANG
+ * 'type boolean; default "false"'): the positive legacy form maps to
+ * NB_OP_MODIFY "true", 'no ...' destroys back to the false default, and
+ * cli_show emits the bare positive line iff the leaf reads true. The xpath
+ * is relative to the instance base pushed at BGP_EVPN_NODE
+ * (VTY_CURR_XPATH), so it appends './afi-safis/l2vpn-evpn/<leaf>'. Grammar
+ * and help strings are kept identical to the retired bgp_evpn_vty.c DEFPYs.
+ * The EVPN role guards those DEFUNs carried (EVPN_ENABLED / bgp_get_evpn)
+ * live in the backend apply callbacks (bgp_nb_evpn.c), except
+ * advertise-all-vni's single-EVPN-instance guard which is a hard
+ * NB_EV_VALIDATE rejection.
+ */
+
+DEFPY_YANG(
+	bgp_evpn_advertise_all_vni, bgp_evpn_advertise_all_vni_cli_cmd,
+	"advertise-all-vni",
+	"Advertise All local VNIs\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-all-vni", NB_OP_MODIFY,
+			      "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_advertise_all_vni, no_bgp_evpn_advertise_all_vni_cli_cmd,
+	"no advertise-all-vni",
+	NO_STR
+	"Advertise All local VNIs\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-all-vni", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_advertise_default_gw, bgp_evpn_advertise_default_gw_cli_cmd,
+	"advertise-default-gw",
+	"Advertise All default g/w mac-ip routes in EVPN\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-default-gw", NB_OP_MODIFY,
+			      "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_advertise_default_gw, no_bgp_evpn_advertise_default_gw_cli_cmd,
+	"no advertise-default-gw",
+	NO_STR
+	"Withdraw All default g/w mac-ip routes from EVPN\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-default-gw", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_advertise_svi_ip, bgp_evpn_advertise_svi_ip_cli_cmd,
+	"[no$no] advertise-svi-ip",
+	NO_STR
+	"Advertise svi mac-ip routes in EVPN\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-svi-ip", NB_OP_DESTROY,
+				      NULL);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-svi-ip", NB_OP_MODIFY,
+				      "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_enable_resolve_overlay_index, bgp_evpn_enable_resolve_overlay_index_cli_cmd,
+	"[no$no] enable-resolve-overlay-index",
+	NO_STR
+	"Enable Recursive Resolution of type-5 route overlay index\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/enable-resolve-overlay-index",
+				      NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/enable-resolve-overlay-index",
+				      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 DEFPY_YANG_NOSH(
 	router_bgp, router_bgp_cli_cmd,
 	"router bgp [ASNUM$instasn [<view|vrf>$view_vrf VIEWVRFNAME] [as-notation <dot|dot+|plain>$notation]]",
@@ -2881,6 +2967,39 @@ void instance_evpn_vni_cli_write_end(struct vty *vty, const struct lyd_node *dno
 	vty_out(vty, "  exit-vni\n");
 }
 
+/* M6 B2: instance-level l2vpn-evpn advertise-flag emitters. Tier-A
+ * default-false booleans: emit the two-space-indented positive line iff the
+ * leaf reads true, reproducing bgp_config_write_evpn_info()'s exact tokens
+ * (that native emission is now gated off for these four lines). */
+void instance_evpn_advertise_all_vni_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  advertise-all-vni\n");
+}
+
+void instance_evpn_advertise_default_gw_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  advertise-default-gw\n");
+}
+
+void instance_evpn_advertise_svi_ip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  advertise-svi-ip\n");
+}
+
+void instance_evpn_enable_resolve_overlay_index_cli_write(struct vty *vty,
+							  const struct lyd_node *dnode,
+							  bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  enable-resolve-overlay-index\n");
+}
+
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -4738,6 +4857,14 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cli_cmd);
 	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cli_cmd);
+
+	/* M6 B2: instance-level l2vpn-evpn advertise-flag leaves (mgmtd side). */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_all_vni_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_all_vni_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_default_gw_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_default_gw_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_svi_ip_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_enable_resolve_overlay_index_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);

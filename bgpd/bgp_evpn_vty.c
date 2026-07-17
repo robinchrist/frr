@@ -3556,8 +3556,7 @@ static void evpn_show_all_vnis(struct vty *vty, struct bgp *bgp, json_object *js
 /*
  * evpn - enable advertisement of svi MAC-IP
  */
-static void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn,
-					 uint32_t set)
+void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn, uint32_t set)
 {
 	if (!vpn) {
 		if (set && bgp->evpn_info->advertise_svi_macip)
@@ -3583,7 +3582,7 @@ static void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * evpn - enable advertisement of default g/w
  */
-static void evpn_set_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn)
+void evpn_set_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	if (!vpn) {
 		if (bgp->advertise_gw_macip)
@@ -3605,8 +3604,7 @@ static void evpn_set_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn)
 /*
  * evpn - disable advertisement of default g/w
  */
-static void evpn_unset_advertise_default_gw(struct bgp *bgp,
-					    struct bgpevpn *vpn)
+void evpn_unset_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	if (!vpn) {
 		if (!bgp->advertise_gw_macip)
@@ -3688,7 +3686,7 @@ static void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn)
 /*
  * EVPN (VNI advertisement) enabled. Register with zebra.
  */
-static void evpn_set_advertise_all_vni(struct bgp *bgp)
+void evpn_set_advertise_all_vni(struct bgp *bgp)
 {
 	bgp->advertise_all_vni = 1;
 	bgp_set_evpn(bgp);
@@ -3699,7 +3697,7 @@ static void evpn_set_advertise_all_vni(struct bgp *bgp)
  * EVPN (VNI advertisement) disabled. De-register with zebra. Cleanup VNI
  * cache, EVPN routes (delete and withdraw from peers).
  */
-static void evpn_unset_advertise_all_vni(struct bgp *bgp)
+void evpn_unset_advertise_all_vni(struct bgp *bgp)
 {
 	bgp->advertise_all_vni = 0;
 	bgp_set_evpn(bgp_get_default());
@@ -3708,7 +3706,7 @@ static void evpn_unset_advertise_all_vni(struct bgp *bgp)
 }
 
 /* Set resolve overlay index flag */
-static void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set)
+void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set)
 {
 	if (set == bgp->resolve_overlay_index)
 		return;
@@ -3906,78 +3904,9 @@ DEFPY (no_bgp_evpn_advertise_default_vni_gw,
 }
 
 
-DEFPY (bgp_evpn_advertise_default_gw,
-       bgp_evpn_advertise_default_gw_cmd,
-       "advertise-default-gw",
-       "Advertise All default g/w mac-ip routes in EVPN\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	evpn_set_advertise_default_gw(bgp, NULL);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_advertise_default_gw,
-       no_bgp_evpn_advertise_default_gw_cmd,
-       "no advertise-default-gw",
-       NO_STR
-       "Withdraw All default g/w mac-ip routes from EVPN\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	evpn_unset_advertise_default_gw(bgp, NULL);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_evpn_advertise_all_vni,
-       bgp_evpn_advertise_all_vni_cmd,
-       "advertise-all-vni",
-       "Advertise All local VNIs\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp *bgp_evpn = NULL;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	bgp_evpn = bgp_get_evpn();
-	if (bgp_evpn && bgp_evpn != bgp) {
-		vty_out(vty, "%% Please unconfigure EVPN in %s\n",
-			bgp_evpn->name_pretty);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	evpn_set_advertise_all_vni(bgp);
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_advertise_all_vni,
-       no_bgp_evpn_advertise_all_vni_cmd,
-       "no advertise-all-vni",
-       NO_STR
-       "Advertise All local VNIs\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-	evpn_unset_advertise_all_vni(bgp);
-	return CMD_SUCCESS;
-}
+/* advertise-default-gw / advertise-all-vni: converted to proteus/northbound
+ * in M6 batch B2 (instance-level flag leaves); mgmtd owns the CLI and
+ * bgp_config_write_evpn_info's emission is gated off for them. */
 
 DEFPY_ATTR(bgp_evpn_advertise_autort_rfc8365,
 	   bgp_evpn_advertise_autort_rfc8365_cmd,
@@ -4193,30 +4122,9 @@ DEFPY (no_dup_addr_detection,
 	return CMD_SUCCESS;
 }
 
-DEFPY(bgp_evpn_advertise_svi_ip,
-      bgp_evpn_advertise_svi_ip_cmd,
-      "[no$no] advertise-svi-ip",
-      NO_STR
-      "Advertise svi mac-ip routes in EVPN\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (no)
-		evpn_set_advertise_svi_macip(bgp, NULL, 0);
-	else {
-		if (!EVPN_ENABLED(bgp)) {
-			vty_out(vty,
-				"This command is only supported under EVPN VRF\n");
-			return CMD_WARNING;
-		}
-		evpn_set_advertise_svi_macip(bgp, NULL, 1);
-	}
-
-	return CMD_SUCCESS;
-}
+/* Instance-level advertise-svi-ip: converted to proteus/northbound in M6
+ * batch B2. The per-VNI 'advertise-svi-ip' (bgp_evpn_advertise_svi_ip_vni)
+ * below stays native until M6 batch B6. */
 
 DEFPY(bgp_evpn_advertise_svi_ip_vni,
       bgp_evpn_advertise_svi_ip_vni_cmd,
@@ -4584,25 +4492,8 @@ DEFPY (bgp_evpn_ead_evi_tx_disable,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_evpn_enable_resolve_overlay_index,
-       bgp_evpn_enable_resolve_overlay_index_cmd,
-       "[no$no] enable-resolve-overlay-index",
-       NO_STR
-       "Enable Recursive Resolution of type-5 route overlay index\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (bgp != bgp_get_evpn()) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	bgp_evpn_set_unset_resolve_overlay_index(bgp, no ? false : true);
-	return CMD_SUCCESS;
-}
+/* enable-resolve-overlay-index: converted to proteus/northbound in M6 batch
+ * B2 (instance-level flag leaf). */
 
 DEFPY (bgp_evpn_advertise_pip_ip_mac,
        bgp_evpn_advertise_pip_ip_mac_cmd,
@@ -7903,6 +7794,19 @@ static int vni_cmp(const void **a, const void **b)
 /*
  * Output EVPN configuration information.
  */
+/* M6 batch B2: the instance-level EVPN advertise flags (advertise-all-vni,
+ * advertise-default-gw, advertise-svi-ip, enable-resolve-overlay-index) are
+ * proteus/mgmtd-owned -- mgmtd's cli_show is their single emitter, so bgpd
+ * emits nothing for them (bgp_config_write_evpn_info's guarded lines below).
+ * The remaining bgp_config_write_evpn_info lines stay native until their own
+ * M6 batch converts. Always true for the one (afi,safi) this emitter handles;
+ * shaped like bgp_af_activate_is_proteus() so it reads as an incremental
+ * retirement seam. */
+static bool bgp_evpn_flag_is_proteus(afi_t afi, safi_t safi)
+{
+	return afi == AFI_L2VPN && safi == SAFI_EVPN;
+}
+
 void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi)
 {
 	struct bgp_evpn_rt_config *rt_config = bgp->vrf_route_target_config;
@@ -7910,7 +7814,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	const char *autort_mode_str;
 	char rt_buf[RT_ADDRSTRLEN];
 
-	if (bgp->advertise_all_vni)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->advertise_all_vni)
 		vty_out(vty, "  advertise-all-vni\n");
 
 	if (hashcount(bgp->vnihash)) {
@@ -7925,10 +7829,10 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 		list_delete(&vnilist);
 	}
 
-	if (bgp->advertise_gw_macip)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->advertise_gw_macip)
 		vty_out(vty, "  advertise-default-gw\n");
 
-	if (bgp->evpn_info->advertise_svi_macip)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->evpn_info->advertise_svi_macip)
 		vty_out(vty, "  advertise-svi-ip\n");
 
 	if (bgp->evpn_info->soo) {
@@ -7939,7 +7843,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 		ecommunity_strfree(&ecom_str);
 	}
 
-	if (bgp->resolve_overlay_index)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->resolve_overlay_index)
 		vty_out(vty, "  enable-resolve-overlay-index\n");
 
 	if (bgp_mh_info->evi_per_es_frag != BGP_EVPN_MAX_EVI_PER_ES_FRAG)
@@ -8103,13 +8007,11 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_ip_bgp_l2vpn_evpn_all_overlay_cmd);
 	install_element(BGP_EVPN_NODE, &no_evpnrt5_network_cmd);
 	install_element(BGP_EVPN_NODE, &evpnrt5_network_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_all_vni_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_all_vni_cmd);
+	/* advertise-all-vni / advertise-default-gw / advertise-svi-ip /
+	 * enable-resolve-overlay-index converted to proteus/northbound (M6
+	 * batch B2); their CLI is installed by mgmtd (bgp_cli_instance.c). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_autort_rfc8365_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_autort_rfc8365_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_default_gw_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_default_gw_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_svi_ip_cmd);
 	install_element(BGP_EVPN_NODE, &macvrf_soo_global_cmd);
 	install_element(BGP_EVPN_NODE, &no_macvrf_soo_global_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cmd);
@@ -8124,8 +8026,6 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_disable_cmd);
-	install_element(BGP_EVPN_NODE,
-			&bgp_evpn_enable_resolve_overlay_index_cmd);
 
 	/* test commands */
 	install_element(BGP_EVPN_NODE, &test_es_add_cmd);

@@ -24,6 +24,17 @@ const char *bgp_afi_safi_container_name(int node);
 void instance_evpn_vni_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
 void instance_evpn_vni_cli_write_end(struct vty *vty, const struct lyd_node *dnode);
 
+/* M6 B2: instance-level l2vpn-evpn advertise-flag emitters. */
+void instance_evpn_advertise_all_vni_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+void instance_evpn_advertise_default_gw_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						  bool show_defaults);
+void instance_evpn_advertise_svi_ip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void instance_evpn_enable_resolve_overlay_index_cli_write(struct vty *vty,
+							  const struct lyd_node *dnode,
+							  bool show_defaults);
+
 /* M5 B1: per-AF 'neighbor X activate' emitter, shared neighbor/peer-group. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults);

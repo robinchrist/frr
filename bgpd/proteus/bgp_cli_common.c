@@ -114,6 +114,31 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show_end = instance_evpn_vni_cli_write_end,
 			}
 		},
+		/* M6 B2: instance-level l2vpn-evpn advertise-flag leaves. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-all-vni",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_all_vni_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-default-gw",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_default_gw_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-svi-ip",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_svi_ip_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/enable-resolve-overlay-index",
+			.cbs = {
+				.cli_show = instance_evpn_enable_resolve_overlay_index_cli_write,
+			}
+		},
 		/* M5 B9: instance-AF 'network' list (ipv4/ipv6 x
 		 * unicast/multicast/labeled-unicast); ipv4/ipv6-vpn use the
 		 * separate RD-keyed af-network-vpn-* grouping (M7). */

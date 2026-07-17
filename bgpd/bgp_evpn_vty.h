@@ -15,6 +15,17 @@ extern void bgp_ethernetvpn_init(void);
 extern struct bgpevpn *evpn_create_update_vni(struct bgp *bgp, vni_t vni);
 extern void evpn_delete_vni(struct bgp *bgp, struct bgpevpn *vpn);
 
+/* Instance-level EVPN advertise-flag setters (vty-free), shared with the
+ * proteus/northbound flag-leaf modify callbacks (bgp_nb_evpn.c, M6 batch B2).
+ * All are self-guarded/idempotent. The advertise-default-gw / advertise-svi-ip
+ * setters take a vpn (pass NULL for the instance-level default). */
+extern void evpn_set_advertise_all_vni(struct bgp *bgp);
+extern void evpn_unset_advertise_all_vni(struct bgp *bgp);
+extern void evpn_set_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn);
+extern void evpn_unset_advertise_default_gw(struct bgp *bgp, struct bgpevpn *vpn);
+extern void evpn_set_advertise_svi_macip(struct bgp *bgp, struct bgpevpn *vpn, uint32_t set);
+extern void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set);
+
 #define L2VPN_HELP_STR        "Layer 2 Virtual Private Network\n"
 #define EVPN_HELP_STR        "Ethernet Virtual Private Network\n"
 #define VNI_HELP_STR "VXLAN Network Identifier\n"
