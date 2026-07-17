@@ -4196,6 +4196,94 @@ DEFPY_ATTR(
 	return ret;
 }
 
+/*
+ * M5 batch B1: per-address-family 'neighbor X activate' / 'no neighbor X
+ * activate', shared between neighbor and peer-group via
+ * bgp_cli_peer_or_group_xpath() like every command in this file. Installed
+ * in the nine proteus address-family sub-nodes (BGP_IPV4_NODE ...
+ * BGP_EVPN_NODE); the target AF is read from vty->node via
+ * bgp_afi_safi_container_name() (bgp_cli_instance.c, M5 B0), so one command
+ * definition covers all nine families. flowspec/unreachability/link-state
+ * keep the legacy neighbor_activate DEFUN (bgp_vty.c) -- proteus models no
+ * per-AF surface for them.
+ *
+ * 'neighbor X activate' -> activate=true, 'no neighbor X activate' ->
+ * activate=false (both MODIFY: legacy 'no activate' calls peer_deactivate(),
+ * an explicit deactivation, not a revert to the default). An unset leaf means
+ * "follow the per-AF default activation" (bgp_nb_af_activate_default(),
+ * bgp_nb_util.c).
+ */
+static int bgp_cli_neighbor_activate(struct vty *vty, const char *peer, const char *value)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/activate", xpath, container);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, value);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_activate, neighbor_activate_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer activate",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable the Address Family for this Neighbor\n")
+{
+	return bgp_cli_neighbor_activate(vty, peer, "true");
+}
+
+DEFPY_YANG(
+	no_neighbor_activate, no_neighbor_activate_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer activate",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enable the Address Family for this Neighbor\n")
+{
+	return bgp_cli_neighbor_activate(vty, peer, "false");
+}
+
+/* Shared activate emitter for both neighbor and peer-group afi-safis/<af>/
+ * activate. Reproduces bgp_config_write_peer_af()'s (bgp_vty.c) two-space
+ * '  neighbor <addr> activate' / '  no neighbor <addr> activate' inside the
+ * address-family block opened by afi_safi_cli_write() (M5 B0). The stored
+ * value is authoritative: true -> activate, false -> no activate; a peer or
+ * group that follows its default activation has no leaf and emits nothing.
+ * The display token is the neighbor address key (an IP or an interface name,
+ * matching legacy's conf_if/host) or the peer-group name. */
+void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	const struct lyd_node *nbr = yang_dnode_get_parent(dnode, "neighbor");
+	const char *addr;
+
+	if (nbr)
+		addr = yang_dnode_get_string(nbr, "address");
+	else
+		addr = yang_dnode_get_string(yang_dnode_get_parent(dnode, "peer-group"), "name");
+
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s activate\n", addr);
+	else
+		vty_out(vty, "  no neighbor %s activate\n", addr);
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -4346,4 +4434,28 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_disable_link_bw_encoding_ieee_cli_cmd);
 	install_element(BGP_NODE, &neighbor_extended_link_bw_cli_cmd);
 	install_element(BGP_NODE, &neighbor_extended_optional_parameters_cli_cmd);
+
+	/* per-AF 'neighbor X activate' in the nine proteus address-family
+	 * sub-nodes (M5 batch B1). install_element() needs a compile-time-
+	 * constant node, so each is spelled out (as with exit-address-family
+	 * in bgp_cli_instance.c). */
+	install_element(BGP_IPV4_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_activate_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_neighbor_activate_cli_cmd);
 }

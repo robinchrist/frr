@@ -508,6 +508,134 @@ struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode)
 	return peer_lookup(bgp, &su);
 }
 
+/*
+ * M5 batch B1: shared per-AF 'activate' apply, parameterized by afi/safi.
+ *
+ * The thin per-container delegators (instance_neighbor_afi_safis_<af>_
+ * activate_modify/destroy and their peer-group twins, one pair per
+ * afi-safis container in bgp_nb_{neighbor,peer_group}_afi_*.c) pass their
+ * compile-time afi/safi here so a single implementation covers all nine
+ * proteus families and both the neighbor and peer-group scope. This is the
+ * template every M5 per-AF leaf batch (B2+) reuses: a shared helper keyed on
+ * afi/safi, called from a one-line generated stub.
+ *
+ * 'conf' is the real peer for neighbor scope and group->conf for peer-group
+ * scope; peer_activate()/peer_deactivate() (bgpd.c) already fan a group
+ * template out to its members via the PEER_STATUS_GROUP branch, exactly as
+ * the retired neighbor_activate/no_neighbor_activate DEFUNs relied on
+ * peer_and_group_lookup_vty() handing them either shape. Looked up by key on
+ * every call, never cached, for the same reason as bgp_nb_neighbor_lookup()
+ * (a legacy 'no neighbor ...' can delete the struct underneath a later leaf
+ * callback in the same commit).
+ */
+static int bgp_nb_af_activate_set(struct peer *conf, bool activate, afi_t afi, safi_t safi)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (activate)
+		ret = peer_activate(conf, afi, safi);
+	else
+		ret = peer_deactivate(conf, afi, safi);
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_%sactivate() failed: %d",
+			 __func__, activate ? "" : "de", ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+/* Destroy (the activate leaf is removed) means "follow the per-AF default
+ * activation" again: a peer-group member inherits its group's activation, a
+ * standalone peer follows bgp->default_af[afi][safi] ('bgp default
+ * <afi>-<safi>'). Reached in practice only when the whole neighbor/group is
+ * deleted (conf then resolves NULL and this no-ops) -- frr-reload removes an
+ * explicit 'neighbor X activate' with 'no neighbor X activate', which is a
+ * modify-to-false, not a leaf destroy. */
+static int bgp_nb_af_activate_default(struct peer *conf, afi_t afi, safi_t safi)
+{
+	bool baseline;
+
+	if (!conf)
+		return NB_OK;
+
+	if (peer_group_active(conf))
+		baseline = conf->group->conf->afc[afi][safi];
+	else
+		baseline = conf->bgp->default_af[afi][safi];
+
+	return bgp_nb_af_activate_set(conf, baseline, afi, safi);
+}
+
+int bgp_nb_neighbor_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_activate_set(bgp_nb_neighbor_lookup(args->dnode),
+					      yang_dnode_get_bool(args->dnode, NULL), afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_activate_default(bgp_nb_neighbor_lookup(args->dnode), afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_activate_set(group ? group->conf : NULL,
+					      yang_dnode_get_bool(args->dnode, NULL), afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_activate_default(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
 /* Shared "reread the whole bfd container and reconfigure" apply for both
  * neighbor and peer-group (both share the 'bfd' container from the
  * neighbor-session-parameters grouping, M4 batch B10). The datastore is

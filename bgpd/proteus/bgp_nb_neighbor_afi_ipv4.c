@@ -32,34 +32,12 @@
 
 int instance_neighbor_afi_safis_ipv4_unicast_activate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_activate_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_addpath_tx_modify(struct nb_cb_modify_args *args)
@@ -1689,34 +1667,12 @@ int instance_neighbor_afi_safis_ipv4_unicast_filters_conditional_advertisement_c
 
 int instance_neighbor_afi_safis_ipv4_multicast_activate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_activate_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_addpath_tx_modify(struct nb_cb_modify_args *args)
@@ -3354,34 +3310,12 @@ int instance_neighbor_afi_safis_ipv4_multicast_filters_conditional_advertisement
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_activate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_activate_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_addpath_tx_modify(struct nb_cb_modify_args *args)
@@ -5023,34 +4957,12 @@ int instance_neighbor_afi_safis_ipv4_labeled_unicast_filters_conditional_adverti
 
 int instance_neighbor_afi_safis_ipv4_vpn_activate_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_activate_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/activate");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_activate_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_addpath_tx_modify(struct nb_cb_modify_args *args)

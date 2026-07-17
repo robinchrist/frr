@@ -645,6 +645,243 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_listen_limit_cli_write,
 			}
 		},
+		/* M5 B1: per-AF activate for neighbor and peer-group. The
+		 * shared afi_safi_cli_write() header/trailer (M5 B0) opens the
+		 * address-family block around the converted activate leaf. */
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
 		{
 			.xpath = NULL,
 		},

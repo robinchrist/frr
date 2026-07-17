@@ -16546,6 +16546,20 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 */
 }
 
+/* M5 batch B1: the nine address families whose per-neighbor 'activate' line
+ * is now emitted by mgmtd (bgpd/proteus, neighbor_af_activate_cli_write()).
+ * bgp_config_write_peer_af() skips the activate emission for these; every
+ * other per-AF neighbor line it writes stays native during M5. */
+static bool bgp_af_activate_is_proteus(afi_t afi, safi_t safi)
+{
+	if (afi == AFI_L2VPN)
+		return safi == SAFI_EVPN;
+	if (afi == AFI_IP || afi == AFI_IP6)
+		return safi == SAFI_UNICAST || safi == SAFI_MULTICAST ||
+		       safi == SAFI_LABELED_UNICAST || safi == SAFI_MPLS_VPN;
+	return false;
+}
+
 /* BGP peer configuration display function. */
 static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 				     struct peer *peer, afi_t afi, safi_t safi)
@@ -16570,30 +16584,33 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 	/************************************
 	 ****** Per AF to the neighbor ******
 	 ************************************/
-	if (peer_group_active(peer)) {
-		g_peer = peer->group->conf;
+	/* activate/no-activate: emitted by mgmtd for the nine proteus AFs
+	 * (M5 B1); still native for encap/flowspec/unreachability/link-state. */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		if (peer_group_active(peer)) {
+			g_peer = peer->group->conf;
 
-		/* If the peer-group is active but peer is not, print a 'no
-		 * activate' */
-		if (g_peer->afc[afi][safi] && !peer->afc[afi][safi]) {
-			vty_out(vty, "  no neighbor %s activate\n", addr);
-		}
+			/* If the peer-group is active but peer is not, print a
+			 * 'no activate' */
+			if (g_peer->afc[afi][safi] && !peer->afc[afi][safi]) {
+				vty_out(vty, "  no neighbor %s activate\n", addr);
+			}
 
-		/* If the peer-group is not active but peer is, print an
-		   'activate' */
-		else if (!g_peer->afc[afi][safi] && peer->afc[afi][safi]) {
-			vty_out(vty, "  neighbor %s activate\n", addr);
-		}
-	} else {
-		if (peer->afc[afi][safi]) {
-			if (safi == SAFI_ENCAP)
+			/* If the peer-group is not active but peer is, print an
+			   'activate' */
+			else if (!g_peer->afc[afi][safi] && peer->afc[afi][safi]) {
 				vty_out(vty, "  neighbor %s activate\n", addr);
-			else if (!bgp->default_af[afi][safi])
-				vty_out(vty, "  neighbor %s activate\n", addr);
+			}
 		} else {
-			if (bgp->default_af[afi][safi])
-				vty_out(vty, "  no neighbor %s activate\n",
-					addr);
+			if (peer->afc[afi][safi]) {
+				if (safi == SAFI_ENCAP)
+					vty_out(vty, "  neighbor %s activate\n", addr);
+				else if (!bgp->default_af[afi][safi])
+					vty_out(vty, "  neighbor %s activate\n", addr);
+			} else {
+				if (bgp->default_af[afi][safi])
+					vty_out(vty, "  no neighbor %s activate\n", addr);
+			}
 		}
 	}
 
@@ -17930,38 +17947,24 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_neighbor_interface_peer_group_remote_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_peer_group_cmd);
 
-	/* "neighbor activate" commands. */
+	/* "neighbor activate" commands. The nine proteus address families
+	 * (ipv4/ipv6 {unicast,multicast,labeled-unicast,vpn}, l2vpn evpn) are
+	 * converted to mgmtd (M5 batch B1: neighbor_activate_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c); only encap/flowspec/unreachability/
+	 * link-state and the hidden BGP_NODE alias stay native here. */
 	install_element(BGP_NODE, &neighbor_activate_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_activate_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_activate_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_activate_cmd);
 	install_element(BGP_IPV4U_NODE, &neighbor_activate_cmd);
 	install_element(BGP_IPV6U_NODE, &neighbor_activate_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_activate_cmd);
 	install_element(BGP_LS_NODE, &neighbor_activate_cmd);
 
-	/* "no neighbor activate" commands. */
+	/* "no neighbor activate" commands (see the note above). */
 	install_element(BGP_NODE, &no_neighbor_activate_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_IPV4U_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_IPV6U_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_activate_cmd);
 	install_element(BGP_LS_NODE, &no_neighbor_activate_cmd);
 
 	/* "neighbor ... peer-group PGNAME" bind/unbind commands: reinstated,
