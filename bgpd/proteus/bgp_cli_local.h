@@ -67,6 +67,20 @@ void neighbor_af_remove_private_as_cli_write(struct vty *vty, const struct lyd_n
 void neighbor_af_orf_prefix_list_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults);
 
+/* M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
+ * maximum-prefix-out + allowas-in + weight emitters, shared
+ * neighbor/peer-group. */
+void neighbor_af_default_originate_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults);
+void neighbor_af_maximum_prefix_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void neighbor_af_maximum_prefix_out_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void neighbor_af_allowas_in_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+void neighbor_af_weight_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,

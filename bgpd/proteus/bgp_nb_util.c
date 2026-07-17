@@ -3035,3 +3035,1007 @@ int bgp_nb_peer_group_af_orf_prefix_list_destroy(struct nb_cb_destroy_args *args
 
 	return NB_OK;
 }
+
+/*
+ * M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
+ * maximum-prefix-out + allowas-in + weight, all afi/safi-parameterized
+ * (neighbor + peer-group), reusing B1's delegator template.
+ *
+ * default-originate and allowas-in are, like B3's conditional-advertisement,
+ * multi-leaf containers whose legacy DEFPY/DEFUN always supplies every
+ * member together, so every one of a container's leaves' MODIFY/DESTROY
+ * callbacks reroutes to a shared "reread the whole container, call the
+ * legacy setter" helper -- the same idiom bgp_nb_af_advertise_map_set()
+ * established, safe here for the same reason: by NB_EV_APPLY every pending
+ * change in the transaction is already committed to the dnode tree, so
+ * rereading sibling leaves via the parent container always sees the final
+ * post-commit state regardless of which specific leaf's callback fired
+ * first. maximum-prefix is the same shape with five leaves instead of
+ * three/four. maximum-prefix-out and weight are plain independent leaves
+ * needing no such rereading.
+ */
+
+/*
+ * default-originate (neighbor-af's 'default-originate' container,
+ * proteus-bgp.yang 855-867: 'enabled' boolean, default false; 'route-map'
+ * string, no default) replaces legacy's neighbor_default_originate/_rmap/
+ * no_neighbor_default_originate DEFUN trio (bgp_vty.c, retained for the
+ * still-native BGP_NODE hidden aliases only). peer_default_originate_set()/
+ * _unset() (bgpd.c) are themselves peer-group-aware (member fan-out,
+ * inherit-on-unset), exactly like the retired DEFUNs relied on
+ * peer_and_group_lookup_vty() handing them either shape. Legacy's bare
+ * 'default-originate' (no route-map) explicitly clears any previously
+ * configured route-map (peer_default_originate_set()'s '!rmap' branch), so
+ * 'enabled=true with route-map absent' correctly maps to
+ * peer_default_originate_set(conf, afi, safi, NULL, NULL) here too.
+ */
+static int bgp_nb_af_default_originate_apply(struct peer *conf, afi_t afi, safi_t safi,
+					      const struct lyd_node *cont_dnode)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (yang_dnode_get_bool(cont_dnode, "enabled")) {
+		const char *rmap = NULL;
+		struct route_map *route_map = NULL;
+
+		if (yang_dnode_exists(cont_dnode, "route-map")) {
+			rmap = yang_dnode_get_string(cont_dnode, "route-map");
+			route_map = route_map_lookup_by_name(rmap);
+		}
+
+		ret = peer_default_originate_set(conf, afi, safi, rmap, route_map);
+	} else {
+		ret = peer_default_originate_unset(conf, afi, safi);
+	}
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_default_originate_set()/_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_default_originate_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_default_originate_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+							 safi, yang_dnode_get_parent(args->dnode,
+										     "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_default_originate_route_map_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_default_originate_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+							 safi, yang_dnode_get_parent(args->dnode,
+										     "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_default_originate_route_map_destroy(struct nb_cb_destroy_args *args,
+							    afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_default_originate_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+							 safi, yang_dnode_get_parent(args->dnode,
+										     "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_default_originate_enabled_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_default_originate_apply(group ? group->conf : NULL, afi, safi,
+							 yang_dnode_get_parent(args->dnode,
+									       "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_default_originate_route_map_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_default_originate_apply(group ? group->conf : NULL, afi, safi,
+							 yang_dnode_get_parent(args->dnode,
+									       "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_default_originate_route_map_destroy(struct nb_cb_destroy_args *args,
+							      afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_default_originate_apply(group ? group->conf : NULL, afi, safi,
+							 yang_dnode_get_parent(args->dnode,
+									       "default-originate"));
+	}
+
+	return NB_OK;
+}
+
+/*
+ * maximum-prefix (neighbor-af's 'maximum-prefix' container, proteus-bgp.yang
+ * 876-918: 'count' uint32 no default, 'threshold' uint8 no default,
+ * 'warning-only' boolean default false, 'restart-interval' uint16 no
+ * default, 'force' boolean default false) replaces legacy's six
+ * neighbor_maximum_prefix[_threshold][_warning][_restart] DEFUN
+ * combinations plus no_neighbor_maximum_prefix (bgp_vty.c, retained for the
+ * still-native BGP_NODE hidden aliases and the unreachability
+ * BGP_IPV4U_NODE/BGP_IPV6U_NODE installs, which proteus-bgp does not
+ * model). 'count' absent means "not configured" -- the same sentinel the
+ * container-destroy path (whole container removed, so 'count' is always
+ * among the departing children whenever it was ever set, since the CLI
+ * grammar makes it mandatory for every positive form) resolves to,
+ * reusing peer_maximum_prefix_unset() as the single teardown path exactly
+ * like B3's advertise-map container.
+ */
+static int bgp_nb_af_maximum_prefix_apply(struct peer *conf, afi_t afi, safi_t safi,
+					   const struct lyd_node *cont_dnode)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (!yang_dnode_exists(cont_dnode, "count")) {
+		ret = peer_maximum_prefix_unset(conf, afi, safi);
+	} else {
+		uint32_t count = yang_dnode_get_uint32(cont_dnode, "count");
+		uint8_t threshold = yang_dnode_exists(cont_dnode, "threshold")
+					    ? yang_dnode_get_uint8(cont_dnode, "threshold")
+					    : MAXIMUM_PREFIX_THRESHOLD_DEFAULT;
+		bool warning = yang_dnode_get_bool(cont_dnode, "warning-only");
+		uint16_t restart = yang_dnode_exists(cont_dnode, "restart-interval")
+					   ? yang_dnode_get_uint16(cont_dnode, "restart-interval")
+					   : 0;
+		bool force = yang_dnode_get_bool(cont_dnode, "force");
+
+		ret = peer_maximum_prefix_set(conf, afi, safi, count, threshold, warning, restart,
+					      force);
+	}
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_maximum_prefix_set()/_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args,
+							       afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args,
+								afi_t afi, safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_force_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_maximum_prefix_apply(bgp_nb_neighbor_lookup(args->dnode), afi,
+						      safi, yang_dnode_get_parent(args->dnode,
+										  "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args,
+								 afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args,
+								  afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_force_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_maximum_prefix_apply(group ? group->conf : NULL, afi, safi,
+						      yang_dnode_get_parent(args->dnode,
+									    "maximum-prefix"));
+	}
+
+	return NB_OK;
+}
+
+/*
+ * maximum-prefix-out (neighbor-af's plain 'maximum-prefix-out' uint32 leaf,
+ * proteus-bgp.yang 920-926, no default) replaces legacy's
+ * neighbor_maximum_prefix_out/no_... DEFUN pair (bgp_vty.c, retained for
+ * the still-native bare BGP_NODE install and the unreachability
+ * BGP_IPV4U_NODE/BGP_IPV6U_NODE installs). A plain independent leaf, no
+ * container rereading needed.
+ */
+int bgp_nb_neighbor_af_maximum_prefix_out_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+		ret = peer_maximum_prefix_out_set(peer, afi, safi,
+						  yang_dnode_get_uint32(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_maximum_prefix_out_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+		ret = peer_maximum_prefix_out_unset(peer, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_maximum_prefix_out_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_out_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+		ret = peer_maximum_prefix_out_set(group->conf, afi, safi,
+						  yang_dnode_get_uint32(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_maximum_prefix_out_set() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+		ret = peer_maximum_prefix_out_unset(group->conf, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_maximum_prefix_out_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+/*
+ * allowas-in (neighbor-af's 'allowas-in' container, proteus-bgp.yang
+ * 943-976: 'enabled' boolean default false, 'count' uint8 1-10 no default,
+ * 'origin' boolean default false with a 'must' enforcing mutual exclusion
+ * with 'count', 'route-map' string no default) replaces legacy's
+ * neighbor_allowas_in/no_neighbor_allowas_in DEFPY pair (bgp_vty.c,
+ * retained for the still-native BGP_NODE hidden aliases). Same
+ * whole-container-reread idiom as default-originate above:
+ * peer_allowas_in_set()'s allow_num argument collapses 'origin' (0),
+ * explicit 'count' or -- when neither is present, exactly like legacy's
+ * bare 'allowas-in' -- BGP_ALLOWAS_IN_DEFAULT (3).
+ */
+static int bgp_nb_af_allowas_in_apply(struct peer *conf, afi_t afi, safi_t safi,
+				      const struct lyd_node *cont_dnode)
+{
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	if (!yang_dnode_get_bool(cont_dnode, "enabled")) {
+		ret = peer_allowas_in_unset(conf, afi, safi);
+	} else {
+		bool origin = yang_dnode_get_bool(cont_dnode, "origin");
+		int allow_num;
+		const char *rmap = NULL;
+
+		if (origin)
+			allow_num = 0;
+		else if (yang_dnode_exists(cont_dnode, "count"))
+			allow_num = yang_dnode_get_uint8(cont_dnode, "count");
+		else
+			allow_num = BGP_ALLOWAS_IN_DEFAULT;
+
+		if (yang_dnode_exists(cont_dnode, "route-map"))
+			rmap = yang_dnode_get_string(cont_dnode, "route-map");
+
+		ret = peer_allowas_in_set(conf, afi, safi, allow_num, origin, rmap);
+	}
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_allowas_in_set()/_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_origin_modify(struct nb_cb_modify_args *args, afi_t afi,
+					       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_route_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_allowas_in_apply(bgp_nb_neighbor_lookup(args->dnode), afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_origin_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_route_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_allowas_in_apply(group ? group->conf : NULL, afi, safi,
+						  yang_dnode_get_parent(args->dnode, "allowas-in"));
+	}
+
+	return NB_OK;
+}
+
+/*
+ * weight (neighbor-af's plain 'weight' uint16 leaf, proteus-bgp.yang
+ * 998-1002, no default) replaces legacy's neighbor_weight/no_... DEFUN pair
+ * (bgp_vty.c, retained for the still-native BGP_NODE hidden aliases). A
+ * plain independent leaf, no container rereading needed.
+ */
+int bgp_nb_neighbor_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+		ret = peer_weight_set(peer, afi, safi, yang_dnode_get_uint16(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_weight_set() failed: %d",
+				 __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer *peer;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			return NB_OK;
+		ret = peer_weight_unset(peer, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_weight_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+		ret = peer_weight_set(group->conf, afi, safi,
+				      yang_dnode_get_uint16(args->dnode, NULL));
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: peer_weight_set() failed: %d",
+				 __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+	int ret;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			return NB_OK;
+		ret = peer_weight_unset(group->conf, afi, safi);
+		if (ret != 0) {
+			flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+				 "%s: peer_weight_unset() failed: %d", __func__, ret);
+			return NB_ERR_INCONSISTENCY;
+		}
+	}
+
+	return NB_OK;
+}

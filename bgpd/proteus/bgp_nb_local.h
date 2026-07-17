@@ -145,6 +145,88 @@ int bgp_nb_peer_group_af_soo_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 int bgp_nb_peer_group_af_soo_case_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_soo_case_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+/* M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
+ * maximum-prefix-out + allowas-in + weight (neighbor + peer-group). */
+int bgp_nb_neighbor_af_default_originate_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi);
+int bgp_nb_neighbor_af_default_originate_route_map_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_default_originate_route_map_destroy(struct nb_cb_destroy_args *args,
+							    afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_default_originate_enabled_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_default_originate_route_map_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_default_originate_route_map_destroy(struct nb_cb_destroy_args *args,
+							      afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args,
+							       afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args,
+								afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_force_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args,
+							   afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args,
+							     afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args,
+								 afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args,
+								  afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_force_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_out_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_neighbor_af_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_out_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_peer_group_af_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_origin_modify(struct nb_cb_modify_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_route_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_neighbor_af_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						    safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_enabled_modify(struct nb_cb_modify_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_count_modify(struct nb_cb_modify_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_count_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_origin_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_route_map_modify(struct nb_cb_modify_args *args, afi_t afi,
+						     safi_t safi);
+int bgp_nb_peer_group_af_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						      safi_t safi);
+int bgp_nb_neighbor_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_neighbor_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_neighbor_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_local_as_destroy_apply(const struct lyd_node *dnode);

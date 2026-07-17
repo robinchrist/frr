@@ -253,55 +253,19 @@ int instance_neighbor_afi_safis_ipv4_unicast_send_community_extended_rpki_modify
 		args, AFI_IP, SAFI_UNICAST, PEER_FLAG_SEND_EXT_COMMUNITY_RPKI);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_default_originate_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/default-originate/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_enabled_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_default_originate_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_soft_reconfiguration_inbound_modify(
@@ -310,173 +274,54 @@ int instance_neighbor_afi_safis_ipv4_unicast_soft_reconfiguration_inbound_modify
 	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP, SAFI_UNICAST, PEER_FLAG_SOFT_RECONFIG);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_warning_only_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/warning-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_force_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_force_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix/force");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_force_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_out_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_out_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_route_server_client_modify(
@@ -495,100 +340,32 @@ int instance_neighbor_afi_safis_ipv4_unicast_nexthop_local_unchanged_modify(
 
 int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_enabled_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_origin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_origin_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_unicast_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_accept_own_modify(struct nb_cb_modify_args *args)
@@ -674,34 +451,12 @@ int instance_neighbor_afi_safis_ipv4_unicast_soo_ipv4_local_admin_modify(
 
 int instance_neighbor_afi_safis_ipv4_unicast_weight_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_weight_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_unicast_attribute_unchanged_as_path_modify(
@@ -1246,55 +1001,19 @@ int instance_neighbor_afi_safis_ipv4_multicast_send_community_extended_rpki_modi
 		args, AFI_IP, SAFI_MULTICAST, PEER_FLAG_SEND_EXT_COMMUNITY_RPKI);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_default_originate_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/default-originate/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_enabled_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_default_originate_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_soft_reconfiguration_inbound_modify(
@@ -1304,174 +1023,54 @@ int instance_neighbor_afi_safis_ipv4_multicast_soft_reconfiguration_inbound_modi
 					      PEER_FLAG_SOFT_RECONFIG);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_warning_only_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/warning-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_force_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_force_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix/force");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_force_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_route_server_client_modify(
@@ -1488,105 +1087,34 @@ int instance_neighbor_afi_safis_ipv4_multicast_nexthop_local_unchanged_modify(
 					      PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_enabled_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_count_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_origin_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_origin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_origin_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_multicast_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_accept_own_modify(struct nb_cb_modify_args *args)
@@ -1672,34 +1200,12 @@ int instance_neighbor_afi_safis_ipv4_multicast_soo_ipv4_local_admin_modify(
 
 int instance_neighbor_afi_safis_ipv4_multicast_weight_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_modify(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_weight_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_destroy(args, AFI_IP, SAFI_MULTICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_multicast_attribute_unchanged_as_path_modify(
@@ -2249,55 +1755,19 @@ int instance_neighbor_afi_safis_ipv4_labeled_unicast_send_community_extended_rpk
 		args, AFI_IP, SAFI_LABELED_UNICAST, PEER_FLAG_SEND_EXT_COMMUNITY_RPKI);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/default-originate/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_enabled_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_default_originate_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_soft_reconfiguration_inbound_modify(
@@ -2307,174 +1777,54 @@ int instance_neighbor_afi_safis_ipv4_labeled_unicast_soft_reconfiguration_inboun
 					      PEER_FLAG_SOFT_RECONFIG);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_warning_only_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/warning-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_force_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_force_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix/force");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_force_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_route_server_client_modify(
@@ -2491,106 +1841,34 @@ int instance_neighbor_afi_safis_ipv4_labeled_unicast_nexthop_local_unchanged_mod
 					      PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_enabled_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_origin_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_origin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_origin_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_labeled_unicast_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_accept_own_modify(
@@ -2678,34 +1956,12 @@ int instance_neighbor_afi_safis_ipv4_labeled_unicast_soo_ipv4_local_admin_modify
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_weight_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_modify(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_weight_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_destroy(args, AFI_IP, SAFI_LABELED_UNICAST);
 }
 
 int instance_neighbor_afi_safis_ipv4_labeled_unicast_attribute_unchanged_as_path_modify(
@@ -3254,55 +2510,19 @@ int instance_neighbor_afi_safis_ipv4_vpn_send_community_extended_rpki_modify(
 		args, AFI_IP, SAFI_MPLS_VPN, PEER_FLAG_SEND_EXT_COMMUNITY_RPKI);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_default_originate_enabled_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/default-originate/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_enabled_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_default_originate_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/default-originate/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_default_originate_route_map_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_soft_reconfiguration_inbound_modify(
@@ -3314,167 +2534,52 @@ int instance_neighbor_afi_safis_ipv4_vpn_soft_reconfiguration_inbound_modify(
 
 int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_count_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_threshold_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/threshold");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_warning_only_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_warning_only_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/warning-only");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_modify(
-	struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_destroy(
-	struct nb_cb_destroy_args *args)
+int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_restart_interval_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/restart-interval");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_force_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix/force");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_force_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_out_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_maximum_prefix_out_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix-out");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_maximum_prefix_out_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_route_server_client_modify(struct nb_cb_modify_args *args)
@@ -3492,98 +2597,32 @@ int instance_neighbor_afi_safis_ipv4_vpn_nexthop_local_unchanged_modify(
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_enabled_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_count_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_count_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/count");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_count_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_origin_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/origin");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_origin_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_allowas_in_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_allowas_in_route_map_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_accept_own_modify(struct nb_cb_modify_args *args)
@@ -3663,34 +2702,12 @@ int instance_neighbor_afi_safis_ipv4_vpn_soo_ipv4_local_admin_modify(struct nb_c
 
 int instance_neighbor_afi_safis_ipv4_vpn_weight_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_modify(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_weight_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/weight");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_neighbor_af_weight_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
 
 int instance_neighbor_afi_safis_ipv4_vpn_attribute_unchanged_as_path_modify(

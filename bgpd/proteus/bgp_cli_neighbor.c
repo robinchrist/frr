@@ -5468,6 +5468,429 @@ void neighbor_af_orf_prefix_list_cli_write(struct vty *vty, const struct lyd_nod
 		bgp_cli_neighbor_or_group_name(dnode), yang_dnode_get_string(dnode, NULL));
 }
 
+/*
+ * M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
+ * maximum-prefix-out + allowas-in + weight, neighbor + peer-group --
+ * reusing B1/B2's xpath-building pattern (container from vty->node via
+ * bgp_afi_safi_container_name(), peer/group xpath from
+ * bgp_cli_peer_or_group_xpath()).
+ *
+ * default-originate is installed only on the six proteus AFs the legacy
+ * neighbor_default_originate[_rmap] DEFUNs reached (ipv4/ipv6
+ * {unicast,multicast,labeled-unicast}; never vpn or l2vpn evpn -- see
+ * bgp_cli_neighbor_init()); maximum-prefix-out and weight on the eight the
+ * legacy DEFUNs reached (adding vpn, never l2vpn evpn); maximum-prefix and
+ * allowas-in on all nine (legacy reached BGP_EVPN_NODE for both). Every
+ * legacy DEFUN/DEFPY stays defined -- their BGP_NODE hidden aliases (and,
+ * for maximum-prefix/allowas-in, the still-native BGP_IPV4U_NODE/
+ * BGP_IPV6U_NODE unreachability installs; for maximum-prefix-out, the bare
+ * non-hidden BGP_NODE install operating on the default ipv4-unicast AF)
+ * keep them reachable -- only the per-AF install_element() calls for the
+ * nodes converted here are removed.
+ */
+
+/*
+ * default-originate: legacy's bare 'default-originate' (no route-map)
+ * explicitly clears any previously configured route-map
+ * (peer_default_originate_set()'s '!rmap' branch), so the positive form
+ * here always issues both leaves -- MODIFY enabled=true and either MODIFY
+ * or DESTROY route-map depending on whether RMAP_NAME was given. The
+ * negative form destroys the whole non-presence container in one shot,
+ * same pattern as B3's 'no neighbor X advertise-map ...'.
+ */
+DEFPY_YANG(
+	neighbor_default_originate, neighbor_default_originate_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer default-originate [route-map RMAP_NAME$rmap_name]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Originate default route to this neighbor\n"
+	"Route-map to specify criteria to originate default\n"
+	"route-map name\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/default-originate", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+	} else {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/enabled", xpath_base);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath_base);
+		if (rmap_name)
+			nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, rmap_name);
+		else
+			nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath (dnode is the 'default-originate'
+ * container itself), same idiom as B5's send-community: the legacy
+ * bgp_config_write_peer_af() line combines 'enabled' and 'route-map' on one
+ * line, so both leaves are read directly off dnode rather than
+ * independently. */
+void neighbor_af_default_originate_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	vty_out(vty, "  neighbor %s default-originate", bgp_cli_neighbor_or_group_name(dnode));
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
+/*
+ * maximum-prefix: collapses legacy's six neighbor_maximum_prefix[_threshold]
+ * [_warning][_restart] DEFUN combinations plus no_neighbor_maximum_prefix
+ * into one DEFPY -- a superset grammar (threshold/restart/warning-only/
+ * force freely combinable) rather than legacy's exact enumerated set,
+ * matching B5's collapsing philosophy. The positive form always issues
+ * every leaf explicitly (MODIFY the given value, or DESTROY the ranged
+ * leaves threshold/restart-interval when omitted, matching
+ * peer_maximum_prefix_set_vty()'s own "always rewrite all five fields from
+ * scratch" behavior -- a bare re-run of 'maximum-prefix N' after a previous
+ * 'maximum-prefix N 50 restart 5' really does clear threshold/restart, not
+ * just leave them alone). The negative form destroys the whole container in
+ * one shot, same as default-originate above.
+ */
+DEFPY_YANG(
+	neighbor_maximum_prefix, neighbor_maximum_prefix_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer maximum-prefix"
+	" [(1-4294967295)$max [(1-100)$threshold]] [restart (1-65535)$restart] [warning-only$warning] [force$force]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Maximum number of prefixes to accept from this peer\n"
+	"maximum no. of prefix limit\n"
+	"Threshold value (%) at which to generate a warning msg\n"
+	"Restart bgp connection after limit is exceeded\n"
+	"Restart interval in minutes\n"
+	"Only give warning message when limit is exceeded\n"
+	"Force checking all received routes not only accepted\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-prefix", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_base);
+		ret = nb_cli_apply_changes(vty, NULL);
+		return ret;
+	}
+
+	if (!max_str) {
+		vty_out(vty, "%% Must specify a prefix count\n");
+		XFREE(MTYPE_TMP, xpath_base);
+		return CMD_WARNING;
+	}
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/count", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, max_str);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/threshold", xpath_base);
+	if (threshold_str)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, threshold_str);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/warning-only", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, warning ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/restart-interval", xpath_base);
+	if (restart_str)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, restart_str);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/force", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, force ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath, reproducing
+ * bgp_config_write_peer_af()'s single incrementally-built
+ * '  neighbor <addr> maximum-prefix <count> [<threshold>] [warning-only]
+ * [restart <n>] [force]\n' line. */
+void neighbor_af_maximum_prefix_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	if (!yang_dnode_exists(dnode, "count"))
+		return;
+
+	vty_out(vty, "  neighbor %s maximum-prefix %u", bgp_cli_neighbor_or_group_name(dnode),
+		yang_dnode_get_uint32(dnode, "count"));
+
+	if (yang_dnode_exists(dnode, "threshold"))
+		vty_out(vty, " %u", yang_dnode_get_uint8(dnode, "threshold"));
+	if (yang_dnode_get_bool(dnode, "warning-only"))
+		vty_out(vty, " warning-only");
+	if (yang_dnode_exists(dnode, "restart-interval"))
+		vty_out(vty, " restart %u", yang_dnode_get_uint16(dnode, "restart-interval"));
+	if (yang_dnode_get_bool(dnode, "force"))
+		vty_out(vty, " force");
+
+	vty_out(vty, "\n");
+}
+
+/* maximum-prefix-out: plain independent leaf, collapsing legacy's
+ * neighbor_maximum_prefix_out/no_... DEFUN pair. */
+DEFPY_YANG(
+	neighbor_maximum_prefix_out, neighbor_maximum_prefix_out_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer maximum-prefix-out [(1-4294967295)$max]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Maximum number of prefixes to be sent to this peer\n"
+	"Maximum no. of prefix limit\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/maximum-prefix-out", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	} else {
+		if (!max_str) {
+			vty_out(vty, "%% Must specify a prefix count\n");
+			XFREE(MTYPE_TMP, xpath_child);
+			return CMD_WARNING;
+		}
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, max_str);
+	}
+	XFREE(MTYPE_TMP, xpath_child);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+void neighbor_af_maximum_prefix_out_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	vty_out(vty, "  neighbor %s maximum-prefix-out %u\n", bgp_cli_neighbor_or_group_name(dnode),
+		yang_dnode_get_uint32(dnode, NULL));
+}
+
+/*
+ * allowas-in: collapses legacy's neighbor_allowas_in/no_... DEFPY pair.
+ * peer_allowas_in_set()'s allow_num argument folds 'origin' (0), an
+ * explicit count or -- like legacy's bare 'allowas-in' -- the implicit
+ * default of 3 (BGP_ALLOWAS_IN_DEFAULT), so the positive form always
+ * issues 'enabled=true' plus a definitive MODIFY-or-DESTROY for each of
+ * 'origin'/'count'/'route-map', mirroring maximum-prefix's "always rewrite
+ * every leaf from scratch" discipline. The negative form destroys the
+ * whole container in one shot.
+ */
+DEFPY_YANG(
+	neighbor_allowas_in, neighbor_allowas_in_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer allowas-in"
+	" [route-map RMAP_NAME$rmap_name] [<(1-10)$allow_num|origin$origin_kw>]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Accept as-path with my AS present in it\n"
+	"Filter routes using route-map\n"
+	"Name of route-map\n"
+	"Number of occurrences of AS number\n"
+	"Only accept my AS in the as-path if the route was originated in my AS\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_base, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_base = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/allowas-in", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_base, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_base);
+		ret = nb_cli_apply_changes(vty, NULL);
+		return ret;
+	}
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/enabled", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/origin", xpath_base);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, origin_kw ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/count", xpath_base);
+	if (!origin_kw && allow_num_str)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, allow_num_str);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath_base);
+	if (rmap_name)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, rmap_name);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+
+	XFREE(MTYPE_TMP, xpath_base);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Registered on the container xpath, reproducing
+ * bgp_config_write_peer_af()'s four-branch allowas-in line (route-map
+ * present/absent x origin/explicit-count/implicit-default). */
+void neighbor_af_allowas_in_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	const char *name = bgp_cli_neighbor_or_group_name(dnode);
+	bool origin;
+	const char *rmap;
+
+	if (!yang_dnode_get_bool(dnode, "enabled"))
+		return;
+
+	origin = yang_dnode_get_bool(dnode, "origin");
+	rmap = yang_dnode_exists(dnode, "route-map") ? yang_dnode_get_string(dnode, "route-map")
+						     : NULL;
+
+	if (rmap) {
+		if (origin)
+			vty_out(vty, "  neighbor %s allowas-in route-map %s origin\n", name, rmap);
+		else if (!yang_dnode_exists(dnode, "count"))
+			vty_out(vty, "  neighbor %s allowas-in route-map %s\n", name, rmap);
+		else
+			vty_out(vty, "  neighbor %s allowas-in route-map %s %u\n", name, rmap,
+				yang_dnode_get_uint8(dnode, "count"));
+	} else {
+		if (origin)
+			vty_out(vty, "  neighbor %s allowas-in origin\n", name);
+		else if (!yang_dnode_exists(dnode, "count"))
+			vty_out(vty, "  neighbor %s allowas-in\n", name);
+		else
+			vty_out(vty, "  neighbor %s allowas-in %u\n", name,
+				yang_dnode_get_uint8(dnode, "count"));
+	}
+}
+
+/* weight: plain independent leaf, collapsing legacy's neighbor_weight/
+ * no_... DEFUN pair. */
+DEFPY_YANG(
+	neighbor_weight, neighbor_weight_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer weight [(0-65535)$weight]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Set default weight for routes from this neighbor\n"
+	"default weight\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/weight", xpath, container);
+	XFREE(MTYPE_TMP, xpath);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	} else {
+		if (!weight_str) {
+			vty_out(vty, "%% Must specify weight\n");
+			XFREE(MTYPE_TMP, xpath_child);
+			return CMD_WARNING;
+		}
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, weight_str);
+	}
+	XFREE(MTYPE_TMP, xpath_child);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+void neighbor_af_weight_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults)
+{
+	vty_out(vty, "  neighbor %s weight %u\n", bgp_cli_neighbor_or_group_name(dnode),
+		yang_dnode_get_uint16(dnode, NULL));
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -5891,4 +6314,66 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_IPV6_NODE, &neighbor_capability_orf_prefix_cli_cmd);
 	install_element(BGP_IPV6M_NODE, &neighbor_capability_orf_prefix_cli_cmd);
 	install_element(BGP_IPV6L_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+
+	/* default-originate + maximum-prefix (+opts) + maximum-prefix-out +
+	 * allowas-in + weight, neighbor + peer-group (M5 batch B6). Install
+	 * sets match the retired legacy DEFUNs' per-AF install_element()
+	 * calls exactly. */
+
+	/* default-originate: legacy never reached vpn or l2vpn evpn. */
+	install_element(BGP_IPV4_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_default_originate_cli_cmd);
+
+	/* maximum-prefix: legacy reached all nine proteus AFs (including
+	 * BGP_EVPN_NODE); still native for the unmodeled unreachability
+	 * BGP_IPV4U_NODE/BGP_IPV6U_NODE. */
+	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_cli_cmd);
+
+	/* maximum-prefix-out: legacy never reached l2vpn evpn; still native
+	 * for the unmodeled unreachability nodes and the bare BGP_NODE
+	 * install (no hidden alias for this one -- the retired DEFUN's own
+	 * plain BGP_NODE install operated directly on the default
+	 * ipv4-unicast AF). */
+	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+
+	/* allowas-in: legacy reached all nine proteus AFs (including
+	 * BGP_EVPN_NODE). */
+	install_element(BGP_IPV4_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_allowas_in_cli_cmd);
+
+	/* weight: legacy never reached l2vpn evpn. */
+	install_element(BGP_IPV4_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_weight_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_weight_cli_cmd);
 }

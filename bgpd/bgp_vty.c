@@ -16656,8 +16656,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		}
 	}
 
-	/* Default information */
-	if (peergroup_af_flag_check(peer, afi, safi,
+	/* Default information: emitted by mgmtd for the six proteus AFs it
+	 * reaches (M5 B6); still native for vpn/flowspec/l2vpn-evpn. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi,
 				    PEER_FLAG_DEFAULT_ORIGINATE)) {
 		vty_out(vty, "  neighbor %s default-originate", addr);
 
@@ -16676,8 +16678,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 			addr);
 	}
 
-	/* maximum-prefix. */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_MAX_PREFIX)) {
+	/* maximum-prefix: emitted by mgmtd for the nine proteus AFs (M5 B6);
+	 * still native for the unmodeled unreachability SAFI. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_MAX_PREFIX)) {
 		vty_out(vty, "  neighbor %s maximum-prefix %u", addr,
 			peer->pmax[afi][safi]);
 
@@ -16697,8 +16701,11 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "\n");
 	}
 
-	/* maximum-prefix-out */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_MAX_PREFIX_OUT))
+	/* maximum-prefix-out: emitted by mgmtd for the eight proteus AFs it
+	 * reaches (M5 B6); still native for the unmodeled unreachability
+	 * SAFI. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_MAX_PREFIX_OUT))
 		vty_out(vty, "  neighbor %s maximum-prefix-out %u\n",
 			addr, peer->pmax_out[afi][safi]);
 
@@ -16718,8 +16725,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s nexthop-local unchanged\n", addr);
 	}
 
-	/* allowas-in <1-10> */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ALLOWAS_IN)) {
+	/* allowas-in <1-10>: emitted by mgmtd for the nine proteus AFs (M5
+	 * B6); still native for the unmodeled unreachability SAFI. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ALLOWAS_IN)) {
 		if (peer->allowas_in_rmap[afi][safi].name) {
 			/* allowas-in with route-map */
 			if (peer_af_flag_check(peer, afi, safi, PEER_FLAG_ALLOWAS_IN_ORIGIN)) {
@@ -16764,8 +16773,10 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		XFREE(MTYPE_ECOMMUNITY_STR, soo_str);
 	}
 
-	/* weight */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_WEIGHT))
+	/* weight: emitted by mgmtd for the eight proteus AFs it reaches (M5
+	 * B6); still native for the unmodeled unreachability SAFI. */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_WEIGHT))
 		vty_out(vty, "  neighbor %s weight %lu\n", addr,
 			peer->weight[afi][safi]);
 
@@ -18256,49 +18267,19 @@ void bgp_vty_init(void)
 	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).
 	 */
 
-	/* "neighbor default-originate" commands. */
+	/* "neighbor default-originate" commands: converted to northbound for
+	 * the six proteus AFs it reaches, see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c, M5 batch B6); the hidden BGP_NODE aliases stay
+	 * native. */
 	install_element(BGP_NODE, &neighbor_default_originate_hidden_cmd);
 	install_element(BGP_NODE, &neighbor_default_originate_rmap_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_default_originate_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_default_originate_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_default_originate_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_default_originate_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_default_originate_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_default_originate_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_default_originate_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_default_originate_rmap_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_default_originate_cmd);
 
-	/* "neighbor weight" commands. */
+	/* "neighbor weight" commands: converted to northbound for the eight
+	 * proteus AFs it reaches (M5 batch B6); the hidden BGP_NODE aliases
+	 * stay native. */
 	install_element(BGP_NODE, &neighbor_weight_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_weight_hidden_cmd);
-
-	install_element(BGP_IPV4_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_weight_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_weight_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_weight_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_weight_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_weight_cmd);
 
 	/* "neighbor encapsulation-srv6|encapsulation-mpls" commands. */
 	install_element(BGP_VPNV4_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
@@ -18370,31 +18351,24 @@ void bgp_vty_init(void)
 	 * native. */
 	install_element(BGP_NODE, &neighbor_advertise_map_hidden_cmd);
 
-	/* neighbor maximum-prefix-out commands. */
+	/* neighbor maximum-prefix-out commands: converted to northbound for
+	 * the eight proteus AFs it reaches, see bgp_cli_neighbor_init()
+	 * (bgp_cli_neighbor.c, M5 batch B6); the bare non-hidden BGP_NODE
+	 * install (operating on the default ipv4-unicast AF -- there is no
+	 * ALIAS_HIDDEN for this command) and the unreachability
+	 * BGP_IPV4U_NODE/BGP_IPV6U_NODE installs stay native. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_IPV4U_NODE, &no_neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_IPV6U_NODE, &no_neighbor_maximum_prefix_out_cmd);
 
-	/* "neighbor maximum-prefix" commands. */
+	/* "neighbor maximum-prefix" commands: converted to northbound for all
+	 * nine proteus AFs (including BGP_EVPN_NODE), see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M5 batch B6); the
+	 * hidden BGP_NODE aliases and the unreachability BGP_IPV4U_NODE/
+	 * BGP_IPV6U_NODE installs stay native. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_hidden_cmd);
 	install_element(BGP_NODE,
 			&neighbor_maximum_prefix_threshold_hidden_cmd);
@@ -18405,78 +18379,6 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE,
 			&neighbor_maximum_prefix_threshold_restart_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_maximum_prefix_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV4_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV4_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_maximum_prefix_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_maximum_prefix_cmd);
 
 	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_cmd);
 	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_threshold_cmd);
@@ -18494,37 +18396,9 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_threshold_restart_cmd);
 	install_element(BGP_IPV6U_NODE, &no_neighbor_maximum_prefix_cmd);
 
-	install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_EVPN_NODE,
-			&neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_EVPN_NODE,
-			&neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_maximum_prefix_cmd);
-
 	/* "neighbor allowas-in" */
 	install_element(BGP_NODE, &neighbor_allowas_in_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_allowas_in_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_EVPN_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_EVPN_NODE, &no_neighbor_allowas_in_cmd);
 	install_element(BGP_IPV4U_NODE, &neighbor_allowas_in_cmd);
 	install_element(BGP_IPV4U_NODE, &no_neighbor_allowas_in_cmd);
 	install_element(BGP_IPV6U_NODE, &neighbor_allowas_in_cmd);

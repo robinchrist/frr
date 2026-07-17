@@ -3582,6 +3582,549 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = neighbor_af_send_community_cli_write,
 			}
 		},
+		/* M5 batch B6: per-AF default-originate + maximum-prefix (+opts) +
+		 * maximum-prefix-out + allowas-in + weight (neighbor scope). */
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		/* M5 batch B6 (peer-group scope). */
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/default-originate",
+			.cbs = {
+				.cli_show = neighbor_af_default_originate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/weight",
+			.cbs = {
+				.cli_show = neighbor_af_weight_cli_write,
+			}
+		},
 		{
 			.xpath = NULL,
 		},
