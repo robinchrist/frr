@@ -2723,6 +2723,39 @@ int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_destroy(struct nb_cb_destroy
 	return NB_OK;
 }
 
+/* EVPN type-5 static 'network <A.B.C.D/M|X:X::X:X/M> rd RD ethtag WORD
+ * label WORD esi WORD gwip <A.B.C.D|X:X::X:X> routermac WORD [route-map
+ * RMAP_NAME]' (evpnrt5_network_cmd / no_evpnrt5_network_cmd,
+ * bgpd/bgp_evpn_vty.c): scouted for M6 batch B8, left as a reject-stub
+ * family for the whole 'network' list -- same class of problem as B7's
+ * advertise-<afi>-unicast family, not a new one:
+ *
+ *  proteus-bgp-evpn.yang's trailing optional 'route-map' leaf is a real
+ *  `leafref path "/rmap:route-map/rmap:name"`, but legacy's single DEFPY
+ *  grammar has always tolerated the referenced route-map being defined
+ *  *after* this line (lazy route_map_lookup_by_name() binding). Routing
+ *  that value through nb_cli_enqueue_change() hits mgmtd's candidate-config
+ *  leafref validation exactly as B7's advertise-unicast conversion did,
+ *  aborting the whole config-load transaction on any forward reference --
+ *  a real regression, not merely a cosmetic one. DO-NOT-MODIFY-YANG applies
+ *  to this batch, so 'route-map' can't be retyped to a plain string (the
+ *  fix already applied to the bfd 'profile' leaf for the same class of
+ *  problem).
+ *
+ *  The mandatory siblings ('rd'/'ethtag'/'label'/'esi'/'gwip'/'routermac')
+ *  can't be split into their own mgmtd command either: legacy's grammar is
+ *  one atomic DEFUN with 'route-map' as its only optional trailing token,
+ *  compiled only into bgpd today (bgp_evpn_vty.c is not in mgmtd's source
+ *  list). Since mgmtd is the sole live CLI entry point in the integrated
+ *  build, dropping 'route-map' from a new mgmtd-only command would make it
+ *  impossible to configure a type-5 network's route-map at all -- the same
+ *  silent-feature-loss outcome the mis-shaped-row precedent (B4/B5/B7)
+ *  rejects. So the entire 'network' list (key/rd/ethtag/label/esi/gwip/
+ *  routermac/route-map, ~28 nodes) stays a reject-stub, flagged for a
+ *  future YANG fix (add 'require-instance false;' to 'route-map') before
+ *  reattempting. bgp_config_write_network_evpn (bgpd/bgp_route.c) stays
+ *  fully native/ungated as a result.
+ */
 int instance_afi_safis_l2vpn_evpn_network_create(struct nb_cb_create_args *args)
 {
 	switch (args->event) {
