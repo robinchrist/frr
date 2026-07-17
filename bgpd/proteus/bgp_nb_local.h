@@ -51,6 +51,9 @@ int bgp_nb_neighbor_remote_as_destroy_apply(const struct lyd_node *dnode);
 int bgp_nb_neighbor_remote_as_destroy_validate(const struct lyd_node *dnode,
 						       char *errmsg, size_t errmsg_len);
 int bgp_nb_neighbor_role_apply(const struct lyd_node *dnode);
+int bgp_nb_path_attribute_validate(struct peer *peer, uint8_t attr_num, const char *what,
+				   char *errmsg, size_t errmsg_len);
+void bgp_nb_path_attribute_soft_clear(struct peer *peer);
 struct peer_group *bgp_nb_peer_group_lookup(const struct lyd_node *dnode);
 int bgp_nb_peer_group_bfd_apply(const struct lyd_node *dnode);
 int bgp_nb_peer_group_local_as_apply(const struct lyd_node *dnode);

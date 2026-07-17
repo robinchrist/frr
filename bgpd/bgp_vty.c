@@ -5599,119 +5599,10 @@ DEFPY (no_neighbor_addpath_paths_limit,
 	return ret;
 }
 
-DEFPY(neighbor_path_attribute_discard,
-      neighbor_path_attribute_discard_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute discard (1-255)...",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Manipulate path attributes from incoming UPDATE messages\n"
-      "Drop specified attributes from incoming UPDATE messages\n"
-      "Attribute number\n")
-{
-	struct peer *peer;
-	int idx = 0;
-	char *discard_attrs = NULL;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	argv_find(argv, argc, "(1-255)", &idx);
-	if (idx)
-		discard_attrs = argv_concat(argv, argc, idx);
-
-	bgp_path_attribute_discard_vty(vty, peer, discard_attrs, true);
-
-	XFREE(MTYPE_TMP, discard_attrs);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_neighbor_path_attribute_discard,
-      no_neighbor_path_attribute_discard_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute discard [(1-255)]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Manipulate path attributes from incoming UPDATE messages\n"
-      "Drop specified attributes from incoming UPDATE messages\n"
-      "Attribute number\n")
-{
-	struct peer *peer;
-	int idx = 0;
-	char *discard_attrs = NULL;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	argv_find(argv, argc, "(1-255)", &idx);
-	if (idx)
-		discard_attrs = argv[idx]->arg;
-
-	bgp_path_attribute_discard_vty(vty, peer, discard_attrs, false);
-
-	XFREE(MTYPE_TMP, discard_attrs);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(neighbor_path_attribute_treat_as_withdraw,
-      neighbor_path_attribute_treat_as_withdraw_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Manipulate path attributes from incoming UPDATE messages\n"
-      "Treat-as-withdraw any incoming BGP UPDATE messages that contain the specified attribute\n"
-      "Attribute number\n")
-{
-	struct peer *peer;
-	int idx = 0;
-	char *withdraw_attrs = NULL;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	argv_find(argv, argc, "(1-255)", &idx);
-	if (idx)
-		withdraw_attrs = argv_concat(argv, argc, idx);
-
-	bgp_path_attribute_withdraw_vty(vty, peer, withdraw_attrs, true);
-
-	XFREE(MTYPE_TMP, withdraw_attrs);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_neighbor_path_attribute_treat_as_withdraw,
-      no_neighbor_path_attribute_treat_as_withdraw_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$neighbor path-attribute treat-as-withdraw (1-255)...",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Manipulate path attributes from incoming UPDATE messages\n"
-      "Treat-as-withdraw any incoming BGP UPDATE messages that contain the specified attribute\n"
-      "Attribute number\n")
-{
-	struct peer *peer;
-	int idx = 0;
-	char *withdraw_attrs = NULL;
-
-	peer = peer_and_group_lookup_vty(vty, neighbor);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	argv_find(argv, argc, "(1-255)", &idx);
-	if (idx)
-		withdraw_attrs = argv_concat(argv, argc, idx);
-
-	bgp_path_attribute_withdraw_vty(vty, peer, withdraw_attrs, false);
-
-	XFREE(MTYPE_TMP, withdraw_attrs);
-
-	return CMD_SUCCESS;
-}
+/* "neighbor X path-attribute discard"/"neighbor X path-attribute
+ * treat-as-withdraw" commands: converted to northbound, see
+ * bgp_cli_neighbor_init() (bgpd/proteus/bgp_cli_neighbor.c, M4 batch B14).
+ */
 
 DEFPY(neighbor_encap_srv6,
       neighbor_encap_srv6_cmd,
@@ -16641,24 +16532,10 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * M4 batch B13).
 	 */
 
-	/* path-attribute discard */
-	char discard_attrs_str[BUFSIZ] = {0};
-	bool discard_attrs = bgp_path_attribute_discard(
-		peer, discard_attrs_str, sizeof(discard_attrs_str));
-
-	if (discard_attrs)
-		vty_out(vty, " neighbor %s path-attribute discard %s\n", addr,
-			discard_attrs_str);
-
-	/* path-attribute treat-as-withdraw */
-	char withdraw_attrs_str[BUFSIZ] = {0};
-	bool withdraw_attrs = bgp_path_attribute_treat_as_withdraw(
-		peer, withdraw_attrs_str, sizeof(withdraw_attrs_str));
-
-	if (withdraw_attrs)
-		vty_out(vty,
-			" neighbor %s path-attribute treat-as-withdraw %s\n",
-			addr, withdraw_attrs_str);
+	/* path-attribute discard, path-attribute treat-as-withdraw:
+	 * converted to northbound, see bgp_cli_write_session_scalars()
+	 * (bgp_cli_neighbor.c, M4 batch B14).
+	 */
 
 	/* graceful-restart-mode: northbound now, see bgp_cli_write_session_scalars()
 	 * (bgp_cli_neighbor.c, M4 batch B11).
@@ -18634,15 +18511,9 @@ void bgp_vty_init(void)
 	 * northbound, see bgp_cli_neighbor_init() (bgp_cli_neighbor.c,
 	 * M4 batch B13). */
 
-	/* "neighbor path-attribute discard" commands. */
-	install_element(BGP_NODE, &neighbor_path_attribute_discard_cmd);
-	install_element(BGP_NODE, &no_neighbor_path_attribute_discard_cmd);
-
-	/* "neighbor path-attribute treat-as-withdraw" commands. */
-	install_element(BGP_NODE,
-			&neighbor_path_attribute_treat_as_withdraw_cmd);
-	install_element(BGP_NODE,
-			&no_neighbor_path_attribute_treat_as_withdraw_cmd);
+	/* "neighbor path-attribute discard"/"neighbor path-attribute
+	 * treat-as-withdraw" commands: converted to northbound, see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B14). */
 
 	/* "neighbor shutdown" (+ message, + rtt) commands: converted to
 	 * northbound, see bgp_cli_neighbor_init() (M4 batch B4). */

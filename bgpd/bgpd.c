@@ -5308,44 +5308,12 @@ static void peer_drop_dynamic_neighbor(struct peer *peer)
 			   peer->group->name, dncount);
 }
 
-bool bgp_path_attribute_discard(struct peer *peer, char *buf, size_t size)
-{
-	if (!buf)
-		return false;
-
-	buf[0] = '\0';
-
-	for (unsigned int i = 1; i <= BGP_ATTR_MAX; i++) {
-		if (peer->discard_attrs[i])
-			snprintf(buf + strlen(buf), size - strlen(buf), "%s%d",
-				 (strlen(buf) > 0) ? " " : "", i);
-	}
-
-	if (strlen(buf) > 0)
-		return true;
-
-	return false;
-}
-
-bool bgp_path_attribute_treat_as_withdraw(struct peer *peer, char *buf,
-					  size_t size)
-{
-	if (!buf)
-		return false;
-
-	buf[0] = '\0';
-
-	for (unsigned int i = 1; i <= BGP_ATTR_MAX; i++) {
-		if (peer->withdraw_attrs[i])
-			snprintf(buf + strlen(buf), size - strlen(buf), "%s%d",
-				 (strlen(buf) > 0) ? " " : "", i);
-	}
-
-	if (strlen(buf) > 0)
-		return true;
-
-	return false;
-}
+/* bgp_path_attribute_discard()/bgp_path_attribute_treat_as_withdraw(): the
+ * legacy config-write string builders for discard_attrs[]/withdraw_attrs[],
+ * retired along with their sole caller (bgp_config_write_peer_global(),
+ * bgp_vty.c) when this feature's emission moved to
+ * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B14).
+ */
 
 /* If peer is configured at least one address family return 1. */
 enum bgp_peer_active peer_active(struct peer_connection *connection)

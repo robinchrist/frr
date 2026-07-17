@@ -1634,16 +1634,42 @@ int instance_peer_group_sender_as_path_loop_detection_modify(struct nb_cb_modify
 	return NB_OK;
 }
 
+/* 'neighbor PGNAME path-attribute discard (1-255)...'/'no ... (1-255)' (M4
+ * batch B14): peer-group-scope counterpart of the neighbor callbacks in
+ * bgp_nb_neighbor.c, operating on group->conf->discard_attrs[] -- exactly
+ * what peer_and_group_lookup_vty() (bgp_vty.c, retired) hands the legacy
+ * _vty() functions when the CLI target names a peer-group instead of a
+ * neighbor. No inheritance to group members: peer_group2peer_config_copy()
+ * (bgpd.c) never touches discard_attrs/withdraw_attrs, so this setting is,
+ * like legacy, write-only on the group's own template peer.
+ */
 int instance_peer_group_path_attribute_discard_create(struct nb_cb_create_args *args)
 {
+	struct peer_group *group;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/path-attribute-discard");
-		return NB_ERR_VALIDATION;
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		ret = bgp_nb_path_attribute_validate(group->conf,
+						     yang_dnode_get_uint8(args->dnode, NULL),
+						     "discard", args->errmsg, args->errmsg_len);
+		if (ret != NB_OK)
+			return ret;
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		group->conf->discard_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = true;
+		bgp_nb_path_attribute_soft_clear(group->conf);
 		break;
 	}
 
@@ -1652,30 +1678,53 @@ int instance_peer_group_path_attribute_discard_create(struct nb_cb_create_args *
 
 int instance_peer_group_path_attribute_discard_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/path-attribute-discard");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->discard_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = false;
+	bgp_nb_path_attribute_soft_clear(group->conf);
 
 	return NB_OK;
 }
 
+/* 'neighbor PGNAME path-attribute treat-as-withdraw (1-255)...'/'no ...
+ * (1-255)' (M4 batch B14): group->conf->withdraw_attrs[]'s sibling, same
+ * per-index create/destroy and no-inheritance reasoning as discard above.
+ */
 int instance_peer_group_path_attribute_treat_as_withdraw_create(struct nb_cb_create_args *args)
 {
+	struct peer_group *group;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/path-attribute-treat-as-withdraw");
-		return NB_ERR_VALIDATION;
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		ret = bgp_nb_path_attribute_validate(group->conf,
+						     yang_dnode_get_uint8(args->dnode, NULL),
+						     "treat-as-withdraw", args->errmsg,
+						     args->errmsg_len);
+		if (ret != NB_OK)
+			return ret;
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		if (!group)
+			break;
+
+		group->conf->withdraw_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = true;
+		bgp_nb_path_attribute_soft_clear(group->conf);
 		break;
 	}
 
@@ -1684,16 +1733,17 @@ int instance_peer_group_path_attribute_treat_as_withdraw_create(struct nb_cb_cre
 
 int instance_peer_group_path_attribute_treat_as_withdraw_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/path-attribute-treat-as-withdraw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	group->conf->withdraw_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = false;
+	bgp_nb_path_attribute_soft_clear(group->conf);
 
 	return NB_OK;
 }

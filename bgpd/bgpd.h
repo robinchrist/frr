@@ -3384,10 +3384,6 @@ extern void bgp_recalculate_afi_safi_bestpaths(struct bgp *bgp, afi_t afi,
 					       safi_t safi);
 extern void peer_on_policy_change(struct peer *peer, afi_t afi, safi_t safi,
 				  int outbound);
-extern bool bgp_path_attribute_discard(struct peer *peer, char *buf,
-				       size_t size);
-extern bool bgp_path_attribute_treat_as_withdraw(struct peer *peer, char *buf,
-						 size_t size);
 
 extern void srv6_function_free(struct bgp_srv6_function *func);
 

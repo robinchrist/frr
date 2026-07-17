@@ -3120,6 +3120,160 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* 'neighbor X path-attribute discard (1-255)...' (M4 batch B14): reproduces
+ * neighbor_path_attribute_discard_cmd (bgp_vty.c, retired) -- one
+ * nb_cli_enqueue_change(CREATE) per attribute number on the line, all
+ * applied together in a single commit (leaf-list entries, additive; see
+ * the northbound callbacks' doc comment, bgp_nb_neighbor.c, for why the
+ * legacy _vty() wrapper's whole-array "clear then set" replace semantics
+ * is deliberately not replicated here).
+ */
+DEFPY_YANG(
+	neighbor_path_attribute_discard, neighbor_path_attribute_discard_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer path-attribute discard (1-255)...",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Manipulate path attributes from incoming UPDATE messages\n"
+	"Drop specified attributes from incoming UPDATE messages\n"
+	"Attribute number\n")
+{
+	char *xpath, *xpath_child;
+	int idx = 0;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	argv_find(argv, argc, "(1-255)", &idx);
+	for (; idx < argc; idx++) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/path-attribute-discard[.='%s']", xpath,
+					 argv[idx]->arg);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_CREATE, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* 'no neighbor X path-attribute discard [(1-255)]' (M4 batch B14):
+ * reproduces no_neighbor_path_attribute_discard_cmd (bgp_vty.c, retired)
+ * byte-for-byte, including its asymmetry with the 'no' form below -- this
+ * grammar takes at most *one* attribute number (destroying just that
+ * entry), while an absent number destroys the whole leaf-list, matching
+ * legacy's "no args -> flush all" branch in bgp_path_attribute_discard_vty().
+ */
+DEFPY_YANG(
+	no_neighbor_path_attribute_discard, no_neighbor_path_attribute_discard_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer path-attribute discard [(1-255)]$attr_num",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Manipulate path attributes from incoming UPDATE messages\n"
+	"Drop specified attributes from incoming UPDATE messages\n"
+	"Attribute number\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (attr_num_str)
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/path-attribute-discard[.='%s']", xpath,
+					 attr_num_str);
+	else
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/path-attribute-discard", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* 'neighbor X path-attribute treat-as-withdraw (1-255)...' (M4 batch B14):
+ * treat-as-withdraw's positive-form sibling of discard above, same
+ * per-entry CREATE loop.
+ */
+DEFPY_YANG(
+	neighbor_path_attribute_treat_as_withdraw, neighbor_path_attribute_treat_as_withdraw_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer path-attribute treat-as-withdraw (1-255)...",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Manipulate path attributes from incoming UPDATE messages\n"
+	"Treat-as-withdraw any incoming BGP UPDATE messages that contain the specified attribute\n"
+	"Attribute number\n")
+{
+	char *xpath, *xpath_child;
+	int idx = 0;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	argv_find(argv, argc, "(1-255)", &idx);
+	for (; idx < argc; idx++) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/path-attribute-treat-as-withdraw[.='%s']",
+					 xpath, argv[idx]->arg);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_CREATE, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* 'no neighbor X path-attribute treat-as-withdraw (1-255)...' (M4 batch
+ * B14): reproduces no_neighbor_path_attribute_treat_as_withdraw_cmd
+ * (bgp_vty.c, retired) byte-for-byte -- unlike discard's 'no' form above,
+ * legacy's grammar here requires at least one attribute number (no '[...]'
+ * around the range, confirmed by direct inspection of bgp_vty.c); there is
+ * no legacy CLI path that ever flushes the whole treat-as-withdraw
+ * leaf-list in one command (an asymmetry with discard, not a mistake in
+ * this conversion).
+ */
+DEFPY_YANG(
+	no_neighbor_path_attribute_treat_as_withdraw,
+	no_neighbor_path_attribute_treat_as_withdraw_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer path-attribute treat-as-withdraw (1-255)...",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Manipulate path attributes from incoming UPDATE messages\n"
+	"Treat-as-withdraw any incoming BGP UPDATE messages that contain the specified attribute\n"
+	"Attribute number\n")
+{
+	char *xpath, *xpath_child;
+	int idx = 0;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	argv_find(argv, argc, "(1-255)", &idx);
+	for (; idx < argc; idx++) {
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/path-attribute-treat-as-withdraw[.='%s']",
+					 xpath, argv[idx]->arg);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
 DEFPY_YANG(
 	neighbor_nhc_attribute, neighbor_nhc_attribute_cli_cmd,
 	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-nexthop-characteristics",
@@ -3240,6 +3394,50 @@ DEFPY_YANG(
  * i.e. it is the northbound mirror of legacy's !peer_group_active(peer),
  * needed below for the 'timers connect'/'timers delayopen' SAVE_ idiom.
  */
+struct bgp_cli_path_attribute_collect_ctx {
+	bool present[256];
+};
+
+static int bgp_cli_path_attribute_collect_cb(const struct lyd_node *dnode, void *arg)
+{
+	struct bgp_cli_path_attribute_collect_ctx *ctx = arg;
+
+	ctx->present[yang_dnode_get_uint8(dnode, NULL)] = true;
+
+	return YANG_ITER_CONTINUE;
+}
+
+/* Builds the space-separated attribute-number list legacy's
+ * bgp_path_attribute_discard()/bgp_path_attribute_treat_as_withdraw()
+ * (bgpd.c, retired) produce for config-write -- in ascending numeric order
+ * regardless of the leaf-list's own (implementation-defined, "ordered-by
+ * system") storage/iteration order, so this stays byte-identical to
+ * legacy's own "for (i = 1; i <= BGP_ATTR_MAX; i++)" scan. Returns false
+ * (nothing to print) when the leaf-list is empty, matching legacy's bool
+ * return.
+ */
+static bool bgp_cli_path_attribute_list(const struct lyd_node *dnode, const char *leaf_list,
+					char *buf, size_t buflen)
+{
+	struct bgp_cli_path_attribute_collect_ctx ctx = { 0 };
+	bool any = false;
+	unsigned int i;
+
+	yang_dnode_iterate(bgp_cli_path_attribute_collect_cb, &ctx, dnode, "./%s", leaf_list);
+
+	buf[0] = '\0';
+	for (i = 1; i <= 255; i++) {
+		if (!ctx.present[i])
+			continue;
+
+		snprintf(buf + strlen(buf), buflen - strlen(buf), "%s%u",
+			 strlen(buf) > 0 ? " " : "", i);
+		any = true;
+	}
+
+	return any;
+}
+
 static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node *dnode,
 					  const char *addr, bool not_group_member)
 {
@@ -3613,11 +3811,11 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these six
 	 * leaves) disable-link-bw-encoding-ieee-through-send-nexthop-
 	 * characteristics lines (physically split across that function by
-	 * the still-unconverted path-attribute discard/treat-as-withdraw
-	 * block, B14, which sits in between rpki-strict/sender-as-path-loop-
-	 * detection and send-nexthop-characteristics there). Tier A, gated
-	 * on this entry's own leaf presence like every other Tier A boolean
-	 * in this function, replacing legacy's peergroup_flag_check() reads.
+	 * the path-attribute discard/treat-as-withdraw block, B14 below,
+	 * which sits in between rpki-strict/sender-as-path-loop-detection
+	 * and send-nexthop-characteristics there). Tier A, gated on this
+	 * entry's own leaf presence like every other Tier A boolean in this
+	 * function, replacing legacy's peergroup_flag_check() reads.
 	 */
 	if (yang_dnode_exists(dnode, "disable-link-bw-encoding-ieee") &&
 	    yang_dnode_get_bool(dnode, "disable-link-bw-encoding-ieee"))
@@ -3637,6 +3835,25 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "sender-as-path-loop-detection") &&
 	    yang_dnode_get_bool(dnode, "sender-as-path-loop-detection"))
 		vty_out(vty, " neighbor %s sender-as-path-loop-detection\n", addr);
+
+	/* path-attribute discard / treat-as-withdraw (M4 batch B14):
+	 * reproduces bgp_config_write_peer_global()'s (bgp_vty.c, retired)
+	 * path-attribute discard/treat-as-withdraw block, in the same
+	 * relative position. One line per non-empty leaf-list, attribute
+	 * numbers in ascending order (see bgp_cli_path_attribute_list()).
+	 */
+	{
+		char attrs[BUFSIZ];
+
+		if (bgp_cli_path_attribute_list(dnode, "path-attribute-discard", attrs,
+						sizeof(attrs)))
+			vty_out(vty, " neighbor %s path-attribute discard %s\n", addr, attrs);
+
+		if (bgp_cli_path_attribute_list(dnode, "path-attribute-treat-as-withdraw", attrs,
+						sizeof(attrs)))
+			vty_out(vty, " neighbor %s path-attribute treat-as-withdraw %s\n", addr,
+				attrs);
+	}
 
 	if (yang_dnode_exists(dnode, "send-nexthop-characteristics") &&
 	    yang_dnode_get_bool(dnode, "send-nexthop-characteristics"))
@@ -4117,6 +4334,14 @@ void bgp_cli_neighbor_init(void)
 	 * bandwidth, extended-optional-parameters (M4 batch B13). */
 	install_element(BGP_NODE, &neighbor_rpki_strict_cli_cmd);
 	install_element(BGP_NODE, &neighbor_aspath_loop_detection_cli_cmd);
+
+	/* "neighbor path-attribute discard"/"neighbor path-attribute
+	 * treat-as-withdraw" commands (M4 batch B14). */
+	install_element(BGP_NODE, &neighbor_path_attribute_discard_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_path_attribute_discard_cli_cmd);
+	install_element(BGP_NODE, &neighbor_path_attribute_treat_as_withdraw_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_path_attribute_treat_as_withdraw_cli_cmd);
+
 	install_element(BGP_NODE, &neighbor_nhc_attribute_cli_cmd);
 	install_element(BGP_NODE, &neighbor_disable_link_bw_encoding_ieee_cli_cmd);
 	install_element(BGP_NODE, &neighbor_extended_link_bw_cli_cmd);

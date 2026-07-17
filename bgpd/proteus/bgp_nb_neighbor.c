@@ -2101,16 +2101,47 @@ int instance_neighbor_sender_as_path_loop_detection_modify(struct nb_cb_modify_a
 	return NB_OK;
 }
 
+/* 'neighbor X path-attribute discard (1-255)...'/'no ... (1-255)' (M4 batch
+ * B14): peer->discard_attrs[] is a bare per-attribute-number bool array (not
+ * a PEER_FLAG_* / flags_override field), so create/destroy set/clear a single
+ * index directly instead of routing through the legacy _vty() wrapper's
+ * whole-line/whole-array replace semantics (bgp_path_attribute_discard_vty(),
+ * bgp_attr.c, retired) -- that "clear every entry, then set the ones on this
+ * line" behavior is specific to one CLI line carrying several numbers at
+ * once and is undocumented (doc/user/bgp.rst); it isn't replicated here,
+ * matching every other leaf-list in this conversion (e.g. B2's listen-range)
+ * where each entry is independently created/destroyed. There is no
+ * peer-group-to-member inheritance for this field: peer_group2peer_config_copy()
+ * (bgpd.c) never touches discard_attrs/withdraw_attrs, so a peer-group-scope
+ * command here (like legacy) only ever affects group->conf, with no fan-out
+ * to member peers -- confirmed by inspection, not assumed.
+ */
 int instance_neighbor_path_attribute_discard_create(struct nb_cb_create_args *args)
 {
+	struct peer *peer;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/path-attribute-discard");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		ret = bgp_nb_path_attribute_validate(peer, yang_dnode_get_uint8(args->dnode, NULL),
+						     "discard", args->errmsg, args->errmsg_len);
+		if (ret != NB_OK)
+			return ret;
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		peer->discard_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = true;
+		bgp_nb_path_attribute_soft_clear(peer);
 		break;
 	}
 
@@ -2119,30 +2150,52 @@ int instance_neighbor_path_attribute_discard_create(struct nb_cb_create_args *ar
 
 int instance_neighbor_path_attribute_discard_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/path-attribute-discard");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->discard_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = false;
+	bgp_nb_path_attribute_soft_clear(peer);
 
 	return NB_OK;
 }
 
+/* 'neighbor X path-attribute treat-as-withdraw (1-255)...'/'no ...
+ * (1-255)' (M4 batch B14): peer->withdraw_attrs[]'s sibling array, same
+ * per-index create/destroy and no-inheritance reasoning as discard above.
+ */
 int instance_neighbor_path_attribute_treat_as_withdraw_create(struct nb_cb_create_args *args)
 {
+	struct peer *peer;
+	int ret;
+
 	switch (args->event) {
 	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/path-attribute-treat-as-withdraw");
-		return NB_ERR_VALIDATION;
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		ret = bgp_nb_path_attribute_validate(peer, yang_dnode_get_uint8(args->dnode, NULL),
+						     "treat-as-withdraw", args->errmsg,
+						     args->errmsg_len);
+		if (ret != NB_OK)
+			return ret;
+		break;
 	case NB_EV_PREPARE:
 	case NB_EV_ABORT:
+		break;
 	case NB_EV_APPLY:
+		peer = bgp_nb_neighbor_lookup(args->dnode);
+		if (!peer)
+			break;
+
+		peer->withdraw_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = true;
+		bgp_nb_path_attribute_soft_clear(peer);
 		break;
 	}
 
@@ -2151,16 +2204,17 @@ int instance_neighbor_path_attribute_treat_as_withdraw_create(struct nb_cb_creat
 
 int instance_neighbor_path_attribute_treat_as_withdraw_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/neighbor/path-attribute-treat-as-withdraw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer *peer;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	peer = bgp_nb_neighbor_lookup(args->dnode);
+	if (!peer)
+		return NB_OK;
+
+	peer->withdraw_attrs[yang_dnode_get_uint8(args->dnode, NULL)] = false;
+	bgp_nb_path_attribute_soft_clear(peer);
 
 	return NB_OK;
 }

@@ -438,11 +438,6 @@ extern unsigned int attrhash_key_make(const void *p);
 extern void attr_show_all(struct vty *vty, bool summary);
 extern unsigned long int attr_count(void);
 extern unsigned long int attr_unknown_count(void);
-extern void bgp_path_attribute_discard_vty(struct vty *vty, struct peer *peer,
-					   const char *discard_attrs, bool set);
-extern void bgp_path_attribute_withdraw_vty(struct vty *vty, struct peer *peer,
-					    const char *withdraw_attrs,
-					    bool set);
 extern enum bgp_attr_parse_ret bgp_attr_ignore(struct peer *peer, uint8_t type);
 
 /* Cluster list prototypes. */

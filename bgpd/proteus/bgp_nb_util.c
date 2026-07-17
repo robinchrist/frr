@@ -1307,3 +1307,59 @@ void bgp_nb_capability_flag_destroy(struct peer *peer, uint64_t flag, bool insta
 	else
 		peer_flag_unset(peer, flag);
 }
+
+/* Shared VALIDATE guard for the 'path-attribute-discard'/
+ * 'path-attribute-treat-as-withdraw' leaf-list entries (M4 batch B14):
+ * mirrors the two rejection checks inside bgp_path_attribute_discard_vty()/
+ * bgp_path_attribute_withdraw_vty() (bgp_attr.c, retired) -- the seven
+ * unconditionally-mandatory attributes, and the three eBGP-only attributes
+ * when the peer/peer-group isn't eBGP-sorted. Legacy prints a warning and
+ * silently skips just that one number while still accepting and applying
+ * the rest of the line (CMD_SUCCESS regardless); like B4's oad, this
+ * rejects instead of silently no-opping, so a candidate that would
+ * silently drop an entry under legacy is caught at commit time. 'what'
+ * names the leaf-list ("discard"/"treat-as-withdraw") for the error text.
+ * Called with peer == group->conf for the peer-group scope, exactly like
+ * peer_and_group_lookup_vty() hands the same 'struct peer *' shape to the
+ * legacy _vty() functions for either scope.
+ */
+int bgp_nb_path_attribute_validate(struct peer *peer, uint8_t attr_num, const char *what,
+				   char *errmsg, size_t errmsg_len)
+{
+	if (attr_num == BGP_ATTR_ORIGIN || attr_num == BGP_ATTR_AS_PATH ||
+	    attr_num == BGP_ATTR_NEXT_HOP || attr_num == BGP_ATTR_MULTI_EXIT_DISC ||
+	    attr_num == BGP_ATTR_MP_REACH_NLRI || attr_num == BGP_ATTR_MP_UNREACH_NLRI ||
+	    attr_num == BGP_ATTR_EXT_COMMUNITIES) {
+		snprintf(errmsg, errmsg_len, "Can't %s path-attribute %u", what, attr_num);
+		return NB_ERR_VALIDATION;
+	}
+
+	if (peer->sort != BGP_PEER_EBGP &&
+	    (attr_num == BGP_ATTR_LOCAL_PREF || attr_num == BGP_ATTR_ORIGINATOR_ID ||
+	     attr_num == BGP_ATTR_CLUSTER_LIST)) {
+		snprintf(errmsg, errmsg_len, "Can %s path-attribute %u only for eBGP", what,
+			 attr_num);
+		return NB_ERR_VALIDATION;
+	}
+
+	return NB_OK;
+}
+
+/* Shared APPLY side effect for every path-attribute-discard/-treat-as-
+ * withdraw create/destroy callback (M4 batch B14): legacy's
+ * 'discard_soft_clear'/'withdraw_soft_clear' labels (bgp_attr.c, retired)
+ * trigger an inbound route-refresh across every afi/safi after any change,
+ * so the routing table picks up attributes that are now dropped/kept
+ * differently. Firing this once per leaf-list entry (rather than once per
+ * legacy CLI line, which could set several entries at once) is redundant
+ * when a single commit touches more than one entry, but each call is
+ * idempotent.
+ */
+void bgp_nb_path_attribute_soft_clear(struct peer *peer)
+{
+	afi_t afi;
+	safi_t safi;
+
+	FOREACH_AFI_SAFI (afi, safi)
+		peer_clear_soft(peer, afi, safi, BGP_CLEAR_SOFT_IN);
+}
