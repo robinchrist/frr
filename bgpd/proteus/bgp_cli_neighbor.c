@@ -3058,6 +3058,168 @@ void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *d
 		yang_dnode_get_string(pg_dnode, "name"));
 }
 
+/* rpki-strict, sender-as-path-loop-detection, send-nexthop-characteristics,
+ * disable-link-bw-encoding-ieee, extended-link-bandwidth, extended-optional-
+ * parameters (M4 batch B13): the remaining plain Tier A session-level flags
+ * shared between neighbor/peer-group. Pure subcommands like B3/B4/B5/B6/
+ * B7/B9/B10's (no legacy DEFUN retention, same rationale as
+ * bgp_cli_peer_or_group_xpath()'s doc comment above); each collapses its
+ * legacy DEFUN(s) (which/whether a 'no' twin exists in legacy varies leaf
+ * by leaf, but all six are the same "no$no" Tier A modify-only shape here,
+ * matching passive/disable-connected-check) into one MODIFY-to-"true"/
+ * "false" DEFPY_YANG.
+ */
+DEFPY_YANG(
+	neighbor_rpki_strict, neighbor_rpki_strict_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer rpki strict",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"RPKI configuration\n"
+	"Strict mode\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/rpki-strict", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_aspath_loop_detection, neighbor_aspath_loop_detection_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer sender-as-path-loop-detection",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Detect AS loops before sending to neighbor\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/sender-as-path-loop-detection", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_nhc_attribute, neighbor_nhc_attribute_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-nexthop-characteristics",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send BGP Next Hop Dependent Characteristics Attribute\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/send-nexthop-characteristics", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_disable_link_bw_encoding_ieee, neighbor_disable_link_bw_encoding_ieee_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable-link-bw-encoding-ieee",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disable IEEE floating-point encoding for extended community bandwidth\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/disable-link-bw-encoding-ieee", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_extended_link_bw, neighbor_extended_link_bw_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer extended-link-bandwidth",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Extended (64-bit) version of encoding for Link-Bandwidth\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/extended-link-bandwidth", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_extended_optional_parameters, neighbor_extended_optional_parameters_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer extended-optional-parameters",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Force the extended optional parameters format for OPEN messages\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/extended-optional-parameters", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
 /* description/password/solo/port/source-interface/tcp-mss/passive (M4
  * batch B3): reproduces the corresponding slice of
  * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these seven
@@ -3444,6 +3606,41 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "enforce-first-as"))
 		vty_out(vty, " neighbor %s enforce-first-as %s\n", addr,
 			yang_dnode_get_bool(dnode, "enforce-first-as") ? "enabled" : "disabled");
+
+	/* rpki-strict, sender-as-path-loop-detection, send-nexthop-
+	 * characteristics, disable-link-bw-encoding-ieee, extended-link-
+	 * bandwidth, extended-optional-parameters (M4 batch B13): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired for these six
+	 * leaves) disable-link-bw-encoding-ieee-through-send-nexthop-
+	 * characteristics lines (physically split across that function by
+	 * the still-unconverted path-attribute discard/treat-as-withdraw
+	 * block, B14, which sits in between rpki-strict/sender-as-path-loop-
+	 * detection and send-nexthop-characteristics there). Tier A, gated
+	 * on this entry's own leaf presence like every other Tier A boolean
+	 * in this function, replacing legacy's peergroup_flag_check() reads.
+	 */
+	if (yang_dnode_exists(dnode, "disable-link-bw-encoding-ieee") &&
+	    yang_dnode_get_bool(dnode, "disable-link-bw-encoding-ieee"))
+		vty_out(vty, " neighbor %s disable-link-bw-encoding-ieee\n", addr);
+
+	if (yang_dnode_exists(dnode, "extended-link-bandwidth") &&
+	    yang_dnode_get_bool(dnode, "extended-link-bandwidth"))
+		vty_out(vty, " neighbor %s extended-link-bandwidth\n", addr);
+
+	if (yang_dnode_exists(dnode, "extended-optional-parameters") &&
+	    yang_dnode_get_bool(dnode, "extended-optional-parameters"))
+		vty_out(vty, " neighbor %s extended-optional-parameters\n", addr);
+
+	if (yang_dnode_exists(dnode, "rpki-strict") && yang_dnode_get_bool(dnode, "rpki-strict"))
+		vty_out(vty, " neighbor %s rpki strict\n", addr);
+
+	if (yang_dnode_exists(dnode, "sender-as-path-loop-detection") &&
+	    yang_dnode_get_bool(dnode, "sender-as-path-loop-detection"))
+		vty_out(vty, " neighbor %s sender-as-path-loop-detection\n", addr);
+
+	if (yang_dnode_exists(dnode, "send-nexthop-characteristics") &&
+	    yang_dnode_get_bool(dnode, "send-nexthop-characteristics"))
+		vty_out(vty, " neighbor %s send-nexthop-characteristics\n", addr);
 }
 
 void peer_group_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -3914,4 +4111,14 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &no_neighbor_enforce_first_as_cli_cmd);
 	install_element(BGP_NODE, &neighbor_enforce_first_as_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_enforce_first_as_deprecated_cli_cmd);
+
+	/* rpki-strict, sender-as-path-loop-detection, send-nexthop-
+	 * characteristics, disable-link-bw-encoding-ieee, extended-link-
+	 * bandwidth, extended-optional-parameters (M4 batch B13). */
+	install_element(BGP_NODE, &neighbor_rpki_strict_cli_cmd);
+	install_element(BGP_NODE, &neighbor_aspath_loop_detection_cli_cmd);
+	install_element(BGP_NODE, &neighbor_nhc_attribute_cli_cmd);
+	install_element(BGP_NODE, &neighbor_disable_link_bw_encoding_ieee_cli_cmd);
+	install_element(BGP_NODE, &neighbor_extended_link_bw_cli_cmd);
+	install_element(BGP_NODE, &neighbor_extended_optional_parameters_cli_cmd);
 }

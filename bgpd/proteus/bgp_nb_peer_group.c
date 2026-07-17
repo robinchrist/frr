@@ -1591,34 +1591,45 @@ int instance_peer_group_capabilities_strict_capability_match_modify(struct nb_cb
 	return NB_OK;
 }
 
+/* See the neighbor-scope callbacks' comment (bgp_nb_neighbor.c) for the
+ * full rationale (M4 batch B13); peer-group scope calls the same legacy
+ * setters on group->conf, which already carries PEER_STATUS_GROUP and so
+ * takes peer_flag_modify()'s fan-out-to-members branch internally.
+ */
 int instance_peer_group_rpki_strict_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/rpki-strict");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_RPKI_STRICT);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_RPKI_STRICT);
 
 	return NB_OK;
 }
 
 int instance_peer_group_sender_as_path_loop_detection_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/sender-as-path-loop-detection");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_AS_LOOP_DETECTION);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_AS_LOOP_DETECTION);
 
 	return NB_OK;
 }
@@ -1689,64 +1700,76 @@ int instance_peer_group_path_attribute_treat_as_withdraw_destroy(struct nb_cb_de
 
 int instance_peer_group_send_nexthop_characteristics_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/send-nexthop-characteristics");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_SEND_NHC_ATTRIBUTE);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_SEND_NHC_ATTRIBUTE);
 
 	return NB_OK;
 }
 
 int instance_peer_group_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/disable-link-bw-encoding-ieee");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
 
 	return NB_OK;
 }
 
 int instance_peer_group_extended_link_bandwidth_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/extended-link-bandwidth");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_EXTENDED_LINK_BANDWIDTH);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_EXTENDED_LINK_BANDWIDTH);
 
 	return NB_OK;
 }
 
 int instance_peer_group_extended_optional_parameters_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/peer-group/extended-optional-parameters");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	if (!group)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		peer_flag_set(group->conf, PEER_FLAG_EXTENDED_OPT_PARAMS);
+	else
+		peer_flag_unset(group->conf, PEER_FLAG_EXTENDED_OPT_PARAMS);
 
 	return NB_OK;
 }
