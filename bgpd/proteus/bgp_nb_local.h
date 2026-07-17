@@ -52,6 +52,28 @@ int bgp_nb_neighbor_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, sa
 				   uint64_t flag);
 int bgp_nb_peer_group_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
 				     uint64_t flag);
+/* M5 batch B5: send-community tri-state destroy, remove-private-as enum,
+ * capability orf prefix-list enum (neighbor + peer-group). */
+int bgp_nb_neighbor_af_flag_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+				    uint64_t flag, bool compiled_default);
+int bgp_nb_peer_group_af_flag_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+				      uint64_t flag, bool compiled_default);
+int bgp_nb_neighbor_af_remove_private_as_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi);
+int bgp_nb_neighbor_af_remove_private_as_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						 safi_t safi);
+int bgp_nb_peer_group_af_remove_private_as_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi);
+int bgp_nb_peer_group_af_remove_private_as_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi);
+int bgp_nb_neighbor_af_orf_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi);
+int bgp_nb_neighbor_af_orf_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi);
+int bgp_nb_peer_group_af_orf_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi);
+int bgp_nb_peer_group_af_orf_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						 safi_t safi);
 /* M5 batch B2: per-AF policy attachments (neighbor + peer-group). */
 int bgp_nb_neighbor_af_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
 					int direct);

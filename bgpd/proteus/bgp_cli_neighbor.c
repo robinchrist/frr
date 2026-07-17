@@ -5161,6 +5161,313 @@ void neighbor_af_attribute_unchanged_cli_write(struct vty *vty, const struct lyd
 		nexthop ? " next-hop" : "", med ? " med" : "");
 }
 
+/*
+ * M5 batch B5: per-AF send-community (standard/extended/large tri-state +
+ * extended-rpki) + remove-private-as (enum) + capability orf prefix-list
+ * (enum), neighbor + peer-group, all nine proteus AFs where the retired
+ * legacy DEFUNs reached them.
+ *
+ * send-community: legacy's bare 'neighbor X send-community'/'no ...' DEFUN
+ * pair only ever touches the 'standard' leaf; the typed
+ * 'send-community <both|all|extended|standard|large>' pair touches a
+ * subset -- both -> standard+extended (NOT large, matching legacy's own
+ * asymmetric "both" naming), all/default -> all three. Every touched leaf
+ * gets its own batched MODIFY, matching B4's attribute-unchanged precedent
+ * for a legacy grammar that sets several leaves per invocation. extended
+ * rpki keeps its own separate legacy grammar ('send-community extended
+ * rpki', neighbor_ecommunity_rpki_cmd, bgp_vty.c) and is a plain Tier-A
+ * default-false flag, so it reuses bgp_cli_neighbor_af_flag_modify()
+ * directly (B4's helper) rather than the send-community-specific enqueue
+ * below.
+ */
+static void bgp_cli_send_community_enqueue(struct vty *vty, const char *xpath,
+					    const char *container, const char *leaf, bool val)
+{
+	char *xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/send-community/%s", xpath,
+				       container, leaf);
+
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, val ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+}
+
+DEFPY_YANG(
+	neighbor_send_community, neighbor_send_community_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Community attribute to this neighbor\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_cli_send_community_enqueue(vty, xpath, container, "standard", no ? false : true);
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_send_community_type, neighbor_send_community_type_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community"
+	" <both|all|extended|standard|large>$type",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Community attribute to this neighbor\n"
+	"Send Standard and Extended Community attributes\n"
+	"Send Standard, Large and Extended Community attributes\n"
+	"Send Extended Community attributes\n"
+	"Send Standard Community attributes\n"
+	"Send Large Community attributes\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	bool val = no ? false : true;
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (strmatch(type, "standard")) {
+		bgp_cli_send_community_enqueue(vty, xpath, container, "standard", val);
+	} else if (strmatch(type, "extended")) {
+		bgp_cli_send_community_enqueue(vty, xpath, container, "extended", val);
+	} else if (strmatch(type, "large")) {
+		bgp_cli_send_community_enqueue(vty, xpath, container, "large", val);
+	} else if (strmatch(type, "both")) {
+		bgp_cli_send_community_enqueue(vty, xpath, container, "standard", val);
+		bgp_cli_send_community_enqueue(vty, xpath, container, "extended", val);
+	} else {
+		/* "all" */
+		bgp_cli_send_community_enqueue(vty, xpath, container, "standard", val);
+		bgp_cli_send_community_enqueue(vty, xpath, container, "extended", val);
+		bgp_cli_send_community_enqueue(vty, xpath, container, "large", val);
+	}
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_ecommunity_rpki, neighbor_ecommunity_rpki_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community extended rpki",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Community attribute to this neighbor\n"
+	"Send Extended Community attributes\n"
+	"Send RPKI Extended Community attributes\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "send-community/extended-rpki",
+					       no ? "false" : "true");
+}
+
+/* Shared per-AF send-community emitter (neighbor + peer-group), registered
+ * on the CONTAINER xpath, not the leaves individually: legacy's negative
+ * forms (bgp_config_write_peer_af(), bgp_vty.c) are only meaningful
+ * evaluated jointly (the combined "no ... send-community all" line when
+ * standard/extended/large are all explicitly off), and the extended-rpki
+ * line is legacy-nested inside the "not all three off" branch -- reproduced
+ * byte-for-byte, quirk included, the same "reread the whole container"
+ * discipline as B4's attribute-unchanged. standard/extended/large have no
+ * YANG default (tri-state: absent means "send", matching the compiled-in
+ * default), so each is only inspected when explicitly present; extended-rpki
+ * carries a YANG default of false and so is always safe to read directly.
+ */
+void neighbor_af_send_community_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	const char *name = bgp_cli_neighbor_or_group_name(dnode);
+	bool std_off = yang_dnode_exists(dnode, "standard") &&
+		       !yang_dnode_get_bool(dnode, "standard");
+	bool ext_off = yang_dnode_exists(dnode, "extended") &&
+		       !yang_dnode_get_bool(dnode, "extended");
+	bool lrg_off = yang_dnode_exists(dnode, "large") && !yang_dnode_get_bool(dnode, "large");
+
+	if (std_off && ext_off && lrg_off) {
+		vty_out(vty, "  no neighbor %s send-community all\n", name);
+		return;
+	}
+
+	if (std_off)
+		vty_out(vty, "  no neighbor %s send-community\n", name);
+	if (ext_off)
+		vty_out(vty, "  no neighbor %s send-community extended\n", name);
+	if (lrg_off)
+		vty_out(vty, "  no neighbor %s send-community large\n", name);
+
+	if (yang_dnode_get_bool(dnode, "extended-rpki"))
+		vty_out(vty, "  neighbor %s send-community extended rpki\n", name);
+}
+
+/*
+ * remove-private-as: proteus-bgp.yang's `remove-private-as` leaf is a
+ * four-way enumeration (basic/all/replace-as/all-replace-as) replacing
+ * legacy's four independent DEFUN/no-DEFUN pairs
+ * (neighbor_remove_private_as[_all][_replace_as], bgp_vty.c, retired).
+ * Unified into a single DEFPY with two optional trailing tokens; the
+ * negative form's trailing [all]/[replace-AS] tokens are accepted but
+ * ignored (like B3's advertise-map/soo negative forms) since the enum leaf
+ * has exactly one "off" state -- any 'no ... remove-private-AS ...' spelling
+ * destroys it.
+ */
+DEFPY_YANG(
+	neighbor_remove_private_as, neighbor_remove_private_as_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer remove-private-AS"
+	" [all$all] [replace-AS$replace]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Remove private ASNs in outbound updates\n"
+	"Apply to all AS numbers\n"
+	"Replace private ASNs with our ASN in outbound updates\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/remove-private-as", xpath, container);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	} else {
+		const char *value;
+
+		if (all && replace)
+			value = "all-replace-as";
+		else if (replace)
+			value = "replace-as";
+		else if (all)
+			value = "all";
+		else
+			value = "basic";
+
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, value);
+	}
+
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+static const struct {
+	const char *value;
+	const char *text;
+} bgp_cli_remove_private_as_text[] = {
+	{ "basic", "remove-private-AS" },
+	{ "all", "remove-private-AS all" },
+	{ "replace-as", "remove-private-AS replace-AS" },
+	{ "all-replace-as", "remove-private-AS all replace-AS" },
+};
+
+void neighbor_af_remove_private_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	const char *value = yang_dnode_get_string(dnode, NULL);
+	unsigned int i;
+
+	for (i = 0; i < array_size(bgp_cli_remove_private_as_text); i++) {
+		if (strmatch(value, bgp_cli_remove_private_as_text[i].value)) {
+			vty_out(vty, "  neighbor %s %s\n", bgp_cli_neighbor_or_group_name(dnode),
+				bgp_cli_remove_private_as_text[i].text);
+			return;
+		}
+	}
+}
+
+/*
+ * capability orf prefix-list: proteus-bgp.yang's `orf-prefix-list` leaf is a
+ * three-way enumeration (send/receive/both) whose values already spell the
+ * legacy <send|receive|both> tokens directly, replacing legacy's
+ * neighbor_capability_orf_prefix/no_... DEFUN pair (bgp_vty.c, retired).
+ * The negative form's trailing token is likewise accepted but ignored,
+ * always destroying the enum leaf -- same reasoning as remove-private-as
+ * above.
+ */
+DEFPY_YANG(
+	neighbor_capability_orf_prefix, neighbor_capability_orf_prefix_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer capability orf prefix-list"
+	" <both|send|receive>$type",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise capability to the peer\n"
+	"Advertise ORF capability to the peer\n"
+	"Advertise prefixlist ORF capability to this neighbor\n"
+	"Capability to SEND and RECEIVE the ORF to/from this neighbor\n"
+	"Capability to RECEIVE the ORF from this neighbor\n"
+	"Capability to SEND the ORF to this neighbor\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/orf-prefix-list", xpath, container);
+
+	if (no)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, type);
+
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+void neighbor_af_orf_prefix_list_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  neighbor %s capability orf prefix-list %s\n",
+		bgp_cli_neighbor_or_group_name(dnode), yang_dnode_get_string(dnode, NULL));
+}
+
 void bgp_cli_neighbor_init(void)
 {
 	/* "neighbor remote-as", interface-unnumbered creation and "neighbor
@@ -5533,4 +5840,55 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_attribute_unchanged_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_attribute_unchanged_cli_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_attribute_unchanged_cli_cmd);
+
+	/* send-community (+ type + extended rpki) + remove-private-as +
+	 * capability orf prefix-list, neighbor + peer-group (M5 batch B5).
+	 * Install sets match the retired legacy DEFUNs' per-AF
+	 * install_element() calls exactly (none of the four ever reached
+	 * BGP_EVPN_NODE; orf additionally never reached the two VPN nodes) --
+	 * the corresponding hidden BGP_NODE aliases (bare BGP_NODE for
+	 * extended rpki) are left native and untouched in bgp_vty.c. */
+	install_element(BGP_IPV4_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_send_community_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_send_community_type_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_remove_private_as_cli_cmd);
+
+	/* capability orf prefix-list: legacy never reached the VPN nodes. */
+	install_element(BGP_IPV4_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_capability_orf_prefix_cli_cmd);
 }

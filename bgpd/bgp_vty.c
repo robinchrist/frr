@@ -16552,10 +16552,11 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s addpath-rx-paths-limit %u\n", addr,
 			peer->addpath_paths_limit[afi][safi].send);
 
-	/* ORF capability.  */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ORF_PREFIX_SM)
-	    || peergroup_af_flag_check(peer, afi, safi,
-				       PEER_FLAG_ORF_PREFIX_RM)) {
+	/* ORF capability: emitted by mgmtd for the nine proteus AFs (M5 B5). */
+	if (!bgp_af_activate_is_proteus(afi, safi) &&
+	    (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_ORF_PREFIX_SM)
+	     || peergroup_af_flag_check(peer, afi, safi,
+					PEER_FLAG_ORF_PREFIX_RM))) {
 		vty_out(vty, "  neighbor %s capability orf prefix-list", addr);
 
 		if (peergroup_af_flag_check(peer, afi, safi,
@@ -16591,27 +16592,30 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s next-hop-self\n", addr);
 	}
 
-	/* remove-private-AS */
-	if (peergroup_af_flag_check(peer, afi, safi,
-				    PEER_FLAG_REMOVE_PRIVATE_AS_ALL_REPLACE)) {
-		vty_out(vty, "  neighbor %s remove-private-AS all replace-AS\n",
-			addr);
-	}
+	/* remove-private-AS: emitted by mgmtd for the nine proteus AFs (M5
+	 * B5). */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		if (peergroup_af_flag_check(peer, afi, safi,
+					    PEER_FLAG_REMOVE_PRIVATE_AS_ALL_REPLACE)) {
+			vty_out(vty, "  neighbor %s remove-private-AS all replace-AS\n",
+				addr);
+		}
 
-	else if (peergroup_af_flag_check(peer, afi, safi,
-					 PEER_FLAG_REMOVE_PRIVATE_AS_REPLACE)) {
-		vty_out(vty, "  neighbor %s remove-private-AS replace-AS\n",
-			addr);
-	}
+		else if (peergroup_af_flag_check(peer, afi, safi,
+						 PEER_FLAG_REMOVE_PRIVATE_AS_REPLACE)) {
+			vty_out(vty, "  neighbor %s remove-private-AS replace-AS\n",
+				addr);
+		}
 
-	else if (peergroup_af_flag_check(peer, afi, safi,
-					 PEER_FLAG_REMOVE_PRIVATE_AS_ALL)) {
-		vty_out(vty, "  neighbor %s remove-private-AS all\n", addr);
-	}
+		else if (peergroup_af_flag_check(peer, afi, safi,
+						 PEER_FLAG_REMOVE_PRIVATE_AS_ALL)) {
+			vty_out(vty, "  neighbor %s remove-private-AS all\n", addr);
+		}
 
-	else if (peergroup_af_flag_check(peer, afi, safi,
-					 PEER_FLAG_REMOVE_PRIVATE_AS)) {
-		vty_out(vty, "  neighbor %s remove-private-AS\n", addr);
+		else if (peergroup_af_flag_check(peer, afi, safi,
+						 PEER_FLAG_REMOVE_PRIVATE_AS)) {
+			vty_out(vty, "  neighbor %s remove-private-AS\n", addr);
+		}
 	}
 
 	/* as-override: emitted by mgmtd for the eight proteus AFs it reaches
@@ -16621,31 +16625,35 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s as-override\n", addr);
 	}
 
-	/* send-community print. */
-	flag_scomm = peergroup_af_flag_check(peer, afi, safi,
-					     PEER_FLAG_SEND_COMMUNITY);
-	flag_secomm = peergroup_af_flag_check(peer, afi, safi,
-					      PEER_FLAG_SEND_EXT_COMMUNITY);
-	flag_slcomm = peergroup_af_flag_check(peer, afi, safi,
-					      PEER_FLAG_SEND_LARGE_COMMUNITY);
+	/* send-community print: emitted by mgmtd for the nine proteus AFs (M5
+	 * B5). */
+	if (!bgp_af_activate_is_proteus(afi, safi)) {
+		flag_scomm = peergroup_af_flag_check(peer, afi, safi,
+						     PEER_FLAG_SEND_COMMUNITY);
+		flag_secomm = peergroup_af_flag_check(peer, afi, safi,
+						      PEER_FLAG_SEND_EXT_COMMUNITY);
+		flag_slcomm = peergroup_af_flag_check(peer, afi, safi,
+						      PEER_FLAG_SEND_LARGE_COMMUNITY);
 
-	if (flag_scomm && flag_secomm && flag_slcomm) {
-		vty_out(vty, "  no neighbor %s send-community all\n", addr);
-	} else {
-		if (flag_scomm)
-			vty_out(vty, "  no neighbor %s send-community\n", addr);
-		if (flag_secomm)
-			vty_out(vty,
-				"  no neighbor %s send-community extended\n",
-				addr);
+		if (flag_scomm && flag_secomm && flag_slcomm) {
+			vty_out(vty, "  no neighbor %s send-community all\n", addr);
+		} else {
+			if (flag_scomm)
+				vty_out(vty, "  no neighbor %s send-community\n", addr);
+			if (flag_secomm)
+				vty_out(vty,
+					"  no neighbor %s send-community extended\n",
+					addr);
 
-		if (flag_slcomm)
-			vty_out(vty, "  no neighbor %s send-community large\n",
-				addr);
+			if (flag_slcomm)
+				vty_out(vty, "  no neighbor %s send-community large\n",
+					addr);
 
-		if (peergroup_af_flag_check(peer, afi, safi,
-					    PEER_FLAG_SEND_EXT_COMMUNITY_RPKI))
-			vty_out(vty, "  neighbor %s send-community extended rpki\n", addr);
+			if (peergroup_af_flag_check(peer, afi, safi,
+						    PEER_FLAG_SEND_EXT_COMMUNITY_RPKI))
+				vty_out(vty, "  neighbor %s send-community extended rpki\n",
+					addr);
+		}
 	}
 
 	/* Default information */
@@ -17996,7 +18004,10 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_as_override_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_as_override_hidden_cmd);
 
-	/* "neighbor remove-private-AS" commands. */
+	/* "neighbor remove-private-AS" commands: converted to mgmtd for the
+	 * eight proteus AFs the legacy DEFUNs reached (M5 batch B5; never
+	 * l2vpn evpn); the hidden BGP_NODE aliases keep these DEFUNs
+	 * reachable. */
 	install_element(BGP_NODE, &neighbor_remove_private_as_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_remove_private_as_hidden_cmd);
 	install_element(BGP_NODE, &neighbor_remove_private_as_all_hidden_cmd);
@@ -18011,149 +18022,19 @@ void bgp_vty_init(void)
 	install_element(
 		BGP_NODE,
 		&no_neighbor_remove_private_as_all_replace_as_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV4_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV4M_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV4L_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6M_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_IPV6L_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_VPNV4_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_remove_private_as_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_remove_private_as_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_remove_private_as_all_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_remove_private_as_all_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_remove_private_as_replace_as_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&neighbor_remove_private_as_all_replace_as_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_remove_private_as_all_replace_as_cmd);
 
-	/* "neighbor send-community" commands.*/
+	/* "neighbor send-community" commands: converted to mgmtd for the eight
+	 * proteus AFs the legacy DEFUNs reached (M5 batch B5; never l2vpn
+	 * evpn); the hidden BGP_NODE aliases keep these DEFUNs reachable.
+	 * neighbor_ecommunity_rpki_cmd's bare BGP_NODE install (not hidden --
+	 * it operates on the default ipv4-unicast AF when entered outside any
+	 * address-family block) is likewise left native and untouched; only
+	 * its per-AF installs below were converted. */
 	install_element(BGP_NODE, &neighbor_send_community_hidden_cmd);
 	install_element(BGP_NODE, &neighbor_send_community_type_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_send_community_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_send_community_type_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_send_community_type_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_send_community_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_send_community_type_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_send_community_cmd);
-	install_element(BGP_VPNV6_NODE, &no_neighbor_send_community_type_cmd);
 	install_element(BGP_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_ecommunity_rpki_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_ecommunity_rpki_cmd);
 
 	/* "neighbor route-reflector" commands: converted to mgmtd for the
 	 * nine proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
@@ -18342,22 +18223,13 @@ void bgp_vty_init(void)
 	/* "neighbor rpki strict" commands: converted to northbound, see
 	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B13). */
 
-	/* "neighbor capability orf prefix-list" commands.*/
+	/* "neighbor capability orf prefix-list" commands: converted to mgmtd
+	 * for the six proteus AFs the legacy DEFUN reached (M5 batch B5;
+	 * never the two vpn AFs or l2vpn evpn); the hidden BGP_NODE alias
+	 * keeps this DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_capability_orf_prefix_hidden_cmd);
 	install_element(BGP_NODE,
 			&no_neighbor_capability_orf_prefix_hidden_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV4_NODE, &no_neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_capability_orf_prefix_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_capability_orf_prefix_cmd);
 
 	/* "neighbor capability dynamic"/"neighbor dont-capability-negotiate"/
 	 * "neighbor capability fqdn" commands: converted to northbound, see

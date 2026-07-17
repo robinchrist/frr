@@ -58,6 +58,15 @@ void neighbor_af_accept_own_cli_write(struct vty *vty, const struct lyd_node *dn
 void neighbor_af_attribute_unchanged_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					       bool show_defaults);
 
+/* M5 batch B5: per-AF send-community + remove-private-as + capability orf
+ * prefix-list emitters, shared neighbor/peer-group. */
+void neighbor_af_send_community_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void neighbor_af_remove_private_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults);
+void neighbor_af_orf_prefix_list_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,

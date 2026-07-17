@@ -2685,3 +2685,353 @@ int bgp_nb_peer_group_af_soo_leaf_modify(struct nb_cb_modify_args *args, afi_t a
 
 	return NB_OK;
 }
+
+/*
+ * M5 batch B5: shared per-AF send-community (standard/extended/large
+ * tri-state trio) destroy, remove-private-as (four-way enumeration) and
+ * capability orf prefix-list (send/receive/both enumeration) apply, all
+ * afi/safi-parameterized (neighbor + peer-group), reusing B1's delegator
+ * template.
+ *
+ * send-community's standard/extended/large leaves (proteus-bgp.yang's
+ * neighbor-af/send-community container, 834-850) carry NO YANG default --
+ * FRR sends every community flavor by default (peer_new(), bgpd.c, SETs both
+ * af_flags and af_flags_invert for all three at peer creation) -- so MODIFY
+ * true/false already reuses B4's bgp_nb_{neighbor,peer_group}_af_flag_modify()
+ * unchanged: 'neighbor X send-community[ <type>]' -> MODIFY true ->
+ * peer_af_flag_set(), 'no ...' -> MODIFY false -> peer_af_flag_unset(), the
+ * same peer_af_flag_set_vty()/peer_af_flag_unset_vty() calls the retired
+ * neighbor_send_community/neighbor_send_community_type DEFUNs made
+ * (bgp_vty.c). Only DESTROY needs a new helper below (the leaves' no-default
+ * status means both a modify and destroy stub were generated, unlike B4's
+ * default-false flags), reached only via a genuine leaf removal -- the
+ * primary CLI grammar always issues an explicit MODIFY true/false, the same
+ * asymmetry as B1's activate. A peer-group member reverts to inheriting its
+ * group's value via peer_af_flag_inherit(); a standalone peer or a
+ * peer-group's own conf entry (peer_group_active() is false for both, since
+ * group->conf always carries PEER_STATUS_GROUP) reverts to the compiled-in
+ * default, mirroring bgp_nb_capability_flag_destroy()'s established shape
+ * for the equivalent non-per-AF case (M4 batch B8).
+ */
+static void bgp_nb_af_flag_destroy(struct peer *conf, afi_t afi, safi_t safi, uint64_t flag,
+				   bool compiled_default)
+{
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return;
+
+	if (peer_group_active(conf)) {
+		peer_af_flag_inherit(conf, afi, safi, flag);
+		return;
+	}
+
+	if (compiled_default)
+		peer_af_flag_set(conf, afi, safi, flag);
+	else
+		peer_af_flag_unset(conf, afi, safi, flag);
+}
+
+int bgp_nb_neighbor_af_flag_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+				    uint64_t flag, bool compiled_default)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp_nb_af_flag_destroy(bgp_nb_neighbor_lookup(args->dnode), afi, safi, flag,
+				       compiled_default);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_flag_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
+				      uint64_t flag, bool compiled_default)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		bgp_nb_af_flag_destroy(group ? group->conf : NULL, afi, safi, flag,
+				       compiled_default);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * remove-private-as (proteus-bgp.yang's neighbor-af/remove-private-as leaf,
+ * 802-813, `type enumeration { basic; all; replace-as; all-replace-as; }`,
+ * no default) collapses the four legacy DEFUN/no-DEFUN pairs
+ * (neighbor_remove_private_as[_all][_replace_as], bgp_vty.c, retired) --
+ * each of which independently toggled exactly one of
+ * PEER_FLAG_REMOVE_PRIVATE_AS{,_ALL,_REPLACE,_ALL_REPLACE} and left the
+ * other three untouched -- into a single mutually-exclusive value. MODIFY
+ * sets the flag matching the new enum value and unsets the other three
+ * unconditionally, so the runtime af_flags state can never carry more than
+ * one of the four bits at once, even if a pre-conversion config had left a
+ * stale combination behind; bgp_config_write_peer_af()'s emission
+ * (bgp_vty.c) already only ever displayed the highest-priority bit anyway
+ * (all-replace-as > replace-as > all > basic), so no displayed behavior
+ * changes. DESTROY unsets (or, for a peer-group member, inherits) all four
+ * via bgp_nb_af_flag_destroy() above, with a compiled-in default of false
+ * (no private-AS scrubbing) for every constituent flag.
+ */
+static const struct {
+	const char *value;
+	uint64_t flag;
+} bgp_nb_remove_private_as_map[] = {
+	{ "basic", PEER_FLAG_REMOVE_PRIVATE_AS },
+	{ "all", PEER_FLAG_REMOVE_PRIVATE_AS_ALL },
+	{ "replace-as", PEER_FLAG_REMOVE_PRIVATE_AS_REPLACE },
+	{ "all-replace-as", PEER_FLAG_REMOVE_PRIVATE_AS_ALL_REPLACE },
+};
+
+static int bgp_nb_af_remove_private_as_set(struct peer *conf, afi_t afi, safi_t safi,
+					   const char *value)
+{
+	unsigned int i;
+	int ret = 0;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	for (i = 0; i < array_size(bgp_nb_remove_private_as_map); i++) {
+		if (strmatch(value, bgp_nb_remove_private_as_map[i].value))
+			ret |= peer_af_flag_set(conf, afi, safi,
+						bgp_nb_remove_private_as_map[i].flag);
+		else
+			ret |= peer_af_flag_unset(conf, afi, safi,
+						  bgp_nb_remove_private_as_map[i].flag);
+	}
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_af_flag_set()/peer_af_flag_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_af_remove_private_as_default(struct peer *conf, afi_t afi, safi_t safi)
+{
+	unsigned int i;
+
+	for (i = 0; i < array_size(bgp_nb_remove_private_as_map); i++)
+		bgp_nb_af_flag_destroy(conf, afi, safi, bgp_nb_remove_private_as_map[i].flag,
+				       false);
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_remove_private_as_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_remove_private_as_set(bgp_nb_neighbor_lookup(args->dnode), afi,
+						       safi,
+						       yang_dnode_get_string(args->dnode, NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_remove_private_as_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						 safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_remove_private_as_default(bgp_nb_neighbor_lookup(args->dnode),
+							   afi, safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_remove_private_as_modify(struct nb_cb_modify_args *args, afi_t afi,
+						  safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_remove_private_as_set(group ? group->conf : NULL, afi, safi,
+						       yang_dnode_get_string(args->dnode, NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_remove_private_as_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						   safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_remove_private_as_default(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * capability orf prefix-list (proteus-bgp.yang's neighbor-af/orf-prefix-list
+ * leaf, 761-768, `type enumeration { send; receive; both; }`, no default)
+ * collapses the legacy neighbor_capability_orf_prefix/no_... DEFUN pair's
+ * <send|receive|both> argument into a single enum value, driving
+ * PEER_FLAG_ORF_PREFIX_SM/_RM the same way legacy's strmatch() dispatch did
+ * (bgp_vty.c, retired): "send" -> SM only, "receive" -> RM only, "both" ->
+ * both. MODIFY sets exactly the flags the new value implies and unsets the
+ * other, so (like remove-private-as above) the runtime state never drifts
+ * from what the enum currently says. Both legacy DEFUNs additionally called
+ * bgp_capability_send() unconditionally on whatever peer_and_group_lookup_vty()
+ * returned, to renegotiate the ORF capability dynamically; reproduced here on
+ * 'conf' directly with no peer-group member fan-out, the same
+ * replicate-legacy-exactly reasoning as bgp_nb_peer_group_role_apply()'s
+ * identical local-role call (M4 batch B12) -- the peer-group template
+ * connection is never established, so bgp_capability_send() is a no-op for
+ * peer-group scope either way (bgp_packet.c). DESTROY unsets/inherits both
+ * flags via bgp_nb_af_flag_destroy() (compiled-in default false, no ORF
+ * negotiated) and sends the capability UNSET action, matching legacy's 'no'
+ * form.
+ */
+static int bgp_nb_af_orf_prefix_list_set(struct peer *conf, afi_t afi, safi_t safi,
+					 const char *value)
+{
+	bool sm = strmatch(value, "send") || strmatch(value, "both");
+	bool rm = strmatch(value, "receive") || strmatch(value, "both");
+	int ret;
+
+	if (!conf)
+		/* peer/group deleted underneath in this same commit */
+		return NB_OK;
+
+	ret = (sm ? peer_af_flag_set(conf, afi, safi, PEER_FLAG_ORF_PREFIX_SM)
+		  : peer_af_flag_unset(conf, afi, safi, PEER_FLAG_ORF_PREFIX_SM)) |
+	      (rm ? peer_af_flag_set(conf, afi, safi, PEER_FLAG_ORF_PREFIX_RM)
+		  : peer_af_flag_unset(conf, afi, safi, PEER_FLAG_ORF_PREFIX_RM));
+
+	bgp_capability_send(conf->connection, afi, safi, CAPABILITY_CODE_ORF,
+			    CAPABILITY_ACTION_SET);
+
+	if (ret != 0) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,
+			 "%s: peer_af_flag_set()/peer_af_flag_unset() failed: %d", __func__, ret);
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_af_orf_prefix_list_default(struct peer *conf, afi_t afi, safi_t safi)
+{
+	if (!conf)
+		return NB_OK;
+
+	bgp_nb_af_flag_destroy(conf, afi, safi, PEER_FLAG_ORF_PREFIX_SM, false);
+	bgp_nb_af_flag_destroy(conf, afi, safi, PEER_FLAG_ORF_PREFIX_RM, false);
+
+	bgp_capability_send(conf->connection, afi, safi, CAPABILITY_CODE_ORF,
+			    CAPABILITY_ACTION_UNSET);
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_orf_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+					      safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_orf_prefix_list_set(bgp_nb_neighbor_lookup(args->dnode), afi,
+						     safi,
+						     yang_dnode_get_string(args->dnode, NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_orf_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					       safi_t safi)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_orf_prefix_list_default(bgp_nb_neighbor_lookup(args->dnode), afi,
+							 safi);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_orf_prefix_list_modify(struct nb_cb_modify_args *args, afi_t afi,
+						safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_orf_prefix_list_set(group ? group->conf : NULL, afi, safi,
+						     yang_dnode_get_string(args->dnode, NULL));
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_orf_prefix_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+						 safi_t safi)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_af_orf_prefix_list_default(group ? group->conf : NULL, afi, safi);
+	}
+
+	return NB_OK;
+}
