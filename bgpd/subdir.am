@@ -102,6 +102,7 @@ bgpd_libbgp_a_SOURCES = \
 	bgpd/proteus/bgp_nb_afi_safi_ipv6.c \
 	bgpd/proteus/bgp_nb_evpn.c \
 	bgpd/proteus/bgp_nb_interface.c \
+	bgpd/proteus/bgp_nb_filter.c \
 	# end
 
 if ENABLE_BGP_VNC
@@ -257,6 +258,7 @@ clippy_scan += \
 	bgpd/proteus/bgp_cli_process.c \
 	bgpd/proteus/bgp_cli_neighbor.c \
 	bgpd/proteus/bgp_cli_interface.c \
+	bgpd/proteus/bgp_cli_filter.c \
 	# end
 
 nodist_bgpd_bgpd_SOURCES = \

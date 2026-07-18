@@ -162,11 +162,8 @@ const struct frr_yang_module_info proteus_filter_cli_info = {
 	.nodes = { { .xpath = NULL } },
 };
 
-const struct frr_yang_module_info proteus_bgp_filter_cli_info = {
-	.name = "proteus-bgp-filter",
-	.ignore_cfg_cbs = true,
-	.nodes = { { .xpath = NULL } },
-};
+/* proteus_bgp_filter_cli_info went live in M7 batch B6 -- defined with its
+ * cli_show callbacks in bgpd/proteus/bgp_cli_filter.c (bgpd/bgp_cli.h). */
 
 const struct frr_yang_module_info proteus_bfd_cli_info = {
 	.name = "proteus-bfd",

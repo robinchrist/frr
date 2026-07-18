@@ -320,7 +320,7 @@ module proteus-route-map {
         }
         leaf alias {
           type leafref {
-            path "/bgpfilter:community-alias/bgpfilter:name";
+            path "/bgpfilter:community-alias/bgpfilter:alias-name";
           }
           description
             "'match alias ALIAS_NAME': community alias defined with

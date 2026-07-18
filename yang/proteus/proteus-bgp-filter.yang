@@ -15,10 +15,10 @@ module proteus-bgp-filter {
     "bgpd's global filter objects: AS-path access lists, community /
      large-community / extended-community lists, and community
      aliases. These are bgpd-global (not per-instance) commands; the
-     running config text comes from legacy config_write functions,
-     cited per node (config_write_as_list in bgpd/bgp_filter.c,
-     community_list_config_write in bgpd/bgp_vty.c,
-     bgp_community_alias_write in bgpd/bgp_community_alias.c).
+     running config text of the not-yet-converted lists comes from
+     legacy config_write functions, cited per node
+     (config_write_as_list in bgpd/bgp_filter.c,
+     community_list_config_write in bgpd/bgp_vty.c).
 
      CLI text:
 
@@ -39,6 +39,13 @@ module proteus-bgp-filter {
      proteus-route-map can leafref 'match alias' without importing
      proteus-bgp, which already imports proteus-route-map (cycle).";
 
+  revision 2026-07-18 {
+    description
+      "community-alias re-keyed by the community text with a unique
+       alias-name; the aliased value is a verbatim string, not a
+       structured community, because aliasing is textual
+       substitution (see the list description).";
+  }
   revision 2026-07-06 {
     description
       "Structured values: standard community-list entries carry
@@ -62,6 +69,11 @@ module proteus-bgp-filter {
    * carries a raw fallback rendered verbatim -- matching or
    * scrubbing deliberately malformed values is a legitimate
    * filtering use case.
+   *
+   * The one deliberate exception is the community-alias list at the
+   * bottom: aliasing is textual substitution over already-rendered
+   * community strings, so its value is a verbatim string (see the
+   * list description).
    */
 
   grouping bgp-filter-entry-header {
@@ -399,37 +411,46 @@ module proteus-bgp-filter {
   }
 
   list community-alias {
-    key "name";
-    must "community/community/global-admin "
-       + "or community/well-known "
-       + "or community/large-community/global-admin "
-       + "or community/raw" {
-      error-message
-        "an alias needs the community value it names";
-    }
+    key "community";
+    unique "alias-name";
     description
-      "One 'bgp community alias COMMUNITY ALIAS' line (DEFPY
-       bgp_community_alias_cmd in bgpd/bgp_vty.c; written by
-       bgp_community_alias_write in bgpd/bgp_community_alias.c).
-       Both directions are unique in FRR: a community has one alias
-       and an alias names one community -- the alias direction is
-       the list key; the community direction is enforced by the
-       DEFPY only (a 'unique' statement can't span the value
-       choice's branches).";
+      "One 'bgp community alias COMMUNITY ALIAS' line: assigns a
+       display alias to one community or large-community value.
+       Both directions are unique (a community has one alias, an
+       alias names one community): the community direction is the
+       list key, the alias direction the 'unique' statement.
+       Re-entering the command with the same community and a new
+       alias re-aliases that community.
 
-    leaf name {
-      type pt:object-name;
+       Unlike the filter lists above, the aliased value is a
+       VERBATIM string, not a structured community: aliasing is
+       textual substitution, the configured text is compared
+       character-for-character against the rendered community
+       string wherever communities are displayed or matched, so
+       canonicalizing the value here would change which communities
+       an alias applies to and how the line round-trips.";
+
+    leaf community {
+      type string {
+        length "1..35";
+        pattern '\S+';
+      }
       description
-        "The alias name (ALIAS_NAME) -- what 'match alias'
-         references.";
+        "The community or large-community being aliased (the
+         COMMUNITY argument): 'AA:NN', 'GA:LD1:LD2', or a
+         well-known community name, stored verbatim. Must parse as
+         a valid community or large community (the same acceptance
+         check the CLI applies); any such value fits the length
+         bound.";
     }
 
-    container community {
+    leaf alias-name {
+      type pt:object-name;
+      mandatory true;
       description
-        "The community or large-community value being aliased (the
-         WORD argument; FRR accepts both kinds). Required -- the
-         'must' on the alias entry.";
-      uses pt:community-value;
+        "The alias name (ALIAS_NAME): what route-map 'match alias'
+         references and what is displayed in place of the community
+         value.";
     }
   }
 }

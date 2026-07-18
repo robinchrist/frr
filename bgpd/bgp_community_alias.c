@@ -78,22 +78,9 @@ void bgp_community_alias_finish(void)
 	hash_clean_and_free(&bgp_ca_alias_hash, bgp_ca_free);
 }
 
-static void bgp_community_alias_show_iterator(struct hash_bucket *hb,
-					      struct vty *vty)
-{
-	struct community_alias *ca = hb->data;
-
-	vty_out(vty, "bgp community alias %s %s\n", ca->community, ca->alias);
-}
-
-int bgp_community_alias_write(struct vty *vty)
-{
-	hash_iterate(bgp_ca_community_hash,
-		     (void (*)(struct hash_bucket *,
-			       void *))bgp_community_alias_show_iterator,
-		     vty);
-	return 1;
-}
+/* Config emission is mgmtd-owned (M7 B6, proteus-bgp-filter): the hashes
+ * below are runtime state fed by the northbound apply callbacks in
+ * bgpd/proteus/bgp_nb_filter.c. */
 
 void bgp_ca_community_insert(struct community_alias *ca)
 {

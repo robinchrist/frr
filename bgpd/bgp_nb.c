@@ -11574,7 +11574,8 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
  * do define data nodes but have no converted batch yet; register them with
  * ignore_cfg_cbs so libyang's auto-implement of their standalone trees
  * doesn't hit nb_validate_callbacks() with uncallbacked config nodes.
- * proteus-interface went live in M7 batch B4 (real table further down).
+ * proteus-interface went live in M7 batch B4, proteus-bgp-filter in M7
+ * batch B6 (real tables further down).
  */
 const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filter",
 							  .ignore_cfg_cbs = true,
@@ -11584,13 +11585,262 @@ const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filte
 								  },
 							  } };
 
-const struct frr_yang_module_info proteus_bgp_filter_info = { .name = "proteus-bgp-filter",
-							      .ignore_cfg_cbs = true,
-							      .nodes = {
-								      {
-									      .xpath = NULL,
-								      },
-							      } };
+/* M7 batch B6: proteus-bgp-filter is live (callbacks in
+ * bgpd/proteus/bgp_nb_filter.c). Only community-alias is converted in B6;
+ * the as-path / community / large-community / extcommunity lists stay
+ * reject-stubbed until their own batches (M7 B7/B8).
+ */
+const struct frr_yang_module_info proteus_bgp_filter_info = {
+	.name = "proteus-bgp-filter",
+	.nodes = {
+		{
+			.xpath = "/proteus-bgp-filter:as-path-access-list",
+			.cbs = {
+				.create = as_path_access_list_create,
+				.destroy = as_path_access_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:as-path-access-list/entry",
+			.cbs = {
+				.create = as_path_access_list_entry_create,
+				.destroy = as_path_access_list_entry_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:as-path-access-list/entry/action",
+			.cbs = {
+				.modify = as_path_access_list_entry_action_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:as-path-access-list/entry/regex",
+			.cbs = {
+				.modify = as_path_access_list_entry_regex_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list",
+			.cbs = {
+				.create = community_list_create,
+				.destroy = community_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/type",
+			.cbs = {
+				.modify = community_list_type_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry",
+			.cbs = {
+				.create = community_list_entry_create,
+				.destroy = community_list_entry_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/action",
+			.cbs = {
+				.modify = community_list_entry_action_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/communities",
+			.cbs = {
+				.create = community_list_entry_communities_create,
+				.destroy = community_list_entry_communities_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/communities/member",
+			.cbs = {
+				.create = community_list_entry_communities_member_create,
+				.destroy = community_list_entry_communities_member_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/communities/well-known",
+			.cbs = {
+				.create = community_list_entry_communities_well_known_create,
+				.destroy = community_list_entry_communities_well_known_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/communities/raw",
+			.cbs = {
+				.create = community_list_entry_communities_raw_create,
+				.destroy = community_list_entry_communities_raw_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-list/entry/regex",
+			.cbs = {
+				.modify = community_list_entry_regex_modify,
+				.destroy = community_list_entry_regex_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list",
+			.cbs = {
+				.create = large_community_list_create,
+				.destroy = large_community_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/type",
+			.cbs = {
+				.modify = large_community_list_type_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry",
+			.cbs = {
+				.create = large_community_list_entry_create,
+				.destroy = large_community_list_entry_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry/action",
+			.cbs = {
+				.modify = large_community_list_entry_action_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry/large-communities",
+			.cbs = {
+				.create = large_community_list_entry_large_communities_create,
+				.destroy = large_community_list_entry_large_communities_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry/large-communities/member",
+			.cbs = {
+				.create = large_community_list_entry_large_communities_member_create,
+				.destroy = large_community_list_entry_large_communities_member_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry/large-communities/raw",
+			.cbs = {
+				.create = large_community_list_entry_large_communities_raw_create,
+				.destroy = large_community_list_entry_large_communities_raw_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:large-community-list/entry/regex",
+			.cbs = {
+				.modify = large_community_list_entry_regex_modify,
+				.destroy = large_community_list_entry_regex_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list",
+			.cbs = {
+				.create = extcommunity_list_create,
+				.destroy = extcommunity_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/type",
+			.cbs = {
+				.modify = extcommunity_list_type_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry",
+			.cbs = {
+				.create = extcommunity_list_entry_create,
+				.destroy = extcommunity_list_entry_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/action",
+			.cbs = {
+				.modify = extcommunity_list_entry_action_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_create,
+				.destroy = extcommunity_list_entry_extcommunities_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as2",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_target_as2_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_target_as2_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as4",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_target_as4_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_target_as4_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/ipv4",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_target_ipv4_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_target_ipv4_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as2",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_origin_as2_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_origin_as2_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as4",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_origin_as4_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_origin_as4_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/ipv4",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_route_origin_ipv4_create,
+				.destroy = extcommunity_list_entry_extcommunities_route_origin_ipv4_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/raw",
+			.cbs = {
+				.create = extcommunity_list_entry_extcommunities_raw_create,
+				.destroy = extcommunity_list_entry_extcommunities_raw_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:extcommunity-list/entry/regex",
+			.cbs = {
+				.modify = extcommunity_list_entry_regex_modify,
+				.destroy = extcommunity_list_entry_regex_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-alias",
+			.cbs = {
+				.create = community_alias_create,
+				.destroy = community_alias_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-filter:community-alias/alias-name",
+			.cbs = {
+				.modify = community_alias_alias_name_modify,
+			}
+		},
+		{
+			.xpath = NULL,
+		},
+	}
+};
 
 const struct frr_yang_module_info proteus_bfd_info = { .name = "proteus-bfd",
 						       .ignore_cfg_cbs = true,

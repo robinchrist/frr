@@ -519,6 +519,7 @@ void afi_safis_retain_route_target_all_cli_write(struct vty *vty, const struct l
 void bgp_cli_instance_init(void);
 void bgp_cli_process_init(void);
 void bgp_cli_interface_init(void);
+void bgp_cli_filter_init(void);
 void bgp_cli_neighbor_init(void);
 
 #ifdef __cplusplus

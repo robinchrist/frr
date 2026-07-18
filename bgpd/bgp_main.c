@@ -442,6 +442,13 @@ static const char *const bgpd_config_xpaths[] = {
 	"/proteus-bgp:process",
 	/* M7 B4: interface-level 'mpls bgp ...' flags (proteus-interface). */
 	"/proteus-interface:interface",
+	/* M7 B6: proteus-bgp-filter went live (community-alias converted;
+	 * the filter lists follow in B7/B8). */
+	"/proteus-bgp-filter:as-path-access-list",
+	"/proteus-bgp-filter:community-list",
+	"/proteus-bgp-filter:large-community-list",
+	"/proteus-bgp-filter:extcommunity-list",
+	"/proteus-bgp-filter:community-alias",
 	/*
 	 * M3 B-RM1: bgpd no longer runs lib's northbound route-map/
 	 * filter CLI locally (bgp_route_map_init()/bgpd.c's

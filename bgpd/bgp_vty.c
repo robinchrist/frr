@@ -1807,84 +1807,15 @@ DEFUN_NOSH (router_bgp,
 	return CMD_SUCCESS;
 }
 
-DEFPY(bgp_community_alias, bgp_community_alias_cmd,
-      "[no$no] bgp community alias WORD$community ALIAS_NAME$alias_name",
-      NO_STR BGP_STR
-      "Add community specific parameters\n"
-      "Create an alias for a community\n"
-      "Community (AA:BB or AA:BB:CC)\n"
-      "Alias name\n")
-{
-	struct community_alias ca = {};
-	struct community_alias *lookup_community;
-	struct community_alias *lookup_alias;
-	struct community *comm;
-	struct lcommunity *lcomm;
-	uint8_t invalid = 0;
-
-	comm = community_str2com(community);
-	if (!comm)
-		invalid++;
-	community_free(&comm);
-
-	lcomm = lcommunity_str2com(community);
-	if (!lcomm)
-		invalid++;
-	lcommunity_free(&lcomm);
-
-	if (invalid > 1) {
-		vty_out(vty, "Invalid community format\n");
-		return CMD_WARNING;
-	}
-
-	strlcpy(ca.community, community, sizeof(ca.community));
-	strlcpy(ca.alias, alias_name, sizeof(ca.alias));
-
-	lookup_community = bgp_ca_community_lookup(&ca);
-	lookup_alias = bgp_ca_alias_lookup(&ca);
-
-	if (no) {
-		bgp_ca_alias_delete(&ca);
-		bgp_ca_community_delete(&ca);
-	} else {
-		if (lookup_alias) {
-			/* Lookup if community hash table has an item
-			 * with the same alias name.
-			 */
-			strlcpy(ca.community, lookup_alias->community,
-				sizeof(ca.community));
-			if (bgp_ca_community_lookup(&ca)) {
-				vty_out(vty,
-					"community (%s) already has this alias (%s)\n",
-					lookup_alias->community,
-					lookup_alias->alias);
-				return CMD_WARNING;
-			}
-			bgp_ca_alias_delete(&ca);
-		}
-
-		if (lookup_community) {
-			/* Lookup if alias hash table has an item
-			 * with the same community.
-			 */
-			strlcpy(ca.alias, lookup_community->alias,
-				sizeof(ca.alias));
-			if (bgp_ca_alias_lookup(&ca)) {
-				vty_out(vty,
-					"alias (%s) already has this community (%s)\n",
-					lookup_community->alias,
-					lookup_community->community);
-				return CMD_WARNING;
-			}
-			bgp_ca_community_delete(&ca);
-		}
-
-		bgp_ca_alias_insert(&ca);
-		bgp_ca_community_insert(&ca);
-	}
-
-	return CMD_SUCCESS;
-}
+/* M7 batch B6: 'bgp community alias' is mgmtd-owned (proteus-bgp-filter
+ * module) -- DEFPY twin + cli_show in bgpd/proteus/bgp_cli_filter.c, apply
+ * callbacks in bgpd/proteus/bgp_nb_filter.c. The native
+ * bgp_community_alias_write() emitter (and the COMMUNITY_ALIAS_NODE that
+ * existed only to host it) is retired with it. Coexistence audit: the line
+ * lived at CONFIG_NODE, where a failed match during bgpd's native config
+ * read cannot walk up into an ancestor node, so it fails in place and no
+ * bare _install_element() reinstatement is needed.
+ */
 
 /**
  * Central routine for maximum-paths configuration.
@@ -19362,19 +19293,10 @@ static void community_list_vty(void)
 	bgp_community_list_command_completion_setup();
 }
 
-static struct cmd_node community_alias_node = {
-	.name = "community alias",
-	.node = COMMUNITY_ALIAS_NODE,
-	.prompt = "",
-	.config_write = bgp_community_alias_write,
-};
-
 void community_alias_vty(void)
 {
-	install_node(&community_alias_node);
-
-	/* Community-list.  */
-	install_element(CONFIG_NODE, &bgp_community_alias_cmd);
-
+	/* The 'bgp community alias' config command and its emission are
+	 * mgmtd-owned (M7 B6, see bgp_cli_filter.c); what remains here is
+	 * the ALIAS_NAME completion for bgpd's own show commands. */
 	bgp_community_alias_command_completion_setup();
 }
