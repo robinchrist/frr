@@ -819,6 +819,14 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_vpn_network_ipv4_cli_write,
 			}
 		},
+		/* M7: default-on 'bgp retain route-target all'; only the 'no'
+		 * form ever renders. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/retain-route-target-all",
+			.cbs = {
+				.cli_show = afi_safis_retain_route_target_all_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/maximum-paths",
 			.cbs = {
@@ -910,6 +918,14 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4",
 			.cbs = {
 				.cli_show = afi_safis_vpn_network_ipv4_cli_write,
+			}
+		},
+		/* M7: default-on 'bgp retain route-target all'; only the 'no'
+		 * form ever renders. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/retain-route-target-all",
+			.cbs = {
+				.cli_show = afi_safis_retain_route_target_all_cli_write,
 			}
 		},
 		/* M5 B13: instance-AF 'distance bgp ...' + per-prefix

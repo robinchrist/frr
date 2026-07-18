@@ -9925,7 +9925,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/retain-route-target-all",
 			.cbs = {
 				.modify = instance_afi_safis_ipv4_vpn_retain_route_target_all_modify,
-				.destroy = instance_afi_safis_ipv4_vpn_retain_route_target_all_destroy,
 			}
 		},
 		{
@@ -10837,7 +10836,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/retain-route-target-all",
 			.cbs = {
 				.modify = instance_afi_safis_ipv6_vpn_retain_route_target_all_modify,
-				.destroy = instance_afi_safis_ipv6_vpn_retain_route_target_all_destroy,
 			}
 		},
 		{

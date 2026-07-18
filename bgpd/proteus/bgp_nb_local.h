@@ -473,6 +473,10 @@ int bgp_nb_af_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args, afi_
 int bgp_nb_af_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args, afi_t afi);
 int bgp_nb_af_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi);
 
+/* 'bgp retain route-target all' (af-retain-route-target), ipv4/ipv6-vpn
+ * only; default-on boolean, modify-only. See bgp_nb_util.c. */
+int bgp_nb_af_retain_route_target_all_modify(struct nb_cb_modify_args *args, afi_t afi);
+
 #ifdef __cplusplus
 }
 #endif

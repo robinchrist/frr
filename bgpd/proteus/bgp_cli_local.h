@@ -498,6 +498,8 @@ void afi_safis_vpn_network_as4_cli_write(struct vty *vty, const struct lyd_node 
 					 bool show_defaults);
 void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults);
+void afi_safis_retain_route_target_all_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults);
 
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */

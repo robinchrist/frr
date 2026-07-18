@@ -3954,7 +3954,6 @@ int instance_afi_safis_ipv4_vpn_distance_prefix_distance_modify(struct nb_cb_mod
 int instance_afi_safis_ipv4_vpn_distance_prefix_access_list_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv4_vpn_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv4_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_ipv4_vpn_retain_route_target_all_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv6_unicast_network_create(struct nb_cb_create_args *args);
 int instance_afi_safis_ipv6_unicast_network_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv6_unicast_network_route_map_modify(struct nb_cb_modify_args *args);
@@ -4264,7 +4263,6 @@ int instance_afi_safis_ipv6_vpn_distance_prefix_distance_modify(struct nb_cb_mod
 int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv6_vpn_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv6_vpn_retain_route_target_all_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_ipv6_vpn_retain_route_target_all_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_all_vni_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_default_gw_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_svi_ip_modify(struct nb_cb_modify_args *args);

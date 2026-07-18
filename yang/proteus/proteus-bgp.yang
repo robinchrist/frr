@@ -1829,13 +1829,14 @@ module proteus-bgp {
   grouping af-retain-route-target {
     leaf retain-route-target-all {
       type boolean;
+      default "true";
       description
-        "'no bgp retain route-target all' when false
-         (bgp_retain_route_target_cmd; default true -- without
-         per-VRF import filtering a PE retains all VPN routes; the
-         positive form is never written back, so only the 'no' form
-         renders and true renders nothing, bgp_vpn_config_write in
-         bgp_vty.c).";
+        "'bgp retain route-target all' / 'no bgp retain
+         route-target all': keep all received VPN routes
+         regardless of route-target import filtering. Default on
+         -- disabling it keeps only VPN routes whose route-targets
+         match a local VRF import; only the 'no' form is written
+         to the configuration.";
     }
   }
 

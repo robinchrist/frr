@@ -7088,6 +7088,47 @@ void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node
 	vty_out(vty, "\n");
 }
 
+/* M7: '[no] bgp retain route-target all' (af-retain-route-target in
+ * proteus-bgp.yang), ipv4-vpn/ipv6-vpn only. Static default-on boolean,
+ * fast-external-failover shape at the AF level: the positive form destroys
+ * back to the true default, 'no' modifies an explicit false, and only the
+ * 'no' form is ever rendered (retired bgp_retain_route_target /
+ * bgp_vpn_config_write, bgp_vty.c). */
+DEFPY_YANG(
+	instance_afi_safis_retain_route_target,
+	instance_afi_safis_retain_route_target_cli_cmd,
+	"[no] bgp retain route-target all",
+	NO_STR
+	BGP_STR
+	"Retain BGP updates\n"
+	"Retain BGP updates based on route-target values\n"
+	"Retain all BGP updates\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/retain-route-target-all", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_MODIFY : NB_OP_DESTROY, no ? "false" : NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_retain_route_target_all_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  no bgp retain route-target all\n");
+}
+
 /*
  * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
  * (1-255)]]' (af-route-selection/dampening in proteus-bgp.yang), across the
@@ -7834,6 +7875,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_table_map_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_dampening_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_vpn_network_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_retain_route_target_cli_cmd);
 
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
@@ -7863,6 +7905,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_table_map_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_dampening_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_vpn_network_ipv6_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_retain_route_target_cli_cmd);
 
 	/* M5 B13: instance-AF 'distance bgp ...' (all eight AFs) + per-prefix
 	 * 'distance (1-255) PREFIX [ACCESSLIST]' (IPv4 grammar on the four IPv4

@@ -7301,3 +7301,41 @@ int bgp_nb_af_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args
 	bgp_nb_af_vpn_network_rd_ipv4(entry_dnode, rd, sizeof(rd));
 	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false, NULL);
 }
+
+/* 'bgp retain route-target all' (retain-route-target-all in
+ * proteus-bgp.yang, ipv4/ipv6-vpn): default-on boolean, so the positive
+ * form resolves to the leaf's true default and only an explicit false ever
+ * differs. Reproduces the retired bgp_retain_route_target DEFPY
+ * (bgp_vty.c): on a real transition flip BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL
+ * on the VPN AF and trigger a soft clear-in so the ADJ-RIB-in is
+ * re-processed under the new retain policy -- disabling re-filters the VPN
+ * table against the local VRF imports, enabling re-fetches everything.
+ * Transition-only, exactly like the legacy setter. */
+int bgp_nb_af_retain_route_target_all_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	struct bgp *bgp;
+	bool retain;
+	bool check;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	retain = yang_dnode_get_bool(args->dnode, NULL);
+	check = CHECK_FLAG(bgp->af_flags[afi][SAFI_MPLS_VPN], BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
+	if (check == retain)
+		return NB_OK;
+
+	if (retain)
+		SET_FLAG(bgp->af_flags[afi][SAFI_MPLS_VPN], BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
+	else
+		UNSET_FLAG(bgp->af_flags[afi][SAFI_MPLS_VPN], BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
+
+	/* trigger a flush to re-sync with ADJ-RIB-in */
+	bgp_clear_soft_in(bgp, afi, SAFI_MPLS_VPN);
+
+	return NB_OK;
+}

@@ -15029,36 +15029,11 @@ DEFUN (no_bgp_redistribute_ipv6,
  * 'neighbor_ip_transparent_cli_cmd' in bgp_cli_neighbor.c (M4 batch B7).
  */
 
-DEFPY(bgp_retain_route_target, bgp_retain_route_target_cmd,
-      "[no$no] bgp retain route-target all",
-      NO_STR BGP_STR
-      "Retain BGP updates\n"
-      "Retain BGP updates based on route-target values\n"
-      "Retain all BGP updates\n")
-{
-	bool check;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	check = CHECK_FLAG(bgp->af_flags[bgp_node_afi(vty)][bgp_node_safi(vty)],
-			   BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
-	if (check != !no) {
-		if (!no)
-			SET_FLAG(bgp->af_flags[bgp_node_afi(vty)]
-					      [bgp_node_safi(vty)],
-				 BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
-		else
-			UNSET_FLAG(bgp->af_flags[bgp_node_afi(vty)]
-						[bgp_node_safi(vty)],
-				   BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL);
-		/* trigger a flush to re-sync with ADJ-RIB-in */
-		bgp_clear(vty, bgp, bgp_node_afi(vty), bgp_node_safi(vty),
-			  clear_all, BGP_CLEAR_SOFT_IN, NULL);
-	}
-	return CMD_SUCCESS;
-}
+/* '[no] bgp retain route-target all': converted to northbound, see
+ * 'instance_afi_safis_retain_route_target_cli_cmd' in bgp_cli_instance.c
+ * (M7). No same-grammar ancestor survives at BGP_NODE, so no native
+ * coexistence install is needed.
+ */
 
 DEFPY(bgp_ls_distribute_bgp_fabric,
       bgp_ls_distribute_bgp_fabric_cmd,
@@ -16201,13 +16176,12 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 	}
 }
 
-static void bgp_vpn_config_write(struct vty *vty, struct bgp *bgp, afi_t afi,
-				 safi_t safi)
-{
-	if (!CHECK_FLAG(bgp->af_flags[afi][safi],
-			BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL))
-		vty_out(vty, "  no bgp retain route-target all\n");
-}
+/* M7: 'no bgp retain route-target all' (af-retain-route-target in
+ * proteus-bgp.yang) is mgmtd-owned for ipv4-vpn/ipv6-vpn -- the only AFs
+ * that carried it -- emitted by afi_safis_retain_route_target_all_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c); the native bgp_vpn_config_write()
+ * emitter is retired.
+ */
 
 /* M5 batch B12: instance-AF 'maximum-paths'/'table-map'/'bgp dampening'
  * (af-route-selection in proteus-bgp.yang) is mgmtd-owned for the eight
@@ -16375,8 +16349,8 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	if (safi == SAFI_FLOWSPEC)
 		bgp_fs_config_write_pbr(vty, bgp, afi, safi);
 
-	if (safi == SAFI_MPLS_VPN)
-		bgp_vpn_config_write(vty, bgp, afi, safi);
+	/* SAFI_MPLS_VPN 'no bgp retain route-target all': mgmtd-owned for
+	 * ipv4-vpn/ipv6-vpn (M7), see bgp_cli_instance.c. */
 
 	if (safi == SAFI_UNICAST) {
 		bgp_vpn_policy_config_write_afi(vty, bgp, afi);
@@ -17765,9 +17739,8 @@ void bgp_vty_init(void)
 	install_element(BGP_EVPN_NODE, &exit_address_family_cmd);
 	install_element(BGP_LS_NODE, &exit_address_family_cmd);
 
-	/* BGP retain all route-target */
-	install_element(BGP_VPNV4_NODE, &bgp_retain_route_target_cmd);
-	install_element(BGP_VPNV6_NODE, &bgp_retain_route_target_cmd);
+	/* BGP retain all route-target: converted to northbound (M7), see
+	 * bgp_cli_instance.c. */
 
 	/* "clear ip bgp commands" */
 	install_element(ENABLE_NODE, &clear_ip_bgp_all_cmd);
