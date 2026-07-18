@@ -5507,4 +5507,5 @@ void bgp_cli_init(void)
 	bgp_cli_instance_init();
 	bgp_cli_process_init();
 	bgp_cli_neighbor_init();
+	bgp_cli_interface_init();
 }

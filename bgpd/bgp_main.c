@@ -440,6 +440,8 @@ static const char *const bgpd_config_xpaths[] = {
 	"/frr-logging:logging",
 	"/proteus-bgp:instance",
 	"/proteus-bgp:process",
+	/* M7 B4: interface-level 'mpls bgp ...' flags (proteus-interface). */
+	"/proteus-interface:interface",
 	/*
 	 * M3 B-RM1: bgpd no longer runs lib's northbound route-map/
 	 * filter CLI locally (bgp_route_map_init()/bgpd.c's

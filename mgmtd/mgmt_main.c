@@ -174,11 +174,8 @@ const struct frr_yang_module_info proteus_bfd_cli_info = {
 	.nodes = { { .xpath = NULL } },
 };
 
-const struct frr_yang_module_info proteus_interface_cli_info = {
-	.name = "proteus-interface",
-	.ignore_cfg_cbs = true,
-	.nodes = { { .xpath = NULL } },
-};
+/* proteus_interface_cli_info went live in M7 batch B4 -- defined with its
+ * cli_show callbacks in bgpd/proteus/bgp_cli_interface.c (bgpd/bgp_cli.h). */
 
 const struct frr_yang_module_info proteus_route_map_cli_info = {
 	.name = "proteus-route-map",

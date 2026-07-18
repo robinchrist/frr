@@ -11551,10 +11551,11 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 /*
  * proteus-types and proteus-bgp-evpn contribute no data nodes of their own
  * (typedefs / groupings only, inlined via import + uses into proteus-bgp)
- * and need no frr_yang_module_info. The remaining support modules below do
- * define data nodes but are not part of the milestone 1 slice; register
- * them with ignore_cfg_cbs so libyang's auto-implement of their standalone
- * trees doesn't hit nb_validate_callbacks() with uncallbacked config nodes.
+ * and need no frr_yang_module_info. The still-dormant support modules below
+ * do define data nodes but have no converted batch yet; register them with
+ * ignore_cfg_cbs so libyang's auto-implement of their standalone trees
+ * doesn't hit nb_validate_callbacks() with uncallbacked config nodes.
+ * proteus-interface went live in M7 batch B4 (real table further down).
  */
 const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filter",
 							  .ignore_cfg_cbs = true,
@@ -11580,13 +11581,59 @@ const struct frr_yang_module_info proteus_bfd_info = { .name = "proteus-bfd",
 							       },
 						       } };
 
-const struct frr_yang_module_info proteus_interface_info = { .name = "proteus-interface",
-							     .ignore_cfg_cbs = true,
-							     .nodes = {
-								     {
-									     .xpath = NULL,
-								     },
-							     } };
+/* M7 batch B4: proteus-interface is live (callbacks in
+ * bgpd/proteus/bgp_nb_interface.c). bgpd owns only the two 'mpls bgp ...'
+ * flags; description and the ipv6-nd subtree are zebra's surface and stay
+ * reject-stubbed permanently.
+ */
+const struct frr_yang_module_info proteus_interface_info = {
+	.name = "proteus-interface",
+	.nodes = {
+		{
+			.xpath = "/proteus-interface:interface",
+			.cbs = {
+				.create = proteus_interface_create,
+				.destroy = proteus_interface_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-interface:interface/description",
+			.cbs = {
+				.modify = proteus_interface_description_modify,
+				.destroy = proteus_interface_description_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-interface:interface/mpls-bgp-forwarding",
+			.cbs = {
+				.modify = proteus_interface_mpls_bgp_forwarding_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-interface:interface/mpls-bgp-l3vpn-multi-domain-switching",
+			.cbs = {
+				.modify = proteus_interface_mpls_bgp_l3vpn_multi_domain_switching_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-interface:interface/ipv6-nd/ra-interval",
+			.cbs = {
+				.modify = proteus_interface_ipv6_nd_ra_interval_modify,
+				.destroy = proteus_interface_ipv6_nd_ra_interval_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-interface:interface/ipv6-nd/ra-interval-msec",
+			.cbs = {
+				.modify = proteus_interface_ipv6_nd_ra_interval_msec_modify,
+				.destroy = proteus_interface_ipv6_nd_ra_interval_msec_destroy,
+			}
+		},
+		{
+			.xpath = NULL,
+		},
+	}
+};
 
 const struct frr_yang_module_info proteus_route_map_info = { .name = "proteus-route-map",
 							     .ignore_cfg_cbs = true,

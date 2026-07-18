@@ -16968,108 +16968,17 @@ static void bgp_config_end(struct vty *vty)
 			bgp_post_config_delay, &t_bgp_cfg);
 }
 
-static int config_write_interface_one(struct vty *vty, struct vrf *vrf)
-{
-	int write = 0;
-	struct interface *ifp;
-	struct bgp_interface *iifp;
-
-	FOR_ALL_INTERFACES (vrf, ifp) {
-		iifp = ifp->info;
-		if (!iifp)
-			continue;
-
-		if_vty_config_start(vty, ifp);
-
-		if (CHECK_FLAG(iifp->flags,
-			       BGP_INTERFACE_MPLS_BGP_FORWARDING)) {
-			vty_out(vty, " mpls bgp forwarding\n");
-			write++;
-		}
-		if (CHECK_FLAG(iifp->flags,
-			       BGP_INTERFACE_MPLS_L3VPN_SWITCHING)) {
-			vty_out(vty,
-				" mpls bgp l3vpn-multi-domain-switching\n");
-			write++;
-		}
-
-		if_vty_config_end(vty);
-	}
-
-	return write;
-}
-
-/* Configuration write function for bgpd. */
-static int config_write_interface(struct vty *vty)
-{
-	int write = 0;
-	struct vrf *vrf = NULL;
-
-	/* Display all VRF aware OSPF interface configuration */
-	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
-		write += config_write_interface_one(vty, vrf);
-	}
-
-	return write;
-}
-
-DEFPY(mpls_bgp_forwarding, mpls_bgp_forwarding_cmd,
-      "[no$no] mpls bgp forwarding",
-      NO_STR MPLS_STR BGP_STR
-      "Enable MPLS forwarding for eBGP directly connected peers\n")
-{
-	bool check;
-	struct bgp_interface *iifp;
-
-	VTY_DECLVAR_CONTEXT(interface, ifp);
-	iifp = ifp->info;
-	if (!iifp) {
-		vty_out(vty, "Interface %s not available\n", ifp->name);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	check = CHECK_FLAG(iifp->flags, BGP_INTERFACE_MPLS_BGP_FORWARDING);
-	if (check != !no) {
-		if (no)
-			UNSET_FLAG(iifp->flags,
-				   BGP_INTERFACE_MPLS_BGP_FORWARDING);
-		else
-			SET_FLAG(iifp->flags,
-				 BGP_INTERFACE_MPLS_BGP_FORWARDING);
-		/* trigger a nht update on eBGP sessions */
-		if (if_is_operative(ifp))
-			bgp_nht_ifp_up(ifp);
-	}
-	return CMD_SUCCESS;
-}
-
-DEFPY(mpls_bgp_l3vpn_multi_domain_switching,
-      mpls_bgp_l3vpn_multi_domain_switching_cmd,
-      "[no$no] mpls bgp l3vpn-multi-domain-switching",
-      NO_STR MPLS_STR BGP_STR
-      "Bind a local MPLS label to incoming L3VPN updates\n")
-{
-	bool check;
-	struct bgp_interface *iifp;
-
-	VTY_DECLVAR_CONTEXT(interface, ifp);
-	iifp = ifp->info;
-	if (!iifp) {
-		vty_out(vty, "Interface %s not available\n", ifp->name);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	check = CHECK_FLAG(iifp->flags, BGP_INTERFACE_MPLS_L3VPN_SWITCHING);
-	if (check == !no)
-		return CMD_SUCCESS;
-	if (no)
-		UNSET_FLAG(iifp->flags, BGP_INTERFACE_MPLS_L3VPN_SWITCHING);
-	else
-		SET_FLAG(iifp->flags, BGP_INTERFACE_MPLS_L3VPN_SWITCHING);
-	/* trigger a nht update on eBGP sessions */
-	if (if_is_operative(ifp))
-		bgp_nht_ifp_up(ifp);
-
-	return CMD_SUCCESS;
-}
+/* M7 batch B4: the interface-level '[no] mpls bgp forwarding' and
+ * '[no] mpls bgp l3vpn-multi-domain-switching' flags are mgmtd-owned
+ * (proteus-interface module) -- DEFPY twins + cli_show in
+ * bgpd/proteus/bgp_cli_interface.c, apply callbacks in
+ * bgpd/proteus/bgp_nb_interface.c. The native config_write_interface()
+ * emitter (these two lines were its only content) is retired with them.
+ * Coexistence audit: no same-grammar ancestor survives (bgpd installs no
+ * 'mpls ...' command at CONFIG_NODE), so the converted lines fail in place
+ * on bgpd's native config read without any node drop and no bare
+ * _install_element() reinstatement is needed.
+ */
 
 /*
  * Local node-entry commands for the mgmtd-owned interface/vrf nodes.
@@ -17127,15 +17036,16 @@ DEFPY_NOSH(bgp_vrf, bgp_vrf_cmd,
 static void bgp_vty_if_init(void)
 {
 	/* Install interface node, without lib's mgmtd-owned interface
-	 * create/destroy commands.
+	 * create/destroy commands. The node (and the bgp_interface node-entry
+	 * DEFPY_NOSH) must survive even with no bgpd-owned interface leaves
+	 * left, so bgpd's native config read can still enter/exit interface
+	 * blocks; config emission is mgmtd's (M7 B4), hence no config_write.
 	 */
-	if_cmd_init_node(config_write_interface);
+	if_cmd_init_node(NULL);
 	install_element(CONFIG_NODE, &bgp_interface_cmd);
 
-	/* "mpls bgp forwarding" commands. */
-	install_element(INTERFACE_NODE, &mpls_bgp_forwarding_cmd);
-	install_element(INTERFACE_NODE,
-			&mpls_bgp_l3vpn_multi_domain_switching_cmd);
+	/* "mpls bgp forwarding" commands: converted to northbound (M7 B4),
+	 * see bgp_cli_interface.c. */
 }
 
 void bgp_vty_init(void)
