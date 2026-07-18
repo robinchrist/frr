@@ -18973,76 +18973,12 @@ static void bgp_config_write_network_vpn(struct vty *vty, struct bgp *bgp,
 	}
 }
 
-static void bgp_config_write_network_evpn(struct vty *vty, struct bgp *bgp,
-					  afi_t afi, safi_t safi)
-{
-	struct bgp_dest *pdest;
-	struct bgp_dest *dest;
-	struct bgp_table *table;
-	const struct prefix *p;
-	struct bgp_static *bgp_static;
-	char buf[PREFIX_STRLEN * 2];
-	char buf2[SU_ADDRSTRLEN];
-	char esi_buf[ESI_STR_LEN];
-
-	/* Network configuration. */
-	for (pdest = bgp_table_top(bgp->static_routes[afi][safi]); pdest;
-	     pdest = bgp_route_next(pdest)) {
-		table = bgp_dest_get_bgp_table_info(pdest);
-		if (!table)
-			continue;
-
-		for (dest = bgp_table_top(table); dest;
-		     dest = bgp_route_next(dest)) {
-			bgp_static = bgp_dest_get_bgp_static_info(dest);
-			if (bgp_static == NULL)
-				continue;
-
-			char *macrouter = NULL;
-
-			if (bgp_static->router_mac)
-				macrouter = prefix_mac2str(
-					bgp_static->router_mac, NULL, 0);
-			if (bgp_static->eth_s_id)
-				esi_to_str(bgp_static->eth_s_id,
-						esi_buf, sizeof(esi_buf));
-			p = bgp_dest_get_prefix(dest);
-
-			/* "network" configuration display.  */
-			if (p->u.prefix_evpn.route_type == 5) {
-				char local_buf[PREFIX_STRLEN];
-
-				uint8_t family = is_evpn_prefix_ipaddr_v4((
-							 struct prefix_evpn *)p)
-							 ? AF_INET
-							 : AF_INET6;
-				inet_ntop(family,
-					  &p->u.prefix_evpn.prefix_addr.ip.ip
-						   .addr,
-					  local_buf, sizeof(local_buf));
-				snprintf(buf, sizeof(buf), "%s/%u", local_buf,
-					 p->u.prefix_evpn.prefix_addr
-						 .ip_prefix_length);
-			} else {
-				prefix2str(p, buf, sizeof(buf));
-			}
-
-			if (bgp_static->gatewayIp.family == AF_INET
-			    || bgp_static->gatewayIp.family == AF_INET6)
-				inet_ntop(bgp_static->gatewayIp.family,
-					  &bgp_static->gatewayIp.u.prefix, buf2,
-					  sizeof(buf2));
-			vty_out(vty,
-				"  network %s rd %s ethtag %u label %u esi %s gwip %s routermac %s\n",
-				buf, bgp_static->prd_pretty,
-				p->u.prefix_evpn.prefix_addr.eth_tag,
-				decode_label(&bgp_static->label), esi_buf, buf2,
-				macrouter);
-
-			XFREE(MTYPE_TMP, macrouter);
-		}
-	}
-}
+/* The EVPN type-5 static 'network' statements are mgmtd-owned (M6 batch
+ * B9b): instance_evpn_network_cli_write (bgpd/proteus/bgp_cli_instance.c)
+ * renders them from the datastore's l2vpn-evpn 'network' keyed list; the
+ * former native emitter (bgp_config_write_network_evpn) is retired. See
+ * bgp_config_write_network()'s l2vpn-evpn branch below.
+ */
 
 /* Configuration of static route announcement and aggregate
    information. */
@@ -19077,10 +19013,9 @@ void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 		return;
 	}
 
-	if (afi == AFI_L2VPN && safi == SAFI_EVPN) {
-		bgp_config_write_network_evpn(vty, bgp, afi, safi);
+	if (afi == AFI_L2VPN && safi == SAFI_EVPN)
+		/* mgmtd-owned since M6 B9b, see the comment above. */
 		return;
-	}
 
 	/* Network configuration: emitted by mgmtd for the six proteus AFs
 	 * (M5 B9); still native for encap/flowspec/unreachability/link-state. */

@@ -11335,6 +11335,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast",
+			.cbs = {
+				.apply_finish = instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_apply_finish,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast/enabled",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_enabled_modify,
@@ -11351,6 +11357,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_modify,
 				.destroy = instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast",
+			.cbs = {
+				.apply_finish = instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_apply_finish,
 			}
 		},
 		{
@@ -11382,6 +11394,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/default-originate/ipv6",
 			.cbs = {
 				.modify = instance_afi_safis_l2vpn_evpn_default_originate_ipv6_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip",
+			.cbs = {
+				.apply_finish = instance_afi_safis_l2vpn_evpn_advertise_pip_apply_finish,
 			}
 		},
 		{

@@ -38,9 +38,7 @@ extern void evpn_unset_advertise_subnet(struct bgp *bgp, struct bgpevpn *vpn);
 
 /* Per-VRF-instance role setters (vty-free), shared with the proteus/
  * northbound instance-level 'l2vpn-evpn' sub-leaf callbacks (bgp_nb_evpn.c,
- * M6 batch B7: 'rd' and 'default-originate'; 'advertise ipv4/ipv6 unicast'
- * was scouted but reject-stubbed, see the doc comment on the
- * still-installed bgp_evpn_advertise_type5_cmd in bgp_evpn_vty.c).
+ * M6 batch B7: 'rd' and 'default-originate').
  * rd_pretty is copied (XSTRDUP'd internally), so a function-scope buffer is
  * fine at the call site. evpn_process_default_originate_cmd() is the
  * un-static'd former DEFPY-local helper: 'add' true/false mirrors the
@@ -50,6 +48,23 @@ extern void evpn_configure_vrf_rd(struct bgp *bgp_vrf, struct prefix_rd *rd,
 				  const char *rd_pretty);
 extern void evpn_unconfigure_vrf_rd(struct bgp *bgp_vrf);
 extern void evpn_process_default_originate_cmd(struct bgp *bgp_vrf, afi_t afi, bool add);
+
+/* Desired-state processors extracted from the retired advertise-type5 /
+ * advertise-pip commands (vty-free), shared with the proteus/northbound
+ * callbacks (bgp_nb_evpn.c, M6 batch B9b). Both fire their route
+ * withdraw/re-advertise machinery only on a real transition; rmap_name,
+ * ip and mac may be NULL for "none". */
+extern void evpn_process_advertise_type5_cmd(struct bgp *bgp_vrf, afi_t afi,
+					     enum overlay_index_type oly, const char *rmap_name,
+					     bool add);
+extern void evpn_process_advertise_pip_cmd(struct bgp *bgp_vrf, bool enable,
+					   const struct in_addr *ip, const struct ethaddr *mac);
+
+/* The per-L2VNI route-target configure/unconfigure cores and the autort
+ * rfc8365/mode helpers un-static'd for M6 batch B9b are declared in
+ * bgp_evpn_private.h next to their VRF-level counterparts (their
+ * signatures need the typed-RT definitions from there, which this
+ * header's other includers do not pull in). */
 
 /* Loop over all extended-communities in 'rtl' and return true if 'ecomtarget'
  * matches one of them; un-static'd (was bgp_evpn_vty.c-local) for the
@@ -68,10 +83,6 @@ extern bool bgp_evpn_rt_matches_existing(struct list *rtl, struct ecommunity *ec
 #define VTEP_HELP_STR "Remote VTEP\n"
 #define VTEP_IP_HELP_STR "Remote VTEP IPv4 address\n"
 #define VTEP_IPV6_HELP_STR "Remote VTEP IPv6 address\n"
-
-extern int argv_find_and_parse_oly_idx(struct cmd_token **argv, int argc,
-				       int *oly_idx,
-				       enum overlay_index_type *oly);
 
 /* Parse type from "type <ead|1|...>", return -1 on failure */
 extern int bgp_evpn_cli_parse_type(int *type, struct cmd_token **argv,

@@ -50,15 +50,6 @@ struct vni_walk_ctx {
 	bool mac_table;
 };
 
-int argv_find_and_parse_oly_idx(struct cmd_token **argv, int argc, int *oly_idx,
-				enum overlay_index_type *oly)
-{
-	*oly = OVERLAY_INDEX_TYPE_NONE;
-	if (argv_find(argv, argc, "gateway-ip", oly_idx))
-		*oly = OVERLAY_INDEX_GATEWAY_IP;
-	return 1;
-}
-
 /*
  * Decode a route-target extended community into its display form.
  * Returns false if the value is not a displayable route-target.
@@ -1929,76 +1920,20 @@ DEFUN(show_bgp_l2vpn_evpn_com,
 	return ret;
 }
 
-/* For testing purpose, static route of EVPN RT-5. */
-DEFUN(evpnrt5_network,
-      evpnrt5_network_cmd,
-      "network <A.B.C.D/M|X:X::X:X/M> rd ASN:NN_OR_IP-ADDRESS:NN ethtag WORD label WORD esi WORD gwip <A.B.C.D|X:X::X:X> routermac WORD [route-map RMAP_NAME]",
-      "Specify a network to announce via BGP\n"
-      "IP prefix\n"
-      "IPv6 prefix\n"
-      "Specify Route Distinguisher\n"
-      "VPN Route Distinguisher\n"
-      "Ethernet Tag\n"
-      "Ethernet Tag Value\n"
-      "BGP label\n"
-      "label value\n"
-      "Ethernet Segment Identifier\n"
-      "ESI value ( 00:11:22:33:44:55:66:77:88:99 format) \n"
-      "Gateway IP\n"
-      "Gateway IP ( A.B.C.D )\n"
-      "Gateway IPv6 ( X:X::X:X )\n"
-      "Router Mac Ext Comm\n"
-      "Router Mac address Value ( aa:bb:cc:dd:ee:ff format)\n"
-      "Route-map to modify the attributes\n"
-      "Name of the route map\n")
-{
-	int idx_ipv4_prefixlen = 1;
-	int idx_route_distinguisher = 3;
-	int idx_label = 7;
-	int idx_esi = 9;
-	int idx_gwip = 11;
-	int idx_ethtag = 5;
-	int idx_routermac = 13;
+/* EVPN type-5 static 'network ... rd ... ethtag ... label ... esi ...
+ * gwip ... routermac ... [route-map NAME]' (evpnrt5_network_cmd /
+ * no_evpnrt5_network_cmd): converted to proteus/northbound in M6 batch
+ * B9b; mgmtd owns the CLI (bgp_cli_instance.c), the keyed-list callbacks
+ * live in bgp_nb_evpn.c (driving the same bgp_static_set() core the
+ * retired DEFUNs reached through bgp_static_set_vty()), and the native
+ * bgp_config_write_network_evpn() emitter is retired with them
+ * (bgp_route.c). B8 had reject-stubbed the family over the 'route-map'
+ * require-instance leafref; M6 batch B9a retyped it to a plain string.
+ * Note the retired positive DEFUN parsed its optional 'route-map' token
+ * but never passed it on (bgp_static_set_vty() got NULL) and the emitter
+ * never wrote it back -- the converted path stores and applies it, so
+ * the token is no longer silently dropped. */
 
-	return bgp_static_set_vty(vty, false, argv[idx_ipv4_prefixlen]->arg,
-			      argv[idx_route_distinguisher]->arg,
-			      argv[idx_label]->arg, AFI_L2VPN, SAFI_EVPN, NULL,
-			      0, 0, BGP_EVPN_IP_PREFIX_ROUTE,
-			      argv[idx_esi]->arg, argv[idx_gwip]->arg,
-			      argv[idx_ethtag]->arg, argv[idx_routermac]->arg);
-}
-
-/* For testing purpose, static route of EVPN RT-5. */
-DEFUN(no_evpnrt5_network,
-      no_evpnrt5_network_cmd,
-      "no network <A.B.C.D/M|X:X::X:X/M> rd ASN:NN_OR_IP-ADDRESS:NN ethtag WORD label WORD esi WORD gwip <A.B.C.D|X:X::X:X>",
-      NO_STR
-      "Specify a network to announce via BGP\n"
-      "IP prefix\n"
-      "IPv6 prefix\n"
-      "Specify Route Distinguisher\n"
-      "VPN Route Distinguisher\n"
-      "Ethernet Tag\n"
-      "Ethernet Tag Value\n"
-      "BGP label\n"
-      "label value\n"
-      "Ethernet Segment Identifier\n"
-      "ESI value ( 00:11:22:33:44:55:66:77:88:99 format) \n"
-      "Gateway IP\n" "Gateway IP ( A.B.C.D )\n" "Gateway IPv6 ( X:X::X:X )\n")
-{
-	int idx_ipv4_prefixlen = 2;
-	int idx_ext_community = 4;
-	int idx_label = 8;
-	int idx_ethtag = 6;
-	int idx_esi = 10;
-	int idx_gwip = 12;
-
-	return bgp_static_set_vty(vty, true, argv[idx_ipv4_prefixlen]->arg,
-			      argv[idx_ext_community]->arg,
-			      argv[idx_label]->arg, AFI_L2VPN, SAFI_EVPN, NULL,
-			      0, 0, BGP_EVPN_IP_PREFIX_ROUTE, argv[idx_esi]->arg,
-			      argv[idx_gwip]->arg, argv[idx_ethtag]->arg, NULL);
-}
 
 /* Remove a route target from a configured route target list and free it */
 static void evpn_l2vni_cfgd_rt_list_del(struct bgp_evpn_cfgd_rt_slu_head *head,
@@ -2022,7 +1957,7 @@ static void evpn_l2vni_cfgd_rt_list_add(struct bgp_evpn_cfgd_rt_slu_head *head,
  * Configure an import route target for an L2VNI (vty handler). Caller expected to
  * check that this is a change. Takes ownership of cfgd_rt.
  */
-static void evpn_configure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_configure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 					       struct bgp_evpn_cfgd_rt *cfgd_rt)
 {
 	/* If the VNI is "live", we need to uninstall routes using the current
@@ -2052,7 +1987,7 @@ static void evpn_configure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *
  * Unconfigure import route target(s) of an L2VNI (vty handler). cfgd_rt is NULL
  * when all import route targets should be removed.
  */
-static void evpn_unconfigure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_unconfigure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 						 const struct bgp_evpn_cfgd_rt *cfgd_rt)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
@@ -2096,7 +2031,7 @@ static void evpn_unconfigure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn
  * Configure an export route target for an L2VNI (vty handler). Caller expected to
  * check that this is a change. Takes ownership of cfgd_rt.
  */
-static void evpn_configure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_configure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 					       struct bgp_evpn_cfgd_rt *cfgd_rt)
 {
 	evpn_l2vni_cfgd_rt_list_add(&vpn->rt_config->cfgd_export, cfgd_rt);
@@ -2114,7 +2049,7 @@ static void evpn_configure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *
  * Unconfigure export route target(s) of an L2VNI (vty handler). cfgd_rt is NULL
  * when all export route targets should be removed.
  */
-static void evpn_unconfigure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_unconfigure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 						 const struct bgp_evpn_cfgd_rt *cfgd_rt)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
@@ -2145,7 +2080,7 @@ static void evpn_unconfigure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn
 /*
  * Configure the auto import RT state for an L2VNI (vty handler).
  */
-static void evpn_configure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_configure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 						    enum bgp_evpn_autort_cfgd autort)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
@@ -2173,7 +2108,7 @@ static void evpn_configure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpe
 /*
  * Unconfigure the auto import RT state for an L2VNI (vty handler).
  */
-static void evpn_unconfigure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn)
+void evpn_unconfigure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
 
@@ -2200,7 +2135,7 @@ static void evpn_unconfigure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bg
 /*
  * Configure the auto export RT state for an L2VNI (vty handler).
  */
-static void evpn_configure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+void evpn_configure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
 						    enum bgp_evpn_autort_cfgd autort)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
@@ -2220,7 +2155,7 @@ static void evpn_configure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpe
 /*
  * Unconfigure the auto export RT state for an L2VNI (vty handler).
  */
-static void evpn_unconfigure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn)
+void evpn_unconfigure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
 
@@ -3729,7 +3664,7 @@ void bgp_evpn_set_unset_resolve_overlay_index(struct bgp *bgp, bool set)
 /*
  * EVPN - use RFC8365 to auto-derive RT
  */
-static void evpn_set_autort_rfc8365(struct bgp *bgp, bool import, bool export)
+void evpn_set_autort_rfc8365(struct bgp *bgp, bool import, bool export)
 {
 	bool changed = false;
 
@@ -3749,7 +3684,7 @@ static void evpn_set_autort_rfc8365(struct bgp *bgp, bool import, bool export)
 /*
  * EVPN - don't use RFC8365 to auto-derive RT
  */
-static void evpn_unset_autort_rfc8365(struct bgp *bgp, bool import, bool export)
+void evpn_unset_autort_rfc8365(struct bgp *bgp, bool import, bool export)
 {
 	bool changed = false;
 
@@ -3766,114 +3701,52 @@ static void evpn_unset_autort_rfc8365(struct bgp *bgp, bool import, bool export)
 		bgp_evpn_handle_autort_change(bgp);
 }
 
-/* The add-mode keyword written back for an auto route-target setting, or
- * NULL when nothing should be written (implicit default). Shared by the
- * VRF and per-VNI configuration writers.
+/* True once any of this VNI's converted sub-nodes is set: the B6
+ * sub-leaves (rd, flooding, advertise-default-gw/svi-ip/subnet) or, since
+ * M6 B9b, any route-target configuration (manual/wildcard RTs or an
+ * explicit auto-route-target mode for either direction). Mirrors
+ * bgp_evpn_vni_dnode_has_cfg() (bgp_cli_instance.c, M6 B1) against bgpd's
+ * own struct state instead of the mgmtd datastore: whenever this is true,
+ * mgmtd's instance_evpn_vni_cli_write is already emitting this vni's
+ * 'vni N' / 'exit-vni' frame with the converted content nested inside.
  */
-static const char *bgp_evpn_autort_mode_str(enum bgp_evpn_autort_cfgd autort)
-{
-	switch (autort) {
-	case BGP_EVPN_AUTORT_ADD_ALWAYS:
-		return "add-always";
-	case BGP_EVPN_AUTORT_ADD_NEVER:
-		return "add-never";
-	case BGP_EVPN_AUTORT_ADD_IF_NO_MANUAL:
-		return "add-if-no-manual";
-	case BGP_EVPN_AUTORT_NOT_CFGD:
-		return NULL;
-	}
-
-	return NULL;
-}
-
-/* True once this VNI has at least one still-native line to emit: a manually
- * configured (non-auto) import/export route-target, or an explicit
- * auto-route-target mode for either direction. VNI route-targets stay
- * native pending M6 B9's remodel. */
-static bool bgp_evpn_vni_has_native_rt_cfg(struct bgpevpn *vpn)
+static bool bgp_evpn_vni_has_converted_cfg(struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
 
-	return bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_import) ||
+	return is_rd_configured(vpn) || vpn->vxlan_flood_ctrl != VXLAN_FLOOD_INHERIT_GLOBAL ||
+	       vpn->advertise_gw_macip || vpn->advertise_svi_macip || vpn->advertise_subnet ||
+	       bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_import) ||
 	       rt_config->autort_cfgd_import != BGP_EVPN_AUTORT_NOT_CFGD ||
 	       bgp_evpn_cfgd_rt_slu_count(&rt_config->cfgd_export) ||
 	       rt_config->autort_cfgd_export != BGP_EVPN_AUTORT_NOT_CFGD;
 }
 
-/* True once any of this VNI's converted sub-leaves (rd, flooding,
- * advertise-default-gw/svi-ip/subnet -- M6 B6) is set. Mirrors
- * bgp_evpn_vni_dnode_has_cfg() (bgp_cli_instance.c, M6 B1) against bgpd's
- * own struct state instead of the mgmtd datastore: whenever this is true,
- * mgmtd's instance_evpn_vni_cli_write is already emitting this vni's
- * 'vni N' / 'exit-vni' frame with the converted content nested inside, so
- * write_vni_config below must not also emit a (now content-free) frame of
- * its own for it -- unless bgp_evpn_vni_has_native_rt_cfg() is also true,
- * in which case both sides emit their own complete frame (see
- * write_vni_config's doc comment).
- */
-static bool bgp_evpn_vni_has_converted_cfg(struct bgpevpn *vpn)
-{
-	return is_rd_configured(vpn) || vpn->vxlan_flood_ctrl != VXLAN_FLOOD_INHERIT_GLOBAL ||
-	       vpn->advertise_gw_macip || vpn->advertise_svi_macip || vpn->advertise_subnet;
-}
-
 /*
- * M6 batch B6: per-VNI 'rd', 'flooding', 'advertise-default-gw',
- * 'advertise-svi-ip' and 'advertise-subnet' all moved to mgmtd
- * (bgp_nb_evpn.c / bgp_cli_instance.c); only the route-target/
- * auto-route-target lines below stay native pending B9's remodel.
- *
- * Dual-emission: mgmtd's instance_evpn_vni_cli_write (bgp_cli_instance.c)
- * emits the 'vni N' / 'exit-vni' frame once bgp_evpn_vni_dnode_has_cfg()
- * sees a converted child -- the same condition as
- * bgp_evpn_vni_has_converted_cfg() above, mirrored against the mgmtd
- * datastore instead of this struct. This native emitter therefore stays
- * fully silent for a vni with converted content and no native RT
- * configuration (mgmtd's frame already says everything there is to say),
- * but still emits its OWN complete 'vni N' ... 'exit-vni' frame whenever a
- * native RT line exists, even alongside a converted-content vni -- two
- * separate blocks for the same list entry in the merged running-config,
- * tolerated by vtysh's merge the same way dual 'address-family' blocks
- * already are (re-entering the same list-entry context, not erroring).
- * The one case both predicates return false for -- a vni with literally
- * nothing configured -- still gets its bare frame from here, exactly as
- * before B1: mgmtd's has-cfg guard never renders for it.
+ * M6 batch B9b: the per-VNI route-target/auto-route-target lines -- the
+ * last still-native 'vni N' sub-content -- moved to mgmtd
+ * (bgp_nb_evpn.c / bgp_cli_instance.c), completing B6's split. The one
+ * job left here is the B1 coexistence tail: a configured vni with NO
+ * converted content at all still gets its bare 'vni N' ... 'exit-vni'
+ * frame from this native emitter, because mgmtd's
+ * instance_evpn_vni_cli_write only renders a frame once
+ * bgp_evpn_vni_dnode_has_cfg() sees a non-default child (a bare list
+ * entry looks content-free there). The moment any converted sub-node is
+ * set, mgmtd's frame says everything there is to say and this emitter
+ * stays fully silent for the entry.
  */
 static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
 {
-	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
-	struct bgp_evpn_cfgd_rt *cfgd_rt;
-	const char *autort_mode_str;
-	char rt_buf[RT_ADDRSTRLEN];
-
 	if (!is_vni_configured(vpn))
 		return;
 
-	if (!bgp_evpn_vni_has_native_rt_cfg(vpn) && bgp_evpn_vni_has_converted_cfg(vpn))
+	if (bgp_evpn_vni_has_converted_cfg(vpn))
 		return;
 
 	vty_out(vty, "  vni %u\n", vpn->vni);
-
-	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "   route-target import %s\n", rt_buf);
-	}
-
-	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_import);
-	if (autort_mode_str)
-		vty_out(vty, "   auto-route-target import %s\n", autort_mode_str);
-
-	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "   route-target export %s\n", rt_buf);
-	}
-
-	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_export);
-	if (autort_mode_str)
-		vty_out(vty, "   auto-route-target export %s\n", autort_mode_str);
-
 	vty_out(vty, "  exit-vni\n");
 }
+
 
 #include "bgpd/bgp_evpn_vty_clippy.c"
 
@@ -3892,44 +3765,16 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
  * in M6 batch B2 (instance-level flag leaves); mgmtd owns the CLI and
  * bgp_config_write_evpn_info's emission is gated off for them. */
 
-DEFPY_ATTR(bgp_evpn_advertise_autort_rfc8365,
-	   bgp_evpn_advertise_autort_rfc8365_cmd,
-	   "autort rfc8365-compatible",
-	   "Auto-derivation of RT\n"
-	   "Auto-derivation of RT using RFC8365\n",
-	   CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
+/* Deprecated 'autort rfc8365-compatible' / 'no autort rfc8365-compatible'
+ * aliases (for 'auto-route-target both rfc8365-compatible'): converted to
+ * proteus/northbound in M6 batch B9b together with the whole VRF-level
+ * route-target family; mgmtd owns the deprecated CLI-layer mappings
+ * (bgp_cli_instance.c). evpn_set_autort_rfc8365() /
+ * evpn_unset_autort_rfc8365() above are un-static'd (bgp_evpn_vty.h) for
+ * the per-direction rfc8365-compatible leaf callbacks (bgp_nb_evpn.c) --
+ * both already self-guarded/idempotent (no bgp_evpn_handle_autort_change
+ * walk unless a direction actually flipped). */
 
-	if (!bgp)
-		return CMD_WARNING;
-
-	vty_out(vty,
-		"%% \"autort rfc8365-compatible\" is deprecated, use \"auto-route-target both rfc8365-compatible\"\n");
-
-	evpn_set_autort_rfc8365(bgp, true, true);
-	return CMD_SUCCESS;
-}
-
-DEFPY_ATTR(no_bgp_evpn_advertise_autort_rfc8365,
-	   no_bgp_evpn_advertise_autort_rfc8365_cmd,
-	   "no autort rfc8365-compatible",
-	   NO_STR
-	   "Auto-derivation of RT\n"
-	   "Auto-derivation of RT using RFC8365\n",
-	   CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	vty_out(vty,
-		"%% \"no autort rfc8365-compatible\" is deprecated, use \"no auto-route-target both rfc8365-compatible\"\n");
-
-	evpn_unset_autort_rfc8365(bgp, true, true);
-	return CMD_SUCCESS;
-}
 
 /* 'default-originate <ipv4|ipv6>' / 'no default-originate <ipv4|ipv6>'
  * (bgp_evpn_default_originate_cmd / no_bgp_evpn_default_originate_cmd):
@@ -3941,75 +3786,14 @@ DEFPY_ATTR(no_bgp_evpn_advertise_autort_rfc8365,
  * (evpn_default_originate_set() bail-out), so it needed no further
  * extraction. */
 
-/* M6 batch B4: 'dup-addr-detection [max-moves ... time ...]' and
- * 'dup-addr-detection freeze <permanent|N>' (the two optional/value-bearing
- * sub-forms, plus their 'no' counterparts) have moved to mgmtd
- * (bgp_nb_evpn.c / bgp_cli_instance.c) -- max-moves/time/freeze are clean
- * no-YANG-default leaves there. 'enabled' (bgp_vrf->evpn_info->dup_addr_detect)
- * could not be converted in this batch: proteus-bgp-evpn.yang's
- * dup-addr-detection/enabled leaf carries no 'default "true"' statement,
- * unlike every other default-on boolean in the proteus-bgp modules (see
- * fast-external-failover et al.), so the Tier A destroy-resolves-to-default
- * mechanics this leaf's own description assumes do not actually exist on
- * the wire -- a YANG modeling gap, not something fixable from this batch
- * (YANG files are out of scope here). The bare enable/disable toggle stays
- * on this native command pair, narrowed to drop the now-mgmtd-owned
- * optional/value grammar.
- */
-DEFPY (dup_addr_detection,
-       dup_addr_detection_cmd,
-       "dup-addr-detection",
-       "Duplicate address detection\n")
-{
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	bgp_vrf->evpn_info->dup_addr_detect = true;
-
-	bgp_zebra_dup_addr_detection(bgp_vrf);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_dup_addr_detection,
-       no_dup_addr_detection_cmd,
-       "no dup-addr-detection",
-       NO_STR
-       "Duplicate address detection\n")
-{
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is only supported under the EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	if (!bgp_vrf->evpn_info->dup_addr_detect)
-		return CMD_SUCCESS;
-
-	/* Reset all parameters to default. */
-	bgp_vrf->evpn_info->dup_addr_detect = false;
-	bgp_vrf->evpn_info->dad_time = EVPN_DAD_DEFAULT_TIME;
-	bgp_vrf->evpn_info->dad_max_moves = EVPN_DAD_DEFAULT_MAX_MOVES;
-	bgp_vrf->evpn_info->dad_freeze = false;
-	bgp_vrf->evpn_info->dad_freeze_time = 0;
-
-	bgp_zebra_dup_addr_detection(bgp_vrf);
-
-	return CMD_SUCCESS;
-}
+/* M6 batch B4 converted 'dup-addr-detection max-moves ... time ...' and
+ * 'dup-addr-detection freeze <permanent|N>'; M6 batch B9b converts the
+ * bare enable/disable toggle too ('dup-addr-detection' / 'no
+ * dup-addr-detection'), now that B9a gave dup-addr-detection/enabled its
+ * missing 'default "true"' statement (plain Tier-A-inverted leaf: only
+ * the negative form is ever written back). mgmtd owns the whole family's
+ * CLI (bgp_cli_instance.c) and bgp_config_write_evpn_info's
+ * 'no dup-addr-detection' line is gated off below. */
 
 /* Instance-level advertise-svi-ip: converted to proteus/northbound in M6
  * batch B2. The per-VNI 'advertise-svi-ip' (bgp_evpn_advertise_svi_ip_vni_cmd)
@@ -4031,98 +3815,38 @@ DEFPY (no_dup_addr_detection,
  * legacy's soft CMD_WARNING, when the VNI has no tenant VRF attached). */
 
 /* 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]' /
- * 'no advertise <ipv4|ipv6> unicast [route-map WORD]'
- * (bgp_evpn_advertise_type5_cmd / no_bgp_evpn_advertise_type5_cmd): SCOUTED
- * for M6 batch B7 but reject-stubbed. proteus-bgp-evpn.yang models
- * 'route-map' as `type leafref { path "/rmap:route-map/rmap:name"; }` with
- * default require-instance semantics, but the legacy grammar has always
- * allowed the referenced route-map to be defined *after* this line (FRR's
- * classic CLI resolves route-map names lazily via
- * route_map_lookup_by_name(), tolerating NULL until the route-map is
- * created later in the same file or interactively) -- a config shape this
- * topotest suite's own r2/frr.conf uses (rmap4/rmap6 are defined at the
- * bottom of the file, after the 'router bgp ... vrf ...' blocks that
- * reference them). A first implementation converting 'enabled'/
- * 'gateway-ip'/'route-map' to mgmtd (bgp_nb_evpn.c) hit exactly this:
- * mgmtd's candidate-config leafref validation rejects the forward
- * reference outright ("Invalid leafref value 'rmap4' - no target instance
- * ...") and, worse, that one rejected line aborted the rest of that
- * router's config-load transaction, silently dropping unrelated later
- * lines too (bgp_evpn_rt5's r2 lost its second VRF's rd/route-target/
- * advertise entirely, not just the route-map-bearing one) --
- * bgp_evpn_rt5/test_bgp_evpn.py::test_protocols_convergence and
- * bgp_evpn_rt5_addpath's route-map test both failed against a stash
- * baseline that passed cleanly. DO-NOT-MODIFY-YANG applies (this batch's
- * hard rule), so 'route-map' can't be retyped to a plain string here; per
- * the batch's mis-shaped-row precedent (B4/B5), the whole family stays a
- * reject-stub rather than shipping a real regression, and 'enabled'/
- * 'gateway-ip' stay bundled with it since legacy's single command line
- * can't be split into a converted and a native DEFUN at the same node
- * without a grammar collision (same reasoning as the advertise-pip
- * reject-stub below). Flag for a future YANG fix (add
- * 'require-instance false;', matching the existing bfd 'profile' leaf's
- * documented LIMITATION in proteus-bgp.yang) before reattempting. */
-
-DEFUN (bgp_evpn_advertise_type5,
-       bgp_evpn_advertise_type5_cmd,
-       "advertise " BGP_AFI_CMD_STR "" BGP_SAFI_CMD_STR " [gateway-ip] [route-map RMAP_NAME]",
-       "Advertise prefix routes\n"
-       BGP_AFI_HELP_STR
-       BGP_SAFI_HELP_STR
-       "advertise gateway IP overlay index\n"
-       "route-map for filtering specific routes\n"
-       "Name of the route map\n")
+ * 'no advertise <ipv4|ipv6> unicast [route-map WORD]': converted to
+ * proteus/northbound in M6 batch B9b; mgmtd owns the CLI
+ * (bgp_cli_instance.c) and bgp_config_write_evpn_info's two blocks are
+ * gated off for it below. The family had been reject-stubbed by B7: the
+ * 'route-map' leaf was then a real require-instance leafref into the
+ * unpopulated proteus-route-map tree, so mgmtd's candidate validation
+ * rejected legacy configs that define the route-map after the 'router
+ * bgp ... vrf ...' block referencing it (bgp_evpn_rt5's r2 does exactly
+ * that); M6 batch B9a retyped it to a plain string, unblocking this.
+ *
+ * evpn_process_advertise_type5_cmd() below is the extracted vty-free
+ * body of the retired bgp_evpn_advertise_type5_cmd /
+ * no_bgp_evpn_advertise_type5_cmd DEFUN pair, reshaped from
+ * argv-parsing to a desired-state (afi, overlay-index, route-map, add)
+ * tuple but keeping the legacy transition machinery bit-for-bit: the
+ * withdraw-before-flag-flip ordering (addpath id handling in the
+ * withdraw logic needs the OLD flags), the withdraw firing only when
+ * the overlay-index form or the route-map actually changed, and the
+ * no-op early return when the requested state is already configured
+ * (legacy's CMD_WARNING "already configured" case, silent here). The
+ * legacy runtime rejections of non-ipv4/ipv6 AFIs and non-unicast
+ * SAFIs are grammar-level on the mgmtd DEFPY, so they need no runtime
+ * twin here.
+ */
+void evpn_process_advertise_type5_cmd(struct bgp *bgp_vrf, afi_t afi, enum overlay_index_type oly,
+				      const char *rmap_name, bool add)
 {
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
-	int idx_afi = 0;
-	int idx_safi = 0;
-	int idx_rmap = 0;
-	afi_t afi = 0;
-	safi_t safi = 0;
-	int ret = 0;
+	safi_t safi = SAFI_UNICAST;
 	int rmap_changed = 0;
-	enum overlay_index_type oly = OVERLAY_INDEX_TYPE_NONE;
-	int idx_oly = 0;
 	bool adv_flag_changed = false;
 	uint16_t flag_oi_none, flag_oi_gw_ip;
 	bool has_flag_oi_none, has_flag_oi_gw_ip;
-
-	if (!bgp_vrf)
-		return CMD_WARNING;
-
-	argv_find_and_parse_afi(argv, argc, &idx_afi, &afi);
-	argv_find_and_parse_safi(argv, argc, &idx_safi, &safi);
-	argv_find_and_parse_oly_idx(argv, argc, &idx_oly, &oly);
-
-	ret = argv_find(argv, argc, "route-map", &idx_rmap);
-	if (ret) {
-		if (!bgp_vrf->adv_cmd_rmap[afi][safi].name)
-			rmap_changed = 1;
-		else if (strcmp(argv[idx_rmap + 1]->arg,
-				bgp_vrf->adv_cmd_rmap[afi][safi].name)
-			 != 0)
-			rmap_changed = 1;
-	} else if (bgp_vrf->adv_cmd_rmap[afi][safi].name) {
-		rmap_changed = 1;
-	}
-
-	if (!(afi == AFI_IP || afi == AFI_IP6)) {
-		vty_out(vty,
-			"%% Only ipv4 or ipv6 address families are supported\n");
-		return CMD_WARNING;
-	}
-
-	if (safi != SAFI_UNICAST) {
-		vty_out(vty,
-			"%% Only ipv4 unicast or ipv6 unicast are supported\n");
-		return CMD_WARNING;
-	}
-
-	if ((oly != OVERLAY_INDEX_TYPE_NONE)
-	    && (oly != OVERLAY_INDEX_GATEWAY_IP)) {
-		vty_out(vty, "%% Unknown overlay-index type specified\n");
-		return CMD_WARNING;
-	}
 
 	if (afi == AFI_IP) {
 		flag_oi_none = BGP_L2VPN_EVPN_ADV_IPV4_UNICAST;
@@ -4134,6 +3858,44 @@ DEFUN (bgp_evpn_advertise_type5,
 	has_flag_oi_none = CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_none);
 	has_flag_oi_gw_ip = CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_gw_ip);
 
+	if (!add) {
+		/* If we are not advertising ipv4/ipv6 prefixes as type-5,
+		 * nothing to withdraw.
+		 */
+		if (has_flag_oi_none || has_flag_oi_gw_ip) {
+			bgp_evpn_withdraw_type5_routes(bgp_vrf, afi, safi);
+
+			UNSET_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_none);
+			UNSET_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_gw_ip);
+
+			/* Cleanup addpath IDs if evpn export was the only
+			 * consumer.
+			 */
+			if (has_flag_oi_gw_ip)
+				bgp_addpath_type_changed(bgp_vrf);
+		}
+
+		/* Clear the route-map information for advertise ipv4/ipv6
+		 * unicast.
+		 */
+		if (bgp_vrf->adv_cmd_rmap[afi][safi].name) {
+			XFREE(MTYPE_ROUTE_MAP_NAME, bgp_vrf->adv_cmd_rmap[afi][safi].name);
+			bgp_vrf->adv_cmd_rmap[afi][safi].name = NULL;
+			bgp_vrf->adv_cmd_rmap[afi][safi].map = NULL;
+		}
+
+		return;
+	}
+
+	if (rmap_name) {
+		if (!bgp_vrf->adv_cmd_rmap[afi][safi].name)
+			rmap_changed = 1;
+		else if (strcmp(rmap_name, bgp_vrf->adv_cmd_rmap[afi][safi].name) != 0)
+			rmap_changed = 1;
+	} else if (bgp_vrf->adv_cmd_rmap[afi][safi].name) {
+		rmap_changed = 1;
+	}
+
 	if (!has_flag_oi_none && !has_flag_oi_gw_ip) {
 		if (oly == OVERLAY_INDEX_GATEWAY_IP)
 			adv_flag_changed = true;
@@ -4142,11 +3904,11 @@ DEFUN (bgp_evpn_advertise_type5,
 	else if (!has_flag_oi_gw_ip && oly == OVERLAY_INDEX_GATEWAY_IP)
 		adv_flag_changed = true;
 	else if (!rmap_changed)
-		/* Command is issued with the same option (no overlay index or gateway-ip) which
-		 * was already configured. So nothing to do. However, has not been modified.
-		 * Return an error
+		/* The same overlay-index form is already configured and the
+		 * route-map did not change either -- nothing to do (legacy's
+		 * "has not been modified" CMD_WARNING, a silent no-op here).
 		 */
-		return CMD_WARNING;
+		return;
 
 	if (rmap_changed || adv_flag_changed) {
 		/* If either of these are changed, then FRR needs to withdraw already advertised
@@ -4188,18 +3950,17 @@ DEFUN (bgp_evpn_advertise_type5,
 		bgp_addpath_type_changed(bgp_vrf);
 
 	/* set the route-map for advertise command */
-	if (ret && argv[idx_rmap + 1]->arg) {
+	if (rmap_name) {
 		/* Only allocate/update if the route-map name is different */
 		if (!bgp_vrf->adv_cmd_rmap[afi][safi].name ||
-		    strcmp(bgp_vrf->adv_cmd_rmap[afi][safi].name, argv[idx_rmap + 1]->arg) != 0) {
+		    strcmp(bgp_vrf->adv_cmd_rmap[afi][safi].name, rmap_name) != 0) {
 			if (bgp_vrf->adv_cmd_rmap[afi][safi].name) {
 				XFREE(MTYPE_ROUTE_MAP_NAME, bgp_vrf->adv_cmd_rmap[afi][safi].name);
 				route_map_counter_decrement(bgp_vrf->adv_cmd_rmap[afi][safi].map);
 			}
 			bgp_vrf->adv_cmd_rmap[afi][safi].name = XSTRDUP(MTYPE_ROUTE_MAP_NAME,
-									argv[idx_rmap + 1]->arg);
-			bgp_vrf->adv_cmd_rmap[afi][safi].map =
-				route_map_lookup_by_name(argv[idx_rmap + 1]->arg);
+									rmap_name);
+			bgp_vrf->adv_cmd_rmap[afi][safi].map = route_map_lookup_by_name(rmap_name);
 			route_map_counter_increment(bgp_vrf->adv_cmd_rmap[afi][safi].map);
 		}
 	}
@@ -4208,233 +3969,85 @@ DEFUN (bgp_evpn_advertise_type5,
 	if (advertise_type5_routes_bestpath(bgp_vrf, afi) ||
 	    advertise_type5_routes_multipath(bgp_vrf, afi))
 		bgp_evpn_advertise_type5_routes(bgp_vrf, afi, safi);
-	return CMD_SUCCESS;
 }
 
-DEFUN (no_bgp_evpn_advertise_type5,
-       no_bgp_evpn_advertise_type5_cmd,
-       "no advertise " BGP_AFI_CMD_STR "" BGP_SAFI_CMD_STR " [route-map WORD]",
-       NO_STR
-       "Advertise prefix routes\n"
-       BGP_AFI_HELP_STR
-       BGP_SAFI_HELP_STR
-       "route-map for filtering specific routes\n"
-       "Name of the route map\n")
+/* 'use-es-l3nhg' / 'disable-ead-evi-rx' / 'disable-ead-evi-tx': converted
+ * to proteus/northbound in M6 batch B9b; mgmtd owns the CLI
+ * (bgp_cli_instance.c) and bgp_config_write_evpn_info's three lines are
+ * gated off for them below. All three had been B5 reject-stubs because
+ * their YANG leaves carried no 'default' statement; M6 batch B9a added
+ * the defaults matching the compiled BGP_EVPN_MH_*_DEF constants, making
+ * them plain Tier A leaves (modify-only callbacks, bgp_nb_evpn.c). */
+
+/* 'advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]' /
+ * 'no advertise-pip [...]': converted to proteus/northbound in M6 batch
+ * B9b; mgmtd owns the CLI (bgp_cli_instance.c) and
+ * bgp_config_write_evpn_info's advertise-pip block is gated off for it
+ * below. B7 had reject-stubbed the family because the 'enabled' leaf
+ * carried no 'default "true"'; M6 batch B9a added it plus the 'must'
+ * constraints binding a static ip to enabled and a static mac to the ip,
+ * mirroring the one atomic legacy command.
+ *
+ * evpn_process_advertise_pip_cmd() below is the extracted vty-free body
+ * of the retired bgp_evpn_advertise_pip_ip_mac_cmd DEFPY, reshaped from
+ * the DEFPY's add/remove/partial-remove argv cases to one desired-state
+ * (enable, static ip, static mac) application -- the northbound side
+ * rereads the whole advertise-pip container and hands the complete tuple
+ * over (apply_finish, bgp_nb_evpn.c), so the legacy per-case
+ * "PIP IP/MAC does not match" removal validation has no equivalent
+ * operation left to guard. Fires the route-update machinery
+ * (update_advertise_vrf_routes + the svi-macip type-2 walk) only when
+ * the stored state actually changed, per the M6 B2 only-on-transition
+ * rule. One deliberate divergence from a legacy quirk: re-issuing
+ * 'advertise-pip ip A.B.C.D' after a static MAC was configured now
+ * clears the static MAC (the desired state has none), where the legacy
+ * add-path left pip_rmac_static stale.
+ */
+void evpn_process_advertise_pip_cmd(struct bgp *bgp_vrf, bool enable, const struct in_addr *ip,
+				    const struct ethaddr *mac)
 {
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
-	int idx_afi = 0;
-	int idx_safi = 0;
-	afi_t afi = 0;
-	safi_t safi = 0;
-	uint16_t flag_oi_none, flag_oi_gw_ip;
-	bool has_flag_oi_none, has_flag_oi_gw_ip;
+	struct bgp *bgp_evpn = bgp_get_evpn();
+	struct bgp_evpn_info *ei = bgp_vrf->evpn_info;
+	struct in_addr ip_static = { .s_addr = INADDR_ANY };
+	struct ethaddr mac_static;
 
-	if (!bgp_vrf)
-		return CMD_WARNING;
+	memset(&mac_static, 0, sizeof(mac_static));
+	if (enable && ip)
+		ip_static = *ip;
+	if (enable && mac)
+		mac_static = *mac;
 
-	argv_find_and_parse_afi(argv, argc, &idx_afi, &afi);
-	argv_find_and_parse_safi(argv, argc, &idx_safi, &safi);
+	/* Fire the update machinery below only on a real transition. */
+	if (ei->advertise_pip == enable &&
+	    IPV4_ADDR_SAME(&ip_static, &ei->pip_ip_static.ipaddr_v4) &&
+	    memcmp(&mac_static, &ei->pip_rmac_static, ETH_ALEN) == 0)
+		return;
 
-	if (!(afi == AFI_IP || afi == AFI_IP6)) {
-		vty_out(vty,
-			"%% Only ipv4 or ipv6 address families are supported\n");
-		return CMD_WARNING;
-	}
+	ei->advertise_pip = enable;
 
-	if (safi != SAFI_UNICAST) {
-		vty_out(vty,
-			"%% Only ipv4 unicast or ipv6 unicast are supported\n");
-		return CMD_WARNING;
-	}
+	/* Static PIP address, or the derived default (the EVPN instance's
+	 * router-id while PIP is enabled, unset otherwise -- the legacy
+	 * disable path also fell back to the router-id, matching).
+	 */
+	ei->pip_ip_static.ipaddr_v4 = ip_static;
+	if (ip_static.s_addr != INADDR_ANY)
+		ei->pip_ip.ipaddr_v4 = ip_static;
+	else if (bgp_evpn)
+		ei->pip_ip.ipaddr_v4 = bgp_evpn->router_id;
+	else
+		ei->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
 
-	if (afi == AFI_IP) {
-		flag_oi_none = BGP_L2VPN_EVPN_ADV_IPV4_UNICAST;
-		flag_oi_gw_ip = BGP_L2VPN_EVPN_ADV_IPV4_UNICAST_GW_IP;
-	} else {
-		flag_oi_none = BGP_L2VPN_EVPN_ADV_IPV6_UNICAST;
-		flag_oi_gw_ip = BGP_L2VPN_EVPN_ADV_IPV6_UNICAST_GW_IP;
-	}
-	has_flag_oi_none = CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_none);
-	has_flag_oi_gw_ip = CHECK_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_gw_ip);
-
-	/* if we are not advertising ipv4/ipv6 prefix as type-5, nothing to do */
-	if (has_flag_oi_none || has_flag_oi_gw_ip) {
-		bgp_evpn_withdraw_type5_routes(bgp_vrf, afi, safi);
-
-		UNSET_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_none);
-		UNSET_FLAG(bgp_vrf->af_flags[AFI_L2VPN][SAFI_EVPN], flag_oi_gw_ip);
-
-		/* cleanup addpath IDs if evpn export was the only consumer */
-		if (has_flag_oi_gw_ip)
-			bgp_addpath_type_changed(bgp_vrf);
-	}
-
-	/* clear the route-map information for advertise ipv4/ipv6 unicast */
-	if (bgp_vrf->adv_cmd_rmap[afi][safi].name) {
-		XFREE(MTYPE_ROUTE_MAP_NAME, bgp_vrf->adv_cmd_rmap[afi][safi].name);
-		bgp_vrf->adv_cmd_rmap[afi][safi].name = NULL;
-		bgp_vrf->adv_cmd_rmap[afi][safi].map = NULL;
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_evpn_use_es_l3nhg,
-       bgp_evpn_use_es_l3nhg_cmd,
-       "[no$no] use-es-l3nhg",
-       NO_STR
-       "use L3 nexthop group for host routes with ES destination\n")
-{
-	bgp_mh_info->host_routes_use_l3nhg = no ? false :true;
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_evpn_ead_evi_rx_disable,
-       bgp_evpn_ead_evi_rx_disable_cmd,
-       "[no$no] disable-ead-evi-rx",
-       NO_STR
-       "Activate PE on EAD-ES even if EAD-EVI is not received\n")
-{
-	bool old_ead_evi_rx = no ? true : false;
-
-	if (old_ead_evi_rx != bgp_mh_info->enable_ead_evi_rx) {
-		bgp_mh_info->enable_ead_evi_rx = old_ead_evi_rx;
-		bgp_evpn_switch_ead_evi_rx();
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_evpn_ead_evi_tx_disable,
-       bgp_evpn_ead_evi_tx_disable_cmd,
-       "[no$no] disable-ead-evi-tx",
-       NO_STR
-       "Don't advertise EAD-EVI for local ESs\n")
-{
-	bool old_ead_evi_tx = no ? true : false;
-
-	if (old_ead_evi_tx != bgp_mh_info->enable_ead_evi_tx) {
-		bgp_mh_info->enable_ead_evi_tx = old_ead_evi_tx;
-		bgp_evpn_switch_ead_evi_tx();
-	}
-
-	return CMD_SUCCESS;
-}
-
-/* enable-resolve-overlay-index: converted to proteus/northbound in M6 batch
- * B2 (instance-level flag leaf). */
-
-DEFPY (bgp_evpn_advertise_pip_ip_mac,
-       bgp_evpn_advertise_pip_ip_mac_cmd,
-       "[no$no] advertise-pip [ip <A.B.C.D> [mac <X:X:X:X:X:X|X:X:X:X:X:X/M>]]",
-       NO_STR
-       "evpn system primary IP\n"
-       IP_STR
-       "ip address\n"
-       MAC_STR MAC_STR MAC_STR)
-{
-	struct bgp *bgp_vrf = VTY_GET_CONTEXT(bgp); /* bgp vrf instance */
-	struct bgp *bgp_evpn = NULL;
-
-	if (!bgp_vrf || EVPN_ENABLED(bgp_vrf)) {
-		vty_out(vty,
-			"This command is supported under L3VNI BGP EVPN VRF\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	bgp_evpn = bgp_get_evpn();
-
-	if (!no) {
-		/* pip is already enabled */
-		if (argc == 1 && bgp_vrf->evpn_info->advertise_pip)
-			return CMD_SUCCESS;
-
-		bgp_vrf->evpn_info->advertise_pip = true;
-		if (ip.s_addr != INADDR_ANY) {
-			/* Already configured with same IP */
-			if (IPV4_ADDR_SAME(&ip, &bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4))
-				return CMD_SUCCESS;
-
-			bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4 = ip;
-			bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = ip;
-		} else {
-			bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr = INADDR_ANY;
-			/* default instance router-id assignemt */
-			if (bgp_evpn)
-				bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn->router_id;
-		}
-		/* parse sys mac */
-		if (!is_zero_mac(&mac->eth_addr)) {
-			/* Already configured with same MAC */
-			if (memcmp(&bgp_vrf->evpn_info->pip_rmac_static,
-				   &mac->eth_addr, ETH_ALEN) == 0)
-				return CMD_SUCCESS;
-
-			memcpy(&bgp_vrf->evpn_info->pip_rmac_static,
-			       &mac->eth_addr, ETH_ALEN);
-			memcpy(&bgp_vrf->evpn_info->pip_rmac,
-			       &bgp_vrf->evpn_info->pip_rmac_static,
-			       ETH_ALEN);
-		} else {
-			/* Copy zebra sys mac */
-			if (!is_zero_mac(&bgp_vrf->evpn_info->pip_rmac_zebra))
-				memcpy(&bgp_vrf->evpn_info->pip_rmac,
-				       &bgp_vrf->evpn_info->pip_rmac_zebra,
-				       ETH_ALEN);
-		}
-	} else {
-		if (argc == 2) {
-			if (!bgp_vrf->evpn_info->advertise_pip)
-				return CMD_SUCCESS;
-			/* Disable PIP feature */
-			bgp_vrf->evpn_info->advertise_pip = false;
-			/* copy anycast mac */
-			memcpy(&bgp_vrf->evpn_info->pip_rmac,
-			       &bgp_vrf->rmac, ETH_ALEN);
-		} else {
-			/* remove MAC-IP option retain PIP knob. */
-			if ((ip.s_addr != INADDR_ANY) &&
-			    !IPV4_ADDR_SAME(&ip, &bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4)) {
-				vty_out(vty,
-					"%% BGP EVPN PIP IP does not match\n");
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-
-			if (!is_zero_mac(&mac->eth_addr) &&
-			    memcmp(&bgp_vrf->evpn_info->pip_rmac_static,
-				   &mac->eth_addr, ETH_ALEN) != 0) {
-				vty_out(vty,
-					"%% BGP EVPN PIP MAC does not match\n");
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-			/* pip_rmac can carry vrr_rmac reset only if it matches
-			 * with static value.
-			 */
-			if (memcmp(&bgp_vrf->evpn_info->pip_rmac,
-				   &bgp_vrf->evpn_info->pip_rmac_static,
-				   ETH_ALEN) == 0) {
-				/* Copy zebra sys mac */
-				if (!is_zero_mac(
-					&bgp_vrf->evpn_info->pip_rmac_zebra))
-					memcpy(&bgp_vrf->evpn_info->pip_rmac,
-					&bgp_vrf->evpn_info->pip_rmac_zebra,
-					       ETH_ALEN);
-				else {
-					/* copy anycast mac */
-					memcpy(&bgp_vrf->evpn_info->pip_rmac,
-					       &bgp_vrf->rmac, ETH_ALEN);
-				}
-			}
-		}
-		/* reset user configured sys MAC */
-		memset(&bgp_vrf->evpn_info->pip_rmac_static, 0, ETH_ALEN);
-		/* reset user configured sys IP */
-		bgp_vrf->evpn_info->pip_ip_static.ipaddr_v4.s_addr = INADDR_ANY;
-		/* Assign default PIP IP (bgp instance router-id) */
-		if (bgp_evpn)
-			bgp_vrf->evpn_info->pip_ip.ipaddr_v4 = bgp_evpn->router_id;
-		else
-			bgp_vrf->evpn_info->pip_ip.ipaddr_v4.s_addr = INADDR_ANY;
-	}
+	/* Static PIP router MAC, or the derived default: zebra's system MAC
+	 * while PIP is enabled, the anycast VRR MAC when disabled (legacy's
+	 * two fallback paths).
+	 */
+	memcpy(&ei->pip_rmac_static, &mac_static, ETH_ALEN);
+	if (!is_zero_mac(&mac_static))
+		memcpy(&ei->pip_rmac, &mac_static, ETH_ALEN);
+	else if (enable && !is_zero_mac(&ei->pip_rmac_zebra))
+		memcpy(&ei->pip_rmac, &ei->pip_rmac_zebra, ETH_ALEN);
+	else
+		memcpy(&ei->pip_rmac, &bgp_vrf->rmac, ETH_ALEN);
 
 	if (is_evpn_enabled()) {
 		struct listnode *node = NULL;
@@ -4455,8 +4068,6 @@ DEFPY (bgp_evpn_advertise_pip_ip_mac,
 			update_routes_for_vni(bgp_evpn, vpn);
 		}
 	}
-
-	return CMD_SUCCESS;
 }
 
 /*
@@ -6316,448 +5927,31 @@ DEFUN (show_bgp_vrf_l3vni_info,
 	return CMD_SUCCESS;
 }
 
-/* Add a manual route target to the VRF (L3VNI) configuration. Takes
- * ownership of cfgd_rt on success. "both" is an alias for import plus
- * export.
+/* VRF-level and per-VNI 'route-target <both|import|export> RTLIST...' and
+ * 'auto-route-target <both|import|export> <add-always|add-never|
+ * add-if-no-manual[|rfc8365-compatible]>' (plus the deprecated
+ * 'route-target <type> auto' aliases): converted to proteus/northbound in
+ * M6 batch B9b onto B9a's direction-primary route-target tree; mgmtd owns
+ * the CLI (bgp_cli_instance.c) and the RT emission moved with it (the
+ * write_vni_config() split below and the gated tail of
+ * bgp_config_write_evpn_info()). The retired DEFPYs' rtlist
+ * parse/apply machinery (evpn_parse_rtlist and the vrf_rt_add/del /
+ * l2vni_rt_add/del direction dispatchers) went with them: mgmtd's DEFPYs
+ * expand the list and the 'both' direction alias into individual typed
+ * YANG list entries, so the northbound callbacks (bgp_nb_evpn.c) receive
+ * one already-typed RT per callback and drive the per-direction setters
+ * (bgp_evpn_configure_*_rt_for_vrf, bgp_evpn.c;
+ * evpn_configure_*_rt_for_l2vni, above -- un-static'd via
+ * bgp_evpn_vty.h) directly, with the former dispatchers'
+ * duplicate-add/missing-delete presence checks reproduced at the
+ * callback layer (the manual-RT setters expect the caller to have
+ * checked, and uninstall/reinstall routes unconditionally).
  */
-static int vrf_rt_add(struct bgp *bgp, struct bgp_evpn_cfgd_rt *cfgd_rt,
-		      enum bgp_evpn_rt_direction rt_direction)
-{
-	struct bgp_evpn_rt_config *rt_config = bgp->vrf_route_target_config;
-	bool have_import, have_export;
 
-	/* Do nothing if we already have this route-target */
-	switch (rt_direction) {
-	case RT_TYPE_IMPORT:
-		if (bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt))
-			return -1;
-
-		bgp_evpn_configure_import_rt_for_vrf(bgp, cfgd_rt);
-		break;
-	case RT_TYPE_EXPORT:
-		if (bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt))
-			return -1;
-
-		bgp_evpn_configure_export_rt_for_vrf(bgp, cfgd_rt);
-		break;
-	case RT_TYPE_BOTH:
-		have_import = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt);
-		have_export = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt);
-
-		if (have_import && have_export)
-			return -1;
-
-		if (!have_import && !have_export) {
-			bgp_evpn_configure_import_rt_for_vrf(bgp, cfgd_rt);
-			bgp_evpn_configure_export_rt_for_vrf(bgp, bgp_evpn_cfgd_rt_dup(cfgd_rt));
-		} else if (!have_import) {
-			bgp_evpn_configure_import_rt_for_vrf(bgp, cfgd_rt);
-		} else {
-			bgp_evpn_configure_export_rt_for_vrf(bgp, cfgd_rt);
-		}
-		break;
-	default:
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Remove a manual route target from the VRF (L3VNI) configuration.
- * The caller keeps ownership of cfgd_rt. "both" removes whichever of
- * the two directions is configured.
- */
-static int vrf_rt_del(struct bgp *bgp, const struct bgp_evpn_cfgd_rt *cfgd_rt,
-		      enum bgp_evpn_rt_direction rt_direction)
-{
-	struct bgp_evpn_rt_config *rt_config = bgp->vrf_route_target_config;
-	bool have_import, have_export;
-
-	/* Verify we already have this route-target */
-	switch (rt_direction) {
-	case RT_TYPE_IMPORT:
-		if (!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt))
-			return -1;
-
-		bgp_evpn_unconfigure_import_rt_for_vrf(bgp, cfgd_rt);
-		break;
-	case RT_TYPE_EXPORT:
-		if (!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt))
-			return -1;
-
-		bgp_evpn_unconfigure_export_rt_for_vrf(bgp, cfgd_rt);
-		break;
-	case RT_TYPE_BOTH:
-		have_import = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt);
-		have_export = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt);
-
-		if (!have_import && !have_export)
-			return -1;
-
-		if (have_import)
-			bgp_evpn_unconfigure_import_rt_for_vrf(bgp, cfgd_rt);
-		if (have_export)
-			bgp_evpn_unconfigure_export_rt_for_vrf(bgp, cfgd_rt);
-		break;
-	default:
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Add a manual route target to an L2VNI (an EVI, strictly speaking;
- * FRR uses the terms interchangeably). Takes ownership of cfgd_rt on
- * success. "both" is an alias for import plus export.
- */
-static int l2vni_rt_add(struct bgp *bgp, struct bgpevpn *vpn, struct bgp_evpn_cfgd_rt *cfgd_rt,
-			enum bgp_evpn_rt_direction rt_direction)
-{
-	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
-	bool have_import, have_export;
-
-	/* Do nothing if we already have this route-target */
-	switch (rt_direction) {
-	case RT_TYPE_IMPORT:
-		if (bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt))
-			return -1;
-
-		evpn_configure_import_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		break;
-	case RT_TYPE_EXPORT:
-		if (bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt))
-			return -1;
-
-		evpn_configure_export_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		break;
-	case RT_TYPE_BOTH:
-		have_import = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt);
-		have_export = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt);
-
-		if (have_import && have_export)
-			return -1;
-
-		if (!have_import && !have_export) {
-			evpn_configure_import_rt_for_l2vni(bgp, vpn, cfgd_rt);
-			evpn_configure_export_rt_for_l2vni(bgp, vpn, bgp_evpn_cfgd_rt_dup(cfgd_rt));
-		} else if (!have_import) {
-			evpn_configure_import_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		} else {
-			evpn_configure_export_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		}
-		break;
-	default:
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Remove a manual route target from an L2VNI. The caller keeps
- * ownership of cfgd_rt. "both" removes whichever of the two directions
- * is configured.
- */
-static int l2vni_rt_del(struct bgp *bgp, struct bgpevpn *vpn,
-			const struct bgp_evpn_cfgd_rt *cfgd_rt,
-			enum bgp_evpn_rt_direction rt_direction)
-{
-	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
-	bool have_import, have_export;
-
-	/* Verify we already have this route-target */
-	switch (rt_direction) {
-	case RT_TYPE_IMPORT:
-		if (!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt))
-			return -1;
-
-		evpn_unconfigure_import_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		break;
-	case RT_TYPE_EXPORT:
-		if (!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt))
-			return -1;
-
-		evpn_unconfigure_export_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		break;
-	case RT_TYPE_BOTH:
-		have_import = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_import, cfgd_rt);
-		have_export = !!bgp_evpn_cfgd_rt_slu_find(&rt_config->cfgd_export, cfgd_rt);
-
-		if (!have_import && !have_export)
-			return -1;
-
-		if (have_import)
-			evpn_unconfigure_import_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		if (have_export)
-			evpn_unconfigure_export_rt_for_l2vni(bgp, vpn, cfgd_rt);
-		break;
-	default:
-		return -1;
-	}
-
-	return 0;
-}
-
-/* Free and clear a partially or fully parsed route-target list of n_rts
- * entries; used to undo a parse that failed partway through.
- */
-static void evpn_cfgd_rtlist_free(struct bgp_evpn_cfgd_rt **cfgd_rts, int n_rts)
-{
-	for (int i = 0; i < n_rts; i++) {
-		if (cfgd_rts[i] == NULL)
-			continue;
-
-		bgp_evpn_cfgd_rt_free(cfgd_rts[i]);
-		cfgd_rts[i] = NULL;
-	}
-}
-
-/* Parse a route-target list from the n_rts command tokens rt_argv[0 .. n_rts-1]
- * into cfgd_rts[0 .. n_rts-1].
- *
- *   vty         - for error output.
- *   rt_argv     - the route-target command tokens (an argv sub-slice).
- *   n_rts       - number of route-target tokens.
- *   wildcard_ok - whether a wildcard '*' route-target is allowed (import only).
- *   cfgd_rts    - output array. Must be pre-allocated by the caller with room
- *                 for n_rts entries; the caller owns the array and, on success,
- *                 the parsed entries.
- *
- * Returns 0 on success. On any parse error nothing is left allocated: every
- * cfgd_rts[0 .. n_rts-1] is freed and set to NULL, and -1 is returned.
- */
-static int evpn_parse_rtlist(struct vty *vty, struct cmd_token **rt_argv, int n_rts,
-			     bool wildcard_ok, struct bgp_evpn_cfgd_rt **cfgd_rts)
-{
-	struct ecommunity *ecom;
-	bool is_wildcard;
-	int i;
-
-	for (i = 0; i < n_rts; i++) {
-		is_wildcard = false;
-
-		/* The wildcard '*' is converted to 0 so the ecommunity
-		 * parser does not need to know about it.
-		 */
-		if ((rt_argv[i]->arg)[0] == '*') {
-			if (!wildcard_ok) {
-				vty_out(vty, "%% Wildcard '*' only applicable for import: %s\n",
-					rt_argv[i]->arg);
-				evpn_cfgd_rtlist_free(cfgd_rts, n_rts);
-				return -1;
-			}
-
-			(rt_argv[i]->arg)[0] = '0';
-			is_wildcard = true;
-		}
-
-		/* Parse the RT string into a temporary extended community. */
-		ecom = ecommunity_str2com(rt_argv[i]->arg, ECOMMUNITY_ROUTE_TARGET, 0);
-
-		/* Put it back as was */
-		if (is_wildcard)
-			(rt_argv[i]->arg)[0] = '*';
-
-		if (!ecom) {
-			vty_out(vty, "%% Malformed Route Target: %s\n", rt_argv[i]->arg);
-			evpn_cfgd_rtlist_free(cfgd_rts, n_rts);
-			return -1;
-		}
-
-		/* Convert the extended community into a typed configured RT. */
-		cfgd_rts[i] = bgp_evpn_cfgd_rt_from_ecom(ecom, is_wildcard);
-		ecommunity_free(&ecom);
-
-		if (!cfgd_rts[i]) {
-			vty_out(vty, "%% Malformed Route Target: %s\n", rt_argv[i]->arg);
-			evpn_cfgd_rtlist_free(cfgd_rts, n_rts);
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-/* Apply a parsed route target list to the VRF (L3VNI) configuration, adding
- * (is_add) or removing each entry. Consumes the cfgd_rts entries. Reach it
- * through the vrf_process_rtlist_add()/vrf_process_rtlist_del() wrappers.
- */
-static int vrf_process_rtlist_internal(struct bgp *bgp, struct vty *vty, struct cmd_token **rt_argv,
-				       int n_rts, struct bgp_evpn_cfgd_rt **cfgd_rts, bool is_add,
-				       enum bgp_evpn_rt_direction rt_direction)
-{
-	int ret = CMD_SUCCESS;
-
-	for (int i = 0; i < n_rts; i++) {
-		struct bgp_evpn_cfgd_rt *cfgd_rt = cfgd_rts[i];
-
-		cfgd_rts[i] = NULL;
-
-		if (is_add) {
-			if (vrf_rt_add(bgp, cfgd_rt, rt_direction) != 0) {
-				vty_out(vty,
-					"%% RT specified already configured for this VRF: %s\n",
-					rt_argv[i]->arg);
-				bgp_evpn_cfgd_rt_free(cfgd_rt);
-				ret = CMD_WARNING;
-			}
-
-		} else {
-			if (vrf_rt_del(bgp, cfgd_rt, rt_direction) != 0) {
-				vty_out(vty,
-					"%% RT specified does not match configuration for this VRF: %s\n",
-					rt_argv[i]->arg);
-				ret = CMD_WARNING;
-			}
-
-			bgp_evpn_cfgd_rt_free(cfgd_rt);
-		}
-	}
-
-	return ret;
-}
-
-/* Add each parsed route target in cfgd_rts to the VRF (L3VNI) configuration. */
-static int vrf_process_rtlist_add(struct bgp *bgp, struct vty *vty, struct cmd_token **rt_argv,
-				  int n_rts, struct bgp_evpn_cfgd_rt **cfgd_rts,
-				  enum bgp_evpn_rt_direction rt_direction)
-{
-	return vrf_process_rtlist_internal(bgp, vty, rt_argv, n_rts, cfgd_rts, true, rt_direction);
-}
-
-/* Remove each parsed route target in cfgd_rts from the VRF (L3VNI) configuration. */
-static int vrf_process_rtlist_del(struct bgp *bgp, struct vty *vty, struct cmd_token **rt_argv,
-				  int n_rts, struct bgp_evpn_cfgd_rt **cfgd_rts,
-				  enum bgp_evpn_rt_direction rt_direction)
-{
-	return vrf_process_rtlist_internal(bgp, vty, rt_argv, n_rts, cfgd_rts, false, rt_direction);
-}
-
-/* Apply a parsed route target list to an L2VNI configuration, adding (is_add)
- * or removing each entry. Consumes the cfgd_rts entries. Reach it through the
- * l2vni_process_rtlist_add()/l2vni_process_rtlist_del() wrappers.
- */
-static int l2vni_process_rtlist_internal(struct bgp *bgp, struct bgpevpn *vpn, struct vty *vty,
-					 struct cmd_token **rt_argv, int n_rts,
-					 struct bgp_evpn_cfgd_rt **cfgd_rts, bool is_add,
-					 enum bgp_evpn_rt_direction rt_direction)
-{
-	int ret = CMD_SUCCESS;
-
-	for (int i = 0; i < n_rts; i++) {
-		struct bgp_evpn_cfgd_rt *cfgd_rt = cfgd_rts[i];
-
-		cfgd_rts[i] = NULL;
-
-		if (is_add) {
-			if (l2vni_rt_add(bgp, vpn, cfgd_rt, rt_direction) != 0) {
-				vty_out(vty,
-					"%% RT specified already configured for this VNI: %s\n",
-					rt_argv[i]->arg);
-				bgp_evpn_cfgd_rt_free(cfgd_rt);
-				ret = CMD_WARNING;
-			}
-
-		} else {
-			if (l2vni_rt_del(bgp, vpn, cfgd_rt, rt_direction) != 0) {
-				vty_out(vty,
-					"%% RT specified does not match configuration for this VNI: %s\n",
-					rt_argv[i]->arg);
-				ret = CMD_WARNING;
-			}
-
-			bgp_evpn_cfgd_rt_free(cfgd_rt);
-		}
-	}
-
-	return ret;
-}
-
-/* Add each parsed route target in cfgd_rts to the L2VNI configuration. */
-static int l2vni_process_rtlist_add(struct bgp *bgp, struct bgpevpn *vpn, struct vty *vty,
-				    struct cmd_token **rt_argv, int n_rts,
-				    struct bgp_evpn_cfgd_rt **cfgd_rts,
-				    enum bgp_evpn_rt_direction rt_direction)
-{
-	return l2vni_process_rtlist_internal(bgp, vpn, vty, rt_argv, n_rts, cfgd_rts, true,
-					     rt_direction);
-}
-
-/* Remove each parsed route target in cfgd_rts from the L2VNI configuration. */
-static int l2vni_process_rtlist_del(struct bgp *bgp, struct bgpevpn *vpn, struct vty *vty,
-				    struct cmd_token **rt_argv, int n_rts,
-				    struct bgp_evpn_cfgd_rt **cfgd_rts,
-				    enum bgp_evpn_rt_direction rt_direction)
-{
-	return l2vni_process_rtlist_internal(bgp, vpn, vty, rt_argv, n_rts, cfgd_rts, false,
-					     rt_direction);
-}
-
-/* import/export rt for l3vni-vrf */
-DEFPY (bgp_evpn_vrf_rt,
-       bgp_evpn_vrf_rt_cmd,
-       "route-target <both$both|import$import|export$export> RTLIST...",
-       "Route Target\n"
-       "import and export\n"
-       "import\n"
-       "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp_evpn_cfgd_rt **cfgd_rts;
-	enum bgp_evpn_rt_direction rt_direction;
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (import)
-		rt_direction = RT_TYPE_IMPORT;
-	else if (export)
-		rt_direction = RT_TYPE_EXPORT;
-	else if (both)
-		rt_direction = RT_TYPE_BOTH;
-	else {
-		/* Should not happen: the grammar only offers these three. */
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* The route-target list follows "route-target <type>" (argv[0..1]); the
-	 * RTLIST... grammar guarantees at least one, but re-check before indexing.
-	 */
-	if (argc <= 2) {
-		vty_out(vty, "%% No route-target specified\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (strmatch(argv[2]->arg, "auto")) {
-		vty_out(vty,
-			"%% Use \"auto-route-target\" to configure the automatic route-target\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	int n_rts = argc - 2;
-	struct cmd_token **rt_argv = argv + 2;
-
-	cfgd_rts = XCALLOC(MTYPE_TMP, n_rts * sizeof(*cfgd_rts));
-
-	/* Wildcard '*' route-targets are only valid for import. */
-	bool wildcard_ok = (rt_direction == RT_TYPE_IMPORT);
-	int parse_ret = evpn_parse_rtlist(vty, rt_argv, n_rts, wildcard_ok, cfgd_rts);
-
-	if (parse_ret != 0) {
-		XFREE(MTYPE_TMP, cfgd_rts);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = vrf_process_rtlist_add(bgp, vty, rt_argv, n_rts, cfgd_rts, rt_direction);
-	XFREE(MTYPE_TMP, cfgd_rts);
-
-	return ret;
-}
-
-/* Map an "auto-route-target" add-mode keyword to its enum. */
-static enum bgp_evpn_autort_cfgd bgp_evpn_autort_mode_from_str(const char *mode)
+/* Map an "auto-route-target" add-mode keyword to its enum. Un-static'd
+ * for the auto/mode leaf callbacks (bgp_nb_evpn.c); the YANG enum uses
+ * the identical keywords. */
+enum bgp_evpn_autort_cfgd bgp_evpn_autort_mode_from_str(const char *mode)
 {
 	if (strmatch(mode, "add-always"))
 		return BGP_EVPN_AUTORT_ADD_ALWAYS;
@@ -6768,562 +5962,12 @@ static enum bgp_evpn_autort_cfgd bgp_evpn_autort_mode_from_str(const char *mode)
 	return BGP_EVPN_AUTORT_ADD_IF_NO_MANUAL;
 }
 
-DEFPY (bgp_evpn_vrf_auto_rt,
-       bgp_evpn_vrf_auto_rt_cmd,
-       "auto-route-target <both|import|export>$type <add-always|add-never|add-if-no-manual|rfc8365-compatible>$mode",
-       "Automatic route-target configuration\n"
-       "Import and export\n"
-       "Import\n"
-       "Export\n"
-       "Always add the automatic route-target, even when manual route-targets are configured\n"
-       "Never add the automatic route-target\n"
-       "Add the automatic route-target only when no manual route-target is configured (default)\n"
-       "Encode the automatic route-target as RFC 8365 compatible (set the VXLAN encapsulation bits in the local admin field)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	bool do_import, do_export;
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	/* "both" is an alias for import plus export */
-	do_import = strmatch(type, "import") || strmatch(type, "both");
-	do_export = strmatch(type, "export") || strmatch(type, "both");
-
-	/* rfc8365-compatible is orthogonal to the add-mode: it only affects
-	 * how the automatic route-target is encoded.
-	 */
-	if (strmatch(mode, "rfc8365-compatible")) {
-		evpn_set_autort_rfc8365(bgp, do_import, do_export);
-	} else {
-		enum bgp_evpn_autort_cfgd autort = bgp_evpn_autort_mode_from_str(mode);
-
-		if (do_import)
-			bgp_evpn_configure_import_auto_rt_for_vrf(bgp, autort);
-		if (do_export)
-			bgp_evpn_configure_export_auto_rt_for_vrf(bgp, autort);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY_ATTR(bgp_evpn_vrf_rt_auto,
-	   bgp_evpn_vrf_rt_auto_cmd,
-	   "route-target <both|import|export>$type auto",
-	   "Route Target\n"
-	   "import and export\n"
-	   "import\n"
-	   "export\n"
-	   "Automatically derive route target\n",
-	   CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	vty_out(vty,
-		"%% \"route-target %s auto\" is deprecated, use \"auto-route-target %s add-always\"\n",
-		type, type);
-
-	/* "both" is an alias for import plus export */
-	if (strmatch(type, "import") || strmatch(type, "both"))
-		bgp_evpn_configure_import_auto_rt_for_vrf(bgp, BGP_EVPN_AUTORT_ADD_ALWAYS);
-	if (strmatch(type, "export") || strmatch(type, "both"))
-		bgp_evpn_configure_export_auto_rt_for_vrf(bgp, BGP_EVPN_AUTORT_ADD_ALWAYS);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_vrf_rt,
-       no_bgp_evpn_vrf_rt_cmd,
-       "no route-target <both$both|import$import|export$export> RTLIST...",
-       NO_STR
-       "Route Target\n"
-       "import and export\n"
-       "import\n"
-       "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp_evpn_cfgd_rt **cfgd_rts;
-	enum bgp_evpn_rt_direction rt_direction;
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (import)
-		rt_direction = RT_TYPE_IMPORT;
-	else if (export)
-		rt_direction = RT_TYPE_EXPORT;
-	else if (both)
-		rt_direction = RT_TYPE_BOTH;
-	else {
-		/* Should not happen: the grammar only offers these three. */
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* The route-target list follows "no route-target <type>" (argv[0..2]); the
-	 * RTLIST... grammar guarantees at least one, but re-check before indexing.
-	 */
-	if (argc <= 3) {
-		vty_out(vty, "%% No route-target specified\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (strmatch(argv[3]->arg, "auto")) {
-		vty_out(vty,
-			"%% Use \"no auto-route-target\" to unconfigure the automatic route-target\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	int n_rts = argc - 3;
-	struct cmd_token **rt_argv = argv + 3;
-
-	cfgd_rts = XCALLOC(MTYPE_TMP, n_rts * sizeof(*cfgd_rts));
-
-	/* Wildcard '*' route-targets are only valid for import. Unconfigured RTs
-	 * (not currently present) are reported per-entry by vrf_process_rtlist_del().
-	 */
-	bool wildcard_ok = (rt_direction == RT_TYPE_IMPORT);
-	int parse_ret = evpn_parse_rtlist(vty, rt_argv, n_rts, wildcard_ok, cfgd_rts);
-
-	if (parse_ret != 0) {
-		XFREE(MTYPE_TMP, cfgd_rts);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	ret = vrf_process_rtlist_del(bgp, vty, rt_argv, n_rts, cfgd_rts, rt_direction);
-	XFREE(MTYPE_TMP, cfgd_rts);
-
-	return ret;
-}
-
-DEFPY (no_bgp_evpn_vrf_auto_rt,
-       no_bgp_evpn_vrf_auto_rt_cmd,
-       "no auto-route-target [<both|import|export>$type [<add-always|add-never|add-if-no-manual|rfc8365-compatible>$mode]]",
-       NO_STR
-       "Automatic route-target configuration\n"
-       "Import and export\n"
-       "Import\n"
-       "Export\n"
-       "Always add the automatic route-target, even when manual route-targets are configured\n"
-       "Never add the automatic route-target\n"
-       "Add the automatic route-target only when no manual route-target is configured (default)\n"
-       "Encode the automatic route-target as RFC 8365 compatible (set the VXLAN encapsulation bits in the local admin field)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp_evpn_rt_config *rt_config;
-	bool do_import, do_export;
-	bool clear_add_import, clear_add_export;
-	bool clear_rfc_import, clear_rfc_export;
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	rt_config = bgp->vrf_route_target_config;
-
-	/* A missing direction means both; "both" is an alias for both too. */
-	do_import = !type || strmatch(type, "import") || strmatch(type, "both");
-	do_export = !type || strmatch(type, "export") || strmatch(type, "both");
-
-	if (mode && strmatch(mode, "rfc8365-compatible")) {
-		/* Clear the (orthogonal) rfc8365 setting, exact match. */
-		bool clear_import = do_import && bgp->autort_rfc8365_import;
-		bool clear_export = do_export && bgp->autort_rfc8365_export;
-
-		if (!clear_import && !clear_export) {
-			vty_out(vty,
-				"%% RFC 8365 compatible automatic route-target is not configured for this VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		evpn_unset_autort_rfc8365(bgp, clear_import, clear_export);
-		return CMD_SUCCESS;
-	}
-
-	if (mode) {
-		/* With an explicit add-mode the configured state must match it
-		 * exactly, otherwise nothing is changed.
-		 */
-		enum bgp_evpn_autort_cfgd autort = bgp_evpn_autort_mode_from_str(mode);
-		bool clear_import = do_import && rt_config->autort_cfgd_import == autort;
-		bool clear_export = do_export && rt_config->autort_cfgd_export == autort;
-
-		if (!clear_import && !clear_export) {
-			vty_out(vty,
-				"%% Automatic route-target \"%s\" is not configured for this VRF\n",
-				mode);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (clear_import)
-			bgp_evpn_unconfigure_import_auto_rt_for_vrf(bgp);
-		if (clear_export)
-			bgp_evpn_unconfigure_export_auto_rt_for_vrf(bgp);
-
-		return CMD_SUCCESS;
-	}
-
-	/* Without a mode, clear both the add-mode and the rfc8365 setting for
-	 * the direction(s).
-	 */
-	clear_add_import = do_import && rt_config->autort_cfgd_import != BGP_EVPN_AUTORT_NOT_CFGD;
-	clear_add_export = do_export && rt_config->autort_cfgd_export != BGP_EVPN_AUTORT_NOT_CFGD;
-	clear_rfc_import = do_import && bgp->autort_rfc8365_import;
-	clear_rfc_export = do_export && bgp->autort_rfc8365_export;
-
-	if (!clear_add_import && !clear_add_export && !clear_rfc_import && !clear_rfc_export) {
-		vty_out(vty, "%% Automatic route-target is not configured for this VRF\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (clear_add_import)
-		bgp_evpn_unconfigure_import_auto_rt_for_vrf(bgp);
-	if (clear_add_export)
-		bgp_evpn_unconfigure_export_auto_rt_for_vrf(bgp);
-	evpn_unset_autort_rfc8365(bgp, clear_rfc_import, clear_rfc_export);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY_ATTR(no_bgp_evpn_vrf_rt_auto,
-	   no_bgp_evpn_vrf_rt_auto_cmd,
-	   "no route-target <both|import|export>$type auto",
-	   NO_STR
-	   "Route Target\n"
-	   "import and export\n"
-	   "import\n"
-	   "export\n"
-	   "Automatically derive route target\n",
-	   CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgp_evpn_rt_config *rt_config;
-	bool do_import, do_export;
-	bool clear_import, clear_export;
-
-	if (!bgp)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	vty_out(vty,
-		"%% \"no route-target %s auto\" is deprecated, use \"no auto-route-target %s add-always\"\n",
-		type, type);
-
-	rt_config = bgp->vrf_route_target_config;
-	do_import = strmatch(type, "import") || strmatch(type, "both");
-	do_export = strmatch(type, "export") || strmatch(type, "both");
-
-	/* The deprecated form only ever set ADD_ALWAYS; its no-form must
-	 * match that exactly so it can never clobber new-style state.
-	 */
-	clear_import = do_import && rt_config->autort_cfgd_import == BGP_EVPN_AUTORT_ADD_ALWAYS;
-	clear_export = do_export && rt_config->autort_cfgd_export == BGP_EVPN_AUTORT_ADD_ALWAYS;
-
-	if (!clear_import && !clear_export) {
-		vty_out(vty, "%% Automatic route-target is not configured for this VRF\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (clear_import)
-		bgp_evpn_unconfigure_import_auto_rt_for_vrf(bgp);
-	if (clear_export)
-		bgp_evpn_unconfigure_export_auto_rt_for_vrf(bgp);
-
-	return CMD_SUCCESS;
-}
-
 /* 'ead-es-frag evi-limit (1-1000)' and 'ead-es-route-target export RT':
  * converted to proteus/northbound in M6 batch B5; mgmtd owns the CLI and
  * bgp_config_write_evpn_info's emission is gated off for both below.
  * bgp_evpn_rt_matches_existing() (still used by bgp_nb_evpn.c's converted
  * callbacks) and bgp_evpn_mh_config_ead_export_rt() stay exported.
  */
-
-DEFPY (bgp_evpn_vni_rt,
-       bgp_evpn_vni_rt_cmd,
-       "route-target <both$both|import$import|export$export> RTLIST...",
-       "Route Target\n"
-       "import and export\n"
-       "import\n"
-       "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	struct bgp_evpn_cfgd_rt **cfgd_rts;
-	enum bgp_evpn_rt_direction rt_direction;
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	if (import)
-		rt_direction = RT_TYPE_IMPORT;
-	else if (export)
-		rt_direction = RT_TYPE_EXPORT;
-	else if (both)
-		rt_direction = RT_TYPE_BOTH;
-	else {
-		/* Should not happen: the grammar only offers these three. */
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING;
-	}
-
-	/* The route-target list follows "route-target <type>" (argv[0..1]); the
-	 * RTLIST... grammar guarantees at least one, but re-check before indexing.
-	 */
-	if (argc <= 2) {
-		vty_out(vty, "%% No route-target specified\n");
-		return CMD_WARNING;
-	}
-
-	int n_rts = argc - 2;
-	struct cmd_token **rt_argv = argv + 2;
-
-	cfgd_rts = XCALLOC(MTYPE_TMP, n_rts * sizeof(*cfgd_rts));
-
-	/* Wildcard '*' route-targets are only valid for import. */
-	bool wildcard_ok = (rt_direction == RT_TYPE_IMPORT);
-	int parse_ret = evpn_parse_rtlist(vty, rt_argv, n_rts, wildcard_ok, cfgd_rts);
-
-	if (parse_ret != 0) {
-		XFREE(MTYPE_TMP, cfgd_rts);
-		return CMD_WARNING;
-	}
-
-	ret = l2vni_process_rtlist_add(bgp, vpn, vty, rt_argv, n_rts, cfgd_rts, rt_direction);
-	XFREE(MTYPE_TMP, cfgd_rts);
-
-	return ret;
-}
-
-DEFPY (no_bgp_evpn_vni_rt,
-       no_bgp_evpn_vni_rt_cmd,
-       "no route-target <both$both|import$import|export$export> RTLIST...",
-       NO_STR
-       "Route Target\n"
-       "import and export\n"
-       "import\n"
-       "export\n"
-       "Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	struct bgp_evpn_cfgd_rt **cfgd_rts;
-	enum bgp_evpn_rt_direction rt_direction;
-	int ret;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	if (import)
-		rt_direction = RT_TYPE_IMPORT;
-	else if (export)
-		rt_direction = RT_TYPE_EXPORT;
-	else if (both)
-		rt_direction = RT_TYPE_BOTH;
-	else {
-		/* Should not happen: the grammar only offers these three. */
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING;
-	}
-
-	/* The route-target list follows "no route-target <type>" (argv[0..2]); the
-	 * RTLIST... grammar guarantees at least one, but re-check before indexing.
-	 */
-	if (argc <= 3) {
-		vty_out(vty, "%% No route-target specified\n");
-		return CMD_WARNING;
-	}
-
-	int n_rts = argc - 3;
-	struct cmd_token **rt_argv = argv + 3;
-
-	cfgd_rts = XCALLOC(MTYPE_TMP, n_rts * sizeof(*cfgd_rts));
-
-	/* Wildcard '*' route-targets are only valid for import. Unconfigured RTs
-	 * (not currently present) are reported per-entry by l2vni_process_rtlist_del().
-	 */
-	bool wildcard_ok = (rt_direction == RT_TYPE_IMPORT);
-	int parse_ret = evpn_parse_rtlist(vty, rt_argv, n_rts, wildcard_ok, cfgd_rts);
-
-	if (parse_ret != 0) {
-		XFREE(MTYPE_TMP, cfgd_rts);
-		return CMD_WARNING;
-	}
-
-	ret = l2vni_process_rtlist_del(bgp, vpn, vty, rt_argv, n_rts, cfgd_rts, rt_direction);
-	XFREE(MTYPE_TMP, cfgd_rts);
-
-	return ret;
-}
-
-DEFPY (no_bgp_evpn_vni_rt_without_val,
-       no_bgp_evpn_vni_rt_without_val_cmd,
-       "no route-target <import$import|export$export>",
-       NO_STR
-       "Route Target\n"
-       "import\n"
-       "export\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	enum bgp_evpn_rt_direction rt_direction;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	if (import)
-		rt_direction = RT_TYPE_IMPORT;
-	else if (export)
-		rt_direction = RT_TYPE_EXPORT;
-	else {
-		/* Should not happen: the grammar only offers import/export. */
-		vty_out(vty, "%% Invalid Route Target type\n");
-		return CMD_WARNING;
-	}
-
-	/* Bulk-remove all RTs of the direction; nothing to do (and an error) if
-	 * that direction has no manually configured RT.
-	 */
-	if (rt_direction == RT_TYPE_IMPORT) {
-		if (!bgp_evpn_l2vni_has_manual_import_rt_cfgd(vpn)) {
-			vty_out(vty, "%% Import RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-		evpn_unconfigure_import_rt_for_l2vni(bgp, vpn, NULL);
-	} else {
-		if (!bgp_evpn_l2vni_has_manual_export_rt_cfgd(vpn)) {
-			vty_out(vty, "%% Export RT is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-		evpn_unconfigure_export_rt_for_l2vni(bgp, vpn, NULL);
-	}
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (bgp_evpn_vni_auto_rt,
-       bgp_evpn_vni_auto_rt_cmd,
-       "auto-route-target <both|import|export>$type <add-always|add-never|add-if-no-manual>$mode",
-       "Automatic route-target configuration\n"
-       "Import and export\n"
-       "Import\n"
-       "Export\n"
-       "Always add the automatic route-target, even when manual route-targets are configured\n"
-       "Never add the automatic route-target\n"
-       "Add the automatic route-target only when no manual route-target is configured (default)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	enum bgp_evpn_autort_cfgd autort;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	autort = bgp_evpn_autort_mode_from_str(mode);
-
-	/* "both" is an alias for import plus export */
-	if (strmatch(type, "import") || strmatch(type, "both"))
-		evpn_configure_import_auto_rt_for_l2vni(bgp, vpn, autort);
-	if (strmatch(type, "export") || strmatch(type, "both"))
-		evpn_configure_export_auto_rt_for_l2vni(bgp, vpn, autort);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY (no_bgp_evpn_vni_auto_rt,
-       no_bgp_evpn_vni_auto_rt_cmd,
-       "no auto-route-target [<both|import|export>$type [<add-always|add-never|add-if-no-manual>$mode]]",
-       NO_STR
-       "Automatic route-target configuration\n"
-       "Import and export\n"
-       "Import\n"
-       "Export\n"
-       "Always add the automatic route-target, even when manual route-targets are configured\n"
-       "Never add the automatic route-target\n"
-       "Add the automatic route-target only when no manual route-target is configured (default)\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	VTY_DECLVAR_CONTEXT_SUB(bgpevpn, vpn);
-	struct bgp_evpn_rt_config *rt_config;
-	bool do_import, do_export;
-	bool clear_import, clear_export;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	if (!EVPN_ENABLED(bgp)) {
-		vty_out(vty, "This command is only supported under EVPN VRF\n");
-		return CMD_WARNING;
-	}
-
-	rt_config = vpn->rt_config;
-
-	/* A missing direction means both; "both" is an alias for both too. */
-	do_import = !type || strmatch(type, "import") || strmatch(type, "both");
-	do_export = !type || strmatch(type, "export") || strmatch(type, "both");
-
-	if (mode) {
-		/* With an explicit mode the configured state must match it
-		 * exactly, otherwise nothing is changed.
-		 */
-		enum bgp_evpn_autort_cfgd autort = bgp_evpn_autort_mode_from_str(mode);
-
-		clear_import = do_import && rt_config->autort_cfgd_import == autort;
-		clear_export = do_export && rt_config->autort_cfgd_export == autort;
-
-		if (!clear_import && !clear_export) {
-			vty_out(vty,
-				"%% Automatic route-target \"%s\" is not configured for this VNI\n",
-				mode);
-			return CMD_WARNING;
-		}
-	} else {
-		/* Without a mode, clear whatever is configured for the
-		 * direction(s).
-		 */
-		clear_import = do_import &&
-			       rt_config->autort_cfgd_import != BGP_EVPN_AUTORT_NOT_CFGD;
-		clear_export = do_export &&
-			       rt_config->autort_cfgd_export != BGP_EVPN_AUTORT_NOT_CFGD;
-
-		if (!clear_import && !clear_export) {
-			vty_out(vty, "%% Automatic route-target is not configured for this VNI\n");
-			return CMD_WARNING;
-		}
-	}
-
-	if (clear_import)
-		evpn_unconfigure_import_auto_rt_for_l2vni(bgp, vpn);
-	if (clear_export)
-		evpn_unconfigure_export_auto_rt_for_l2vni(bgp, vpn);
-
-	return CMD_SUCCESS;
-}
 
 static int vni_cmp(const void **a, const void **b)
 {
@@ -7351,11 +5995,6 @@ static bool bgp_evpn_flag_is_proteus(afi_t afi, safi_t safi)
 
 void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi)
 {
-	struct bgp_evpn_rt_config *rt_config = bgp->vrf_route_target_config;
-	struct bgp_evpn_cfgd_rt *cfgd_rt;
-	const char *autort_mode_str;
-	char rt_buf[RT_ADDRSTRLEN];
-
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->advertise_all_vni)
 		vty_out(vty, "  advertise-all-vni\n");
 
@@ -7389,41 +6028,46 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 		vty_out(vty, "  enable-resolve-overlay-index\n");
 
 	/* 'ead-es-frag evi-limit' is mgmtd-owned once the AF is proteus (M6
-	 * B5); the still-native use-es-l3nhg/disable-ead-evi-* lines below
-	 * stay ungated (see the doc comment on their reject-stub callbacks,
-	 * bgp_nb_evpn.c).
+	 * B5); use-es-l3nhg/disable-ead-evi-rx/-tx are mgmtd-owned too since
+	 * M6 B9b (Tier A leaves; their cli_shows emit only the
+	 * differs-from-default form, exactly like the lines gated off here).
 	 */
 	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
 	    bgp_mh_info->evi_per_es_frag != BGP_EVPN_MAX_EVI_PER_ES_FRAG)
 		vty_out(vty, "  ead-es-frag evi-limit %u\n", bgp_mh_info->evi_per_es_frag);
 
-	if (bgp_mh_info->host_routes_use_l3nhg != BGP_EVPN_MH_USE_ES_L3NHG_DEF) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    bgp_mh_info->host_routes_use_l3nhg != BGP_EVPN_MH_USE_ES_L3NHG_DEF) {
 		if (bgp_mh_info->host_routes_use_l3nhg)
 			vty_out(vty, "  use-es-l3nhg\n");
 		else
 			vty_out(vty, "  no use-es-l3nhg\n");
 	}
 
-	if (bgp_mh_info->enable_ead_evi_rx != BGP_EVPN_MH_EAD_EVI_RX_DEF) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    bgp_mh_info->enable_ead_evi_rx != BGP_EVPN_MH_EAD_EVI_RX_DEF) {
 		if (bgp_mh_info->enable_ead_evi_rx)
 			vty_out(vty, "  no disable-ead-evi-rx\n");
 		else
 			vty_out(vty, "  disable-ead-evi-rx\n");
 	}
 
-	if (bgp_mh_info->enable_ead_evi_tx != BGP_EVPN_MH_EAD_EVI_TX_DEF) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    bgp_mh_info->enable_ead_evi_tx != BGP_EVPN_MH_EAD_EVI_TX_DEF) {
 		if (bgp_mh_info->enable_ead_evi_tx)
 			vty_out(vty, "  no disable-ead-evi-tx\n");
 		else
 			vty_out(vty, "  disable-ead-evi-tx\n");
 	}
 
-	/* 'enabled' (dup_addr_detect) stays native/ungated -- its YANG leaf
-	 * has no 'default "true"' statement to convert onto (M6 B4). The two
-	 * value-bearing sub-forms below are mgmtd-owned (bgp_cli_common.c's
-	 * instance_evpn_dup_addr_detection_cli_write) once the AF is proteus.
+	/* The whole dup-addr-detection family is mgmtd-owned once the AF is
+	 * proteus: max-moves/time/freeze since M6 B4, the bare
+	 * enable/disable toggle ('no dup-addr-detection') since M6 B9b (its
+	 * 'enabled' leaf gained the missing 'default "true"' in B9a). All
+	 * emitted by instance_evpn_dup_addr_detection_cli_write
+	 * (bgp_cli_instance.c).
 	 */
-	if (!bgp->evpn_info->dup_addr_detect)
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && !bgp->evpn_info->dup_addr_detect)
 		vty_out(vty, "  no dup-addr-detection\n");
 
 	if (!bgp_evpn_flag_is_proteus(afi, safi)) {
@@ -7444,24 +6088,22 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->vxlan_flood_ctrl == VXLAN_FLOOD_DISABLED)
 		vty_out(vty, "  flooding disable\n");
 
-	/* 'advertise ipv4/ipv6 unicast [...]' stays native/ungated -- scouted
-	 * for M6 B7 but reject-stubbed (route-map leafref forward-reference
-	 * regression, see the doc comment on the retired-in-name-only
-	 * bgp_evpn_advertise_type5_cmd DEFUN above). 'default-originate
-	 * ipv4/ipv6' / 'rd' are mgmtd-owned once the AF is proteus (M6 B7);
-	 * 'advertise-pip' stays native/ungated too -- its YANG 'enabled' leaf
-	 * has no default to convert onto (same B4/B5-style gap), and its
-	 * ip/mac sub-values aren't separable from 'enabled' at the
-	 * CLI-grammar level either (see the reject-stub doc comment on the
-	 * advertise-pip callbacks, bgp_nb_evpn.c).
+	/* 'advertise ipv4/ipv6 unicast [...]' and 'advertise-pip' are
+	 * mgmtd-owned once the AF is proteus (M6 B9b; both had been B7
+	 * reject-stubs until B9a's YANG fixes -- see
+	 * evpn_process_advertise_type5_cmd() / evpn_process_advertise_pip_cmd()
+	 * above). 'default-originate ipv4/ipv6' / 'rd' are mgmtd-owned since
+	 * M6 B7.
 	 */
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV4_UNICAST)) {
 		if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv4 unicast route-map %s\n",
 				bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name);
 		else
 			vty_out(vty, "  advertise ipv4 unicast\n");
-	} else if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	} else if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+		   CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
 			      BGP_L2VPN_EVPN_ADV_IPV4_UNICAST_GW_IP)) {
 		if (bgp->adv_cmd_rmap[AFI_IP][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv4 unicast gateway-ip route-map %s\n",
@@ -7485,13 +6127,15 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 		}
 	}
 
-	if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+	    CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN], BGP_L2VPN_EVPN_ADV_IPV6_UNICAST)) {
 		if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv6 unicast route-map %s\n",
 				bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name);
 		else
 			vty_out(vty, "  advertise ipv6 unicast\n");
-	} else if (CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
+	} else if (!bgp_evpn_flag_is_proteus(afi, safi) &&
+		   CHECK_FLAG(bgp->af_flags[AFI_L2VPN][SAFI_EVPN],
 			      BGP_L2VPN_EVPN_ADV_IPV6_UNICAST_GW_IP)) {
 		if (bgp->adv_cmd_rmap[AFI_IP6][SAFI_UNICAST].name)
 			vty_out(vty, "  advertise ipv6 unicast gateway-ip route-map %s\n",
@@ -7510,7 +6154,7 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 			vty_out(vty, "  default-originate ipv6\n");
 	}
 
-	if (bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
+	if (!bgp_evpn_flag_is_proteus(afi, safi) && bgp->inst_type == BGP_INSTANCE_TYPE_VRF) {
 		if (!bgp->evpn_info->advertise_pip)
 			vty_out(vty, "  no advertise-pip\n");
 		if (bgp->evpn_info->advertise_pip) {
@@ -7532,31 +6176,13 @@ void bgp_config_write_evpn_info(struct vty *vty, struct bgp *bgp, afi_t afi, saf
 	if (!bgp_evpn_flag_is_proteus(afi, safi) && CHECK_FLAG(bgp->vrf_flags, BGP_VRF_RD_CFGD))
 		vty_out(vty, "  rd %s\n", bgp->vrf_prd_pretty);
 
-	/* import route-target */
-	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "  route-target import %s\n", rt_buf);
-	}
-
-	/* import auto route-target */
-	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_import);
-	if (autort_mode_str)
-		vty_out(vty, "  auto-route-target import %s\n", autort_mode_str);
-	if (bgp->autort_rfc8365_import)
-		vty_out(vty, "  auto-route-target import rfc8365-compatible\n");
-
-	/* export route-target */
-	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
-		bgp_evpn_format_cfgd_rt(rt_buf, sizeof(rt_buf), cfgd_rt);
-		vty_out(vty, "  route-target export %s\n", rt_buf);
-	}
-
-	/* export auto route-target */
-	autort_mode_str = bgp_evpn_autort_mode_str(rt_config->autort_cfgd_export);
-	if (autort_mode_str)
-		vty_out(vty, "  auto-route-target export %s\n", autort_mode_str);
-	if (bgp->autort_rfc8365_export)
-		vty_out(vty, "  auto-route-target export rfc8365-compatible\n");
+	/* The VRF-level route-target / auto-route-target lines (manual RTs,
+	 * wildcard import RTs, add-modes, rfc8365-compatible) are mgmtd-owned
+	 * once the AF is proteus (M6 B9b): instance_evpn_rt_import/
+	 * export_cli_write and the auto-leaf emitters (bgp_cli_instance.c)
+	 * render them from the datastore's direction-primary route-target
+	 * tree.
+	 */
 }
 
 void bgp_ethernetvpn_init(void)
@@ -7577,26 +6203,16 @@ void bgp_ethernetvpn_init(void)
 		&show_ip_bgp_l2vpn_evpn_rd_neighbor_advertised_routes_cmd);
 	install_element(VIEW_NODE, &show_ip_bgp_evpn_rd_overlay_cmd);
 	install_element(VIEW_NODE, &show_ip_bgp_l2vpn_evpn_all_overlay_cmd);
-	install_element(BGP_EVPN_NODE, &no_evpnrt5_network_cmd);
-	install_element(BGP_EVPN_NODE, &evpnrt5_network_cmd);
 	/* advertise-all-vni / advertise-default-gw / advertise-svi-ip /
 	 * enable-resolve-overlay-index converted to proteus/northbound (M6
 	 * batch B2); mac-vrf-soo / flooding converted M6 batch B3; rd (per-VNI)
 	 * converted M6 batch B6; default-originate and rd (per-VRF-instance)
-	 * converted M6 batch B7; their CLI is installed by mgmtd
-	 * (bgp_cli_instance.c). advertise ipv4/ipv6 unicast stays native --
-	 * see the reject-stub doc comment above (route-map leafref
-	 * forward-reference regression). */
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_autort_rfc8365_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_autort_rfc8365_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_type5_cmd);
-	install_element(BGP_EVPN_NODE, &dup_addr_detection_cmd);
-	install_element(BGP_EVPN_NODE, &no_dup_addr_detection_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_mac_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_disable_cmd);
+	 * converted M6 batch B7; the type-5 'network' statement, advertise
+	 * ipv4/ipv6 unicast, advertise-pip, the bare dup-addr-detection
+	 * toggle, use-es-l3nhg/disable-ead-evi-rx/-tx and the whole VRF-level
+	 * route-target family (incl. the deprecated 'autort
+	 * rfc8365-compatible' aliases) converted M6 batch B9b; their CLI is
+	 * installed by mgmtd (bgp_cli_instance.c). */
 
 	/* test commands */
 	install_element(BGP_EVPN_NODE, &test_es_add_cmd);
@@ -7663,22 +6279,8 @@ void bgp_ethernetvpn_init(void)
 	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cmd);
 	/* per-VNI 'rd', 'flooding', 'advertise-default-gw', 'advertise-svi-ip'
 	 * and 'advertise-subnet': converted to proteus/northbound (M6 batch
-	 * B6); mgmtd owns the CLI. route-target/auto-route-target below stay
-	 * native pending B9's remodel. */
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rt_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_without_val_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_auto_rt_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_auto_rt_cmd);
-	/* per-VRF-instance 'rd': converted to proteus/northbound (M6 batch
-	 * B7); mgmtd owns the CLI. route-target/auto-route-target below stay
-	 * native pending B9's remodel. */
-	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_auto_rt_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_auto_rt_cmd);
-	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_cmd);
-	/* ead-es-route-target export / ead-es-frag evi-limit: converted to
-	 * proteus/northbound (M6 batch B5); mgmtd owns the CLI. */
+	 * B6); per-VNI and per-VRF-instance route-target/auto-route-target
+	 * (incl. the deprecated 'route-target <type> auto' aliases): M6
+	 * batch B9b; ead-es-route-target export / ead-es-frag evi-limit: M6
+	 * batch B5. mgmtd owns all their CLI (bgp_cli_instance.c). */
 }

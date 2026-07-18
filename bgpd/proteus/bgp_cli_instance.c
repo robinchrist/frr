@@ -683,12 +683,9 @@ DEFPY_YANG_HIDDEN(
  * pair, same MODIFY-true/DESTROY shape as advertise-svi-ip above.
  *
  * 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]' was
- * scouted for this batch but reject-stubbed -- see the doc comment on
- * bgp_evpn_advertise_type5_cmd (still installed, bgp_evpn_vty.c) and on
- * the matching reject-stub callbacks (bgp_nb_evpn.c): its 'route-map'
- * leaf is a real YANG leafref, and legacy's lazy route-map binding allows
- * configs where the route-map is defined *after* this line, which mgmtd's
- * candidate-config leafref validation rejects outright.
+ * scouted for this batch but reject-stubbed over its then-leafref
+ * 'route-map' leaf; converted in M6 B9b (below) after B9a retyped the
+ * leaf to a plain string.
  */
 DEFPY_YANG(
 	bgp_evpn_vrf_rd, bgp_evpn_vrf_rd_cli_cmd,
@@ -762,10 +759,10 @@ DEFPY_YANG(
  * M6 batch B4: 'dup-addr-detection max-moves ... time ...' and
  * 'dup-addr-detection freeze <permanent|N>' (dup_addr_detection_cmd /
  * dup_addr_detection_auto_recovery_cmd's value-bearing sub-forms). The bare
- * enable/disable toggle ('dup-addr-detection' / 'no dup-addr-detection'
- * with no trailing tokens) stays on the native command pair in
- * bgp_evpn_vty.c -- proteus-bgp-evpn.yang's dup-addr-detection/enabled leaf
- * has no YANG default to convert onto (see bgp_nb_evpn.c). max-moves and
+ * enable/disable toggle converted in M6 B9b (its 'enabled' leaf gained the
+ * missing 'default "true"' in B9a); the value-bearing forms below also
+ * delete './enabled' back to that default, reproducing legacy's
+ * detection-back-on side effect. max-moves and
  * time are legacy's one paired DEFPY line and always issued together here
  * (matching B8 dampening's "always rewrite from scratch" idiom); freeze is
  * the separate auto-recovery DEFPY. 'no' forms destroy regardless of the
@@ -782,6 +779,11 @@ DEFPY_YANG(
 	"Duplicate address detection time\n"
 	"Time in seconds (2-1800) default 180\n")
 {
+	/* M6 B9b: legacy's value-bearing forms also (re)asserted
+	 * dup_addr_detect; delete 'enabled' back to its true default so the
+	 * datastore says the same. */
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_DESTROY, NULL);
 	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/max-moves",
 			      NB_OP_MODIFY, max_moves_str);
 	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/time", NB_OP_MODIFY,
@@ -814,6 +816,9 @@ DEFPY_YANG(
 	"Duplicate address detection permanent freeze\n"
 	"Duplicate address detection freeze time (30-3600)\n")
 {
+	/* Same 'enabled' re-assertion as the max-moves/time form above. */
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_DESTROY, NULL);
 	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/freeze",
 			      NB_OP_MODIFY, permanent ? permanent : freeze_time_str);
 	return nb_cli_apply_changes(vty, NULL);
@@ -929,6 +934,770 @@ DEFPY_YANG(
 			   bgp_cli_ead_es_rt_case_name(rt_case), global_admin, local_admin);
 	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * M6 batch B9b: the reopened EVPN families, mgmtd side.
+ *
+ * Route-targets (VRF level at BGP_EVPN_NODE, per-VNI at
+ * BGP_EVPN_VNI_NODE) parse legacy's variadic RTLIST grammar and expand
+ * both the list and the 'both' direction alias into individual typed
+ * changes on B9a's direction-primary tree
+ * (route-target/<import|export>/{rts/<as2|as4|ipv4>, wildcard-rts,
+ * auto/{mode[,rfc8365-compatible]}}). Fully qualified RTs reuse
+ * bgp_cli_soo_parse() (the same as2-vs-as4-vs-ipv4 magnitude split
+ * ecommunity_str2com() applies to RT tokens; established by the B5
+ * ead-es-route-target-export commands above); wildcard '*:NN' tokens --
+ * import-only, and legacy rejected them for 'both' too
+ * (wildcard_ok was direction == RT_TYPE_IMPORT exactly) -- become
+ * wildcard-rts leaf-list entries. Every configured RT is its own
+ * (keyed-list or leaf-list) entry, so add/remove map to plain
+ * CREATE/DESTROY per token.
+ *
+ * 'auto-route-target <dir> <add-mode>' writes the auto/mode leaf (the
+ * YANG enum reuses the exact CLI keywords); the VRF-only
+ * 'auto-route-target <dir> rfc8365-compatible' form writes the
+ * orthogonal default-false rfc8365-compatible leaf instead. The 'no'
+ * forms destroy unconditionally, dropping legacy's exact-value-match
+ * rejections in favor of plain NB_OP_DESTROY like every other
+ * 'no ... [value]' form in this file; a bare 'no auto-route-target
+ * [<dir>]' clears both the mode and (VRF level) the rfc8365 switch,
+ * matching legacy. The deprecated aliases ('route-target <dir> auto'
+ * for 'auto-route-target <dir> add-always', 'autort rfc8365-compatible'
+ * for 'auto-route-target both rfc8365-compatible') stay CMD_ATTR_YANG |
+ * CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN CLI-layer mappings printing the
+ * same deprecation warnings the legacy DEFPY_ATTRs did.
+ */
+/* One parsed route-target token: the xpath fragment below the
+ * direction container it maps to. */
+struct bgp_cli_evpn_rt_token {
+	char suffix[96];
+};
+
+/* Parse one RTLIST token into its rts/wildcard-rts xpath fragment.
+ * Legacy note on failures: the retired DEFPYs' parser
+ * (ecommunity_gettoken) silently WRAPPED an overflowing local
+ * administrator (uint32 'val = val * 10 + digit'), so a nonsense value
+ * like 100:100000010000010000101010 was accepted and stored as its
+ * wrapped remainder; evpn_type5_test_topo1's boundary-value case
+ * encodes the resulting contract: the config load must not abort, and
+ * the literal value must not appear in the configuration. This parser
+ * rejects such tokens outright (no wrap), and the callers return
+ * CMD_WARNING -- which vtysh tolerates from a daemon without failing
+ * the file load -- with nothing enqueued (tokens are parsed to
+ * completion BEFORE the first enqueue: a partial enqueue without an
+ * apply would leak stale changes into the next command's transaction).
+ */
+static bool bgp_cli_evpn_rt_token_parse(struct vty *vty, const char *token, bool wildcard_ok,
+					struct bgp_cli_evpn_rt_token *parsed)
+{
+	if (token[0] == '*') {
+		unsigned long val;
+		char *endptr;
+
+		if (!wildcard_ok) {
+			vty_out(vty, "%% Wildcard '*' only applicable for import: %s\n", token);
+			return false;
+		}
+
+		if (token[1] != ':') {
+			vty_out(vty, "%% Malformed Route Target: %s\n", token);
+			return false;
+		}
+
+		errno = 0;
+		val = strtoul(token + 2, &endptr, 10);
+		if (endptr == token + 2 || *endptr != '\0' || errno || val > UINT32_MAX) {
+			vty_out(vty, "%% Malformed Route Target: %s\n", token);
+			return false;
+		}
+
+		snprintf(parsed->suffix, sizeof(parsed->suffix), "/wildcard-rts[.='%lu']", val);
+		return true;
+	}
+
+	{
+		enum bgp_cli_soo_case rt_case;
+		char global_admin[INET_ADDRSTRLEN], local_admin[12];
+
+		if (!bgp_cli_soo_parse(token, &rt_case, global_admin, sizeof(global_admin),
+				       local_admin, sizeof(local_admin))) {
+			vty_out(vty, "%% Malformed Route Target: %s\n", token);
+			return false;
+		}
+
+		snprintf(parsed->suffix, sizeof(parsed->suffix),
+			 "/rts/%s[global-admin='%s'][local-admin='%s']",
+			 bgp_cli_ead_es_rt_case_name(rt_case), global_admin, local_admin);
+		return true;
+	}
+}
+
+/* Shared body of the four rtlist DEFPYs: parse every token from
+ * rt_argv[0 .. n_rts-1], then enqueue each for the direction(s),
+ * 'both' expanding to import plus export. Legacy's wildcard_ok =
+ * (direction == import) exactly: wildcards are rejected for 'both'
+ * too. */
+static int bgp_cli_evpn_rt_list(struct vty *vty, const char *base_prefix, bool import, bool export,
+				struct cmd_token **rt_argv, int n_rts, enum nb_operation op)
+{
+	struct bgp_cli_evpn_rt_token *parsed;
+	char xpath[XPATH_MAXLEN];
+	bool wildcard_ok = import && !export;
+
+	if (strmatch(rt_argv[0]->arg, "auto")) {
+		vty_out(vty, "%% Use \"%sauto-route-target\" to %sconfigure the automatic route-target\n",
+			op == NB_OP_DESTROY ? "no " : "", op == NB_OP_DESTROY ? "un" : "");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	parsed = XCALLOC(MTYPE_TMP, n_rts * sizeof(*parsed));
+
+	for (int i = 0; i < n_rts; i++) {
+		if (!bgp_cli_evpn_rt_token_parse(vty, rt_argv[i]->arg, wildcard_ok, &parsed[i])) {
+			XFREE(MTYPE_TMP, parsed);
+			return CMD_WARNING;
+		}
+	}
+
+	for (int i = 0; i < n_rts; i++) {
+		if (import) {
+			snprintf(xpath, sizeof(xpath), "%s/route-target/import%s", base_prefix,
+				 parsed[i].suffix);
+			nb_cli_enqueue_change(vty, xpath, op, NULL);
+		}
+		if (export) {
+			snprintf(xpath, sizeof(xpath), "%s/route-target/export%s", base_prefix,
+				 parsed[i].suffix);
+			nb_cli_enqueue_change(vty, xpath, op, NULL);
+		}
+	}
+
+	XFREE(MTYPE_TMP, parsed);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+#define BGP_EVPN_VRF_RT_BASE "./afi-safis/l2vpn-evpn"
+#define BGP_EVPN_VNI_RT_BASE "."
+
+DEFPY_YANG(
+	bgp_evpn_vrf_rt, bgp_evpn_vrf_rt_cli_cmd,
+	"route-target <both$both|import$import|export$export> RTLIST...",
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
+{
+	return bgp_cli_evpn_rt_list(vty, BGP_EVPN_VRF_RT_BASE, import || both, export || both,
+				    argv + 2, argc - 2, NB_OP_CREATE);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vrf_rt, no_bgp_evpn_vrf_rt_cli_cmd,
+	"no route-target <both$both|import$import|export$export> RTLIST...",
+	NO_STR
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
+{
+	return bgp_cli_evpn_rt_list(vty, BGP_EVPN_VRF_RT_BASE, import || both, export || both,
+				    argv + 3, argc - 3, NB_OP_DESTROY);
+}
+
+DEFPY_YANG(
+	bgp_evpn_vrf_auto_rt, bgp_evpn_vrf_auto_rt_cli_cmd,
+	"auto-route-target <both|import|export>$type <add-always|add-never|add-if-no-manual|rfc8365-compatible>$mode",
+	"Automatic route-target configuration\n"
+	"Import and export\n"
+	"Import\n"
+	"Export\n"
+	"Always add the automatic route-target, even when manual route-targets are configured\n"
+	"Never add the automatic route-target\n"
+	"Add the automatic route-target only when no manual route-target is configured (default)\n"
+	"Encode the automatic route-target as RFC 8365 compatible (set the VXLAN encapsulation bits in the local admin field)\n")
+{
+	const char *leaf = strmatch(mode, "rfc8365-compatible") ? "rfc8365-compatible" : "mode";
+	const char *value = strmatch(mode, "rfc8365-compatible") ? "true" : mode;
+	char xpath[XPATH_MAXLEN];
+
+	if (strmatch(type, "import") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/import/auto/%s", leaf);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, value);
+	}
+	if (strmatch(type, "export") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/export/auto/%s", leaf);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, value);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vrf_auto_rt, no_bgp_evpn_vrf_auto_rt_cli_cmd,
+	"no auto-route-target [<both|import|export>$type [<add-always|add-never|add-if-no-manual|rfc8365-compatible>$mode]]",
+	NO_STR
+	"Automatic route-target configuration\n"
+	"Import and export\n"
+	"Import\n"
+	"Export\n"
+	"Always add the automatic route-target, even when manual route-targets are configured\n"
+	"Never add the automatic route-target\n"
+	"Add the automatic route-target only when no manual route-target is configured (default)\n"
+	"Encode the automatic route-target as RFC 8365 compatible (set the VXLAN encapsulation bits in the local admin field)\n")
+{
+	bool rfc8365 = mode && strmatch(mode, "rfc8365-compatible");
+	bool do_import = !type || strmatch(type, "import") || strmatch(type, "both");
+	bool do_export = !type || strmatch(type, "export") || strmatch(type, "both");
+	char xpath[XPATH_MAXLEN];
+	const char *dirs[2];
+	int n_dirs = 0;
+
+	if (do_import)
+		dirs[n_dirs++] = "import";
+	if (do_export)
+		dirs[n_dirs++] = "export";
+
+	for (int i = 0; i < n_dirs; i++) {
+		if (!mode || !rfc8365) {
+			snprintf(xpath, sizeof(xpath),
+				 "./afi-safis/l2vpn-evpn/route-target/%s/auto/mode", dirs[i]);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+		}
+		if (!mode || rfc8365) {
+			snprintf(xpath, sizeof(xpath),
+				 "./afi-safis/l2vpn-evpn/route-target/%s/auto/rfc8365-compatible",
+				 dirs[i]);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+		}
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_evpn_vrf_rt_auto, bgp_evpn_vrf_rt_auto_cli_cmd,
+	"route-target <both|import|export>$type auto",
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Automatically derive route target\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
+{
+	char xpath[XPATH_MAXLEN];
+
+	vty_out(vty,
+		"%% \"route-target %s auto\" is deprecated, use \"auto-route-target %s add-always\"\n",
+		type, type);
+
+	if (strmatch(type, "import") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/import/auto/mode");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "add-always");
+	}
+	if (strmatch(type, "export") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/export/auto/mode");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "add-always");
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Unlike legacy's exact ADD_ALWAYS-match guard, this destroys the mode
+ * unconditionally (the value-match-guard-dropping precedent of every
+ * other deprecated/no form here); a new-style non-add-always mode
+ * removed by the deprecated alias was misuse under legacy too. */
+DEFPY_ATTR(
+	no_bgp_evpn_vrf_rt_auto, no_bgp_evpn_vrf_rt_auto_cli_cmd,
+	"no route-target <both|import|export>$type auto",
+	NO_STR
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Automatically derive route target\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
+{
+	char xpath[XPATH_MAXLEN];
+
+	vty_out(vty,
+		"%% \"no route-target %s auto\" is deprecated, use \"no auto-route-target %s add-always\"\n",
+		type, type);
+
+	if (strmatch(type, "import") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/import/auto/mode");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	if (strmatch(type, "export") || strmatch(type, "both")) {
+		snprintf(xpath, sizeof(xpath),
+			 "./afi-safis/l2vpn-evpn/route-target/export/auto/mode");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_evpn_advertise_autort_rfc8365, bgp_evpn_advertise_autort_rfc8365_cli_cmd,
+	"autort rfc8365-compatible",
+	"Auto-derivation of RT\n"
+	"Auto-derivation of RT using RFC8365\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
+{
+	vty_out(vty,
+		"%% \"autort rfc8365-compatible\" is deprecated, use \"auto-route-target both rfc8365-compatible\"\n");
+
+	nb_cli_enqueue_change(vty,
+			      "./afi-safis/l2vpn-evpn/route-target/import/auto/rfc8365-compatible",
+			      NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty,
+			      "./afi-safis/l2vpn-evpn/route-target/export/auto/rfc8365-compatible",
+			      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_evpn_advertise_autort_rfc8365, no_bgp_evpn_advertise_autort_rfc8365_cli_cmd,
+	"no autort rfc8365-compatible",
+	NO_STR
+	"Auto-derivation of RT\n"
+	"Auto-derivation of RT using RFC8365\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
+{
+	vty_out(vty,
+		"%% \"no autort rfc8365-compatible\" is deprecated, use \"no auto-route-target both rfc8365-compatible\"\n");
+
+	nb_cli_enqueue_change(vty,
+			      "./afi-safis/l2vpn-evpn/route-target/import/auto/rfc8365-compatible",
+			      NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty,
+			      "./afi-safis/l2vpn-evpn/route-target/export/auto/rfc8365-compatible",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_vni_rt, bgp_evpn_vni_rt_cli_cmd,
+	"route-target <both$both|import$import|export$export> RTLIST...",
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
+{
+	return bgp_cli_evpn_rt_list(vty, BGP_EVPN_VNI_RT_BASE, import || both, export || both,
+				    argv + 2, argc - 2, NB_OP_CREATE);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vni_rt, no_bgp_evpn_vni_rt_cli_cmd,
+	"no route-target <both$both|import$import|export$export> RTLIST...",
+	NO_STR
+	"Route Target\n"
+	"import and export\n"
+	"import\n"
+	"export\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|*:OPQR|*:MN)\n")
+{
+	return bgp_cli_evpn_rt_list(vty, BGP_EVPN_VNI_RT_BASE, import || both, export || both,
+				    argv + 3, argc - 3, NB_OP_DESTROY);
+}
+
+/* Bulk 'no route-target <import|export>': legacy removed every MANUAL RT
+ * of the direction -- including wildcards, which share the one
+ * configured-RT list in bgpd -- but never the auto-route-target mode.
+ * Destroy the rts container (all three case lists at once) and every
+ * wildcard-rts instance; auto/ stays untouched. */
+static int no_bgp_evpn_vni_rt_wildcard_iter_cb(const struct lyd_node *dnode, void *arg)
+{
+	struct vty *vty = arg;
+	char *xpath = asprintfrr(MTYPE_TMP, "./route-target/%s/wildcard-rts[.='%s']",
+				 strmatch(lyd_parent(dnode)->schema->name, "import") ? "import"
+										     : "export",
+				 yang_dnode_get_string(dnode, NULL));
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return YANG_ITER_CONTINUE;
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vni_rt_without_val, no_bgp_evpn_vni_rt_without_val_cli_cmd,
+	"no route-target <import$import|export$export>",
+	NO_STR
+	"Route Target\n"
+	"import\n"
+	"export\n")
+{
+	const char *dir = import ? "import" : "export";
+	const struct lyd_node *vni_dnode =
+		yang_dnode_get(vty->candidate_config->dnode, VTY_CURR_XPATH);
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./route-target/%s/rts", dir);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	if (vni_dnode)
+		yang_dnode_iterate(no_bgp_evpn_vni_rt_wildcard_iter_cb, vty, vni_dnode,
+				   "./route-target/%s/wildcard-rts", dir);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_vni_auto_rt, bgp_evpn_vni_auto_rt_cli_cmd,
+	"auto-route-target <both|import|export>$type <add-always|add-never|add-if-no-manual>$mode",
+	"Automatic route-target configuration\n"
+	"Import and export\n"
+	"Import\n"
+	"Export\n"
+	"Always add the automatic route-target, even when manual route-targets are configured\n"
+	"Never add the automatic route-target\n"
+	"Add the automatic route-target only when no manual route-target is configured (default)\n")
+{
+	if (strmatch(type, "import") || strmatch(type, "both"))
+		nb_cli_enqueue_change(vty, "./route-target/import/auto/mode", NB_OP_MODIFY, mode);
+	if (strmatch(type, "export") || strmatch(type, "both"))
+		nb_cli_enqueue_change(vty, "./route-target/export/auto/mode", NB_OP_MODIFY, mode);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_vni_auto_rt, no_bgp_evpn_vni_auto_rt_cli_cmd,
+	"no auto-route-target [<both|import|export>$type [<add-always|add-never|add-if-no-manual>$mode]]",
+	NO_STR
+	"Automatic route-target configuration\n"
+	"Import and export\n"
+	"Import\n"
+	"Export\n"
+	"Always add the automatic route-target, even when manual route-targets are configured\n"
+	"Never add the automatic route-target\n"
+	"Add the automatic route-target only when no manual route-target is configured (default)\n")
+{
+	if (!type || strmatch(type, "import") || strmatch(type, "both"))
+		nb_cli_enqueue_change(vty, "./route-target/import/auto/mode", NB_OP_DESTROY, NULL);
+	if (!type || strmatch(type, "export") || strmatch(type, "both"))
+		nb_cli_enqueue_change(vty, "./route-target/export/auto/mode", NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]': the
+ * three leaves of one advertise-<afi>-unicast container. enabled and
+ * gateway-ip are the two alternatives of the same command (FRR stores
+ * and writes exactly one), so each positive form writes its own leaf
+ * and destroys the other back to false; a positive form without
+ * route-map also clears any configured route-map, matching legacy's
+ * rmap_changed handling. 'no advertise ... [route-map WORD]' destroys
+ * all three (the optional token is accepted but ignored, like every
+ * other 'no ... [value]' form here). The grammar narrows legacy's
+ * BGP_AFI_CMD_STR/BGP_SAFI_CMD_STR token set to the ipv4/ipv6 unicast
+ * combinations -- everything else was a runtime "%% Only ipv4 or
+ * ipv6 ... supported" rejection in the retired DEFUN, now a parse
+ * error.
+ */
+DEFPY_YANG(
+	bgp_evpn_advertise_type5, bgp_evpn_advertise_type5_cli_cmd,
+	"advertise <ipv4$ipv4|ipv6> unicast [gateway-ip$gateway_ip] [route-map RMAP_NAME$rmap]",
+	"Advertise prefix routes\n"
+	"IPv4 Address Family\n"
+	"IPv6 Address Family\n"
+	"Address Family modifier\n"
+	"advertise gateway IP overlay index\n"
+	"route-map for filtering specific routes\n"
+	"Name of the route map\n")
+{
+	const char *af = ipv4 ? "ipv4" : "ipv6";
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/enabled", af);
+	if (gateway_ip)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/gateway-ip",
+		 af);
+	if (gateway_ip)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/route-map",
+		 af);
+	if (rmap)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, rmap);
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_advertise_type5, no_bgp_evpn_advertise_type5_cli_cmd,
+	"no advertise <ipv4$ipv4|ipv6> unicast [route-map RMAP_NAME]",
+	NO_STR
+	"Advertise prefix routes\n"
+	"IPv4 Address Family\n"
+	"IPv6 Address Family\n"
+	"Address Family modifier\n"
+	"route-map for filtering specific routes\n"
+	"Name of the route map\n")
+{
+	const char *af = ipv4 ? "ipv4" : "ipv6";
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/enabled", af);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/gateway-ip",
+		 af);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/advertise-%s-unicast/route-map",
+		 af);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * '[no] advertise-pip [ip A.B.C.D [mac ...]]': one atomic legacy
+ * command over the advertise-pip container's enabled/ip/mac bundle
+ * (B9a's must constraints bind ip to enabled and mac to ip).
+ * - positive without ip: (re)enable only -- destroy enabled back to its
+ *   true default, leave any static ip/mac alone (legacy's argc==1 early
+ *   return kept them too);
+ * - positive with ip [mac]: enable plus set the statics, an absent mac
+ *   clearing a previously configured one (the reread container is the
+ *   whole desired state);
+ * - 'no advertise-pip': disable and clear the statics (enabled
+ *   explicit false, ip/mac destroyed);
+ * - 'no advertise-pip ip ... [mac ...]': legacy's remove-statics-only
+ *   form -- destroy ip/mac, keep the enabled state, dropping the
+ *   legacy value-match rejections per the established precedent.
+ */
+DEFPY_YANG(
+	bgp_evpn_advertise_pip_ip_mac, bgp_evpn_advertise_pip_ip_mac_cli_cmd,
+	"[no$no] advertise-pip [ip A.B.C.D$ip [mac <X:X:X:X:X:X|X:X:X:X:X:X/M>$mac]]",
+	NO_STR
+	"evpn system primary IP\n"
+	IP_STR
+	"ip address\n"
+	MAC_STR MAC_STR MAC_STR)
+{
+	if (!no) {
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
+				      NB_OP_DESTROY, NULL);
+		if (ip_str) {
+			nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip",
+					      NB_OP_MODIFY, ip_str);
+			if (mac_str)
+				nb_cli_enqueue_change(vty,
+						      "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+						      NB_OP_MODIFY, mac_str);
+			else
+				nb_cli_enqueue_change(vty,
+						      "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+						      NB_OP_DESTROY, NULL);
+		}
+	} else {
+		if (!ip_str)
+			nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
+					      NB_OP_MODIFY, "false");
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+				      NB_OP_DESTROY, NULL);
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip",
+				      NB_OP_DESTROY, NULL);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Bare 'dup-addr-detection' / 'no dup-addr-detection' enable toggle
+ * (Tier-A-inverted 'enabled' leaf, default true): positive deletes back
+ * to the default, negative writes an explicit false AND resets
+ * max-moves/time/freeze to their defaults, exactly legacy's
+ * no_dup_addr_detection_cmd ("Reset all parameters to default"). */
+DEFPY_YANG(
+	bgp_evpn_dup_addr_detection_enable, bgp_evpn_dup_addr_detection_enable_cli_cmd,
+	"dup-addr-detection",
+	"Duplicate address detection\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_dup_addr_detection_enable, no_bgp_evpn_dup_addr_detection_enable_cli_cmd,
+	"no dup-addr-detection",
+	NO_STR
+	"Duplicate address detection\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_MODIFY, "false");
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/max-moves",
+			      NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/time",
+			      NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/freeze",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Tier A multihoming toggles (defaults added by B9a: use-es-l3nhg true,
+ * the two disable-* leaves false). Legacy grammar kept verbatim. */
+DEFPY_YANG(
+	bgp_evpn_use_es_l3nhg, bgp_evpn_use_es_l3nhg_cli_cmd,
+	"[no$no] use-es-l3nhg",
+	NO_STR
+	"use L3 nexthop group for host routes with ES destination\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg",
+				      NB_OP_MODIFY, "false");
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg",
+				      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_ead_evi_rx_disable, bgp_evpn_ead_evi_rx_disable_cli_cmd,
+	"[no$no] disable-ead-evi-rx",
+	NO_STR
+	"Activate PE on EAD-ES even if EAD-EVI is not received\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
+				      NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
+				      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_evpn_ead_evi_tx_disable, bgp_evpn_ead_evi_tx_disable_cli_cmd,
+	"[no$no] disable-ead-evi-tx",
+	NO_STR
+	"Don't advertise EAD-EVI for local ESs\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+				      NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+				      NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * EVPN type-5 static 'network' statement, keyed by prefix (B9a's shape).
+ * The rd token routes through bgp_cli_soo_parse() to the matching
+ * as2/as4/ipv4 case (same magnitude split as str2prefix_rd(), the B6/B7
+ * 'rd' precedent); every other token lands on its typed leaf verbatim,
+ * so a non-numeric ethtag/label WORD is now a candidate-validation error
+ * instead of legacy's silent strtoul() misparse. The 'no' form destroys
+ * the whole list entry by prefix -- its rd/ethtag/label/esi/gwip tokens
+ * are accepted but ignored per the established 'no ... [value]'
+ * precedent (legacy matched them against the stored entry).
+ */
+DEFPY_YANG(
+	evpnrt5_network, evpnrt5_network_cli_cmd,
+	"network <A.B.C.D/M|X:X::X:X/M>$prefix rd ASN:NN_OR_IP-ADDRESS:NN$rd ethtag WORD$ethtag label WORD$label esi WORD$esi gwip <A.B.C.D|X:X::X:X>$gwip routermac WORD$routermac [route-map RMAP_NAME$rmap]",
+	"Specify a network to announce via BGP\n"
+	"IP prefix\n"
+	"IPv6 prefix\n"
+	"Specify Route Distinguisher\n"
+	"VPN Route Distinguisher\n"
+	"Ethernet Tag\n"
+	"Ethernet Tag Value\n"
+	"BGP label\n"
+	"label value\n"
+	"Ethernet Segment Identifier\n"
+	"ESI value ( 00:11:22:33:44:55:66:77:88:99 format) \n"
+	"Gateway IP\n"
+	"Gateway IP ( A.B.C.D )\n"
+	"Gateway IPv6 ( X:X::X:X )\n"
+	"Router Mac Ext Comm\n"
+	"Router Mac address Value ( aa:bb:cc:dd:ee:ff format)\n"
+	"Route-map to modify the attributes\n"
+	"Name of the route map\n")
+{
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	char base[128], xpath[XPATH_MAXLEN];
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed Route Distinguisher\n");
+		return CMD_WARNING;
+	}
+
+	snprintf(base, sizeof(base), "./afi-safis/l2vpn-evpn/network[prefix='%s']", prefix_str);
+	nb_cli_enqueue_change(vty, base, NB_OP_CREATE, NULL);
+
+	snprintf(xpath, sizeof(xpath), "%s/rd/%s/administrator", base,
+		 bgp_cli_ead_es_rt_case_name(rd_case));
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, administrator);
+	snprintf(xpath, sizeof(xpath), "%s/rd/%s/assigned-number", base,
+		 bgp_cli_ead_es_rt_case_name(rd_case));
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, assigned_number);
+
+	snprintf(xpath, sizeof(xpath), "%s/ethtag", base);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, ethtag);
+	snprintf(xpath, sizeof(xpath), "%s/label", base);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, label);
+	snprintf(xpath, sizeof(xpath), "%s/esi", base);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, esi);
+	snprintf(xpath, sizeof(xpath), "%s/gwip", base);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, gwip_str);
+	snprintf(xpath, sizeof(xpath), "%s/routermac", base);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, routermac);
+
+	snprintf(xpath, sizeof(xpath), "%s/route-map", base);
+	if (rmap)
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, rmap);
+	else
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_evpnrt5_network, no_evpnrt5_network_cli_cmd,
+	"no network <A.B.C.D/M|X:X::X:X/M>$prefix rd ASN:NN_OR_IP-ADDRESS:NN ethtag WORD label WORD esi WORD gwip <A.B.C.D|X:X::X:X>",
+	NO_STR
+	"Specify a network to announce via BGP\n"
+	"IP prefix\n"
+	"IPv6 prefix\n"
+	"Specify Route Distinguisher\n"
+	"VPN Route Distinguisher\n"
+	"Ethernet Tag\n"
+	"Ethernet Tag Value\n"
+	"BGP label\n"
+	"label value\n"
+	"Ethernet Segment Identifier\n"
+	"ESI value ( 00:11:22:33:44:55:66:77:88:99 format) \n"
+	"Gateway IP\n" "Gateway IP ( A.B.C.D )\n" "Gateway IPv6 ( X:X::X:X )\n")
+{
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/l2vpn-evpn/network[prefix='%s']", prefix_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
 
 	return nb_cli_apply_changes(vty, NULL);
 }
@@ -3657,10 +4426,10 @@ void instance_evpn_default_originate_ipv6_cli_write(struct vty *vty, const struc
 		vty_out(vty, "  default-originate ipv6\n");
 }
 
-/* M6 batch B4: reproduces bgp_config_write_evpn_info()'s max-moves/time and
- * freeze lines (bgp_evpn_vty.c) for the mgmtd-owned sub-forms; 'enabled'
- * (the still-native bare toggle) is printed separately by that same legacy
- * emitter, ungated -- see the comment there.
+/* M6 batch B4 (max-moves/time/freeze) + B9b ('enabled'): reproduces
+ * bgp_config_write_evpn_info()'s retired dup-addr-detection lines
+ * (bgp_evpn_vty.c) -- the negative bare toggle first, then the
+ * value-bearing sub-forms.
  */
 void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
@@ -3670,6 +4439,11 @@ void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct ly
 				      : EVPN_DAD_DEFAULT_MAX_MOVES;
 	uint16_t time = yang_dnode_exists(dnode, "time") ? yang_dnode_get_uint16(dnode, "time")
 							  : EVPN_DAD_DEFAULT_TIME;
+
+	/* M6 B9b: the bare toggle's negative form, printed first exactly as
+	 * the retired native emitter did. */
+	if (!yang_dnode_get_bool(dnode, "enabled"))
+		vty_out(vty, "  no dup-addr-detection\n");
 
 	if (max_moves != EVPN_DAD_DEFAULT_MAX_MOVES || time != EVPN_DAD_DEFAULT_TIME)
 		vty_out(vty, "  dup-addr-detection max-moves %u time %u\n", max_moves, time);
@@ -3723,6 +4497,207 @@ void instance_evpn_ead_es_route_target_export_ipv4_cli_write(struct vty *vty,
 	vty_out(vty, "  ead-es-route-target export %s:%u\n",
 		yang_dnode_get_string(dnode, "global-admin"),
 		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+/* M6 batch B9b: route-target emitters. One cli_show per
+ * route-target/<import|export> container (VRF and per-VNI variants
+ * differ only in indent) renders the whole direction's manual set in
+ * legacy's sorted order -- bgp_evpn_cfgd_rt_cmp sorted the one
+ * configured-RT list by type first (wildcard, as2, ipv4, as4), so the
+ * emitter walks the wildcard-rts leaf-list first and the rts case lists
+ * in that type order rather than schema/DFS order. The auto/mode and
+ * (VRF-only) auto/rfc8365-compatible leaves have their own cli_shows,
+ * reached by the datastore DFS after the container's -- reproducing
+ * legacy's rt-lines-then-auto-route-target-lines order per direction.
+ */
+static void bgp_cli_evpn_rt_lines_write(struct vty *vty, const struct lyd_node *dir_dnode,
+					const char *indent)
+{
+	const char *dir_name = dir_dnode->schema->name;
+	const struct lyd_node *rts = yang_dnode_get(dir_dnode, "rts");
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(dir_dnode), child) {
+		if (strmatch(child->schema->name, "wildcard-rts"))
+			vty_out(vty, "%sroute-target %s *:%s\n", indent, dir_name,
+				yang_dnode_get_string(child, NULL));
+	}
+
+	if (!rts)
+		return;
+
+	LY_LIST_FOR (lyd_child(rts), child) {
+		if (strmatch(child->schema->name, "as2"))
+			vty_out(vty, "%sroute-target %s %s:%s\n", indent, dir_name,
+				yang_dnode_get_string(child, "global-admin"),
+				yang_dnode_get_string(child, "local-admin"));
+	}
+	LY_LIST_FOR (lyd_child(rts), child) {
+		if (strmatch(child->schema->name, "ipv4"))
+			vty_out(vty, "%sroute-target %s %s:%s\n", indent, dir_name,
+				yang_dnode_get_string(child, "global-admin"),
+				yang_dnode_get_string(child, "local-admin"));
+	}
+	LY_LIST_FOR (lyd_child(rts), child) {
+		if (strmatch(child->schema->name, "as4"))
+			vty_out(vty, "%sroute-target %s %s:%s\n", indent, dir_name,
+				yang_dnode_get_string(child, "global-admin"),
+				yang_dnode_get_string(child, "local-admin"));
+	}
+}
+
+void instance_evpn_rt_direction_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	bgp_cli_evpn_rt_lines_write(vty, dnode, "  ");
+}
+
+void instance_evpn_vni_rt_direction_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	bgp_cli_evpn_rt_lines_write(vty, dnode, "   ");
+}
+
+/* The auto/mode leaf's direction is its grandparent container's name. */
+static const char *bgp_cli_evpn_rt_auto_dir(const struct lyd_node *dnode)
+{
+	return yang_dnode_get_parent(dnode, "import") ? "import" : "export";
+}
+
+void instance_evpn_rt_auto_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	vty_out(vty, "  auto-route-target %s %s\n", bgp_cli_evpn_rt_auto_dir(dnode),
+		yang_dnode_get_string(dnode, NULL));
+}
+
+void instance_evpn_vni_rt_auto_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	vty_out(vty, "   auto-route-target %s %s\n", bgp_cli_evpn_rt_auto_dir(dnode),
+		yang_dnode_get_string(dnode, NULL));
+}
+
+void instance_evpn_rt_auto_rfc8365_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  auto-route-target %s rfc8365-compatible\n",
+			bgp_cli_evpn_rt_auto_dir(dnode));
+}
+
+/* M6 batch B9b: 'advertise <ipv4|ipv6> unicast [gateway-ip]
+ * [route-map NAME]' emitter, one per AF container, the AF token taken
+ * from the container's own name (advertise-<af>-unicast). enabled and
+ * gateway-ip are the command's two alternatives; exactly one line
+ * renders, reproducing bgp_config_write_evpn_info()'s retired
+ * four-branch block. */
+void instance_evpn_advertise_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	bool gateway_ip = yang_dnode_get_bool(dnode, "gateway-ip");
+	char af[8] = "";
+
+	if (!yang_dnode_get_bool(dnode, "enabled") && !gateway_ip)
+		return;
+
+	/* "advertise-ipv4-unicast" -> "ipv4" */
+	if (sscanf(dnode->schema->name, "advertise-%7[^-]", af) != 1)
+		return;
+
+	vty_out(vty, "  advertise %s unicast%s", af, gateway_ip ? " gateway-ip" : "");
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
+/* M6 batch B9b: '[no] advertise-pip [ip ... [mac ...]]' emitter.
+ * Deliberate emission cleanup vs legacy: bgp_config_write_evpn_info()
+ * printed a redundant bare '  advertise-pip' line for every VRF
+ * instance sitting at the compiled default (enabled, no statics); under
+ * the Tier A default "true" model the all-default state emits nothing
+ * (this cli_show is not even reached then), and only an explicit 'no
+ * advertise-pip' or a static ip/mac renders. The mac is printed from
+ * its own configured leaf; legacy printed pip_rmac (the effective MAC,
+ * equal to the static whenever one was configured -- same bytes). */
+void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, "enabled")) {
+		vty_out(vty, "  no advertise-pip\n");
+		return;
+	}
+
+	if (yang_dnode_exists(dnode, "ip")) {
+		vty_out(vty, "  advertise-pip ip %s", yang_dnode_get_string(dnode, "ip"));
+		if (yang_dnode_exists(dnode, "mac"))
+			vty_out(vty, " mac %s", yang_dnode_get_string(dnode, "mac"));
+		vty_out(vty, "\n");
+	}
+}
+
+/* M6 batch B9b: Tier A multihoming toggles -- value-checked shape,
+ * printing whichever form differs from the (YANG, == compiled) default;
+ * the at-default value is skipped by the DFS before this is called. */
+void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
+						      const struct lyd_node *dnode,
+						      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  use-es-l3nhg\n");
+	else
+		vty_out(vty, "  no use-es-l3nhg\n");
+}
+
+void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  disable-ead-evi-rx\n");
+	else
+		vty_out(vty, "  no disable-ead-evi-rx\n");
+}
+
+void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  disable-ead-evi-tx\n");
+	else
+		vty_out(vty, "  no disable-ead-evi-tx\n");
+}
+
+/* M6 batch B9b: EVPN type-5 'network' list emitter, one line per entry,
+ * reproducing the retired bgp_config_write_network_evpn()'s
+ * every-field-present line (bgp_route.c) -- plus the optional
+ * route-map, which legacy parsed but never stored or wrote back. */
+void instance_evpn_network_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults)
+{
+	const struct lyd_node *rd_dnode = yang_dnode_get(dnode, "rd");
+	const char *case_name;
+
+	if (yang_dnode_exists(rd_dnode, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(rd_dnode, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(rd_dnode, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "  network %s rd %s:%s ethtag %s label %s esi %s gwip %s routermac %s",
+		yang_dnode_get_string(dnode, "prefix"),
+		yang_dnode_get_string(rd_dnode, "%s/administrator", case_name),
+		yang_dnode_get_string(rd_dnode, "%s/assigned-number", case_name),
+		yang_dnode_get_string(dnode, "ethtag"), yang_dnode_get_string(dnode, "label"),
+		yang_dnode_get_string(dnode, "esi"), yang_dnode_get_string(dnode, "gwip"),
+		yang_dnode_get_string(dnode, "routermac"));
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
 }
 
 void instance_router_id_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -5624,11 +6599,39 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_freeze_cli_cmd);
 
 	/* M6 B5: instance-level l2vpn-evpn multihoming ead-es-frag-evi-limit
-	 * + ead-es-route-target-export leaves (mgmtd side); use-es-l3nhg/
-	 * disable-ead-evi-rx/-tx stay native (bgp_evpn_vty.c). */
+	 * + ead-es-route-target-export leaves (mgmtd side). */
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_frag_evi_limit_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_es_rt_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_es_rt_cli_cmd);
+
+	/* M6 B9b: VRF-level and per-VNI route-target/auto-route-target
+	 * (incl. the deprecated aliases), advertise <afi> unicast,
+	 * advertise-pip, the bare dup-addr-detection toggle, the Tier A
+	 * multihoming toggles and the EVPN type-5 'network' statement
+	 * (mgmtd side). */
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_auto_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_auto_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_vrf_rt_auto_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vrf_rt_auto_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_autort_rfc8365_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_autort_rfc8365_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_rt_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_rt_without_val_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &bgp_evpn_vni_auto_rt_cli_cmd);
+	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_auto_rt_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_type5_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_mac_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_enable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_enable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_disable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &evpnrt5_network_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_evpnrt5_network_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_router_id_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_router_id_cli_cmd);

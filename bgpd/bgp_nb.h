@@ -4435,6 +4435,8 @@ int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_destroy(
 	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_route_target_export_auto_rfc8365_compatible_modify(
 	struct nb_cb_modify_args *args);
+void instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_apply_finish(
+	struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_enabled_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_gateway_ip_modify(
@@ -4443,6 +4445,8 @@ int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_destroy(
 	struct nb_cb_destroy_args *args);
+void instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_apply_finish(
+	struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_enabled_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_gateway_ip_modify(
@@ -4453,6 +4457,7 @@ int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_destroy(
 	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_default_originate_ipv4_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_default_originate_ipv6_modify(struct nb_cb_modify_args *args);
+void instance_afi_safis_l2vpn_evpn_advertise_pip_apply_finish(struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_destroy(struct nb_cb_destroy_args *args);

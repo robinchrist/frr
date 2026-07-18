@@ -179,9 +179,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 		/* M6 B5: instance-level l2vpn-evpn multihoming
 		 * ead-es-frag-evi-limit + ead-es-route-target-export; the
 		 * latter's three case lists each fire once per configured
-		 * RT, same shape as the 'network' lists below. use-es-l3nhg/
-		 * disable-ead-evi-rx/-tx stay native (bgp_evpn_vty.c, see
-		 * bgp_nb_evpn.c's reject-stub doc comment). */
+		 * RT, same shape as the 'network' lists below.
+		 * use-es-l3nhg/disable-ead-evi-rx/-tx follow (M6 B9b, Tier A
+		 * toggles). */
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit",
 			.cbs = {
@@ -204,6 +204,115 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-route-target-export/ipv4",
 			.cbs = {
 				.cli_show = instance_evpn_ead_es_route_target_export_ipv4_cli_write,
+			}
+		},
+		/* M6 B9b: Tier A multihoming toggles. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg",
+			.cbs = {
+				.cli_show = instance_evpn_multihoming_use_es_l3nhg_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
+			.cbs = {
+				.cli_show = instance_evpn_multihoming_disable_ead_evi_rx_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+			.cbs = {
+				.cli_show = instance_evpn_multihoming_disable_ead_evi_tx_cli_write,
+			}
+		},
+		/* M6 B9b: VRF-level and per-VNI route-target trees. One
+		 * cli_show per direction container renders the manual +
+		 * wildcard RT lines in legacy's sorted order; the auto
+		 * leaves render behind it via the DFS. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import",
+			.cbs = {
+				.cli_show = instance_evpn_rt_direction_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/mode",
+			.cbs = {
+				.cli_show = instance_evpn_rt_auto_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/rfc8365-compatible",
+			.cbs = {
+				.cli_show = instance_evpn_rt_auto_rfc8365_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export",
+			.cbs = {
+				.cli_show = instance_evpn_rt_direction_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/mode",
+			.cbs = {
+				.cli_show = instance_evpn_rt_auto_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/rfc8365-compatible",
+			.cbs = {
+				.cli_show = instance_evpn_rt_auto_rfc8365_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rt_direction_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/auto/mode",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rt_auto_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rt_direction_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/auto/mode",
+			.cbs = {
+				.cli_show = instance_evpn_vni_rt_auto_mode_cli_write,
+			}
+		},
+		/* M6 B9b: advertise <ipv4|ipv6> unicast, advertise-pip and
+		 * the type-5 'network' list. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_unicast_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip",
+			.cbs = {
+				.cli_show = instance_evpn_advertise_pip_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network",
+			.cbs = {
+				.cli_show = instance_evpn_network_cli_write,
 			}
 		},
 		/* M6 B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/
@@ -256,10 +365,8 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 		/* M6 B7: instance-level (per-VRF-instance role) 'rd'/
 		 * 'default-originate'. 'rd's cli_show is registered on each
 		 * choice case's assigned-number leaf, same idiom as the
-		 * per-VNI form above. 'advertise ipv4/ipv6 unicast' has no
-		 * entry here -- it stays native (bgp_evpn_vty.c's
-		 * bgp_config_write_evpn_info), see the reject-stub doc
-		 * comment in bgp_cli_instance.c. */
+		 * per-VNI form above. 'advertise ipv4/ipv6 unicast'
+		 * converted in M6 B9b (its containers' rows below). */
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/rd/as2/assigned-number",
 			.cbs = {

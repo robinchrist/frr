@@ -1003,6 +1003,39 @@ extern void bgp_evpn_configure_import_auto_rt_for_vrf(struct bgp *bgp_vrf,
 extern void bgp_evpn_unconfigure_import_rt_for_vrf(struct bgp *bgp_vrf,
 						   const struct bgp_evpn_cfgd_rt *cfgd_rt);
 extern void bgp_evpn_unconfigure_import_auto_rt_for_vrf(struct bgp *bgp_vrf);
+
+/* Per-L2VNI route-target configure/unconfigure cores (bgp_evpn_vty.c,
+ * un-static'd for the proteus/northbound per-VNI route-target callbacks,
+ * bgp_nb_evpn.c, M6 batch B9b). The manual-RT configure functions take
+ * ownership of cfgd_rt and expect the caller to have checked that the RT
+ * is not already configured (they uninstall/reinstall routes
+ * unconditionally); unconfigure with cfgd_rt == NULL removes every RT of
+ * the direction. The auto-RT functions are self-guarded/idempotent, as
+ * are their VRF-level counterparts above (bgp_evpn.c). */
+extern void evpn_configure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+					       struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern void evpn_unconfigure_import_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+						 const struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern void evpn_configure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+					       struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern void evpn_unconfigure_export_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+						 const struct bgp_evpn_cfgd_rt *cfgd_rt);
+extern void evpn_configure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+						    enum bgp_evpn_autort_cfgd autort);
+extern void evpn_unconfigure_import_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn);
+extern void evpn_configure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn,
+						    enum bgp_evpn_autort_cfgd autort);
+extern void evpn_unconfigure_export_auto_rt_for_l2vni(struct bgp *bgp, struct bgpevpn *vpn);
+
+/* rfc8365-compatible auto-RT encoding switch, per direction, and the
+ * "auto-route-target" add-mode keyword mapping (bgp_evpn_vty.c,
+ * un-static'd for bgp_nb_evpn.c, M6 batch B9b). The set/unset pair is
+ * self-guarded/idempotent: bgp_evpn_handle_autort_change() fires only
+ * when a direction actually flipped. */
+extern void evpn_set_autort_rfc8365(struct bgp *bgp, bool import, bool export);
+extern void evpn_unset_autort_rfc8365(struct bgp *bgp, bool import, bool export);
+extern enum bgp_evpn_autort_cfgd bgp_evpn_autort_mode_from_str(const char *mode);
+
 extern int bgp_evpn_handle_export_rt_change(struct bgp *bgp,
 					    struct bgpevpn *vpn);
 extern void bgp_evpn_handle_autort_change(struct bgp *bgp);

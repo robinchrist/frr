@@ -60,6 +60,34 @@ void instance_evpn_ead_es_route_target_export_ipv4_cli_write(struct vty *vty,
 							      const struct lyd_node *dnode,
 							      bool show_defaults);
 
+/* M6 B9b: route-target / advertise-unicast / advertise-pip / multihoming
+ * toggle / type-5 network emitters. */
+void instance_evpn_rt_direction_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void instance_evpn_vni_rt_direction_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void instance_evpn_rt_auto_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void instance_evpn_vni_rt_auto_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void instance_evpn_rt_auto_rfc8365_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults);
+void instance_evpn_advertise_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
+						      const struct lyd_node *dnode,
+						      bool show_defaults);
+void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults);
+void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults);
+void instance_evpn_network_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults);
+
 /* M6 B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/'advertise-svi-ip'/
  * 'advertise-subnet' emitters. */
 void instance_evpn_vni_rd_cli_write(struct vty *vty, const struct lyd_node *dnode,

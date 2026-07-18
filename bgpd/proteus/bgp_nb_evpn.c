@@ -665,33 +665,25 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_de
 }
 
 /* 'use-es-l3nhg' / 'disable-ead-evi-rx' / 'disable-ead-evi-tx' (M6 batch
- * B5, reject-stubbed): all three are default-on/off *compiled* constants
- * (BGP_EVPN_MH_USE_ES_L3NHG_DEF, BGP_EVPN_MH_EAD_EVI_RX_DEF,
- * BGP_EVPN_MH_EAD_EVI_TX_DEF, all 'true' in bgp_evpn_mh.h), the same shape
- * as B4's dup-addr-detection/enabled. B5 could not convert them because
- * proteus-bgp-evpn.yang's three leaves carried no 'default' statement; M6
- * batch B9a closed that gap (use-es-l3nhg default "true", the two
- * disable-* leaves default "false" -- matching the compiled constants), so
- * these are now plain Tier A leaves: modify-only, a delete resolves to the
- * YANG default. The conversion itself is a later batch's job; until then
- * bgp_mh_info->host_routes_use_l3nhg / enable_ead_evi_rx / enable_ead_evi_tx
- * stay reachable only through the still-native bare 'use-es-l3nhg' /
- * 'disable-ead-evi-rx' / 'disable-ead-evi-tx' toggles (bgp_evpn_vty.c), and
- * bgp_config_write_evpn_info()'s corresponding lines stay native and
- * ungated, same as dup-addr-detection/enabled's.
+ * B9b; B5 had reject-stubbed all three because their YANG leaves carried
+ * no 'default' statement, and M6 batch B9a added the defaults matching
+ * the compiled BGP_EVPN_MH_USE_ES_L3NHG_DEF / _EAD_EVI_RX_DEF /
+ * _EAD_EVI_TX_DEF constants). Plain Tier A leaves now: modify-only, a
+ * delete resolves to the YANG default. Like every other multihoming leaf
+ * here, bgp_mh_info is process-wide state, so there is no bgp instance
+ * to look up. use-es-l3nhg is a bare field write with no side-effect
+ * call, exactly like the legacy bgp_evpn_use_es_l3nhg_cmd; the two
+ * disable-* leaves reproduce their legacy DEFPYs' fire-only-on-change
+ * guard around bgp_evpn_switch_ead_evi_rx()/_tx() (which walk/update ES
+ * state). Note the YANG leaves are the CLI's disable-* spelling while
+ * the fields are enable_* -- inverted on read.
  */
 int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_mh_info->host_routes_use_l3nhg = yang_dnode_get_bool(args->dnode, NULL);
 
 	return NB_OK;
 }
@@ -699,15 +691,15 @@ int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_m
 int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	bool enable_rx;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	enable_rx = !yang_dnode_get_bool(args->dnode, NULL);
+	if (enable_rx != bgp_mh_info->enable_ead_evi_rx) {
+		bgp_mh_info->enable_ead_evi_rx = enable_rx;
+		bgp_evpn_switch_ead_evi_rx();
 	}
 
 	return NB_OK;
@@ -716,48 +708,36 @@ int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
 int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	bool enable_tx;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	enable_tx = !yang_dnode_get_bool(args->dnode, NULL);
+	if (enable_tx != bgp_mh_info->enable_ead_evi_tx) {
+		bgp_mh_info->enable_ead_evi_tx = enable_tx;
+		bgp_evpn_switch_ead_evi_tx();
 	}
 
 	return NB_OK;
 }
 
-/* 'enabled' (M6 batch B4, reject-stubbed): B4 could not convert this leaf
- * because proteus-bgp-evpn.yang's dup-addr-detection/enabled carried no
- * 'default "true"' statement; M6 batch B9a added it (FRR's compiled default
- * is duplicate address detection on, with only the negative 'no
- * dup-addr-detection' form ever written back), making this a plain
- * Tier-A-inverted leaf: modify-only, a delete resolves to the true default.
- * The conversion itself is a later batch's job; until then
- * bgp->evpn_info->dup_addr_detect stays reachable only through the
- * still-native bare 'dup-addr-detection' / 'no dup-addr-detection' toggle
- * (bgp_evpn_vty.c), and bgp_config_write_evpn_info()'s line stays native
- * and ungated.
+/* 'dup-addr-detection' / 'no dup-addr-detection' bare toggle -- the
+ * 'enabled' leaf (M6 batch B9b; B4 had reject-stubbed it because the
+ * leaf carried no 'default "true"' statement, added by M6 batch B9a).
+ * Tier-A-inverted: modify-only, only the negative form is ever written
+ * back, a delete resolves to the true default. Routes through the same
+ * reread-the-whole-container helper as max-moves/time/freeze below,
+ * which since this conversion reads the enabled leaf instead of
+ * unconditionally asserting it -- so the legacy DEFPYs' "configuring
+ * max-moves/time or freeze also turns detection back on" side effect now
+ * lives in the CLI layer (the value-bearing mgmtd DEFPYs delete
+ * './enabled' back to its true default, bgp_cli_instance.c), keeping the
+ * datastore and bgp->evpn_info->dup_addr_detect in lockstep. The legacy
+ * bare 'no dup-addr-detection' additionally reset max-moves/time/freeze
+ * to their defaults; the mgmtd 'no' form deletes those leaves alongside,
+ * so the reread reproduces that too.
  */
-int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
-}
-
 /* max-moves/time/freeze (M6 batch B4, dup_addr_detection_cmd /
  * dup_addr_detection_auto_recovery_cmd): none of the three carry a YANG
  * default (same no-default numeric-leaf shape as B8's per-neighbor
@@ -765,19 +745,25 @@ int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb
  * reroutes to a single "reread the whole dup-addr-detection container,
  * reapply to bgp->evpn_info, notify zebra" helper -- a reread after any one
  * leaf's change still recomputes a fully consistent set, and unset leaves
- * fall back to the same EVPN_DAD_DEFAULT_* legacy itself used. Configuring
- * any of the three also (re)asserts dup_addr_detect, mirroring both legacy
- * DEFPYs' own unconditional 'bgp_vrf->evpn_info->dup_addr_detect = true'
- * side effect -- the field is otherwise only ever turned off by the
- * still-native bare 'no dup-addr-detection' (dup_addr_detect's own leaf is
- * not convertible this batch, see above).
+ * fall back to the same EVPN_DAD_DEFAULT_* legacy itself used. Since M6
+ * B9b the dup_addr_detect flag is read from the (now defaulted) 'enabled'
+ * leaf instead of being asserted unconditionally -- see the doc comment
+ * on the enabled_modify callback above; the legacy "configuring
+ * max-moves/time or freeze also turns detection back on" side effect
+ * moved to the CLI layer (the value-bearing mgmtd DEFPYs delete
+ * './enabled' back to its true default, bgp_cli_instance.c), keeping the
+ * datastore and bgp->evpn_info->dup_addr_detect in lockstep. A
+ * destroy-side reread sees the pre-commit sibling values (destroy dnodes
+ * point into the old tree); any sibling changed in the same commit
+ * re-drives this helper with its own final value afterwards, so the last
+ * apply always runs against the fully-new state.
  */
 static void bgp_nb_dup_addr_detection_apply(struct bgp *bgp, const struct lyd_node *dnode)
 {
 	if (!bgp || !bgp->evpn_info)
 		return;
 
-	bgp->evpn_info->dup_addr_detect = true;
+	bgp->evpn_info->dup_addr_detect = yang_dnode_get_bool(dnode, "enabled");
 
 	bgp->evpn_info->dad_max_moves = yang_dnode_exists(dnode, "max-moves")
 						 ? yang_dnode_get_uint16(dnode, "max-moves")
@@ -799,6 +785,18 @@ static void bgp_nb_dup_addr_detection_apply(struct bgp *bgp, const struct lyd_no
 
 	bgp_zebra_dup_addr_detection(bgp);
 }
+
+int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_dup_addr_detection_apply(bgp_nb_instance_lookup(args->dnode),
+					yang_dnode_get_parent(args->dnode, "dup-addr-detection"));
+
+	return NB_OK;
+}
+
 
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(struct nb_cb_modify_args *args)
 {
@@ -1370,28 +1368,186 @@ int instance_afi_safis_l2vpn_evpn_vni_flooding_destroy(struct nb_cb_destroy_args
 	return NB_OK;
 }
 
-/* Per-VNI 'route-target <both|import|export> RTLIST...' and
+/* Per-VNI and VRF-level 'route-target <both|import|export> RTLIST...' /
  * 'auto-route-target <both|import|export> <add-always|add-never|
- * add-if-no-manual>' (M6 batch B9a remodel: one direction-primary
- * route-target tree per VNI -- the manual rts, the import-only
- * wildcard-rts leaf-list ('route-target import *:NN') and the automatic
- * route-target's mode all live under route-target/<import|export>.
- * 'both' is a CLI input alias stored as import plus export, never
- * written back. bgp_evpn_vni_rt_cmd / bgp_evpn_vni_auto_rt_cmd). The
- * conversion is a later batch's job; all reject-stubs until then. */
+ * add-if-no-manual[|rfc8365-compatible]>' (M6 batch B9b, on B9a's
+ * direction-primary route-target tree: manual rts, the import-only
+ * wildcard-rts leaf-list and the automatic route-target's mode -- plus,
+ * VRF-level only, the rfc8365-compatible encoding switch -- all live
+ * under route-target/<import|export>; 'both' is a CLI input alias the
+ * mgmtd DEFPYs expand into both direction subtrees, never seen here).
+ *
+ * Every manual-RT list entry's keys ARE the RT's whole value, so
+ * create/destroy is the complete operation (same shape as B5's
+ * ead-es-route-target-export). Each callback builds the typed
+ * struct bgp_evpn_cfgd_rt directly from the already-typed YANG leaves
+ * and drives the per-direction legacy setters:
+ * bgp_evpn_configure/unconfigure_{import,export}_rt_for_vrf
+ * (bgp_evpn.c) for the VRF level,
+ * evpn_configure/unconfigure_{import,export}_rt_for_l2vni
+ * (bgp_evpn_vty.c, un-static'd) per VNI. Those setters expect the
+ * caller to have checked for duplicate adds / missing deletes (they
+ * uninstall+reinstall or withdraw+re-advertise routes unconditionally,
+ * and the configure side takes ownership of a heap cfgd_rt), so the
+ * bgp_nb_evpn_{vrf,vni}_rt_apply() helpers below reproduce the retired
+ * vrf_rt_add/del / l2vni_rt_add/del dispatchers' presence checks: a
+ * create of an already-present RT and a destroy of an already-absent
+ * one are silent no-ops, keeping the B2 fire-only-on-real-transition
+ * rule (no route churn on replays).
+ *
+ * The auto/mode leaves map the YANG enum (identical keywords) through
+ * bgp_evpn_autort_mode_from_str() onto the mode setters, which are
+ * self-guarded/idempotent; mode destroy resolves to the
+ * never-configured BGP_EVPN_AUTORT_NOT_CFGD state via the unconfigure
+ * setters. The VRF-level rfc8365-compatible leaves (default false,
+ * modify-only) route through the equally self-guarded
+ * evpn_set/unset_autort_rfc8365().
+ *
+ * Role guards: the legacy per-VNI DEFPYs carried an EVPN_ENABLED soft
+ * CMD_WARNING guard, reproduced as an APPLY-time no-op (same
+ * schema-order reasoning as the B6 per-VNI rd callbacks: advertise-all-vni
+ * may be applied earlier in the same commit, so a VALIDATE-time check
+ * would read stale state); the VNI lookup itself already tolerates a
+ * missing bgpevpn. The VRF-level DEFPYs had no role guard, so the VRF
+ * callbacks have none either.
+ */
+static void bgp_nb_evpn_cfgd_rt_from_dnode(struct bgp_evpn_cfgd_rt *rt,
+					   const struct lyd_node *dnode,
+					   enum bgp_evpn_cfgd_rt_type type)
+{
+	memset(rt, 0, sizeof(*rt));
+	rt->type = type;
+
+	switch (type) {
+	case BGP_EVPN_CFGD_RT_TYPE_WILDCARD:
+		rt->payload.wildcard_rt.local_admin = yang_dnode_get_uint32(dnode, NULL);
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_AS2:
+		rt->payload.as2_rt.as = yang_dnode_get_uint16(dnode, "global-admin");
+		rt->payload.as2_rt.local_admin = yang_dnode_get_uint32(dnode, "local-admin");
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_IP4:
+		yang_dnode_get_ipv4(&rt->payload.ip4_rt.ip, dnode, "global-admin");
+		rt->payload.ip4_rt.local_admin = yang_dnode_get_uint16(dnode, "local-admin");
+		break;
+	case BGP_EVPN_CFGD_RT_TYPE_AS4:
+		rt->payload.as4_rt.as = yang_dnode_get_uint32(dnode, "global-admin");
+		rt->payload.as4_rt.local_admin = yang_dnode_get_uint16(dnode, "local-admin");
+		break;
+	}
+}
+
+static void bgp_nb_evpn_vrf_rt_apply(const struct lyd_node *dnode, enum bgp_evpn_cfgd_rt_type type,
+				     bool import, bool del)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	struct bgp_evpn_rt_config *rt_config;
+	struct bgp_evpn_cfgd_rt rt;
+	bool exists;
+
+	if (!bgp)
+		return;
+
+	rt_config = bgp->vrf_route_target_config;
+	bgp_nb_evpn_cfgd_rt_from_dnode(&rt, dnode, type);
+	exists = !!bgp_evpn_cfgd_rt_slu_find(import ? &rt_config->cfgd_import
+						    : &rt_config->cfgd_export,
+					     &rt);
+
+	if (del) {
+		if (!exists)
+			return;
+		if (import)
+			bgp_evpn_unconfigure_import_rt_for_vrf(bgp, &rt);
+		else
+			bgp_evpn_unconfigure_export_rt_for_vrf(bgp, &rt);
+	} else {
+		if (exists)
+			return;
+		if (import)
+			bgp_evpn_configure_import_rt_for_vrf(bgp, bgp_evpn_cfgd_rt_dup(&rt));
+		else
+			bgp_evpn_configure_export_rt_for_vrf(bgp, bgp_evpn_cfgd_rt_dup(&rt));
+	}
+}
+
+/* The bgp/vpn pair every per-VNI RT callback operates on, or vpn == NULL
+ * for "silently skip" (instance gone, VNI not materialized, or the
+ * legacy EVPN_ENABLED soft guard). */
+static struct bgpevpn *bgp_nb_evpn_vni_rt_owner(const struct lyd_node *dnode, struct bgp **bgp_out)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+
+	*bgp_out = bgp;
+	if (!bgp || !EVPN_ENABLED(bgp))
+		return NULL;
+
+	return bgp_nb_evpn_vni_lookup(dnode);
+}
+
+static void bgp_nb_evpn_vni_rt_apply(const struct lyd_node *dnode, enum bgp_evpn_cfgd_rt_type type,
+				     bool import, bool del)
+{
+	struct bgp *bgp;
+	struct bgpevpn *vpn = bgp_nb_evpn_vni_rt_owner(dnode, &bgp);
+	struct bgp_evpn_rt_config *rt_config;
+	struct bgp_evpn_cfgd_rt rt;
+	bool exists;
+
+	if (!vpn)
+		return;
+
+	rt_config = vpn->rt_config;
+	bgp_nb_evpn_cfgd_rt_from_dnode(&rt, dnode, type);
+	exists = !!bgp_evpn_cfgd_rt_slu_find(import ? &rt_config->cfgd_import
+						    : &rt_config->cfgd_export,
+					     &rt);
+
+	if (del) {
+		if (!exists)
+			return;
+		if (import)
+			evpn_unconfigure_import_rt_for_l2vni(bgp, vpn, &rt);
+		else
+			evpn_unconfigure_export_rt_for_l2vni(bgp, vpn, &rt);
+	} else {
+		if (exists)
+			return;
+		if (import)
+			evpn_configure_import_rt_for_l2vni(bgp, vpn, bgp_evpn_cfgd_rt_dup(&rt));
+		else
+			evpn_configure_export_rt_for_l2vni(bgp, vpn, bgp_evpn_cfgd_rt_dup(&rt));
+	}
+}
+
+static void bgp_nb_evpn_vni_auto_rt_apply(const struct lyd_node *dnode, bool import,
+					  const char *mode)
+{
+	struct bgp *bgp;
+	struct bgpevpn *vpn = bgp_nb_evpn_vni_rt_owner(dnode, &bgp);
+
+	if (!vpn)
+		return;
+
+	if (!mode) {
+		if (import)
+			evpn_unconfigure_import_auto_rt_for_l2vni(bgp, vpn);
+		else
+			evpn_unconfigure_export_auto_rt_for_l2vni(bgp, vpn);
+	} else if (import) {
+		evpn_configure_import_auto_rt_for_l2vni(bgp, vpn,
+							bgp_evpn_autort_mode_from_str(mode));
+	} else {
+		evpn_configure_export_auto_rt_for_l2vni(bgp, vpn,
+							bgp_evpn_autort_mode_from_str(mode));
+	}
+}
+
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, true, false);
 
 	return NB_OK;
 }
@@ -1399,16 +1555,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, true, true);
 
 	return NB_OK;
 }
@@ -1416,16 +1564,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as2_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, true, false);
 
 	return NB_OK;
 }
@@ -1433,16 +1573,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, true, true);
 
 	return NB_OK;
 }
@@ -1450,16 +1582,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_as4_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, true, false);
 
 	return NB_OK;
 }
@@ -1467,16 +1591,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, true, true);
 
 	return NB_OK;
 }
@@ -1484,16 +1600,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_rts_ipv4_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/wildcard-rts");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_WILDCARD, true, false);
 
 	return NB_OK;
 }
@@ -1501,16 +1609,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/wildcard-rts");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_WILDCARD, true, true);
 
 	return NB_OK;
 }
@@ -1518,16 +1618,9 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_wildcard_rts_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_auto_rt_apply(args->dnode, true,
+					      yang_dnode_get_string(args->dnode, NULL));
 
 	return NB_OK;
 }
@@ -1535,16 +1628,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_modify(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/import/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_auto_rt_apply(args->dnode, true, NULL);
 
 	return NB_OK;
 }
@@ -1552,16 +1637,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_import_auto_mode_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, false, false);
 
 	return NB_OK;
 }
@@ -1569,16 +1646,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, false, true);
 
 	return NB_OK;
 }
@@ -1586,16 +1655,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as2_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, false, false);
 
 	return NB_OK;
 }
@@ -1603,16 +1664,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, false, true);
 
 	return NB_OK;
 }
@@ -1620,16 +1673,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_as4_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, false, false);
 
 	return NB_OK;
 }
@@ -1637,16 +1682,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_create(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, false, true);
 
 	return NB_OK;
 }
@@ -1654,16 +1691,9 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_rts_ipv4_destroy(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_auto_rt_apply(args->dnode, false,
+					      yang_dnode_get_string(args->dnode, NULL));
 
 	return NB_OK;
 }
@@ -1671,16 +1701,8 @@ int instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_modify(
 int instance_afi_safis_l2vpn_evpn_vni_route_target_export_auto_mode_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/vni/route-target/export/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vni_auto_rt_apply(args->dnode, false, NULL);
 
 	return NB_OK;
 }
@@ -1997,96 +2019,46 @@ int instance_afi_safis_l2vpn_evpn_rd_raw_destroy(struct nb_cb_destroy_args *args
 	return NB_OK;
 }
 
-/* VRF-level 'route-target <both|import|export> RTLIST...' and
- * 'auto-route-target <both|import|export> <add-always|add-never|
- * add-if-no-manual|rfc8365-compatible>' (M6 batch B9a remodel: one
- * direction-primary route-target tree -- the manual rts, the
- * import-only wildcard-rts leaf-list ('route-target import *:NN') and
- * the automatic route-target's mode + rfc8365-compatible encoding
- * switch all live under route-target/<import|export>; the stale
- * per-direction 'auto' booleans, the route-target-both containers and
- * the flat instance-level 'autort rfc8365-compatible' leaf are gone.
- * 'both' is a CLI input alias stored as import plus export, never
- * written back. bgp_evpn_vrf_rt_cmd / bgp_evpn_vrf_auto_rt_cmd; the
- * deprecated 'route-target <type> auto' / 'autort rfc8365-compatible'
- * aliases map onto these nodes at the CLI layer only). The conversion
- * is a later batch's job; all reject-stubs until then. */
+/* VRF-level route-target callbacks: same shape as the per-VNI set above
+ * (see the shared doc comment there), driving the bgp_evpn.c VRF setters
+ * through bgp_nb_evpn_vrf_rt_apply(); no role guard (the legacy VRF
+ * DEFPYs had none). The two rfc8365-compatible leaves are VRF-only. */
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, true, false);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, true, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, true, false);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, true, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, true, false);
 
 	return NB_OK;
 }
@@ -2094,16 +2066,8 @@ int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_create(struct nb_
 int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, true, true);
 
 	return NB_OK;
 }
@@ -2111,16 +2075,8 @@ int instance_afi_safis_l2vpn_evpn_route_target_import_rts_ipv4_destroy(
 int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_create(
 	struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/wildcard-rts");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_WILDCARD, true, false);
 
 	return NB_OK;
 }
@@ -2128,32 +2084,26 @@ int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_create(
 int instance_afi_safis_l2vpn_evpn_route_target_import_wildcard_rts_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/wildcard-rts");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_WILDCARD, true, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_evpn_configure_import_auto_rt_for_vrf(bgp, bgp_evpn_autort_mode_from_str(
+							       yang_dnode_get_string(args->dnode,
+										     NULL)));
 
 	return NB_OK;
 }
@@ -2161,16 +2111,16 @@ int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_modify(struct nb
 int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_evpn_unconfigure_import_auto_rt_for_vrf(bgp);
 
 	return NB_OK;
 }
@@ -2178,96 +2128,59 @@ int instance_afi_safis_l2vpn_evpn_route_target_import_auto_mode_destroy(
 int instance_afi_safis_l2vpn_evpn_route_target_import_auto_rfc8365_compatible_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/import/auto/rfc8365-compatible");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		evpn_set_autort_rfc8365(bgp, true /* import */, false /* export */);
+	else
+		evpn_unset_autort_rfc8365(bgp, true /* import */, false /* export */);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, false, false);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS2, false, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, false, false);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_AS4, false, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, false, false);
 
 	return NB_OK;
 }
@@ -2275,32 +2188,26 @@ int instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_create(struct nb_
 int instance_afi_safis_l2vpn_evpn_route_target_export_rts_ipv4_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/rts/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_evpn_vrf_rt_apply(args->dnode, BGP_EVPN_CFGD_RT_TYPE_IP4, false, true);
 
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_evpn_configure_export_auto_rt_for_vrf(bgp, bgp_evpn_autort_mode_from_str(
+							       yang_dnode_get_string(args->dnode,
+										     NULL)));
 
 	return NB_OK;
 }
@@ -2308,16 +2215,16 @@ int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_modify(struct nb
 int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_evpn_unconfigure_export_auto_rt_for_vrf(bgp);
 
 	return NB_OK;
 }
@@ -2325,171 +2232,127 @@ int instance_afi_safis_l2vpn_evpn_route_target_export_auto_mode_destroy(
 int instance_afi_safis_l2vpn_evpn_route_target_export_auto_rfc8365_compatible_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/route-target/export/auto/rfc8365-compatible");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		evpn_set_autort_rfc8365(bgp, false /* import */, true /* export */);
+	else
+		evpn_unset_autort_rfc8365(bgp, false /* import */, true /* export */);
 
 	return NB_OK;
 }
 
-/* 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]'
- * (bgp_evpn_advertise_type5_cmd / no_bgp_evpn_advertise_type5_cmd):
- * SCOUTED for M6 batch B7 but reject-stubbed -- an initial implementation
- * (enabled/gateway-ip converted, route-map's value routed through
- * unchanged) broke bgp_evpn_rt5's r2, whose frr.conf defines its
- * route-maps *after* the 'router bgp ... vrf ...' blocks that reference
- * them: proteus-bgp-evpn.yang's 'route-map' leaf was then a real
- * `leafref path "/rmap:route-map/rmap:name"` (default require-instance),
- * so mgmtd's candidate-config validation rejected that forward reference
- * ("Invalid leafref value 'rmap4' - no target instance ..."), and the
- * rejection aborted the rest of that router's config-load transaction,
- * dropping the *next* VRF's unrelated rd/route-target/advertise lines too.
- * M6 batch B9a retyped the leaf to a plain string (the fix that landed on
- * the bfd 'profile' leaf and, module-wide, on proteus-bgp.yang's
- * policy-attachment names for the same class of problem), removing that
- * blocker; the conversion of this family is a later batch's job and it
- * stays reject-stubbed until then. bgp_config_write_evpn_info's two
- * blocks (bgpd/bgp_evpn_vty.c) stay fully native/ungated as a result. */
+/* 'advertise <ipv4|ipv6> unicast [gateway-ip] [route-map WORD]' (M6
+ * batch B9b; B7 had reject-stubbed the family over its then-leafref
+ * 'route-map' leaf rejecting forward references -- M6 batch B9a retyped
+ * it to a plain string). The three leaves form one atomic legacy command
+ * (enabled and gateway-ip are alternatives, FRR stores/writes exactly
+ * one), so the whole container converts as one unit through a single
+ * apply_finish callback per AF: it fires once per commit, after every
+ * other callback, with the container from the NEW tree -- rereading the
+ * complete (enabled, gateway-ip, route-map) tuple and handing it to
+ * evpn_process_advertise_type5_cmd() (bgp_evpn_vty.c, the extracted
+ * legacy transition machinery, itself a no-op when the requested state
+ * is already configured). Per-leaf reread-and-reissue callbacks were
+ * deliberately NOT used here: destroys run before modifies and their
+ * dnodes point into the old tree, so a 'no advertise ...' (route-map
+ * destroy + enabled modify) would transiently reissue an
+ * advertise-with-old-flags -- a real withdraw/re-advertise churn cycle
+ * -- before the disable lands. The leaf callbacks below therefore
+ * accept every event and do nothing; apply_finish does all the work.
+ */
+static void bgp_nb_evpn_advertise_unicast_finish(const struct lyd_node *dnode, afi_t afi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const char *rmap_name = NULL;
+	bool enabled, gateway_ip;
+
+	if (!bgp)
+		return;
+
+	enabled = yang_dnode_get_bool(dnode, "enabled");
+	gateway_ip = yang_dnode_get_bool(dnode, "gateway-ip");
+	if (yang_dnode_exists(dnode, "route-map"))
+		rmap_name = yang_dnode_get_string(dnode, "route-map");
+
+	evpn_process_advertise_type5_cmd(bgp, afi,
+					 gateway_ip ? OVERLAY_INDEX_GATEWAY_IP
+						    : OVERLAY_INDEX_TYPE_NONE,
+					 rmap_name, enabled || gateway_ip);
+}
+
+void instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_apply_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	bgp_nb_evpn_advertise_unicast_finish(args->dnode, AFI_IP);
+}
+
+void instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_apply_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	bgp_nb_evpn_advertise_unicast_finish(args->dnode, AFI_IP6);
+}
+
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_enabled_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_gateway_ip_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast/gateway-ip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv4_unicast_route_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv4-unicast/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_enabled_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_gateway_ip_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast/gateway-ip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_ipv6_unicast_route_map_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-ipv6-unicast/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
@@ -2530,394 +2393,330 @@ int instance_afi_safis_l2vpn_evpn_default_originate_ipv6_modify(struct nb_cb_mod
 	return NB_OK;
 }
 
-/* 'advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]' /
- * 'no advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]'
- * (bgp_evpn_advertise_pip_ip_mac_cmd): scouted for M6 batch B7 but
- * reject-stubbed. B7's first blocker -- the 'enabled' leaf carrying no
- * 'default "true"' statement despite FRR's compiled default being
- * advertise-pip on -- was fixed by M6 batch B9a, which also added the
- * 'must' constraints binding a static ip to enabled and a static mac to
- * the ip, mirroring the one atomic legacy command. What remains is the
- * conversion itself, a later batch's job: legacy's single DEFPY grammar
- * ("[no] advertise-pip [ip A.B.C.D [mac ...]]") always enables/disables
- * PIP and sets/clears its static ip/mac in one line, so the family must
- * convert as one unit (a partial conversion would collide with the legacy
- * DEFUN -- two commands, one grammar, same install node).
- * bgp_config_write_evpn_info's advertise-pip block (bgpd/bgp_evpn_vty.c)
- * stays fully native/ungated until then -- see the comment there.
+/* '[no] advertise-pip [ip A.B.C.D [mac X:X:X:X:X:X]]' (M6 batch B9b;
+ * B7 had reject-stubbed the family, and M6 batch B9a added the missing
+ * 'default "true"' on enabled plus the must constraints binding a
+ * static ip to enabled and a static mac to the ip -- the one atomic
+ * legacy command). Same one-apply_finish-per-commit shape as the
+ * advertise-<afi>-unicast containers above, for the same
+ * destroys-before-modifies churn reason: the whole (enabled, ip, mac)
+ * tuple is reread from the NEW tree once and handed to
+ * evpn_process_advertise_pip_cmd() (bgp_evpn_vty.c), which itself
+ * no-ops unless the stored state actually changes.
+ *
+ * Role guard: legacy hard-rejected the command outside a per-VRF
+ * instance ("supported under L3VNI BGP EVPN VRF",
+ * CMD_WARNING_CONFIG_FAILED when EVPN_ENABLED(bgp)). Reproduced as an
+ * APPLY-time silent skip rather than a VALIDATE rejection -- the
+ * EVPN-owning default instance is only known post-apply within a commit
+ * that also toggles advertise-all-vni (the B2/B6 schema-order
+ * reasoning), and a config carrying advertise-pip leaves on the EVPN
+ * underlay instance was equally non-functional under legacy (the line
+ * was dropped at load).
  */
+void instance_afi_safis_l2vpn_evpn_advertise_pip_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(args->dnode);
+	struct in_addr ip;
+	struct ethaddr mac;
+	bool has_ip, has_mac;
+
+	if (!bgp || EVPN_ENABLED(bgp))
+		return;
+
+	has_ip = yang_dnode_exists(args->dnode, "ip");
+	if (has_ip)
+		yang_dnode_get_ipv4(&ip, args->dnode, "ip");
+	has_mac = yang_dnode_exists(args->dnode, "mac");
+	if (has_mac)
+		yang_dnode_get_mac(&mac, args->dnode, "mac");
+
+	evpn_process_advertise_pip_cmd(bgp, yang_dnode_get_bool(args->dnode, "enabled"),
+				       has_ip ? &ip : NULL, has_mac ? &mac : NULL);
+}
+
 int instance_afi_safis_l2vpn_evpn_advertise_pip_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/enabled");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/ip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_pip_ip_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/ip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/mac");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_advertise_pip_mac_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/advertise-pip/mac");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the container's apply_finish does the work, see above. */
 	return NB_OK;
 }
 
 /* EVPN type-5 static 'network <A.B.C.D/M|X:X::X:X/M> rd RD ethtag WORD
  * label WORD esi WORD gwip <A.B.C.D|X:X::X:X> routermac WORD [route-map
- * RMAP_NAME]' (evpnrt5_network_cmd / no_evpnrt5_network_cmd,
- * bgpd/bgp_evpn_vty.c): scouted for M6 batch B8, left as a reject-stub
- * family for the whole 'network' list -- same class of problem as B7's
- * advertise-<afi>-unicast family, not a new one:
+ * NAME]' (M6 batch B9b; B8 had reject-stubbed the whole list over its
+ * then-leafref 'route-map' leaf, retyped to a plain string by M6 batch
+ * B9a). M5 network-list idiom (bgp_nb_af_network_* in bgp_nb_util.c):
+ * the list entry's create/destroy calls the same bgp_static_set() core
+ * the retired evpnrt5_network DEFUNs reached through
+ * bgp_static_set_vty(), and every option-leaf modify rereads the whole
+ * entry and reissues the set (bgp_static_set() updates an existing
+ * (rd, prefix) entry in place). EVPN specifics on top of M5's shape:
  *
- *  proteus-bgp-evpn.yang's trailing optional 'route-map' leaf is a real
- *  `leafref path "/rmap:route-map/rmap:name"`, but legacy's single DEFPY
- *  grammar has always tolerated the referenced route-map being defined
- *  *after* this line (lazy route_map_lookup_by_name() binding). Routing
- *  that value through nb_cli_enqueue_change() hits mgmtd's candidate-config
- *  leafref validation exactly as B7's advertise-unicast conversion did,
- *  aborting the whole config-load transaction on any forward reference --
- *  a real regression, not merely a cosmetic one. DO-NOT-MODIFY-YANG applies
- *  to this batch, so 'route-map' can't be retyped to a plain string (the
- *  fix already applied to the bfd 'profile' leaf for the same class of
- *  problem).
- *
- *  The mandatory siblings ('rd'/'ethtag'/'label'/'esi'/'gwip'/'routermac')
- *  can't be split into their own mgmtd command either: legacy's grammar is
- *  one atomic DEFUN with 'route-map' as its only optional trailing token,
- *  compiled only into bgpd today (bgp_evpn_vty.c is not in mgmtd's source
- *  list). Since mgmtd is the sole live CLI entry point in the integrated
- *  build, dropping 'route-map' from a new mgmtd-only command would make it
- *  impossible to configure a type-5 network's route-map at all -- the same
- *  silent-feature-loss outcome the mis-shaped-row precedent (B4/B5/B7)
- *  rejects. So the entire 'network' list (key/rd/ethtag/label/esi/gwip/
- *  routermac/route-map, ~28 nodes) stays a reject-stub, flagged for a
- *  future YANG fix (add 'require-instance false;' to 'route-map') before
- *  reattempting. bgp_config_write_network_evpn (bgpd/bgp_route.c) stays
- *  fully native/ungated as a result.
+ * - bgp_static_set() keys EVPN statics by (rd, prefix) while the YANG
+ *   list is keyed by prefix alone (one statement per prefix, B9a's
+ *   deliberate shape). An rd change that switches the choice case
+ *   (e.g. as2 -> ipv4) is fully handled: the old case's destroy --
+ *   which fires exactly on a case switch, before any create, its dnode
+ *   still reading the old tree -- negates the entry under its old rd,
+ *   and the new case's own create re-adds it. An rd VALUE change
+ *   within the same case is an in-place leaf modify; its
+ *   reread-and-reissue adds the entry under the new rd and leaves the
+ *   old (rd, prefix) static configured in bgpd until an explicit 'no
+ *   network ... rd <old>' -- exactly what legacy did when a second
+ *   'network P rd RD2 ...' line arrived without removing the first
+ *   (the prefix-keyed datastore merely narrows how that state can be
+ *   reached). The rd presence container itself can never be destroyed
+ *   on a surviving entry (the B9a 'must' requires an rd), so its
+ *   destroy is a no-op.
+ * - The 'route-map' token: the retired positive DEFUN parsed it but
+ *   passed NULL to bgp_static_set_vty() and the emitter never wrote it
+ *   back; here it is stored and applied for real (see the retirement
+ *   comment in bgp_evpn_vty.c).
+ * - ethtag/label are numeric YANG leaves; bgp_static_set() takes their
+ *   canonical string forms directly, as it does prefix/esi/gwip/
+ *   routermac.
  */
-int instance_afi_safis_l2vpn_evpn_network_create(struct nb_cb_create_args *args)
+static const char *bgp_nb_evpn_network_rd_str(const struct lyd_node *entry_dnode, char *buf,
+					      size_t buf_len)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	const struct lyd_node *rd_dnode = yang_dnode_get(entry_dnode, "rd");
+
+	if (!rd_dnode)
+		return NULL;
+
+	if (yang_dnode_exists(rd_dnode, "as2"))
+		snprintf(buf, buf_len, "%s:%s",
+			 yang_dnode_get_string(rd_dnode, "as2/administrator"),
+			 yang_dnode_get_string(rd_dnode, "as2/assigned-number"));
+	else if (yang_dnode_exists(rd_dnode, "as4"))
+		snprintf(buf, buf_len, "%s:%s",
+			 yang_dnode_get_string(rd_dnode, "as4/administrator"),
+			 yang_dnode_get_string(rd_dnode, "as4/assigned-number"));
+	else if (yang_dnode_exists(rd_dnode, "ipv4"))
+		snprintf(buf, buf_len, "%s:%s",
+			 yang_dnode_get_string(rd_dnode, "ipv4/administrator"),
+			 yang_dnode_get_string(rd_dnode, "ipv4/assigned-number"));
+	else
+		/* Case switch mid-commit: the new case's own create (same
+		 * commit) re-drives the set with the new rd. */
+		return NULL;
+
+	return buf;
+}
+
+static int bgp_nb_evpn_network_set(const struct lyd_node *entry_dnode, bool negate, char *errmsg,
+				   size_t errmsg_len)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(entry_dnode);
+	char rd_buf[64];
+	const char *prefix_str, *rd_str, *rmap;
+	int ret;
+
+	if (!bgp)
+		return NB_OK;
+
+	rd_str = bgp_nb_evpn_network_rd_str(entry_dnode, rd_buf, sizeof(rd_buf));
+	if (!rd_str)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(entry_dnode, "prefix");
+	rmap = negate ? NULL
+		      : (yang_dnode_exists(entry_dnode, "route-map")
+				 ? yang_dnode_get_string(entry_dnode, "route-map")
+				 : NULL);
+
+	ret = bgp_static_set(bgp, negate, prefix_str, rd_str,
+			     yang_dnode_get_string(entry_dnode, "label"), AFI_L2VPN, SAFI_EVPN,
+			     rmap, 0 /* backdoor */, 0 /* label_index */, BGP_EVPN_IP_PREFIX_ROUTE,
+			     yang_dnode_get_string(entry_dnode, "esi"),
+			     yang_dnode_get_string(entry_dnode, "gwip"),
+			     yang_dnode_get_string(entry_dnode, "ethtag"),
+			     negate ? NULL : yang_dnode_get_string(entry_dnode, "routermac"),
+			     errmsg, errmsg_len);
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: bgp_static_set() failed for %s: %s",
+			 __func__, prefix_str, errmsg);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
+}
+
+/* Reissue the full entry after one option leaf changed (modify dnodes
+ * live in the new tree, so the reread sees the final state). */
+static int bgp_nb_evpn_network_reissue(const struct lyd_node *leaf_dnode, char *errmsg,
+				       size_t errmsg_len)
+{
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(leaf_dnode, "network"), false, errmsg,
+				       errmsg_len);
+}
+
+int instance_afi_safis_l2vpn_evpn_network_create(struct nb_cb_create_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_evpn_network_set(args->dnode, false, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(args->dnode, true, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* No-op: the mandatory choice case's own create does the real work
+	 * once its two leaves exist in the target tree. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Unreachable on a surviving entry (the entry's 'must' requires an
+	 * rd) and subsumed by the entry's own destroy otherwise. */
 	return NB_OK;
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), false,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	/* Fires only on an rd case switch: negate the entry under its old
+	 * rd (this dnode still reads the old tree) before the new case's
+	 * create re-adds it. */
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), true,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as2_administrator_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as2/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as2_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as2/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), false,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), true,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_administrator_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/ipv4/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_ipv4_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/ipv4/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), false,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_set(yang_dnode_get_parent(args->dnode, "network"), true,
+				       args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as4_administrator_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as4/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_rd_as4_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/rd/as4/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
+/* mac/raw rd cases: no legacy producer (str2prefix_rd() never emits
+ * either, and 'mac' is blocked by a 'must false()' in
+ * proteus-types.yang), same permanent reject-stubs as the vni/instance
+ * 'rd' choices. */
 int instance_afi_safis_l2vpn_evpn_network_rd_mac_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
@@ -2984,111 +2783,88 @@ int instance_afi_safis_l2vpn_evpn_network_rd_raw_destroy(struct nb_cb_destroy_ar
 
 int instance_afi_safis_l2vpn_evpn_network_ethtag_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/ethtag");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_label_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/label");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_esi_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/esi");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_gwip_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/gwip");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_routermac_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/routermac");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
 
-	return NB_OK;
+	return bgp_nb_evpn_network_reissue(args->dnode, args->errmsg, args->errmsg_len);
 }
 
 int instance_afi_safis_l2vpn_evpn_network_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/l2vpn-evpn/network/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	/* The destroy dnode reads the old tree; reissue the entry with the
+	 * route-map explicitly dropped (M5's network route-map destroy
+	 * idiom: reread the other leaves, never the destroyed one). */
+	const struct lyd_node *entry_dnode;
+	struct bgp *bgp;
+	char rd_buf[64];
+	const char *rd_str;
+	char errmsg[256];
+	int ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "network");
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	rd_str = bgp_nb_evpn_network_rd_str(entry_dnode, rd_buf, sizeof(rd_buf));
+	if (!rd_str)
+		return NB_OK;
+
+	ret = bgp_static_set(bgp, false, yang_dnode_get_string(entry_dnode, "prefix"), rd_str,
+			     yang_dnode_get_string(entry_dnode, "label"), AFI_L2VPN, SAFI_EVPN,
+			     NULL /* rmap */, 0, 0, BGP_EVPN_IP_PREFIX_ROUTE,
+			     yang_dnode_get_string(entry_dnode, "esi"),
+			     yang_dnode_get_string(entry_dnode, "gwip"),
+			     yang_dnode_get_string(entry_dnode, "ethtag"),
+			     yang_dnode_get_string(entry_dnode, "routermac"), errmsg,
+			     sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: bgp_static_set() failed: %s",
+			 __func__, errmsg);
+		return NB_ERR_RESOURCE;
 	}
 
 	return NB_OK;
