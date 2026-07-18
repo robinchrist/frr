@@ -342,14 +342,16 @@ module proteus-bgp {
     }
 
     leaf source-interface {
-      type leafref {
-        path "/intf:interface/intf:name";
-      }
+      type string;
       description
         "'neighbor X interface IFNAME' (peer->ifname, the 'Local
          interface name' line in bgp_config_write_peer_global). Note
          this is a legacy knob distinct from update-source and from
-         unnumbered interface peers.";
+         unnumbered interface peers. Plain string, not a leafref into
+         frr-interface: the interface is forward-referenceable (legacy
+         accepts names that appear later or never, and mgmtd loads
+         bgpd.conf before the interface tree exists -- a leafref here
+         aborted the whole file's commit).";
     }
 
     leaf tcp-mss {
@@ -3075,9 +3077,7 @@ module proteus-bgp {
     list neighbor {
       key "address";
       must "remote-as/plain or remote-as/asdot/high or remote-as/type
-            or ../peer-group[name = current()/peer-group]/remote-as/plain
-            or ../peer-group[name = current()/peer-group]/remote-as/asdot/high
-            or ../peer-group[name = current()/peer-group]/remote-as/type" {
+            or peer-group" {
         error-message
           "a neighbor needs remote-as, directly or via its
            peer-group";
@@ -3089,7 +3089,11 @@ module proteus-bgp {
          spelled against remote-as's choice members since an
          all-empty container always 'exists' -- the
          conditional-mandatory rule the shared remote-as node
-         cannot state).";
+         cannot state). Bare peer-group membership satisfies it
+         even when the group itself has no remote-as: legacy
+         retains such members in Active ('no neighbor PG
+         remote-as' keeps the members, they just cannot
+         establish).";
 
       leaf address {
         type union {

@@ -1442,19 +1442,23 @@ bool bgp_nb_get_local_as(const struct lyd_node *local_as_dnode, as_t *as, const 
 int bgp_nb_local_as_validate(const struct lyd_node *dnode, char *errmsg, size_t errmsg_len)
 {
 	const struct lyd_node *local_as_dnode = yang_dnode_get_parent(dnode, "local-as");
-	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+	const struct lyd_node *instance_dnode = yang_dnode_get_parent(dnode, "instance");
 	as_t as;
 	const char *as_str;
 	char as_buf[ASN_STRING_MAX_SIZE];
 
-	if (!bgp)
+	if (!instance_dnode)
 		return NB_OK;
 
 	if (!bgp_nb_get_local_as(local_as_dnode, &as, &as_str, as_buf, sizeof(as_buf), NULL, NULL,
 				 NULL))
 		return NB_OK;
 
-	if (bgp->as == as) {
+	/* Compare against the candidate's own instance AS, not the bgp
+	 * struct: during a config load the native 'router bgp' creation in
+	 * bgpd races this backend VALIDATE, so the struct may not exist yet
+	 * and the check would silently pass. */
+	if (bgp_nb_instance_get_asn(instance_dnode) == as) {
 		snprintf(errmsg, errmsg_len, "Cannot have local-as same as BGP AS number");
 		return NB_ERR_VALIDATION;
 	}
