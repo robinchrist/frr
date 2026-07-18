@@ -204,7 +204,7 @@ module proteus-bgp {
         "'neighbor X description LINE'.";
     }
 
-    container shutdown {
+    container administrative-shutdown {
       description
         "Administrative shutdown of the session.";
       leaf enabled {

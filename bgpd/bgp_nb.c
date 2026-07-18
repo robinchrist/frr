@@ -828,30 +828,30 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/shutdown/enabled",
+			.xpath = "/proteus-bgp:instance/peer-group/administrative-shutdown/enabled",
 			.cbs = {
-				.modify = instance_peer_group_shutdown_enabled_modify,
+				.modify = instance_peer_group_administrative_shutdown_enabled_modify,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/shutdown/message",
+			.xpath = "/proteus-bgp:instance/peer-group/administrative-shutdown/message",
 			.cbs = {
-				.modify = instance_peer_group_shutdown_message_modify,
-				.destroy = instance_peer_group_shutdown_message_destroy,
+				.modify = instance_peer_group_administrative_shutdown_message_modify,
+				.destroy = instance_peer_group_administrative_shutdown_message_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/shutdown/rtt/threshold",
+			.xpath = "/proteus-bgp:instance/peer-group/administrative-shutdown/rtt/threshold",
 			.cbs = {
-				.modify = instance_peer_group_shutdown_rtt_threshold_modify,
-				.destroy = instance_peer_group_shutdown_rtt_threshold_destroy,
+				.modify = instance_peer_group_administrative_shutdown_rtt_threshold_modify,
+				.destroy = instance_peer_group_administrative_shutdown_rtt_threshold_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/shutdown/rtt/count",
+			.xpath = "/proteus-bgp:instance/peer-group/administrative-shutdown/rtt/count",
 			.cbs = {
-				.modify = instance_peer_group_shutdown_rtt_count_modify,
-				.destroy = instance_peer_group_shutdown_rtt_count_destroy,
+				.modify = instance_peer_group_administrative_shutdown_rtt_count_modify,
+				.destroy = instance_peer_group_administrative_shutdown_rtt_count_destroy,
 			}
 		},
 		{
@@ -4966,30 +4966,30 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/shutdown/enabled",
+			.xpath = "/proteus-bgp:instance/neighbor/administrative-shutdown/enabled",
 			.cbs = {
-				.modify = instance_neighbor_shutdown_enabled_modify,
+				.modify = instance_neighbor_administrative_shutdown_enabled_modify,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/shutdown/message",
+			.xpath = "/proteus-bgp:instance/neighbor/administrative-shutdown/message",
 			.cbs = {
-				.modify = instance_neighbor_shutdown_message_modify,
-				.destroy = instance_neighbor_shutdown_message_destroy,
+				.modify = instance_neighbor_administrative_shutdown_message_modify,
+				.destroy = instance_neighbor_administrative_shutdown_message_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/shutdown/rtt/threshold",
+			.xpath = "/proteus-bgp:instance/neighbor/administrative-shutdown/rtt/threshold",
 			.cbs = {
-				.modify = instance_neighbor_shutdown_rtt_threshold_modify,
-				.destroy = instance_neighbor_shutdown_rtt_threshold_destroy,
+				.modify = instance_neighbor_administrative_shutdown_rtt_threshold_modify,
+				.destroy = instance_neighbor_administrative_shutdown_rtt_threshold_destroy,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/shutdown/rtt/count",
+			.xpath = "/proteus-bgp:instance/neighbor/administrative-shutdown/rtt/count",
 			.cbs = {
-				.modify = instance_neighbor_shutdown_rtt_count_modify,
-				.destroy = instance_neighbor_shutdown_rtt_count_destroy,
+				.modify = instance_neighbor_administrative_shutdown_rtt_count_modify,
+				.destroy = instance_neighbor_administrative_shutdown_rtt_count_destroy,
 			}
 		},
 		{

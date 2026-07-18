@@ -1698,7 +1698,7 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/enabled", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
@@ -1726,11 +1726,11 @@ DEFPY_YANG(
 
 	msg = argv_concat(argv, argc, 4);
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/enabled", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "true");
 	XFREE(MTYPE_TMP, xpath_child);
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/message", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, msg);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
@@ -1765,11 +1765,11 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/enabled", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
 	XFREE(MTYPE_TMP, xpath_child);
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/message", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
@@ -1801,11 +1801,11 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/enabled", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/enabled", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
 	XFREE(MTYPE_TMP, xpath_child);
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/message", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/message", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
@@ -1833,12 +1833,12 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/threshold", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/rtt/threshold", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, rtt_str);
 	XFREE(MTYPE_TMP, xpath_child);
 
 	if (cnt_str) {
-		xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/count", xpath);
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/rtt/count", xpath);
 		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, cnt_str);
 		XFREE(MTYPE_TMP, xpath_child);
 	}
@@ -1873,11 +1873,11 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/threshold", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/rtt/threshold", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/shutdown/rtt/count", xpath);
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/administrative-shutdown/rtt/count", xpath);
 	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
@@ -3483,20 +3483,20 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	 * ..." branch and its unconditional "count %u" (falling back to the
 	 * peer_new() default of 1 when 'rtt/count' itself is absent).
 	 */
-	if (yang_dnode_exists(dnode, "shutdown/enabled") &&
-	    yang_dnode_get_bool(dnode, "shutdown/enabled")) {
-		if (yang_dnode_exists(dnode, "shutdown/message"))
+	if (yang_dnode_exists(dnode, "administrative-shutdown/enabled") &&
+	    yang_dnode_get_bool(dnode, "administrative-shutdown/enabled")) {
+		if (yang_dnode_exists(dnode, "administrative-shutdown/message"))
 			vty_out(vty, " neighbor %s shutdown message %s\n", addr,
-				yang_dnode_get_string(dnode, "shutdown/message"));
+				yang_dnode_get_string(dnode, "administrative-shutdown/message"));
 		else
 			vty_out(vty, " neighbor %s shutdown\n", addr);
 	}
 
-	if (yang_dnode_exists(dnode, "shutdown/rtt/threshold"))
+	if (yang_dnode_exists(dnode, "administrative-shutdown/rtt/threshold"))
 		vty_out(vty, " neighbor %s shutdown rtt %u count %u\n", addr,
-			yang_dnode_get_uint16(dnode, "shutdown/rtt/threshold"),
-			yang_dnode_exists(dnode, "shutdown/rtt/count")
-				? yang_dnode_get_uint8(dnode, "shutdown/rtt/count")
+			yang_dnode_get_uint16(dnode, "administrative-shutdown/rtt/threshold"),
+			yang_dnode_exists(dnode, "administrative-shutdown/rtt/count")
+				? yang_dnode_get_uint8(dnode, "administrative-shutdown/rtt/count")
 				: 1);
 
 	/* bfd (+ inline timers, check-control-plane-failure, profile, strict,

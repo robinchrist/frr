@@ -724,7 +724,7 @@ int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *
  * initializer) when destroyed or never set, matching legacy's
  * unconditional inclusion of 'count %u' in the config-write line.
  */
-int instance_peer_group_shutdown_enabled_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_administrative_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -743,7 +743,7 @@ int instance_peer_group_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_message_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_administrative_shutdown_message_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -759,7 +759,7 @@ int instance_peer_group_shutdown_message_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_message_destroy(struct nb_cb_destroy_args *args)
+int instance_peer_group_administrative_shutdown_message_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer_group *group;
 
@@ -775,7 +775,7 @@ int instance_peer_group_shutdown_message_destroy(struct nb_cb_destroy_args *args
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_administrative_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -792,7 +792,7 @@ int instance_peer_group_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
+int instance_peer_group_administrative_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer_group *group;
 
@@ -809,7 +809,7 @@ int instance_peer_group_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
+int instance_peer_group_administrative_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -825,7 +825,7 @@ int instance_peer_group_shutdown_rtt_count_modify(struct nb_cb_modify_args *args
 	return NB_OK;
 }
 
-int instance_peer_group_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
+int instance_peer_group_administrative_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer_group *group;
 
@@ -1016,7 +1016,7 @@ int instance_peer_group_graceful_restart_mode_destroy(struct nb_cb_destroy_args 
 /* See the peer-group-scope callback's comment above for the
  * enabled/message/rtt gating design shared by both scopes.
  */
-int instance_neighbor_shutdown_enabled_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_administrative_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -1035,7 +1035,7 @@ int instance_neighbor_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_message_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_administrative_shutdown_message_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -1051,7 +1051,7 @@ int instance_neighbor_shutdown_message_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_message_destroy(struct nb_cb_destroy_args *args)
+int instance_neighbor_administrative_shutdown_message_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer *peer;
 
@@ -1067,7 +1067,7 @@ int instance_neighbor_shutdown_message_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_administrative_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -1084,7 +1084,7 @@ int instance_neighbor_shutdown_rtt_threshold_modify(struct nb_cb_modify_args *ar
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
+int instance_neighbor_administrative_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer *peer;
 
@@ -1101,7 +1101,7 @@ int instance_neighbor_shutdown_rtt_threshold_destroy(struct nb_cb_destroy_args *
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_administrative_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -1117,7 +1117,7 @@ int instance_neighbor_shutdown_rtt_count_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_neighbor_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
+int instance_neighbor_administrative_shutdown_rtt_count_destroy(struct nb_cb_destroy_args *args)
 {
 	struct peer *peer;
 
