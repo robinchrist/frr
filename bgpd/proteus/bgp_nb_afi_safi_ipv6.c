@@ -1140,244 +1140,81 @@ int instance_afi_safis_ipv6_labeled_unicast_distance_prefix_access_list_destroy(
 	return bgp_nb_af_distance_prefix_access_list_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
+/* M7 batch B3: converted to northbound, see the bgp_nb_af_vpn_network_*
+ * helpers in bgp_nb_util.c. */
 int instance_afi_safis_ipv6_vpn_network_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as2_create(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as2_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as2_label_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2/label");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as2_label_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as2_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as2_route_map_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as2_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as2_route_map_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_ipv4_create(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_ipv4_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4/label");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_ipv4_label_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_ipv4_route_map_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_ipv4_route_map_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as4_create(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as4_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as4_label_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4/label");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as4_label_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as4_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as4_route_map_modify(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_as4_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4/route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_network_as4_route_map_destroy(args, AFI_IP6);
 }
 
 int instance_afi_safis_ipv6_vpn_network_raw_create(struct nb_cb_create_args *args)

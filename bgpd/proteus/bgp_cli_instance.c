@@ -6890,6 +6890,205 @@ void afi_safis_vpn_rt_export_ipv4_cli_write(struct vty *vty, const struct lyd_no
 }
 
 /*
+ * M7 batch B3: MPLS-VPN static 'network' statements (af-network-vpn-ipv4/
+ * -ipv6 in proteus-bgp.yang), ipv4-vpn/ipv6-vpn only. Legacy is
+ * vpnv4_network/vpnv4_network_route_map/no_vpnv4_network and
+ * vpnv6_network/no_vpnv6_network (bgp_mplsvpn.c); the RD-encoding case
+ * split (as2/ipv4/as4) reuses bgp_cli_soo_parse() exactly like B2's 'rd vpn
+ * export' above, and 'raw' has no legacy parser for an arbitrary RD string
+ * (same reasoning as B2's rd-export/raw) so is not reachable from the CLI.
+ * One combined [no] grammar collapses vpnv4_network[_route_map]/
+ * no_vpnv4_network into a single CREATE (list entry + label + optional
+ * route-map, always issued together) or DESTROY, the same idiom B9
+ * established for 'network'; label is YANG-mandatory but not part of the
+ * key, so it is always enqueued alongside the CREATE. The ipv6 form
+ * mirrors legacy's single vpnv6_network DEFUN (route-map already optional
+ * there).
+ */
+DEFPY_YANG(
+	instance_afi_safis_vpn_network, instance_afi_safis_vpn_network_cli_cmd,
+	"[no] network A.B.C.D/M$prefix rd ASN:NN_OR_IP-ADDRESS:NN$rd <tag|label> (0-1048575)$label \
+	[route-map RMAP_NAME$map_name]",
+	NO_STR
+	"Specify a network to announce via BGP\n"
+	"IPv4 prefix\n"
+	"Specify Route Distinguisher\n"
+	"VPN Route Distinguisher\n"
+	"VPN NLRI label (tag)\n"
+	"VPN NLRI label (tag)\n"
+	"Label value\n"
+	"Route-map to modify the attributes\n"
+	"Name of the route map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	const char *case_name;
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed rd\n");
+		return CMD_WARNING;
+	}
+
+	switch (rd_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP,
+			   "%s/afi-safis/%s/network/%s[prefix='%s'][administrator='%s'][assigned-number='%s']",
+			   VTY_CURR_XPATH, container, case_name, prefix_str, administrator,
+			   assigned_number);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/label", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, label_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, map_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      map_name);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_network_ipv6, instance_afi_safis_vpn_network_ipv6_cli_cmd,
+	"[no] network X:X::X:X/M$prefix rd ASN:NN_OR_IP-ADDRESS:NN$rd <tag|label> (0-1048575)$label \
+	[route-map RMAP_NAME$map_name]",
+	NO_STR
+	"Specify a network to announce via BGP\n"
+	"IPv6 prefix <network>/<length>, e.g., 3ffe::/16\n"
+	"Specify Route Distinguisher\n"
+	"VPN Route Distinguisher\n"
+	"VPN NLRI label (tag)\n"
+	"VPN NLRI label (tag)\n"
+	"Label value\n"
+	"Route-map to modify the attributes\n"
+	"Name of the route map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	const char *case_name;
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed rd\n");
+		return CMD_WARNING;
+	}
+
+	switch (rd_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP,
+			   "%s/afi-safis/%s/network/%s[prefix='%s'][administrator='%s'][assigned-number='%s']",
+			   VTY_CURR_XPATH, container, case_name, prefix_str, administrator,
+			   assigned_number);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/label", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, label_str);
+		XFREE(MTYPE_TMP, xpath_child);
+
+		xpath_child = asprintfrr(MTYPE_TMP, "%s/route-map", xpath);
+		nb_cli_enqueue_change(vty, xpath_child, map_name ? NB_OP_MODIFY : NB_OP_DESTROY,
+				      map_name);
+		XFREE(MTYPE_TMP, xpath_child);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+/* One 'network PFX rd ADMIN:ASSIGNED label N [route-map NAME]' line per
+ * list entry, matching bgp_config_write_network_vpn()'s field order
+ * (bgp_route.c, retired for ipv4-vpn/ipv6-vpn in M7 batch B3). Shared
+ * across both AFs (dnode-driven, no AF distinction needed), like B2's
+ * rt-import/rt-export writers above. */
+void afi_safis_vpn_network_as2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	vty_out(vty, "  network %s rd %u:%u label %u", yang_dnode_get_string(dnode, "prefix"),
+		yang_dnode_get_uint16(dnode, "administrator"),
+		yang_dnode_get_uint32(dnode, "assigned-number"),
+		yang_dnode_get_uint32(dnode, "label"));
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
+void afi_safis_vpn_network_as4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	vty_out(vty, "  network %s rd %u:%u label %u", yang_dnode_get_string(dnode, "prefix"),
+		yang_dnode_get_uint32(dnode, "administrator"),
+		yang_dnode_get_uint16(dnode, "assigned-number"),
+		yang_dnode_get_uint32(dnode, "label"));
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
+void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	vty_out(vty, "  network %s rd %s:%u label %u", yang_dnode_get_string(dnode, "prefix"),
+		yang_dnode_get_string(dnode, "administrator"),
+		yang_dnode_get_uint16(dnode, "assigned-number"),
+		yang_dnode_get_uint32(dnode, "label"));
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
+/*
  * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
  * (1-255)]]' (af-route-selection/dampening in proteus-bgp.yang), across the
  * same eight instance AFs. Same container shape (and the same
@@ -7634,6 +7833,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_table_map_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_dampening_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_vpn_network_cli_cmd);
 
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
@@ -7662,6 +7862,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_table_map_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_dampening_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_vpn_network_ipv6_cli_cmd);
 
 	/* M5 B13: instance-AF 'distance bgp ...' (all eight AFs) + per-prefix
 	 * 'distance (1-255) PREFIX [ACCESSLIST]' (IPv4 grammar on the four IPv4

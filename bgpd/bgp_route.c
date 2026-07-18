@@ -19000,6 +19000,17 @@ static bool bgp_af_network_is_proteus(afi_t afi, safi_t safi)
 	       safi == SAFI_LABELED_UNICAST;
 }
 
+/* M7 batch B3: MPLS-VPN static 'network' statements (af-network-vpn-ipv4/
+ * -ipv6 in proteus-bgp.yang) are mgmtd-owned for ipv4-vpn/ipv6-vpn; their
+ * lines are emitted by afi_safis_vpn_network_{as2,as4,ipv4}_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c) instead. SAFI_ENCAP shares this
+ * emitter (bgp_config_write_network_vpn() is "also used for encap safi")
+ * and is out of scope for M7 -- stays native. */
+static bool bgp_af_network_vpn_is_proteus(afi_t afi, safi_t safi)
+{
+	return (afi == AFI_IP || afi == AFI_IP6) && safi == SAFI_MPLS_VPN;
+}
+
 void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 			      safi_t safi)
 {
@@ -19009,7 +19020,8 @@ void bgp_config_write_network(struct vty *vty, struct bgp *bgp, afi_t afi,
 	struct bgp_aggregate *bgp_aggregate;
 
 	if ((safi == SAFI_MPLS_VPN) || (safi == SAFI_ENCAP)) {
-		bgp_config_write_network_vpn(vty, bgp, afi, safi);
+		if (!bgp_af_network_vpn_is_proteus(afi, safi))
+			bgp_config_write_network_vpn(vty, bgp, afi, safi);
 		return;
 	}
 

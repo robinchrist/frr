@@ -4019,12 +4019,29 @@ DEFUN (show_ip_bgp_vpn_rd_neighbor_advertised_routes,
 
 void bgp_mplsvpn_init(void)
 {
-	install_element(BGP_VPNV4_NODE, &vpnv4_network_cmd);
-	install_element(BGP_VPNV4_NODE, &vpnv4_network_route_map_cmd);
-	install_element(BGP_VPNV4_NODE, &no_vpnv4_network_cmd);
+	/* Coexistence node-drop fix: 'network ... rd ...' (ipv4-vpn/ipv6-vpn)
+	 * is converted to northbound (M7 batch B3, see
+	 * 'instance_afi_safis_vpn_network[_ipv6]_cli_cmd' in
+	 * bgp_cli_instance.c); config emission is retired
+	 * (bgp_config_write_network_vpn() below). bgpd still reads bgpd.conf
+	 * natively, so these native DEFUNs must stay reachable at
+	 * BGP_VPNV4_NODE/BGP_VPNV6_NODE -- the bare BGP_NODE 'network'
+	 * install (bgp_network_cmd, ipv4-unicast's own bare-node fallback,
+	 * B9) shares the 'network <prefix>' prefix, so an unreachable vpn
+	 * 'network ... rd ...' line risks the same walk-up class of bug
+	 * c9e358495d fixed rather than silently failing outright. Using
+	 * _install_element() (the bare installer, not the macro) keeps
+	 * vtysh's tree on the single proteus twin -- see the longer note in
+	 * bgp_vty_init(). Retired wholesale at M8. See
+	 * doc/developer/northbound/bgpd-proteus-conversion.rst
+	 * (coexistence).
+	 */
+	_install_element(BGP_VPNV4_NODE, &vpnv4_network_cmd);
+	_install_element(BGP_VPNV4_NODE, &vpnv4_network_route_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_vpnv4_network_cmd);
 
-	install_element(BGP_VPNV6_NODE, &vpnv6_network_cmd);
-	install_element(BGP_VPNV6_NODE, &no_vpnv6_network_cmd);
+	_install_element(BGP_VPNV6_NODE, &vpnv6_network_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_vpnv6_network_cmd);
 
 	install_element(VIEW_NODE, &show_bgp_ip_vpn_all_rd_cmd);
 	install_element(VIEW_NODE, &show_bgp_ip_vpn_rd_cmd);

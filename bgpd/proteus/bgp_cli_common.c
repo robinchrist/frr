@@ -798,6 +798,27 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_dampening_cli_write,
 			}
 		},
+		/* M7 B3: MPLS-VPN static 'network' statements, RD-encoding
+		 * split (as2/ipv4/as4); 'raw' has no legacy parser and stays
+		 * reject-stubbed. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/network/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/network/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-vpn/network/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_ipv4_cli_write,
+			}
+		},
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/maximum-paths",
 			.cbs = {
@@ -868,6 +889,27 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/dampening",
 			.cbs = {
 				.cli_show = afi_safis_dampening_cli_write,
+			}
+		},
+		/* M7 B3: MPLS-VPN static 'network' statements, RD-encoding
+		 * split (as2/ipv4/as4); 'raw' has no legacy parser and stays
+		 * reject-stubbed. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-vpn/network/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_network_ipv4_cli_write,
 			}
 		},
 		/* M5 B13: instance-AF 'distance bgp ...' + per-prefix

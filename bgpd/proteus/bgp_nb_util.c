@@ -6986,3 +6986,318 @@ int bgp_nb_af_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t 
 
 	return NB_OK;
 }
+
+/* M7 batch B3: MPLS-VPN static 'network' statements (af-network-vpn-ipv4/
+ * -ipv6 in proteus-bgp.yang), ipv4-vpn/ipv6-vpn only -- the RD-encoding
+ * split (as2/ipv4/as4/raw) B2's 'rd vpn export' already established for
+ * this module. Legacy is vpnv4_network[_route_map]/no_vpnv4_network and
+ * vpnv6_network/no_vpnv6_network (bgp_mplsvpn.c), all thin wrappers around
+ * the shared bgp_static_set() core (bgp_route.c) that M5 B9 already
+ * refactored to take a resolved 'struct bgp *' plus an errmsg buffer
+ * instead of a vty. 'label' is YANG-mandatory but not part of the list key
+ * (prefix + rd components are); like B9's route-map/label-index/backdoor,
+ * every callback rereads the sibling label/route-map values off the list
+ * entry and reissues a full bgp_static_set() call -- by NB_EV_APPLY the
+ * candidate tree already has every sibling change from the same CLI
+ * transaction merged in, so this is safe even from the entry's own CREATE
+ * callback. 'raw' has no legacy parser for an arbitrary RD string (same
+ * reasoning as B2's rd-export/raw) and stays reject-stubbed permanently.
+ */
+static const char *bgp_nb_af_vpn_network_rmap(const struct lyd_node *entry_dnode)
+{
+	return yang_dnode_exists(entry_dnode, "route-map") ?
+		       yang_dnode_get_string(entry_dnode, "route-map") : NULL;
+}
+
+/* Builds the ASN:NN_OR_IP-ADDRESS:NN pretty rd string bgp_static_set()
+ * parses via str2prefix_rd(); buffer is function-scope in every caller
+ * (nb_cli_enqueue_change/bgp_static_set do not retain the pointer past the
+ * call), matching the value-pointer lifetime rule. */
+static void bgp_nb_af_vpn_network_rd_as2(const struct lyd_node *entry_dnode, char *buf,
+					 size_t buflen)
+{
+	snprintf(buf, buflen, "%u:%u", yang_dnode_get_uint16(entry_dnode, "administrator"),
+		 yang_dnode_get_uint32(entry_dnode, "assigned-number"));
+}
+
+static void bgp_nb_af_vpn_network_rd_as4(const struct lyd_node *entry_dnode, char *buf,
+					 size_t buflen)
+{
+	snprintf(buf, buflen, "%u:%u", yang_dnode_get_uint32(entry_dnode, "administrator"),
+		 yang_dnode_get_uint16(entry_dnode, "assigned-number"));
+}
+
+static void bgp_nb_af_vpn_network_rd_ipv4(const struct lyd_node *entry_dnode, char *buf,
+					  size_t buflen)
+{
+	snprintf(buf, buflen, "%s:%u", yang_dnode_get_string(entry_dnode, "administrator"),
+		 yang_dnode_get_uint16(entry_dnode, "assigned-number"));
+}
+
+/* Common set/unset core: 'negate' true reproduces the 'no network ... rd
+ * ...' path (only prefix + rd matter, bgp_static_set() ignores label/rmap
+ * there); false (re)installs the static route with 'rmap' (the caller's
+ * responsibility to pass NULL rather than reread route-map off the entry
+ * when the route-map child dnode is itself the one being destroyed and may
+ * already be unlinked by APPLY time, same discipline as B9's
+ * bgp_nb_af_network_route_map_destroy()). */
+static int bgp_nb_af_vpn_network_apply(const struct lyd_node *entry_dnode, afi_t afi,
+					const char *rd_str, bool negate, const char *rmap)
+{
+	struct bgp *bgp;
+	const char *prefix_str;
+	char label_str[16];
+	char errmsg[256];
+	int ret;
+
+	bgp = bgp_nb_instance_lookup(entry_dnode);
+	if (!bgp)
+		return NB_OK;
+
+	prefix_str = yang_dnode_get_string(entry_dnode, "prefix");
+
+	if (!negate)
+		snprintf(label_str, sizeof(label_str), "%u",
+			 yang_dnode_get_uint32(entry_dnode, "label"));
+
+	ret = bgp_static_set(bgp, negate, prefix_str, rd_str, negate ? NULL : label_str, afi,
+			     SAFI_MPLS_VPN, negate ? NULL : rmap, 0, BGP_INVALID_LABEL_INDEX, 0,
+			     NULL, NULL, NULL, NULL, errmsg, sizeof(errmsg));
+	if (ret) {
+		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: bgp_static_set() failed for %s: %s",
+			 __func__, prefix_str, errmsg);
+		return NB_ERR_RESOURCE;
+	}
+
+	return NB_OK;
+}
+
+static int bgp_nb_af_vpn_network_create_validate(struct nb_cb_create_args *args, afi_t afi)
+{
+	struct prefix p;
+	const char *prefix_str;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	/* Prefix syntax is already YANG-typed; only bgp_static_set()'s
+	 * semantic link-local rejection needs an explicit check here,
+	 * mirroring bgp_nb_af_network_create() (B9). */
+	if (afi == AFI_IP6) {
+		prefix_str = yang_dnode_get_string(args->dnode, "prefix");
+		if (str2prefix(prefix_str, &p) && IN6_IS_ADDR_LINKLOCAL(&p.u.prefix6)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Malformed prefix (link-local address)");
+			return NB_ERR_VALIDATION;
+		}
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_network_as2_create(struct nb_cb_create_args *args, afi_t afi)
+{
+	char rd[32];
+	int ret;
+
+	ret = bgp_nb_af_vpn_network_create_validate(args, afi);
+	if (ret != NB_OK)
+		return ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_as2(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(args->dnode));
+}
+
+int bgp_nb_af_vpn_network_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_as2(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, true, NULL);
+}
+
+int bgp_nb_af_vpn_network_as2_label_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as2");
+	bgp_nb_af_vpn_network_rd_as2(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(entry_dnode));
+}
+
+int bgp_nb_af_vpn_network_as2_route_map_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as2");
+	bgp_nb_af_vpn_network_rd_as2(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_vpn_network_as2_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as2");
+	bgp_nb_af_vpn_network_rd_as2(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false, NULL);
+}
+
+int bgp_nb_af_vpn_network_as4_create(struct nb_cb_create_args *args, afi_t afi)
+{
+	char rd[32];
+	int ret;
+
+	ret = bgp_nb_af_vpn_network_create_validate(args, afi);
+	if (ret != NB_OK)
+		return ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_as4(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(args->dnode));
+}
+
+int bgp_nb_af_vpn_network_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_as4(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, true, NULL);
+}
+
+int bgp_nb_af_vpn_network_as4_label_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as4");
+	bgp_nb_af_vpn_network_rd_as4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(entry_dnode));
+}
+
+int bgp_nb_af_vpn_network_as4_route_map_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as4");
+	bgp_nb_af_vpn_network_rd_as4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_vpn_network_as4_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "as4");
+	bgp_nb_af_vpn_network_rd_as4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false, NULL);
+}
+
+int bgp_nb_af_vpn_network_ipv4_create(struct nb_cb_create_args *args, afi_t afi)
+{
+	char rd[32];
+	int ret;
+
+	ret = bgp_nb_af_vpn_network_create_validate(args, afi);
+	if (ret != NB_OK)
+		return ret;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_ipv4(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(args->dnode));
+}
+
+int bgp_nb_af_vpn_network_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp_nb_af_vpn_network_rd_ipv4(args->dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(args->dnode, afi, rd, true, NULL);
+}
+
+int bgp_nb_af_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "ipv4");
+	bgp_nb_af_vpn_network_rd_ipv4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   bgp_nb_af_vpn_network_rmap(entry_dnode));
+}
+
+int bgp_nb_af_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "ipv4");
+	bgp_nb_af_vpn_network_rd_ipv4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false,
+					   yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi)
+{
+	const struct lyd_node *entry_dnode;
+	char rd[32];
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	entry_dnode = yang_dnode_get_parent(args->dnode, "ipv4");
+	bgp_nb_af_vpn_network_rd_ipv4(entry_dnode, rd, sizeof(rd));
+	return bgp_nb_af_vpn_network_apply(entry_dnode, afi, rd, false, NULL);
+}

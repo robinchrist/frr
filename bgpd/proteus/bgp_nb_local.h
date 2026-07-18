@@ -454,6 +454,25 @@ int bgp_nb_af_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args, afi_t a
 int bgp_nb_af_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 
+/* M7 batch B3: MPLS-VPN static 'network' statements (af-network-vpn-ipv4/
+ * -ipv6), ipv4-vpn/ipv6-vpn only; see bgp_nb_util.c. 'raw' has no legacy
+ * parser for an arbitrary RD string and stays reject-stubbed permanently. */
+int bgp_nb_af_vpn_network_as2_create(struct nb_cb_create_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as2_label_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as2_route_map_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as2_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as4_create(struct nb_cb_create_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as4_label_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as4_route_map_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_as4_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_ipv4_create(struct nb_cb_create_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_ipv4_label_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_ipv4_route_map_modify(struct nb_cb_modify_args *args, afi_t afi);
+int bgp_nb_af_vpn_network_ipv4_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi);
+
 #ifdef __cplusplus
 }
 #endif
