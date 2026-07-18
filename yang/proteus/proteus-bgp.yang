@@ -1479,6 +1479,7 @@ module proteus-bgp {
           enum eigrp;
           enum isis;
           enum kernel;
+          enum local;
           enum nhrp;
           enum openfabric;
           enum ospf {

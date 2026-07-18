@@ -114,6 +114,10 @@ static struct cmd_node bgp_af_cmd_nodes[] = {
 	  .node = BGP_IPV6U_NODE,
 	  .parent_node = BGP_NODE,
 	  .prompt = "%s(config-router-af)# " },
+	{ .name = "bgp link-state",
+	  .node = BGP_LS_NODE,
+	  .parent_node = BGP_NODE,
+	  .prompt = "%s(config-router-af)# " },
 };
 
 /* The nine proteus afi-safis/<af> containers: node <-> container name and
@@ -247,6 +251,97 @@ DEFPY_YANG_NOSH(
 	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
 {
 	return bgp_af_node_enter(vty, BGP_EVPN_NODE);
+}
+
+/* Parallel no-op 'segment-routing srv6' sub-node. mgmtd reads split
+ * bgpd.conf too (mgmt_daemons[] includes bgpd since M2); without this node
+ * the config reader's parent walkup matches bgpd's ' segment-routing srv6'
+ * block header against ZEBRA's top-level 'segment-routing' tree instead,
+ * conjuring a prefixless zebra locator that fails YANG validation and
+ * aborts mgmtd's whole bgpd.conf load (every converted leaf in the file is
+ * then silently dropped -- this took out the entire srv6/vpn topotest
+ * cluster). The sub-commands are accepted as no-ops with help strings
+ * byte-identical to bgpd's native ones so the generated vtysh entries
+ * merge into one dual-routed command instead of parsing as ambiguous.
+ * Retired when the srv6 batch converts for real. */
+static struct cmd_node bgp_srv6_cmd_node = {
+	.name = "bgp srv6",
+	.node = BGP_SRV6_NODE,
+	.parent_node = BGP_NODE,
+	.prompt = "%s(config-router-srv6)# ",
+	.no_xpath = true,
+};
+
+DEFPY_YANG_NOSH(
+	bgp_segment_routing_srv6, bgp_segment_routing_srv6_cli_cmd,
+	"segment-routing srv6",
+	"Segment-Routing configuration\n"
+	"Segment-Routing SRv6 configuration\n")
+{
+	vty->node = BGP_SRV6_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG(
+	no_bgp_segment_routing_srv6, no_bgp_segment_routing_srv6_cli_cmd,
+	"no segment-routing srv6",
+	NO_STR
+	"Segment-Routing configuration\n"
+	"Segment-Routing SRv6 configuration\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG(
+	bgp_srv6_locator, bgp_srv6_locator_cli_cmd,
+	"locator NAME$name",
+	"Specify SRv6 locator\n"
+	"Specify SRv6 locator\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG(
+	no_bgp_srv6_locator, no_bgp_srv6_locator_cli_cmd,
+	"no locator NAME$name",
+	NO_STR
+	"Specify SRv6 locator\n"
+	"Specify SRv6 locator\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG(
+	bgp_srv6_only, bgp_srv6_only_cli_cmd,
+	"[no] srv6-only",
+	NO_STR
+	"Only allow SRv6 and disallow MPLS routes\n")
+{
+	return CMD_SUCCESS;
+}
+
+DEFPY_YANG(
+	bgp_srv6_encap_behavior, bgp_srv6_encap_behavior_cli_cmd,
+	"[no$no] encap-behavior <H_Encaps|H_Encaps_Red>$encap_behavior",
+	NO_STR
+	"Configure SRv6 encap mode\n"
+	"H.Encaps\n"
+	"H.Encaps.Red\n")
+{
+	return CMD_SUCCESS;
+}
+
+/* No proteus container for link-state; the node exists here only so mgmtd
+ * tracks the block and accepts its exit-address-family (LS subcommands stay
+ * native to bgpd). */
+DEFPY_YANG_NOSH(
+	address_family_link_state, address_family_link_state_cli_cmd,
+	"address-family link-state [link-state]",
+	"Enter Address Family command mode\n"
+	"Link-State Address Family\n"
+	"Link-State Subsequent Address Family\n")
+{
+	return bgp_af_node_enter(vty, BGP_LS_NODE);
 }
 
 DEFPY_YANG_NOSH(
@@ -6072,7 +6167,7 @@ static int bgp_cli_redistribute_apply(struct vty *vty, const char *no, const cha
 
 DEFPY_YANG(
 	instance_afi_safis_redistribute, instance_afi_safis_redistribute_cli_cmd,
-	"[no] redistribute <babel|connected|eigrp|isis|kernel|nhrp|openfabric|ospf|ospf6|rip|ripng|sharp|static>$proto \
+	"[no] redistribute <babel|connected|eigrp|isis|kernel|local|nhrp|openfabric|ospf|ospf6|rip|ripng|sharp|static>$proto \
 	[{metric (0-4294967295)$metric|route-map RMAP_NAME$rmap}]",
 	NO_STR
 	"Redistribute information from another routing protocol\n"
@@ -6081,6 +6176,7 @@ DEFPY_YANG(
 	"Enhanced Interior Gateway Routing Protocol (EIGRP)\n"
 	"Intermediate System to Intermediate System (IS-IS)\n"
 	"Kernel routes (not installed via the zebra RIB)\n"
+	"Local routes (directly attached host route)\n"
 	"Next Hop Resolution Protocol (NHRP)\n"
 	"OpenFabric Routing Protocol\n"
 	"Open Shortest Path First (OSPFv2)\n"
@@ -7733,6 +7829,16 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &address_family_vpnv6_cli_cmd);
 #endif /* KEEP_OLD_VPN_COMMANDS */
 	install_element(BGP_NODE, &address_family_evpn_cli_cmd);
+	install_element(BGP_NODE, &address_family_link_state_cli_cmd);
+
+	install_node(&bgp_srv6_cmd_node);
+	install_default(BGP_SRV6_NODE);
+	install_element(BGP_NODE, &bgp_segment_routing_srv6_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_segment_routing_srv6_cli_cmd);
+	install_element(BGP_SRV6_NODE, &bgp_srv6_locator_cli_cmd);
+	install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cli_cmd);
+	install_element(BGP_SRV6_NODE, &bgp_srv6_only_cli_cmd);
+	install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);
@@ -7747,6 +7853,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_FLOWSPECV6_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4U_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV6U_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_LS_NODE, &exit_address_family_cli_cmd);
 
 	/* M6 B1: 'vni N' ... 'exit-vni' sub-node (mgmtd side). */
 	install_node(&bgp_evpn_vni_node);
@@ -8016,6 +8123,12 @@ void bgp_cli_instance_init(void)
 
 	install_element(CONFIG_NODE, &bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_route_map_delay_timer_cli_cmd);
+	/* Also at BGP_NODE for backwards compat, matching the legacy install:
+	 * without it, vtysh's config-file node walkup matches the CONFIG_NODE
+	 * entry mid-block and strands the parser outside router bgp, dropping
+	 * every following line. */
+	install_element(BGP_NODE, &bgp_route_map_delay_timer_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_route_map_delay_timer_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_session_dscp_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_session_dscp_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_inq_limit_cli_cmd);

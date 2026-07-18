@@ -1983,7 +1983,7 @@ DEFUNSH(VTYSH_BGPD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
         bgp_srv6,
         bgp_srv6_cmd,
         "segment-routing srv6",
@@ -1994,7 +1994,7 @@ DEFUNSH(VTYSH_BGPD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
         exit_bgp_srv6,
         exit_bgp_srv6_cmd,
         "exit",
@@ -2005,7 +2005,7 @@ DEFUNSH(VTYSH_BGPD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
         quit_bgp_srv6,
         quit_bgp_srv6_cmd,
         "quit",
@@ -2034,7 +2034,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, address_family_link_state, address_family_link_state_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_link_state, address_family_link_state_cmd,
 	"address-family link-state [link-state]",
 	"Enter Address Family command mode\n"
 	"Link-State Address Family\n"

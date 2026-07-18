@@ -225,6 +225,41 @@ DEFPY_YANG(
 }
 
 DEFPY_YANG(
+	no_neighbor_interface_config, no_neighbor_interface_config_cli_cmd,
+	"no neighbor WORD$peer interface [v6only] [peer-group PGNAME] [remote-as <ASNUM|internal|external|auto>]",
+	NO_STR
+	NEIGHBOR_STR
+	"Interface name\n"
+	"Configure BGP on interface\n"
+	"Enable BGP with v6 link-local only\n"
+	"Member of the peer-group\n"
+	"Peer-group name\n"
+	"Specify a BGP neighbor\n"
+	AS_STR
+	"Internal BGP peer\n"
+	"External BGP peer\n"
+	"Automatically detect remote ASN\n")
+{
+	char *xpath;
+	int ret;
+
+	/* Legacy semantics: every trailing option variant deletes the whole
+	 * unnumbered peer, exactly like 'no neighbor WORD'. */
+	if (!yang_dnode_existsf(bgp_cli_instance_dnode(vty), "./neighbor[address='%s']", peer)) {
+		vty_out(vty, "%% Create the bgp interface first\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "./neighbor[address='%s']", peer);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
 	no_neighbor_word_remote_as, no_neighbor_word_remote_as_cli_cmd,
 	"no neighbor WORD$peer remote-as <ASNUM|internal|external|auto>",
 	NO_STR
@@ -6316,6 +6351,7 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_remote_as_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_word_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_interface_config_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_word_remote_as_cli_cmd);
 	install_element(BGP_NODE, &neighbor_interface_config_cli_cmd);
 	install_element(BGP_NODE, &neighbor_interface_config_remote_as_cli_cmd);

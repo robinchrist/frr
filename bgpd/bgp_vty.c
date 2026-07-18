@@ -2638,6 +2638,45 @@ DEFUN (no_neighbor_word,
 	return CMD_SUCCESS;
 }
 
+/* "no neighbor WORD interface ...": grammar unchanged from pre-B1
+ * (matches bgp_cli.c's no_neighbor_interface_config_cli_cmd). Every
+ * trailing option variant deletes the whole unnumbered peer. Same silent
+ * tolerance for an already-deleted peer as no_neighbor_word() above. */
+DEFUN (no_neighbor_interface_config,
+       no_neighbor_interface_config_cmd,
+       "no neighbor WORD interface [v6only] [peer-group PGNAME] [remote-as <ASNUM|internal|external|auto>]",
+       NO_STR
+       NEIGHBOR_STR
+       "Interface name\n"
+       "Configure BGP on interface\n"
+       "Enable BGP with v6 link-local only\n"
+       "Member of the peer-group\n"
+       "Peer-group name\n"
+       "Specify a BGP neighbor\n"
+       AS_STR
+       "Internal BGP peer\n"
+       "External BGP peer\n"
+       "Automatically detect remote ASN\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_word = 2;
+	struct peer *peer;
+
+	peer = peer_lookup_by_conf_if(bgp, argv[idx_word]->arg);
+	if (peer) {
+		/* Request zebra to terminate IPv6 RAs on this interface. */
+		if (peer->ifp)
+			bgp_zebra_terminate_radv(peer->bgp, peer);
+		peer_notify_unconfig(peer->connection);
+		peer_delete(peer);
+		bgp_may_stop_listening(bgp, vty);
+	}
+	/* else: already converged via the sibling mgmtd-routed destroy, or a
+	 * genuine no-op -- tolerate silently, see no_neighbor_word(). */
+
+	return CMD_SUCCESS;
+}
+
 /* "no neighbor WORD remote-as ...": grammar unchanged from pre-B1 (already
  * matches bgp_cli.c's no_neighbor_word_remote_as_cli_cmd verbatim). Only
  * change from the pre-B1 body: tolerate "neither a conf_if peer nor a
@@ -17023,6 +17062,7 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_peer_group_cmd);
 	install_element(BGP_NODE, &no_neighbor_cmd);
 	install_element(BGP_NODE, &no_neighbor_word_cmd);
+	install_element(BGP_NODE, &no_neighbor_interface_config_cmd);
 	install_element(BGP_NODE, &no_neighbor_interface_peer_group_remote_as_cmd);
 	install_element(BGP_NODE, &no_neighbor_peer_group_cmd);
 
