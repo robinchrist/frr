@@ -10,8 +10,6 @@
 
 struct frregex;
 
-#define ASPATH_SEQ_NUMBER_AUTO -1
-
 enum as_filter_type { AS_FILTER_DENY, AS_FILTER_PERMIT };
 
 /* Element of AS path filter. */
@@ -53,5 +51,12 @@ extern struct as_list *as_list_lookup(const char *);
 extern void as_list_add_hook(void (*func)(char *));
 extern void as_list_delete_hook(void (*func)(const char *));
 extern bool config_bgp_aspath_validate(const char *regstr);
+
+/* Northbound entry points (M7 batch B7, bgpd/proteus/bgp_nb_filter.c). */
+extern struct as_filter *bgp_aslist_seq_check(struct as_list *list, int64_t seq);
+extern void as_list_filter_set(const char *name, int64_t seq, enum as_filter_type type,
+			       const char *regstr, struct frregex *regex);
+extern void as_list_filter_unset(struct as_list *aslist, struct as_filter *asfilter);
+extern bool as_list_delete_all(const char *name);
 
 #endif /* _QUAGGA_BGP_FILTER_H */

@@ -37,27 +37,8 @@ struct as_list_master {
 
 
 
-/* Calculate new sequential number. */
-static int64_t bgp_alist_new_seq_get(struct as_list *list)
-{
-	int64_t maxseq;
-	int64_t newseq;
-	struct as_filter *entry;
-
-	maxseq = 0;
-
-	for (entry = list->head; entry; entry = entry->next) {
-		if (maxseq < entry->seq)
-			maxseq = entry->seq;
-	}
-
-	newseq = ((maxseq / 5) * 5) + 5;
-
-	return (newseq > UINT_MAX) ? UINT_MAX : newseq;
-}
-
 /* Return as-list entry which has same seq number. */
-static struct as_filter *bgp_aslist_seq_check(struct as_list *list, int64_t seq)
+struct as_filter *bgp_aslist_seq_check(struct as_list *list, int64_t seq)
 {
 	struct as_filter *entry;
 
@@ -101,18 +82,6 @@ static struct as_filter *as_filter_make(struct frregex *reg, const char *reg_str
 	asfilter->reg_str = XSTRDUP(MTYPE_AS_FILTER_STR, reg_str);
 
 	return asfilter;
-}
-
-static struct as_filter *as_filter_lookup(struct as_list *aslist,
-					  const char *reg_str,
-					  enum as_filter_type type)
-{
-	struct as_filter *asfilter;
-
-	for (asfilter = aslist->head; asfilter; asfilter = asfilter->next)
-		if (strcmp(reg_str, asfilter->reg_str) == 0)
-			return asfilter;
-	return NULL;
 }
 
 static void as_filter_entry_replace(struct as_list *list,
@@ -401,164 +370,84 @@ bool config_bgp_aspath_validate(const char *regstr)
 	return false;
 }
 
-DEFUN(as_path, bgp_as_path_cmd,
-      "bgp as-path access-list AS_PATH_FILTER_NAME [seq (0-4294967295)] <deny|permit> LINE...",
-      BGP_STR
-      "BGP autonomous system path filter\n"
-      "Specify an access list name\n"
-      "Regular expression access list name\n"
-      "Sequence number of an entry\n"
-      "Sequence number\n"
-      "Specify packets to reject\n"
-      "Specify packets to forward\n"
-      "A regular-expression (1234567890_^|[,{}() ]$*+.?-\\) to match the BGP AS paths\n")
+/*
+ * Northbound entry points (M7 batch B7, bgpd/proteus/bgp_nb_filter.c): the
+ * guts of the retired bgp_as_path_cmd / no_bgp_as_path_cmd /
+ * no_bgp_as_path_all_cmd DEFUNs, minus CLI argument parsing, minus regex
+ * compile/character validation (an NB_EV_VALIDATE job now, and minus the
+ * legacy content-based asfilter lookup, since the northbound entry list is
+ * keyed by sequence and the caller already resolved which sequence to act
+ * on -- content-based duplicate/no-match resolution moved to the CLI layer
+ * (bgpd/proteus/bgp_cli_filter.c), which is the only place that still sees
+ * the raw <permit|deny> LINE... tokens without a sequence key.
+ */
+
+/* Guts of bgp_as_path_cmd from the regex compile onward. Takes ownership of
+ * 'regex' (as as_filter_make() did) and 'name'/'regstr' are only read, not
+ * retained beyond this call.
+ *
+ * Deviation from the retired DEFUN: the DEFUN called
+ * as_list_list_init(&aslist->exclude_rule) unconditionally on every single
+ * invocation, including ones that only add a second (or later) entry to an
+ * already-linked list -- harmless there only because as_list_list_init()
+ * re-zeroes the DLIST's circular sentinel rather than freeing anything, so
+ * it silently detaches (not frees) any aspath_exclude already linked via a
+ * route-map's 'set as-path exclude as-path-access-list NAME' without
+ * un-setting that struct's own exclude_aspath_acl back-pointer -- a latent
+ * dangling-pointer hazard once the list is later deleted (its exclude_rule
+ * no longer lists the detached entry, so the delete path's own orphan
+ * sweep below skips it). This entry point is called up to twice per CLI
+ * line (both mandatory sibling leaves modify -- see
+ * bgpd/proteus/bgp_nb_filter.c's as_path_access_list_entry_apply()), which
+ * turned this from a latent, hard-to-hit legacy bug into a routinely-hit
+ * one (topotest bgp_set_aspath_exclude ASAN use-after-free). Fixed here by
+ * only initializing/relinking exclude_rule when the list is being created
+ * for the first time -- an already-existing list's exclude_rule (empty or
+ * linked) is left untouched by a later entry add, which is what the
+ * orphan-relink logic was already trying to guarantee. */
+void as_list_filter_set(const char *name, int64_t seq, enum as_filter_type type,
+			const char *regstr, struct frregex *regex)
 {
-	int idx = 0;
-	enum as_filter_type type;
-	struct as_filter *asfilter;
 	struct as_list *aslist;
+	struct as_filter *asfilter;
 	struct aspath_exclude *ase;
-	struct frregex *regex;
-	char *regstr;
-	int64_t seqnum = ASPATH_SEQ_NUMBER_AUTO;
+	bool new_list = as_list_lookup(name) == NULL;
 
-	/* Retrieve access list name */
-	argv_find(argv, argc, "AS_PATH_FILTER_NAME", &idx);
-	char *alname = argv[idx]->arg;
-
-	if (argv_find(argv, argc, "(0-4294967295)", &idx))
-		seqnum = (int64_t)atol(argv[idx]->arg);
-
-	/* Check the filter type. */
-	type = argv_find(argv, argc, "deny", &idx) ? AS_FILTER_DENY
-						   : AS_FILTER_PERMIT;
-
-	/* Check AS path regex. */
-	argv_find(argv, argc, "LINE", &idx);
-	regstr = argv_concat(argv, argc, idx);
-
-	regex = bgp_regcomp(regstr);
-	if (!regex) {
-		vty_out(vty, "can't compile regexp %s\n", regstr);
-		XFREE(MTYPE_TMP, regstr);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (!config_bgp_aspath_validate(regstr)) {
-		vty_out(vty, "Invalid character in as-path access-list %s\n",
-			regstr);
-		XFREE(MTYPE_TMP, regstr);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
+	aslist = as_list_get(name);
 
 	asfilter = as_filter_make(regex, regstr, type);
+	asfilter->seq = seq;
 
-	XFREE(MTYPE_TMP, regstr);
-
-	/* Install new filter to the access_list. */
-	aslist = as_list_get(alname);
-
-	if (seqnum == ASPATH_SEQ_NUMBER_AUTO)
-		seqnum = bgp_alist_new_seq_get(aslist);
-
-	asfilter->seq = seqnum;
-
-	/* Duplicate insertion check. */;
+	/* Duplicate insertion check. */
 	if (as_list_dup_check(aslist, asfilter))
 		as_filter_free(asfilter);
 	else
 		as_list_filter_add(aslist, asfilter);
 
+	if (!new_list)
+		return;
+
 	/* init the exclude rule list*/
 	as_list_list_init(&aslist->exclude_rule);
 
 	/* get aspath orphan exclude that are using this acl */
-	ase = as_exclude_lookup_orphan(alname);
+	ase = as_exclude_lookup_orphan(name);
 	if (ase) {
 		as_list_list_add_head(&aslist->exclude_rule, ase);
 		/* set reverse pointer */
 		ase->exclude_aspath_acl = aslist;
 		/* set list of aspath excludes using that acl */
-		while ((ase = as_exclude_lookup_orphan(alname))) {
+		while ((ase = as_exclude_lookup_orphan(name))) {
 			as_list_list_add_head(&aslist->exclude_rule, ase);
 			ase->exclude_aspath_acl = aslist;
 		}
 	}
-
-	return CMD_SUCCESS;
 }
 
-DEFUN(no_as_path, no_bgp_as_path_cmd,
-      "no bgp as-path access-list AS_PATH_FILTER_NAME [seq (0-4294967295)] <deny|permit> LINE...",
-      NO_STR
-      BGP_STR
-      "BGP autonomous system path filter\n"
-      "Specify an access list name\n"
-      "Regular expression access list name\n"
-      "Sequence number of an entry\n"
-      "Sequence number\n"
-      "Specify packets to reject\n"
-      "Specify packets to forward\n"
-      "A regular-expression (1234567890_^|[,{}() ]$*+.?-\\) to match the BGP AS paths\n")
+/* Guts of no_bgp_as_path_cmd from the asfilter lookup onward. */
+void as_list_filter_unset(struct as_list *aslist, struct as_filter *asfilter)
 {
-	int idx = 0;
-	enum as_filter_type type;
-	struct as_filter *asfilter;
-	struct as_list *aslist;
 	struct aspath_exclude *ase;
-	char *regstr;
-	struct frregex *regex;
-
-	char *aslistname =
-		argv_find(argv, argc, "AS_PATH_FILTER_NAME", &idx) ? argv[idx]->arg : NULL;
-
-	/* Lookup AS list from AS path list. */
-	aslist = as_list_lookup(aslistname);
-	if (aslist == NULL) {
-		vty_out(vty, "bgp as-path access-list %s doesn't exist\n",
-			aslistname);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* Check the filter type. */
-	if (argv_find(argv, argc, "permit", &idx))
-		type = AS_FILTER_PERMIT;
-	else if (argv_find(argv, argc, "deny", &idx))
-		type = AS_FILTER_DENY;
-	else {
-		vty_out(vty, "filter type must be [permit|deny]\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* Compile AS path. */
-	argv_find(argv, argc, "LINE", &idx);
-	regstr = argv_concat(argv, argc, idx);
-
-	if (!config_bgp_aspath_validate(regstr)) {
-		vty_out(vty, "Invalid character in as-path access-list %s\n",
-			regstr);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	regex = bgp_regcomp(regstr);
-	if (!regex) {
-		vty_out(vty, "can't compile regexp %s\n", regstr);
-		XFREE(MTYPE_TMP, regstr);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	/* Lookup asfilter. */
-	asfilter = as_filter_lookup(aslist, regstr, type);
-
-	bgp_regex_free(regex);
-
-	if (asfilter == NULL) {
-		vty_out(vty, "Regex entered %s does not exist\n", regstr);
-		XFREE(MTYPE_TMP, regstr);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	XFREE(MTYPE_TMP, regstr);
 
 	/* put aspath exclude list into orphan */
 	if (as_list_list_count(&aslist->exclude_rule))
@@ -567,36 +456,29 @@ DEFUN(no_as_path, no_bgp_as_path_cmd,
 
 	as_list_list_fini(&aslist->exclude_rule);
 	as_list_filter_delete(aslist, asfilter);
-
-	return CMD_SUCCESS;
 }
 
-DEFUN (no_as_path_all,
-       no_bgp_as_path_all_cmd,
-       "no bgp as-path access-list AS_PATH_FILTER_NAME",
-       NO_STR
-       BGP_STR
-       "BGP autonomous system path filter\n"
-       "Specify an access list name\n"
-       "Regular expression access list name\n")
+/* Guts of no_bgp_as_path_all_cmd. Returns false if the named list doesn't
+ * exist (defensive only -- a destroy callback only fires on an entry that
+ * existed in the datastore). */
+bool as_list_delete_all(const char *name)
 {
-	int idx_word = 4;
 	struct as_list *aslist;
 
-	aslist = as_list_lookup(argv[idx_word]->arg);
-	if (aslist == NULL) {
-		vty_out(vty, "bgp as-path access-list %s doesn't exist\n",
-			argv[idx_word]->arg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
+	aslist = as_list_lookup(name);
+	if (!aslist)
+		return false;
 
 	as_list_delete(aslist);
 
-	/* Run hook function. */
+	/* Run hook function. as_list_delete() itself doesn't -- it's also
+	 * used internally by as_list_filter_delete() for the "list became
+	 * empty after removing one entry" case, which fires its own hook
+	 * call with the pre-deletion name already in hand. */
 	if (as_list_master.delete_hook)
-		(*as_list_master.delete_hook)(argv[idx_word]->arg);
+		(*as_list_master.delete_hook)(name);
 
-	return CMD_SUCCESS;
+	return true;
 }
 
 static void as_list_show(struct vty *vty, struct as_list *aslist,
@@ -704,33 +586,13 @@ ALIAS (show_as_path_access_list_all,
        "List AS path access lists\n"
        JSON_STR)
 
-static int config_write_as_list(struct vty *vty)
-{
-	struct as_list *aslist;
-	struct as_filter *asfilter;
-	int write = 0;
-
-	for (aslist = as_list_master.str.head; aslist; aslist = aslist->next)
-		for (asfilter = aslist->head; asfilter;
-		     asfilter = asfilter->next) {
-			vty_out(vty,
-				"bgp as-path access-list %s seq %" PRId64
-				" %s %s\n",
-				aslist->name, asfilter->seq,
-				filter_type_str(asfilter->type),
-				asfilter->reg_str);
-			write++;
-		}
-	return write;
-}
-
-static int config_write_as_list(struct vty *vty);
-static struct cmd_node as_list_node = {
-	.name = "as list",
-	.node = AS_LIST_NODE,
-	.prompt = "",
-	.config_write = config_write_as_list,
-};
+/* Config emission is mgmtd-owned (M7 B7, proteus-bgp-filter): the
+ * as_list_master state above is runtime state fed by the northbound apply
+ * callbacks in bgpd/proteus/bgp_nb_filter.c (as_list_filter_set() et al.),
+ * and rendered by bgpd/proteus/bgp_cli_filter.c's cli_show. AS_LIST_NODE
+ * (lib/command.h) is no longer installed by bgpd -- vtysh still uses the
+ * enum value on its own side to file "bgp as-path access-list" lines by
+ * prefix regardless of which daemon emitted them (vtysh_config.c). */
 
 static void bgp_aspath_filter_cmd_completion(vector comps,
 					     struct cmd_token *token)
@@ -749,12 +611,6 @@ static const struct cmd_variable_handler aspath_filter_handlers[] = {
 /* Register functions. */
 void bgp_filter_init(void)
 {
-	install_node(&as_list_node);
-
-	install_element(CONFIG_NODE, &bgp_as_path_cmd);
-	install_element(CONFIG_NODE, &no_bgp_as_path_cmd);
-	install_element(CONFIG_NODE, &no_bgp_as_path_all_cmd);
-
 	install_element(VIEW_NODE, &show_bgp_as_path_access_list_cmd);
 	install_element(VIEW_NODE, &show_ip_as_path_access_list_cmd);
 	install_element(VIEW_NODE, &show_bgp_as_path_access_list_all_cmd);
