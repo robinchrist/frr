@@ -11917,3 +11917,92 @@ const struct frr_yang_module_info proteus_route_map_info = { .name = "proteus-ro
 									     .xpath = NULL,
 								     },
 							     } };
+
+/* M7 batch B9: proteus-bgp-dump (MRT dump, the module's initial revision
+ * and its conversion land together). Each presence container is one
+ * atomic legacy 'dump bgp ...' command applied through its apply_finish
+ * (see the design comment in bgp_nb_dump.c).
+ */
+const struct frr_yang_module_info proteus_bgp_dump_info = {
+	.name = "proteus-bgp-dump",
+	.nodes = {
+		{
+			.xpath = "/proteus-bgp-dump:dump/all",
+			.cbs = {
+				.create = dump_all_create,
+				.destroy = dump_all_destroy,
+				.apply_finish = dump_all_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/all/path",
+			.cbs = {
+				.modify = dump_all_path_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/all/interval",
+			.cbs = {
+				.modify = dump_all_interval_modify,
+				.destroy = dump_all_interval_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/all/extended-timestamp",
+			.cbs = {
+				.modify = dump_all_extended_timestamp_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/updates",
+			.cbs = {
+				.create = dump_updates_create,
+				.destroy = dump_updates_destroy,
+				.apply_finish = dump_updates_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/updates/path",
+			.cbs = {
+				.modify = dump_updates_path_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/updates/interval",
+			.cbs = {
+				.modify = dump_updates_interval_modify,
+				.destroy = dump_updates_interval_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/updates/extended-timestamp",
+			.cbs = {
+				.modify = dump_updates_extended_timestamp_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/routes-mrt",
+			.cbs = {
+				.create = dump_routes_mrt_create,
+				.destroy = dump_routes_mrt_destroy,
+				.apply_finish = dump_routes_mrt_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/routes-mrt/path",
+			.cbs = {
+				.modify = dump_routes_mrt_path_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-dump:dump/routes-mrt/interval",
+			.cbs = {
+				.modify = dump_routes_mrt_interval_modify,
+				.destroy = dump_routes_mrt_interval_destroy,
+			}
+		},
+		{
+			.xpath = NULL,
+		},
+	}
+};

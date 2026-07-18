@@ -115,6 +115,7 @@ nodist_mgmtd_mgmtd_SOURCES += \
 	yang/proteus/proteus-types.yang.c \
 	yang/proteus/proteus-filter.yang.c \
 	yang/proteus/proteus-bgp-filter.yang.c \
+	yang/proteus/proteus-bgp-dump.yang.c \
 	yang/proteus/proteus-bfd.yang.c \
 	yang/proteus/proteus-interface.yang.c \
 	yang/proteus/proteus-route-map.yang.c \
@@ -129,6 +130,7 @@ mgmtd_libmgmt_be_nb_la_SOURCES += \
 	bgpd/proteus/bgp_cli_neighbor.c \
 	bgpd/proteus/bgp_cli_interface.c \
 	bgpd/proteus/bgp_cli_filter.c \
+	bgpd/proteus/bgp_cli_dump.c \
 	bgpd/proteus/bgp_filter_value.c \
 	bgpd/bgp_routemap_cli.c \
 	# end

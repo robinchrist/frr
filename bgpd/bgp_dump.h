@@ -42,6 +42,23 @@
 #define TABLE_DUMP_V2_PEER_INDEX_TABLE_AS2 0
 #define TABLE_DUMP_V2_PEER_INDEX_TABLE_AS4 2
 
+/* The three dump streams of proteus-bgp-dump.yang's 'dump' container: its
+ * 'all' / 'updates' / 'routes-mrt' presence containers map 1:1 onto these
+ * (the CLI's '-et' token variants select the extended-timestamp flag, not
+ * a separate stream).
+ */
+enum bgp_dump_target {
+	BGP_DUMP_TARGET_ALL,
+	BGP_DUMP_TARGET_UPDATES,
+	BGP_DUMP_TARGET_ROUTES,
+};
+
+struct peer;
+
+extern void bgp_dump_target_set(enum bgp_dump_target target, const char *path,
+				const char *interval_str, bool extended_timestamp);
+extern void bgp_dump_target_unset(enum bgp_dump_target target);
+
 extern void bgp_dump_init(void);
 extern void bgp_dump_finish(void);
 extern int bgp_dump_state(struct peer *peer);

@@ -1,0 +1,130 @@
+module proteus-bgp-dump {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/bgp-dump";
+  prefix proteus-bgp-dump;
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "MRT dump configuration (RFC 6396): periodic or continuous dumps
+     of BGP protocol activity to files in the MRT format. This is a
+     bgpd-global surface, not per-instance: there is exactly one dump
+     stream per kind, fed by every peer's traffic (the routing-table
+     dump walks the default instance's IPv4/IPv6 unicast tables).
+
+     CLI text:
+
+       dump bgp <all|all-et> PATH [INTERVAL]
+       dump bgp <updates|updates-et> PATH [INTERVAL]
+       dump bgp routes-mrt PATH [INTERVAL]";
+
+  revision 2026-07-18 {
+    description
+      "Initial revision.";
+  }
+
+  typedef dump-interval {
+    type string {
+      pattern '[0-9]*([Hh][0-9]*)?([Mm][0-9]*)?' {
+        error-message "Malformed interval string";
+      }
+      pattern '.*[1-9].*' {
+        error-message "Malformed interval string";
+      }
+    }
+    description
+      "Interval between dumps, stored verbatim in the spelling it was
+       entered in. Either a plain number of seconds (86400) or a
+       combination of hours, minutes and seconds using the markers
+       'H'/'h' and 'M'/'m', hours before minutes, with a plain-digit
+       seconds remainder allowed at the end (1h30m, 90m, 2h, 1h30).
+       Any digit group may be omitted (h30 is 30 seconds past zero
+       hours, i.e. 30 seconds). The interval must amount to at least
+       one second, which the second pattern enforces (some digit must
+       be non-zero).";
+  }
+
+  grouping dump-target {
+    description
+      "The path/interval pair every dump kind carries.";
+    leaf path {
+      type string {
+        length "1..max";
+      }
+      mandatory true;
+      description
+        "Output filename. strftime(3) conversion specifiers in the
+         name are expanded against the local time each time the file
+         is (re)opened, so an interval combined with a
+         time-formatted path produces a fresh file per cycle (e.g.
+         /var/log/bgpdump/updates-%Y%m%d-%H%M.mrt). A relative path
+         is resolved against the daemon's working directory. The
+         file is truncated on every open.";
+    }
+    leaf interval {
+      type dump-interval;
+      description
+        "Reopen the output file (starting a new dump cycle) every
+         such interval. If the interval divides a day evenly, cycles
+         are aligned to midnight so dumps happen at predictable
+         times of day. If no interval is configured the dump runs as
+         a single shot: the file is opened (and, for the
+         routing-table kind, written and closed) once when the
+         command is entered.";
+    }
+  }
+
+  grouping dump-extended-timestamp {
+    description
+      "The -et token of the packet-dump kinds.";
+    leaf extended-timestamp {
+      type boolean;
+      default "false";
+      description
+        "Write MRT records with the Extended Timestamp header
+         (microsecond resolution, MRT type BGP4MP_ET) instead of
+         plain BGP4MP. Selected by the '-et' spelling of the CLI
+         token ('dump bgp all-et ...', 'dump bgp updates-et ...').";
+    }
+  }
+
+  container dump {
+    description
+      "MRT dump configuration. The three kinds are independent
+       streams and may be active simultaneously.";
+    container all {
+      presence
+        "Dump all BGP packets.";
+      description
+        "'dump bgp all PATH [INTERVAL]' / 'dump bgp all-et ...':
+         dump every BGP packet sent or received, plus a state-change
+         record whenever a peering session changes status. The file
+         stays open and is appended to as traffic happens; the
+         interval only rotates it.";
+      uses dump-target;
+      uses dump-extended-timestamp;
+    }
+    container updates {
+      presence
+        "Dump BGP UPDATE packets.";
+      description
+        "'dump bgp updates PATH [INTERVAL]' / 'dump bgp updates-et
+         ...': like 'all' but restricted to UPDATE messages, without
+         state-change records.";
+      uses dump-target;
+      uses dump-extended-timestamp;
+    }
+    container routes-mrt {
+      presence
+        "Dump the BGP routing table.";
+      description
+        "'dump bgp routes-mrt PATH [INTERVAL]': dump the default
+         instance's whole IPv4 and IPv6 unicast routing table as a
+         TABLE_DUMP_V2 snapshot, once immediately or once per
+         interval. Each snapshot closes the file when complete.";
+      uses dump-target;
+    }
+  }
+}

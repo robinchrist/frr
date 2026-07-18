@@ -9,7 +9,7 @@
 #include "log.h"
 #include "stream.h"
 #include "sockunion.h"
-#include "command.h"
+#include "vty.h"
 #include "prefix.h"
 #include "frrevent.h"
 #include "linklist.h"
@@ -31,15 +31,6 @@ enum bgp_dump_type {
 	BGP_DUMP_UPDATES,
 	BGP_DUMP_UPDATES_ET,
 	BGP_DUMP_ROUTES
-};
-
-static const struct bgp_dump_type_map {
-	enum bgp_dump_type type;
-	const char *str;
-} bgp_dump_type_map[] = {
-	{BGP_DUMP_ALL, "all"},		 {BGP_DUMP_ALL_ET, "all-et"},
-	{BGP_DUMP_UPDATES, "updates"},   {BGP_DUMP_UPDATES_ET, "updates-et"},
-	{BGP_DUMP_ROUTES, "routes-mrt"}, {0, NULL},
 };
 
 enum MRT_MSG_TYPES {
@@ -73,7 +64,7 @@ struct bgp_dump {
 	struct event *t_interval;
 };
 
-static int bgp_dump_unset(struct bgp_dump *bgp_dump);
+static void bgp_dump_unset(struct bgp_dump *bgp_dump);
 static void bgp_dump_interval_func(struct event *);
 
 /* BGP packet dump output buffer. */
@@ -646,51 +637,59 @@ static unsigned int bgp_dump_parse_time(const char *str)
 	return total + time;
 }
 
-static int bgp_dump_set(struct vty *vty, struct bgp_dump *bgp_dump,
-			enum bgp_dump_type type, const char *path,
-			const char *interval_str)
+static struct bgp_dump *bgp_dump_target_lookup(enum bgp_dump_target target)
 {
-	unsigned int interval;
+	switch (target) {
+	case BGP_DUMP_TARGET_ALL:
+		return &bgp_dump_all;
+	case BGP_DUMP_TARGET_UPDATES:
+		return &bgp_dump_updates;
+	case BGP_DUMP_TARGET_ROUTES:
+		return &bgp_dump_routes;
+	}
 
-	/* Don't schedule duplicate dumps if the dump command is given twice */
-	if (bgp_dump->filename && strcmp(path, bgp_dump->filename) == 0
-	    && type == bgp_dump->type) {
-		if (interval_str) {
-			if (bgp_dump->interval_str
-			    && strcmp(bgp_dump->interval_str, interval_str)
-				       == 0)
-				return CMD_SUCCESS;
-		} else {
-			if (!bgp_dump->interval_str)
-				return CMD_SUCCESS;
-		}
+	assert(!"Reached end of function we should never reach");
+}
+
+/* Config application core, driven by the proteus-bgp-dump northbound
+ * callbacks (bgpd/proteus/bgp_nb_dump.c); the CLI grammar and config
+ * emission are mgmtd-owned (M7 B9, bgpd/proteus/bgp_cli_dump.c).
+ *
+ * (Re)configuration always restarts the dump from scratch, like the
+ * retired 'dump bgp ...' DEFUN did: close and reopen the output file and
+ * reschedule the interval timer. interval_str (may be NULL) has already
+ * been validated by the schema to parse to a non-zero number of seconds.
+ */
+void bgp_dump_target_set(enum bgp_dump_target target, const char *path, const char *interval_str,
+			 bool extended_timestamp)
+{
+	struct bgp_dump *bgp_dump = bgp_dump_target_lookup(target);
+	enum bgp_dump_type type;
+	unsigned int interval = 0;
+
+	switch (target) {
+	case BGP_DUMP_TARGET_ALL:
+		type = extended_timestamp ? BGP_DUMP_ALL_ET : BGP_DUMP_ALL;
+		break;
+	case BGP_DUMP_TARGET_UPDATES:
+		type = extended_timestamp ? BGP_DUMP_UPDATES_ET : BGP_DUMP_UPDATES;
+		break;
+	case BGP_DUMP_TARGET_ROUTES:
+	default:
+		type = BGP_DUMP_ROUTES;
+		break;
 	}
 
 	/* Removing previous config */
 	bgp_dump_unset(bgp_dump);
 
 	if (interval_str) {
-		/* Check interval string. */
 		interval = bgp_dump_parse_time(interval_str);
-		if (interval == 0) {
-			vty_out(vty, "Malformed interval string\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		/* Setting interval string */
-		bgp_dump->interval_str =
-			XSTRDUP(MTYPE_BGP_DUMP_STR, interval_str);
-	} else {
-		interval = 0;
+		bgp_dump->interval_str = XSTRDUP(MTYPE_BGP_DUMP_STR, interval_str);
 	}
 
-	/* Set type. */
 	bgp_dump->type = type;
-
-	/* Set interval */
 	bgp_dump->interval = interval;
-
-	/* Set file name. */
 	bgp_dump->filename = XSTRDUP(MTYPE_BGP_DUMP_STR, path);
 
 	/* Create interval thread. */
@@ -698,11 +697,14 @@ static int bgp_dump_set(struct vty *vty, struct bgp_dump *bgp_dump,
 
 	/* This should be called when interval is expired. */
 	bgp_dump_open_file(bgp_dump);
-
-	return CMD_SUCCESS;
 }
 
-static int bgp_dump_unset(struct bgp_dump *bgp_dump)
+void bgp_dump_target_unset(enum bgp_dump_target target)
+{
+	bgp_dump_unset(bgp_dump_target_lookup(target));
+}
+
+static void bgp_dump_unset(struct bgp_dump *bgp_dump)
 {
 	/* Removing file name. */
 	XFREE(MTYPE_BGP_DUMP_STR, bgp_dump->filename);
@@ -720,144 +722,6 @@ static int bgp_dump_unset(struct bgp_dump *bgp_dump)
 
 	/* Removing interval string. */
 	XFREE(MTYPE_BGP_DUMP_STR, bgp_dump->interval_str);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN (dump_bgp_all,
-       dump_bgp_all_cmd,
-       "dump bgp <all|all-et|updates|updates-et|routes-mrt> PATH [INTERVAL]",
-       "Dump packet\n"
-       "BGP packet dump\n"
-       "Dump all BGP packets\nDump all BGP packets (Extended Timestamp Header)\n"
-       "Dump BGP updates only\nDump BGP updates only (Extended Timestamp Header)\n"
-       "Dump whole BGP routing table\n"
-       "Output filename\n"
-       "Interval of output\n")
-{
-	int idx_dump_routes = 2;
-	int idx_path = 3;
-	int idx_interval = 4;
-	int bgp_dump_type = 0;
-	const char *interval = NULL;
-	struct bgp_dump *bgp_dump_struct = NULL;
-	const struct bgp_dump_type_map *map = NULL;
-
-	for (map = bgp_dump_type_map; map->str; map++)
-		if (strmatch(argv[idx_dump_routes]->text, map->str))
-			bgp_dump_type = map->type;
-
-	switch (bgp_dump_type) {
-	case BGP_DUMP_ALL:
-	case BGP_DUMP_ALL_ET:
-		bgp_dump_struct = &bgp_dump_all;
-		break;
-	case BGP_DUMP_UPDATES:
-	case BGP_DUMP_UPDATES_ET:
-		bgp_dump_struct = &bgp_dump_updates;
-		break;
-	case BGP_DUMP_ROUTES:
-	default:
-		bgp_dump_struct = &bgp_dump_routes;
-		break;
-	}
-
-	/* When an interval is given */
-	if (argc == idx_interval + 1)
-		interval = argv[idx_interval]->arg;
-
-	return bgp_dump_set(vty, bgp_dump_struct, bgp_dump_type,
-			    argv[idx_path]->arg, interval);
-}
-
-DEFUN (no_dump_bgp_all,
-       no_dump_bgp_all_cmd,
-       "no dump bgp <all|all-et|updates|updates-et|routes-mrt> [PATH [INTERVAL]]",
-       NO_STR
-       "Stop dump packet\n"
-       "Stop BGP packet dump\n"
-       "Stop dump process all\n"
-       "Stop dump process all-et\n"
-       "Stop dump process updates\n"
-       "Stop dump process updates-et\n"
-       "Stop dump process route-mrt\n"
-       "Output filename\n"
-       "Interval of output\n")
-{
-	int idx_dump_routes = 3;
-	int bgp_dump_type = 0;
-	const struct bgp_dump_type_map *map = NULL;
-	struct bgp_dump *bgp_dump_struct = NULL;
-
-	for (map = bgp_dump_type_map; map->str; map++)
-		if (strmatch(argv[idx_dump_routes]->text, map->str))
-			bgp_dump_type = map->type;
-
-	switch (bgp_dump_type) {
-	case BGP_DUMP_ALL:
-	case BGP_DUMP_ALL_ET:
-		bgp_dump_struct = &bgp_dump_all;
-		break;
-	case BGP_DUMP_UPDATES:
-	case BGP_DUMP_UPDATES_ET:
-		bgp_dump_struct = &bgp_dump_updates;
-		break;
-	case BGP_DUMP_ROUTES:
-	default:
-		bgp_dump_struct = &bgp_dump_routes;
-		break;
-	}
-
-	return bgp_dump_unset(bgp_dump_struct);
-}
-
-static int config_write_bgp_dump(struct vty *vty);
-/* BGP node structure. */
-static struct cmd_node bgp_dump_node = {
-	.name = "dump",
-	.node = DUMP_NODE,
-	.prompt = "",
-	.config_write = config_write_bgp_dump,
-};
-
-static int config_write_bgp_dump(struct vty *vty)
-{
-	if (bgp_dump_all.filename) {
-		const char *type_str = "all";
-		if (bgp_dump_all.type == BGP_DUMP_ALL_ET)
-			type_str = "all-et";
-
-		if (bgp_dump_all.interval_str)
-			vty_out(vty, "dump bgp %s %s %s\n", type_str,
-				bgp_dump_all.filename,
-				bgp_dump_all.interval_str);
-		else
-			vty_out(vty, "dump bgp %s %s\n", type_str,
-				bgp_dump_all.filename);
-	}
-	if (bgp_dump_updates.filename) {
-		const char *type_str = "updates";
-		if (bgp_dump_updates.type == BGP_DUMP_UPDATES_ET)
-			type_str = "updates-et";
-
-		if (bgp_dump_updates.interval_str)
-			vty_out(vty, "dump bgp %s %s %s\n", type_str,
-				bgp_dump_updates.filename,
-				bgp_dump_updates.interval_str);
-		else
-			vty_out(vty, "dump bgp %s %s\n", type_str,
-				bgp_dump_updates.filename);
-	}
-	if (bgp_dump_routes.filename) {
-		if (bgp_dump_routes.interval_str)
-			vty_out(vty, "dump bgp routes-mrt %s %s\n",
-				bgp_dump_routes.filename,
-				bgp_dump_routes.interval_str);
-		else
-			vty_out(vty, "dump bgp routes-mrt %s\n",
-				bgp_dump_routes.filename);
-	}
-	return 0;
 }
 
 /* Initialize BGP packet dump functionality. */
@@ -869,11 +733,6 @@ void bgp_dump_init(void)
 
 	bgp_dump_obuf =
 		stream_new(BGP_MAX_PACKET_SIZE + BGP_MAX_PACKET_SIZE_OVERFLOW);
-
-	install_node(&bgp_dump_node);
-
-	install_element(CONFIG_NODE, &dump_bgp_all_cmd);
-	install_element(CONFIG_NODE, &no_dump_bgp_all_cmd);
 
 	hook_register(bgp_packet_dump, bgp_dump_packet);
 	hook_register(peer_status_changed, bgp_dump_state);

@@ -15,6 +15,7 @@ extern "C" {
 extern const struct frr_yang_module_info proteus_bgp_nb_info;
 extern const struct frr_yang_module_info proteus_filter_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_info;
+extern const struct frr_yang_module_info proteus_bgp_dump_info;
 extern const struct frr_yang_module_info proteus_bfd_info;
 extern const struct frr_yang_module_info proteus_interface_info;
 extern const struct frr_yang_module_info proteus_route_map_info;
@@ -4582,6 +4583,29 @@ int instance_afi_safis_l2vpn_evpn_network_gwip_modify(struct nb_cb_modify_args *
 int instance_afi_safis_l2vpn_evpn_network_routermac_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_network_route_map_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_network_route_map_destroy(struct nb_cb_destroy_args *args);
+
+/* proteus-bgp-dump (M7 batch B9, MRT dump): bodies in
+ * bgpd/proteus/bgp_nb_dump.c. */
+int dump_all_create(struct nb_cb_create_args *args);
+int dump_all_destroy(struct nb_cb_destroy_args *args);
+void dump_all_apply_finish(struct nb_cb_apply_finish_args *args);
+int dump_all_path_modify(struct nb_cb_modify_args *args);
+int dump_all_interval_modify(struct nb_cb_modify_args *args);
+int dump_all_interval_destroy(struct nb_cb_destroy_args *args);
+int dump_all_extended_timestamp_modify(struct nb_cb_modify_args *args);
+int dump_updates_create(struct nb_cb_create_args *args);
+int dump_updates_destroy(struct nb_cb_destroy_args *args);
+void dump_updates_apply_finish(struct nb_cb_apply_finish_args *args);
+int dump_updates_path_modify(struct nb_cb_modify_args *args);
+int dump_updates_interval_modify(struct nb_cb_modify_args *args);
+int dump_updates_interval_destroy(struct nb_cb_destroy_args *args);
+int dump_updates_extended_timestamp_modify(struct nb_cb_modify_args *args);
+int dump_routes_mrt_create(struct nb_cb_create_args *args);
+int dump_routes_mrt_destroy(struct nb_cb_destroy_args *args);
+void dump_routes_mrt_apply_finish(struct nb_cb_apply_finish_args *args);
+int dump_routes_mrt_path_modify(struct nb_cb_modify_args *args);
+int dump_routes_mrt_interval_modify(struct nb_cb_modify_args *args);
+int dump_routes_mrt_interval_destroy(struct nb_cb_destroy_args *args);
 
 #ifdef __cplusplus
 }
