@@ -15189,15 +15189,265 @@ ALIAS_HIDDEN(
 	"Route map reference\n"
 	"Pointer to route-map entries\n")
 
-/* bgp_redistribute_ipv6[_rmap|_metric|_rmap_metric|_metric_rmap], the
+/*
+ * bgp_redistribute_ipv6[_rmap|_metric|_rmap_metric|_metric_rmap], the
  * numbered table-direct pair (bgp_redistribute_ipv6_table/
- * no_bgp_redistribute_ipv6_table) and no_bgp_redistribute_ipv6: converted to
- * northbound, see 'instance_afi_safis_redistribute_cli_cmd'/
- * '_instance_cli_cmd' in bgp_cli_instance.c (M5 batch B11). Deleted outright
- * (not just uninstalled) -- unlike the ipv4 forms, these had no BGP_NODE
- * hidden-alias fallback, so once their BGP_IPV6_NODE install_element() calls
- * are removed they have no reachable install site left (B7/B9 precedent).
+ * no_bgp_redistribute_ipv6_table) and no_bgp_redistribute_ipv6 are converted
+ * to northbound (M5 batch B11); config emission is retired and mgmtd renders
+ * them (see instance_afi_safis_redistribute_cli_cmd in bgp_cli_instance.c).
+ * The native DEFUN/DEFPY bodies below are RESTORED for the coexistence
+ * window (retired wholesale at M8): bgpd's config reader must still match
+ * 'redistribute ...' at BGP_IPV6_NODE natively. There is no ipv6-specific
+ * BGP_NODE hidden alias, but the surviving ipv4 hidden redistribute at
+ * BGP_NODE (FRR_IP_REDIST_STR_BGPD) matches the source keywords ipv4 and
+ * ipv6 share (kernel/connected/local/static/isis/nhrp/vnc/babel/openfabric),
+ * so a walk-up from BGP_IPV6_NODE would otherwise match it, wrongly apply
+ * the redistribute to ipv4-unicast AND pop vty->node out of the ipv6 block,
+ * stranding the following native lines. See
+ * doc/developer/northbound/bgpd-proteus-conversion.rst (coexistence).
  */
+
+DEFUN (bgp_redistribute_ipv6,
+       bgp_redistribute_ipv6_cmd,
+       "redistribute " FRR_IP6_REDIST_STR_BGPD,
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD)
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 1;
+	uint8_t type;
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_redist_add(bgp, AFI_IP6, type, 0);
+	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, false);
+}
+
+DEFUN (bgp_redistribute_ipv6_rmap,
+       bgp_redistribute_ipv6_rmap_cmd,
+       "redistribute " FRR_IP6_REDIST_STR_BGPD " route-map RMAP_NAME",
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD
+       "Route map reference\n"
+       "Pointer to route-map entries\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 1;
+	int idx_word = 3;
+	uint8_t type;
+	struct bgp_redist *red;
+	bool changed;
+	struct route_map *route_map =
+		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
+	changed =
+		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
+	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
+}
+
+DEFUN (bgp_redistribute_ipv6_metric,
+       bgp_redistribute_ipv6_metric_cmd,
+       "redistribute " FRR_IP6_REDIST_STR_BGPD " metric (0-4294967295)",
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD
+       "Metric for redistributed routes\n"
+       "Default metric\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 1;
+	int idx_number = 3;
+	uint8_t type;
+	uint32_t metric;
+	struct bgp_redist *red;
+	bool changed;
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	metric = strtoul(argv[idx_number]->arg, NULL, 10);
+
+	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
+	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP6, type, metric);
+	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
+}
+
+DEFUN (bgp_redistribute_ipv6_rmap_metric,
+       bgp_redistribute_ipv6_rmap_metric_cmd,
+       "redistribute " FRR_IP6_REDIST_STR_BGPD " route-map RMAP_NAME metric (0-4294967295)",
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD
+       "Route map reference\n"
+       "Pointer to route-map entries\n"
+       "Metric for redistributed routes\n"
+       "Default metric\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 1;
+	int idx_word = 3;
+	int idx_number = 5;
+	uint8_t type;
+	uint32_t metric;
+	struct bgp_redist *red;
+	bool changed;
+	struct route_map *route_map =
+		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	metric = strtoul(argv[idx_number]->arg, NULL, 10);
+
+	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
+	changed =
+		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
+	changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP6, type,
+						metric);
+	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
+}
+
+DEFPY(bgp_redistribute_ipv6_table, bgp_redistribute_ipv6_table_cmd,
+      "redistribute table-direct (1-65535)$table_id [{metric$metric (0-4294967295)$metric_val|route-map WORD$rmap}]",
+      "Redistribute information from another routing protocol\n"
+      "Non-main Kernel Routing Table - Direct\n"
+      "Table ID\n"
+      "Metric for redistributed routes\n"
+      "Default metric\n"
+      "Route map reference\n"
+      "Pointer to route-map entries\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	bool changed = false;
+	struct route_map *route_map = NULL;
+	struct bgp_redist *red;
+
+	if (rmap)
+		route_map = route_map_lookup_warn_noexist(vty, rmap);
+
+	if (bgp->vrf_id != VRF_DEFAULT) {
+		vty_out(vty,
+			"%% Only default BGP instance can use 'table-direct'\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	if (table_id == RT_TABLE_MAIN || table_id == RT_TABLE_LOCAL) {
+		vty_out(vty, "%% 'table-direct', can not use %" PRIu64 " routing table\n",
+			table_id);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	red = bgp_redist_add(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT, table_id);
+	if (rmap)
+		changed = bgp_redistribute_rmap_set(red, rmap, route_map);
+	if (metric)
+		changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP6,
+						       ZEBRA_ROUTE_TABLE_DIRECT,
+						       metric_val);
+	return bgp_redistribute_set(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT,
+				    table_id, changed);
+}
+
+DEFPY(no_bgp_redistribute_ipv6_table, no_bgp_redistribute_ipv6_table_cmd,
+      "no redistribute table-direct (1-65535)$table_id [{metric (0-4294967295)|route-map WORD}]",
+      NO_STR
+      "Redistribute information from another routing protocol\n"
+      "Non-main Kernel Routing Table - Direct\n"
+      "Table ID\n"
+      "Metric for redistributed routes\n"
+      "Default metric\n"
+      "Route map reference\n"
+      "Pointer to route-map entries\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+
+	if (bgp->vrf_id != VRF_DEFAULT) {
+		vty_out(vty,
+			"%% Only default BGP instance can use 'table-direct'\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	if (table_id == RT_TABLE_MAIN || table_id == RT_TABLE_LOCAL) {
+		vty_out(vty, "%% 'table-direct', can not use %" PRIu64 " routing table\n",
+			table_id);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_redistribute_unset(bgp, AFI_IP6, ZEBRA_ROUTE_TABLE_DIRECT, table_id);
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_redistribute_ipv6_metric_rmap,
+       bgp_redistribute_ipv6_metric_rmap_cmd,
+       "redistribute " FRR_IP6_REDIST_STR_BGPD " metric (0-4294967295) route-map RMAP_NAME",
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD
+       "Metric for redistributed routes\n"
+       "Default metric\n"
+       "Route map reference\n"
+       "Pointer to route-map entries\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 1;
+	int idx_number = 3;
+	int idx_word = 5;
+	uint8_t type;
+	uint32_t metric;
+	struct bgp_redist *red;
+	bool changed;
+	struct route_map *route_map =
+		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	metric = strtoul(argv[idx_number]->arg, NULL, 10);
+
+	red = bgp_redist_add(bgp, AFI_IP6, type, 0);
+	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP6, SAFI_UNICAST,
+						metric);
+	changed |=
+		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
+	return bgp_redistribute_set(bgp, AFI_IP6, type, 0, changed);
+}
+
+DEFUN (no_bgp_redistribute_ipv6,
+       no_bgp_redistribute_ipv6_cmd,
+       "no redistribute " FRR_IP6_REDIST_STR_BGPD " [{metric (0-4294967295)|route-map RMAP_NAME}]",
+       NO_STR
+       "Redistribute information from another routing protocol\n"
+       FRR_IP6_REDIST_HELP_STR_BGPD
+       "Metric for redistributed routes\n"
+       "Default metric\n"
+       "Route map reference\n"
+       "Pointer to route-map entries\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+	int idx_protocol = 2;
+	uint8_t type;
+
+	type = proto_redistnum(AFI_IP6, argv[idx_protocol]->text);
+	if (type == ZEBRA_ROUTE_ERROR) {
+		vty_out(vty, "%% Invalid route type\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	bgp_redistribute_unset(bgp, AFI_IP6, type, 0);
+	return CMD_SUCCESS;
+}
 
 /* neighbor tcp-mss: converted to northbound, see
  * 'neighbor_tcp_mss_cli_cmd' in bgp_cli.c (M4 batch B3).
@@ -18089,6 +18339,548 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_neighbor_ls_local_link_id_cmd);
 	install_element(BGP_NODE, &neighbor_ls_remote_link_id_cmd);
 	install_element(BGP_NODE, &no_neighbor_ls_remote_link_id_cmd);
+
+	/*
+	 * Coexistence node-drop fix (converted per-AF commands keep their
+	 * native sub-node command installs until M8). bgpd's config reader,
+	 * command_config_read_one_line() (lib/command.c), strict-matches the
+	 * current sub-node first; on a miss it walks up parent nodes and, on a
+	 * successful ancestor match (a hidden BGP_NODE alias or a bare
+	 * BGP_NODE install of the same grammar), cmd_exit()s out of the
+	 * address-family block -- silently stranding every still-native line
+	 * that follows it in that block. The proteus/mgmtd _cli_cmd twins are
+	 * installed only in mgmtd's command tree (bgp_cli_init() runs from
+	 * mgmtd/mgmt_vty.c, never from bgpd), so without these native installs
+	 * bgpd cannot match the converted line at its own sub-node at all.
+	 *
+	 * These use _install_element() (the bare installer), NOT the
+	 * install_element() macro, on purpose: the macro also emits an
+	 * XREFT_INSTALL_ELEMENT xref that python/xref2vtysh.py turns into a
+	 * vtysh DEFSH. bgp_cli_neighbor.c is linked into bgpd too, so the
+	 * proteus twin's install xref is already in bgpd's binary; adding the
+	 * native command's xref for the same node would give vtysh two
+	 * commands for the same input whenever the proteus DEFPY consolidated
+	 * grammar the legacy DEFUNs kept split (e.g. "[no] ... next-hop-self
+	 * [force]" vs the separate native forms) -- "% Ambiguous command" on
+	 * vtysh -f config apply. _install_element() adds the command to bgpd's
+	 * own runtime graph (all bgpd needs to read its own config) while
+	 * leaving vtysh's tree to the proteus twin alone. Config emission
+	 * stays retired (mgmtd renders these); the native handlers are
+	 * idempotent. Retired wholesale at M8. See
+	 * doc/developer/northbound/bgpd-proteus-conversion.rst (coexistence).
+	 */
+	_install_element(BGP_IPV4_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_activate_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_activate_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_distribute_list_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_prefix_list_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_filter_list_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_route_map_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_route_map_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_unsuppress_map_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_advertise_map_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_attr_unchanged_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_nexthop_self_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_nexthop_self_force_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_as_override_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_as_override_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_route_reflector_client_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_route_reflector_client_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_route_server_client_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_remove_private_as_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_remove_private_as_all_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_send_community_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_send_community_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_send_community_type_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_ecommunity_rpki_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_capability_orf_prefix_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_default_originate_rmap_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_default_originate_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_weight_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_weight_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_maximum_prefix_out_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_threshold_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_warning_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_maximum_prefix_restart_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_maximum_prefix_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_allowas_in_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_addpath_tx_all_paths_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_bestpath_per_as_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_addpath_tx_bestpath_per_as_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_EVPN_NODE, &neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_VPNV4_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_VPNV6_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_EVPN_NODE, &no_neighbor_addpath_paths_limit_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV4M_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV4L_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV6M_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV6L_NODE, &neighbor_damp_cmd);
+	_install_element(BGP_IPV4_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV6_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_neighbor_damp_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_redistribute_ipv4_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_rmap_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_metric_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_rmap_metric_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_metric_rmap_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_redistribute_ipv4_ospf_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_rmap_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_redistribute_ipv4_ospf_metric_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_redistribute_ipv6_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_rmap_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_metric_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_rmap_metric_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_metric_rmap_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_redistribute_ipv6_table_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_redistribute_ipv6_table_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_maxpaths_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_maxpaths_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_maxpaths_cmd);
+	_install_element(BGP_IPV6L_NODE, &bgp_maxpaths_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_maxpaths_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_maxpaths_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_bgp_maxpaths_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
+	_install_element(BGP_IPV6L_NODE, &bgp_maxpaths_ibgp_cluster_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV4L_NODE, &no_bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV6L_NODE, &no_bgp_maxpaths_ibgp_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_af_nexthop_prefer_global_cmd);
 
 	bgp_vty_if_init();
 

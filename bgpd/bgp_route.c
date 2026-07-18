@@ -19214,6 +19214,61 @@ void bgp_route_init(void)
 
 	install_element(VIEW_NODE, &show_bgp_listeners_cmd);
 	install_element(VIEW_NODE, &show_bgp_peerhash_cmd);
+
+	/*
+	 * Coexistence node-drop fix: converted instance per-AF commands
+	 * (network, aggregate-address, table-map, dampening, distance) keep
+	 * their native sub-node command installs until M8. Without them bgpd's
+	 * config reader misses the line at the address-family sub-node and
+	 * walks up to a surviving bare BGP_NODE install of the same grammar,
+	 * popping vty->node out of the block and stranding the following
+	 * still-native lines. These use _install_element() (the bare
+	 * installer), not the install_element() macro, so no vtysh DEFSH xref
+	 * is emitted for them -- vtysh's tree stays with the proteus twin and
+	 * cannot go "% Ambiguous command" (see the longer note in
+	 * bgp_vty_init()). Emission stays retired; handlers are idempotent.
+	 * See doc/developer/northbound/bgpd-proteus-conversion.rst
+	 * (coexistence).
+	 */
+	_install_element(BGP_IPV4_NODE, &bgp_network_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_network_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_network_cmd);
+	_install_element(BGP_IPV4_NODE, &aggregate_addressv4_cmd);
+	_install_element(BGP_IPV4M_NODE, &aggregate_addressv4_cmd);
+	_install_element(BGP_IPV4L_NODE, &aggregate_addressv4_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_table_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_table_map_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_table_map_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_table_map_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_bgp_table_map_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_table_map_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV6M_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV6L_NODE, &bgp_damp_set_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV4L_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV6M_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV6L_NODE, &bgp_damp_unset_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_distance_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_distance_cmd);
+	_install_element(BGP_IPV6_NODE, &bgp_distance_cmd);
+	_install_element(BGP_IPV6M_NODE, &bgp_distance_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_distance_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_bgp_distance_cmd);
+	_install_element(BGP_IPV6_NODE, &no_bgp_distance_cmd);
+	_install_element(BGP_IPV6M_NODE, &no_bgp_distance_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_distance_source_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_distance_source_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_distance_source_cmd);
+	_install_element(BGP_IPV4M_NODE, &no_bgp_distance_source_cmd);
+	_install_element(BGP_IPV4_NODE, &bgp_distance_source_access_list_cmd);
+	_install_element(BGP_IPV4M_NODE, &bgp_distance_source_access_list_cmd);
+	_install_element(BGP_IPV4_NODE, &no_bgp_distance_source_access_list_cmd);
 }
 
 void bgp_route_finish(void)

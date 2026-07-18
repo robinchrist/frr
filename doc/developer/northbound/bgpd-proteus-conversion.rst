@@ -131,6 +131,81 @@ remains a known gap, per the M4 batch B1 commit message.
 ``bgpd.conf`` lines mgmtd doesn't recognize. This is cosmetic and
 expected during the transition; it does not indicate a conversion bug.
 
+**Converted commands retire emission only -- native sub-node installs
+stay until M8.** bgpd still reads ``bgpd.conf`` natively (it does not
+set ``FRR_NO_SPLIT_CONFIG``), so it must be able to *match* every line
+in the file at its current node, including the converted ones. The
+proteus ``_cli_cmd`` twins do not help here: they are installed only in
+mgmtd's command tree (``bgp_cli_init()`` is called from
+``mgmtd/mgmt_vty.c``, never from bgpd), so in bgpd's own node graph the
+converted line has no command at the address-family/vni sub-node. bgpd's
+config reader, ``command_config_read_one_line()`` (``lib/command.c``),
+first strict-matches the current sub-node; on a miss it walks up the
+parent nodes, and each level it tries calls ``cmd_exit()`` on the way.
+If a walk-up reaches an ancestor node that *does* carry a command of the
+same grammar, the match succeeds **at the ancestor** -- and because
+``cmd_exit()`` already popped ``vty->node`` out of the block, every
+still-native line that follows in that same block is now read at the
+wrong node and rejected with "No such command", silently stranding the
+rest of the block. (This bit the VPN suites: ``neighbor X activate`` in
+an ``address-family ipv4 vpn`` block matched the surviving hidden
+``BGP_NODE`` alias on walk-up and stranded the block's still-native
+``label vpn`` / ``rd vpn`` / ``rt vpn`` / ``exit-vrf`` lines.) So the
+"No such command" noise above is only cosmetic when the walk-up finds
+**no** ancestor match; when it finds one, it drops the node.
+
+The rule: a converted per-AF/vni command retires its config **emission**
+only (mgmtd's ``cli_show`` renders it); its native command stays
+installed on the address-family/vni sub-nodes until the whole native
+surface is retired at M8. The native DEFUN/DEFPY handlers are idempotent,
+so both the mgmtd datastore path and the bgpd native read converge on the
+same result. The reinstated installs are collected in one block per
+``init`` function -- ``bgp_vty_init()`` (``bgp_vty.c``) for the neighbor
+per-AF families plus instance maximum-paths / ipv4+ipv6 redistribute /
+ipv6 nexthop prefer-global, and ``bgp_route_init()`` (``bgp_route.c``)
+for network / aggregate-address / table-map / dampening / distance --
+each carrying a comment back to this section.
+
+These blocks call ``_install_element()`` (the bare installer in
+``lib/command.c``), **not** the ``install_element()`` macro. The macro
+additionally emits an ``XREFT_INSTALL_ELEMENT`` xref that
+``python/xref2vtysh.py`` turns into a vtysh ``DEFSH``. Because
+``bgp_cli_neighbor.c`` is linked into bgpd as well as mgmtd, the proteus
+twin's install xref is already present in bgpd's binary and vtysh already
+has a command for the grammar; adding the native command's install xref
+for the same node would give vtysh **two** matching commands whenever the
+proteus DEFPY consolidated grammar the legacy DEFUNs kept split -- e.g.
+proteus ``[no] neighbor X next-hop-self [force]`` versus the separate
+native ``neighbor X next-hop-self`` / ``... force`` / ``no ...`` DEFUNs,
+or the consolidated ``redistribute`` and ``route-map`` forms. vtysh then
+reports ``% Ambiguous command`` when it applies an integrated
+``frr.conf`` (``vtysh -f``, the topojson test framework's config path),
+because the typed line completes against both. ``_install_element()``
+adds the command to bgpd's *runtime* command graph only -- which is all
+bgpd needs to strict-match its own ``bgpd.conf`` -- and leaves vtysh's
+tree to the single proteus twin. (bgpd's runtime graph never carries the
+proteus twins itself: ``bgp_cli_init()`` runs only in mgmtd, so the bgpd
+side is unambiguous either way.)
+
+Stranding needs a surviving ancestor of matching grammar, so not every
+converted command is affected. The affected ones are those whose family
+kept a hidden ``BGP_NODE`` alias (most per-AF ``neighbor`` commands, e.g.
+``activate``, ``route-map``, ``soft-reconfiguration``,
+``send-community``, ``maximum-prefix``) or a bare ``BGP_NODE`` install
+(``network``, ``distance``, ``table-map``, ``maximum-paths``,
+``dampening``, ``aggregate-address``, ipv4 ``redistribute``). ipv6
+``redistribute`` counts too even though it has no ipv6-specific
+``BGP_NODE`` alias: the surviving ipv4 hidden ``redistribute`` at
+``BGP_NODE`` matches the source keywords ipv4 and ipv6 share
+(``kernel``/``connected``/``local``/``static``/``isis``/``nhrp``/``vnc``/
+``babel``/``openfabric``), so a walk-up from ``BGP_IPV6_NODE`` would
+match it -- its deleted DEFUN/DEFPY bodies are restored in ``bgp_vty.c``
+for the coexistence window. The EVPN instance and per-vni commands are
+**not** affected: walking up from ``BGP_EVPN_NODE`` / ``BGP_EVPN_VNI_NODE``
+reaches only ``vni`` / ``exit-vni`` / ``BGP_NODE``, none of which carry
+those grammars, so their config lines fail in place (single line, no
+node drop) and no native reinstall is required.
+
 Backend daemons must not run mgmtd-owned northbound CLI locally
 ----------------------------------------------------------------
 
