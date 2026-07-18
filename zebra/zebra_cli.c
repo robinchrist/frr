@@ -2921,6 +2921,14 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* In mgmtd this is the single owner of the 'match source-protocol' grammar:
+ * bgpd's variant (formerly bgp_routemap_cli.c) had the identical command
+ * string, which the parser rejects as ambiguous once both are hosted in one
+ * daemon. Legacy vtysh sent the one line to both zebra and bgpd, each
+ * storing its own namespaced condition; mirror that here by writing the
+ * frr-bgp-route-map condition too whenever that module is loaded (mgmtd
+ * only; plain zebra does not load it). Each backend only consumes its own
+ * namespace. */
 DEFPY_YANG(
 	match_source_protocol, match_source_protocol_cmd,
 	"match source-protocol " FRR_REDIST_STR_ZEBRA "$proto",
@@ -2930,6 +2938,7 @@ DEFPY_YANG(
 {
 	const char *xpath =
 		"./match-condition[condition='frr-zebra-route-map:source-protocol']";
+	const char *bgp_xpath = "./match-condition[condition='frr-bgp-route-map:source-protocol']";
 	char xpath_value[XPATH_MAXLEN];
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
@@ -2937,6 +2946,13 @@ DEFPY_YANG(
 		 "%s/rmap-match-condition/frr-zebra-route-map:source-protocol",
 		 xpath);
 	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, proto);
+
+	if (yang_module_find("frr-bgp-route-map")) {
+		nb_cli_enqueue_change(vty, bgp_xpath, NB_OP_CREATE, NULL);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/rmap-match-condition/frr-bgp-route-map:source-protocol", bgp_xpath);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, proto);
+	}
 
 	return nb_cli_apply_changes(vty, NULL);
 }
@@ -2951,8 +2967,11 @@ DEFPY_YANG(
 {
 	const char *xpath =
 		"./match-condition[condition='frr-zebra-route-map:source-protocol']";
+	const char *bgp_xpath = "./match-condition[condition='frr-bgp-route-map:source-protocol']";
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	if (yang_module_find("frr-bgp-route-map"))
+		nb_cli_enqueue_change(vty, bgp_xpath, NB_OP_DESTROY, NULL);
 
 	return nb_cli_apply_changes(vty, NULL);
 }

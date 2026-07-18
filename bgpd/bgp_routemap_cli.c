@@ -2871,41 +2871,10 @@ DEFPY_YANG (match_rpki_extcommunity,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-DEFPY_YANG (match_source_protocol,
-            match_source_protocol_cmd,
-	    "match source-protocol " FRR_REDIST_STR_ZEBRA "$proto",
-	    MATCH_STR
-	    "Match protocol via which the route was learnt\n"
-	    FRR_REDIST_HELP_STR_ZEBRA)
-{
-	const char *xpath =
-		"./match-condition[condition='frr-bgp-route-map:source-protocol']";
-	char xpath_value[XPATH_MAXLEN];
-
-	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-match-condition/frr-bgp-route-map:source-protocol",
-		 xpath);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, proto);
-
-	return nb_cli_apply_changes(vty, NULL);
-}
-
-DEFPY_YANG (no_match_source_protocol,
-            no_match_source_protocol_cmd,
-	    "no match source-protocol [" FRR_REDIST_STR_ZEBRA "]",
-	    NO_STR
-	    MATCH_STR
-	    "Match protocol via which the route was learnt\n"
-	    FRR_REDIST_HELP_STR_ZEBRA)
-{
-	const char *xpath =
-		"./match-condition[condition='frr-bgp-route-map:source-protocol']";
-
-	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-
-	return nb_cli_apply_changes(vty, NULL);
-}
+/* 'match source-protocol': the grammar is identical to zebra's, which is
+ * also hosted in mgmtd (zebra_cli.c) -- two installs of the same string in
+ * one daemon parse as ambiguous. zebra_cli.c's handler is the single owner
+ * and writes the frr-bgp-route-map:source-protocol condition too. */
 
 DEFPY_YANG (match_vpn_dataplane,
        match_vpn_dataplane_cmd,
@@ -3449,8 +3418,6 @@ void bgp_routemap_cli_init(void)
 	install_element(RMAP_NODE, &set_ipv6_nexthop_peer_cmd);
 	install_element(RMAP_NODE, &no_set_ipv6_nexthop_peer_cmd);
 	install_element(RMAP_NODE, &match_rpki_extcommunity_cmd);
-	install_element(RMAP_NODE, &match_source_protocol_cmd);
-	install_element(RMAP_NODE, &no_match_source_protocol_cmd);
 #ifdef HAVE_SCRIPTING
 	install_element(RMAP_NODE, &match_script_cmd);
 #endif
