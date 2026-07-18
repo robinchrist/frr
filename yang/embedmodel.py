@@ -64,7 +64,10 @@ def escapech(char):
         return "\\t"
     if char in "\"\\'":
         return "\\" + char
-    return "\\x%02x" % (ord(char))
+    # terminate the hex escape with an empty string literal; otherwise a
+    # following [0-9a-fA-F] character is absorbed into the escape (C hex
+    # escapes have no length limit) and silently corrupts the embedded text
+    return '\\x%02x""' % (ord(char))
 
 
 def escape(line):
