@@ -561,6 +561,15 @@ static void txn_finish_commit(struct txn_req_commit *ccreq, enum mgmt_result res
 		 * This is the backend init request. Unlock the running
 		 * datastore if we are the last reader.
 		 */
+		if (!success)
+			/* No front-end session to deliver this to: the
+			 * backend rejected (part of) the running config it
+			 * was just handed on connect, so its state now
+			 * diverges from the running datastore. Must be loud;
+			 * otherwise the only trace is a debug line and the
+			 * divergence surfaces as unexplainable behavior. */
+			zlog_err("init config push to backend failed, backend state diverges from running DS: %s",
+				 error_if_any && error_if_any[0] ? error_if_any : "unknown error");
 		if (!--txn_init_readers)
 			mgmt_ds_unlock(ccreq->dst_ds_ctx, 0);
 		TXN_DECREF(txn);

@@ -450,15 +450,22 @@ int vty_mgmt_send_commit_config(struct vty *vty, bool validate_only, bool abort,
 {
 	if (mgmt_fe_client && vty->mgmt_session_id) {
 		vty->mgmt_req_id++;
+		/* Set the pending marker BEFORE sending: a short-circuit
+		 * send delivers the reply synchronously from inside
+		 * mgmt_fe_send_commit_req(), and the resume path needs the
+		 * marker in place or the result is dropped and the late-set
+		 * marker wedges the session (see mgmt_fe_client.c's "queue
+		 * before sending short-circuit" note). */
+		vty->mgmt_req_pending_cmd = "MESSAGE_COMMCFG_REQ";
 		if (mgmt_fe_send_commit_req(mgmt_fe_client, vty->mgmt_session_id, vty->mgmt_req_id,
 					    MGMTD_DS_CANDIDATE, MGMTD_DS_RUNNING, validate_only,
 					    abort, unlock)) {
+			vty->mgmt_req_pending_cmd = NULL;
 			zlog_err("Failed sending COMMIT-REQ req-id %" PRIu64, vty->mgmt_req_id);
 			vty_out(vty, "Failed to send COMMIT-REQ to MGMTD!\n");
 			return -1;
 		}
 
-		vty->mgmt_req_pending_cmd = "MESSAGE_COMMCFG_REQ";
 		vty->mgmt_num_pending_setcfg = 0;
 	}
 
@@ -510,17 +517,18 @@ int vty_mgmt_send_get_data_req(struct vty *vty, uint8_t datastore, LYD_FORMAT re
 
 	vty->mgmt_req_id++;
 
+	/* marker before send: short-circuit replies resume synchronously */
+	vty->mgmt_req_pending_cmd = "MESSAGE_GET_DATA_REQ";
+	vty->mgmt_req_pending_data = result_type;
 	if (mgmt_fe_send_get_data_req(mgmt_fe_client, vty->mgmt_session_id, vty->mgmt_req_id,
 				      datastore, intern_format, flags, defaults, xpath)) {
+		vty->mgmt_req_pending_cmd = NULL;
 		zlog_err("Failed to send GET-DATA to MGMTD session-id: %" PRIu64 " req-id %" PRIu64
 			 ".",
 			 vty->mgmt_session_id, vty->mgmt_req_id);
 		vty_out(vty, "Failed to send GET-DATA to MGMTD!\n");
 		return -1;
 	}
-
-	vty->mgmt_req_pending_cmd = "MESSAGE_GET_DATA_REQ";
-	vty->mgmt_req_pending_data = result_type;
 
 	return 0;
 }
@@ -587,15 +595,16 @@ int vty_mgmt_send_edit_req(struct vty *vty, uint8_t datastore, LYD_FORMAT reques
 {
 	vty->mgmt_req_id++;
 
+	/* marker before send: short-circuit replies resume synchronously */
+	vty->mgmt_req_pending_cmd = "MESSAGE_EDIT_REQ";
 	if (mgmt_fe_send_edit_req(mgmt_fe_client, vty->mgmt_session_id, vty->mgmt_req_id,
 				  datastore, request_type, flags, operation, xpath, data)) {
+		vty->mgmt_req_pending_cmd = NULL;
 		zlog_err("Failed to send EDIT to MGMTD session-id: %" PRIu64 " req-id %" PRIu64 ".",
 			 vty->mgmt_session_id, vty->mgmt_req_id);
 		vty_out(vty, "Failed to send EDIT to MGMTD!\n");
 		return -1;
 	}
-
-	vty->mgmt_req_pending_cmd = "MESSAGE_EDIT_REQ";
 
 	return 0;
 }
@@ -636,15 +645,16 @@ int vty_mgmt_send_rpc_req(struct vty *vty, LYD_FORMAT request_type, const char *
 {
 	vty->mgmt_req_id++;
 
+	/* marker before send: short-circuit replies resume synchronously */
+	vty->mgmt_req_pending_cmd = "MESSAGE_RPC_REQ";
 	if (mgmt_fe_send_rpc_req(mgmt_fe_client, vty->mgmt_session_id, vty->mgmt_req_id,
 				 request_type, xpath, data)) {
+		vty->mgmt_req_pending_cmd = NULL;
 		zlog_err("Failed to send RPC to MGMTD session-id: %" PRIu64 " req-id %" PRIu64 ".",
 			 vty->mgmt_session_id, vty->mgmt_req_id);
 		vty_out(vty, "Failed to send RPC to MGMTD!\n");
 		return -1;
 	}
-
-	vty->mgmt_req_pending_cmd = "MESSAGE_RPC_REQ";
 
 	return 0;
 }
