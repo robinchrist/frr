@@ -1943,21 +1943,10 @@ static int bgp_maxpaths_config_vty(struct vty *vty, int peer_type,
 	return CMD_SUCCESS;
 }
 
-DEFPY (bgp_use_underlying_nexthop_weight,
-       bgp_use_underlying_nexthop_weight_cmd,
-       "[no] use-underlays-nexthop-weight",
-       NO_STR
-       "Tell Zebra when resolving a route to use the underlays nexthop weight for when nexthops are resolved\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		UNSET_FLAG(bgp->flags, BGP_FLAG_USE_RECURSIVE_WEIGHT);
-	else
-		SET_FLAG(bgp->flags, BGP_FLAG_USE_RECURSIVE_WEIGHT);
-
-	return CMD_SUCCESS;
-}
+/* '[no] use-underlays-nexthop-weight': converted to northbound, see
+ * 'bgp_use_underlays_nexthop_weight_cli_cmd' in bgp_cli_instance.c (M7
+ * batch B5).
+ */
 
 /* Maximum-paths configuration */
 DEFUN (bgp_maxpaths,
@@ -2237,32 +2226,10 @@ int bgp_peer_soft_reset(struct peer *peer, bool is_group)
  * B4).
  */
 
-DEFUN_HIDDEN (bgp_graceful_restart_disable_eor,
-              bgp_graceful_restart_disable_eor_cmd,
-              "bgp graceful-restart disable-eor",
-              BGP_STR
-              "Graceful restart configuration parameters\n"
-              "Disable EOR Check\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	SET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
-
-	return CMD_SUCCESS;
-}
-
-DEFUN_HIDDEN (no_bgp_graceful_restart_disable_eor,
-              no_bgp_graceful_restart_disable_eor_cmd,
-              "no bgp graceful-restart disable-eor",
-              NO_STR
-              BGP_STR
-              "Graceful restart configuration parameters\n"
-              "Disable EOR Check\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	UNSET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
-
-	return CMD_SUCCESS;
-}
+/* '[no] bgp graceful-restart disable-eor' (hidden): converted to
+ * northbound, see 'bgp_graceful_restart_disable_eor_cli_cmd' in
+ * bgp_cli_instance.c (M7 batch B5, stays hidden).
+ */
 
 /* "bgp graceful-restart rib-stale-time" (process + instance pair): converted
  * to northbound, see '/proteus-bgp:process/graceful-restart/rib-stale-time'
@@ -2434,95 +2401,19 @@ DEFUN (bgp_default_shutdown,
 	return CMD_SUCCESS;
 }
 
-DEFPY(bgp_shutdown_msg, bgp_shutdown_msg_cmd, "bgp shutdown message MSG...",
-      BGP_STR
-      "Administrative shutdown of the BGP instance\n"
-      "Add a shutdown message (RFC 8203)\n"
-      "Shutdown message\n")
-{
-	char *msgstr = NULL;
-
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (argc > 3)
-		msgstr = argv_concat(argv, argc, 3);
-
-	if (msgstr && strlen(msgstr) > BGP_ADMIN_SHUTDOWN_MSG_LEN) {
-		vty_out(vty, "%% Shutdown message size exceeded %d\n",
-			BGP_ADMIN_SHUTDOWN_MSG_LEN);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	bgp_shutdown_enable(bgp, msgstr);
-	XFREE(MTYPE_TMP, msgstr);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(bgp_shutdown, bgp_shutdown_cmd, "bgp shutdown",
-      BGP_STR "Administrative shutdown of the BGP instance\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_shutdown_enable(bgp, NULL);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_bgp_shutdown, no_bgp_shutdown_cmd, "no bgp shutdown",
-      NO_STR BGP_STR "Administrative shutdown of the BGP instance\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_shutdown_disable(bgp);
-
-	return CMD_SUCCESS;
-}
-
-ALIAS(no_bgp_shutdown, no_bgp_shutdown_msg_cmd,
-      "no bgp shutdown message MSG...", NO_STR BGP_STR
-      "Administrative shutdown of the BGP instance\n"
-      "Add a shutdown message (RFC 8203)\n" "Shutdown message\n")
-
-DEFPY (bgp_allow_martian,
-       bgp_allow_martian_cmd,
-       "[no]$no bgp allow-martian-nexthop",
-       NO_STR
-       BGP_STR
-       "Allow Martian nexthops to be received in the NLRI from a peer\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	if (no)
-		bgp->allow_martian = false;
-	else
-		bgp->allow_martian = true;
-
-	return CMD_SUCCESS;
-}
-
-/* Enable fast convergence of bgp sessions. If this is enabled, bgp
- * sessions do not wait for hold timer expiry to bring down the sessions
- * when nexthop becomes unreachable
+/* '[no] bgp shutdown [message MSG...]': converted to northbound, see
+ * 'bgp_instance_shutdown*_cli_cmd' in bgp_cli_instance.c (M7 batch B5).
+ * The BGP_ADMIN_SHUTDOWN_MSG_LEN vty check moved into the YANG leaf's
+ * length statement.
  */
-DEFUN(bgp_fast_convergence, bgp_fast_convergence_cmd, "bgp fast-convergence",
-      BGP_STR "Fast convergence for bgp sessions\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp->fast_convergence = true;
 
-	return CMD_SUCCESS;
-}
+/* '[no] bgp allow-martian-nexthop': converted to northbound, see
+ * 'bgp_allow_martian_cli_cmd' in bgp_cli_instance.c (M7 batch B5).
+ */
 
-DEFUN(no_bgp_fast_convergence, no_bgp_fast_convergence_cmd,
-      "no bgp fast-convergence",
-      NO_STR BGP_STR "Fast convergence for bgp sessions\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp->fast_convergence = false;
-
-	return CMD_SUCCESS;
-}
+/* '[no] bgp fast-convergence': converted to northbound, see
+ * 'bgp_fast_convergence_cli_cmd' in bgp_cli_instance.c (M7 batch B5).
+ */
 
 static int peer_conf_interface_get(struct vty *vty, const char *conf_if, int v6only,
 				   const char *peer_group_name, const char *as_str)
@@ -16554,8 +16445,10 @@ int bgp_config_write(struct vty *vty)
 		 * leaves' cli_show in bgp_cli.c.
 		 */
 
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR))
-			vty_out(vty, " bgp graceful-restart disable-eor\n");
+		/* bgp graceful-restart disable-eor: converted to northbound,
+		 * see '/proteus-bgp:instance/graceful-restart/disable-eor'
+		 * cli_show in bgp_cli_instance.c (M7 batch B5).
+		 */
 
 		/* BGP TCP keepalive: converted to northbound, see
 		 * '/proteus-bgp:instance/tcp-keepalive' cli_show in
@@ -16598,22 +16491,18 @@ int bgp_config_write(struct vty *vty)
 		if (bgp->autoshutdown)
 			vty_out(vty, " bgp default shutdown\n");
 
-		/* BGP instance administrative shutdown */
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_SHUTDOWN))
-			vty_out(vty, " bgp shutdown\n");
+		/* BGP instance administrative shutdown, allow-martian-nexthop,
+		 * use-underlays-nexthop-weight and fast-convergence: converted
+		 * to northbound (M7 batch B5), see the
+		 * '/proteus-bgp:instance/administrative-shutdown' etc.
+		 * cli_show in bgp_cli_instance.c. The administrative-shutdown
+		 * subtree also renders after the neighbor config in schema
+		 * order, preserving the peers-before-shutdown replay property.
+		 */
 
 		/* Automatic RA enabling by BGP: converted to northbound, see
 		 * '/proteus-bgp:instance/ipv6-auto-ra' cli_show in bgp_cli.c.
 		 */
-
-		if (bgp->allow_martian)
-			vty_out(vty, " bgp allow-martian-nexthop\n");
-
-		if (CHECK_FLAG(bgp->flags, BGP_FLAG_USE_RECURSIVE_WEIGHT))
-			vty_out(vty, " use-underlays-nexthop-weight\n");
-
-		if (bgp->fast_convergence)
-			vty_out(vty, " bgp fast-convergence\n");
 
 		if (bgp_srv6_locator_is_configured(bgp) || bgp->srv6_only == false ||
 		    bgp->srv6_encap_behavior != SRV6_HEADEND_BEHAVIOR_H_ENCAPS) {
@@ -17102,11 +16991,9 @@ void bgp_vty_init(void)
 	install_element(CONFIG_NODE, &bgp_local_mac_cmd);
 	install_element(CONFIG_NODE, &no_bgp_local_mac_cmd);
 
-	install_element(BGP_NODE, &bgp_allow_martian_cmd);
-
-	/* bgp fast-convergence command */
-	install_element(BGP_NODE, &bgp_fast_convergence_cmd);
-	install_element(BGP_NODE, &no_bgp_fast_convergence_cmd);
+	/* bgp allow-martian-nexthop / bgp fast-convergence: converted to
+	 * northbound (M7 batch B5), see bgp_cli_instance.c.
+	 */
 
 	/* bgp ipv6-auto-ra: both process and per-VRF instance scopes are
 	 * northbound now, see bgp_cli.c */
@@ -17139,7 +17026,9 @@ void bgp_vty_init(void)
 	 * commands: converted to northbound, see bgp_cli_neighbor_init()
 	 * (M4 batch B4). */
 
-	install_element(BGP_NODE, &bgp_use_underlying_nexthop_weight_cmd);
+	/* use-underlays-nexthop-weight: converted to northbound (M7 batch
+	 * B5), see bgp_cli_instance.c.
+	 */
 
 	/* "nexthop prefer-global" commands: ipv6-unicast converted to
 	 * northbound (M5 batch B14), see
@@ -17174,8 +17063,10 @@ void bgp_vty_init(void)
 	 * and preserve-fw-state: northbound now, see bgp_cli.c
 	 */
 
-	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cmd);
-	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cmd);
+	/* bgp graceful-restart disable-eor: converted to northbound (M7
+	 * batch B5), see bgp_cli_instance.c.
+	 */
+
 	/* bgp graceful-restart rib-stale-time: northbound now, see bgp_cli.c */
 
 	/* "bgp listen limit"/"bgp listen range": northbound now, see
@@ -17184,11 +17075,9 @@ void bgp_vty_init(void)
 	/* "bgp default shutdown" command */
 	install_element(BGP_NODE, &bgp_default_shutdown_cmd);
 
-	/* "bgp shutdown" commands */
-	install_element(BGP_NODE, &bgp_shutdown_cmd);
-	install_element(BGP_NODE, &bgp_shutdown_msg_cmd);
-	install_element(BGP_NODE, &no_bgp_shutdown_cmd);
-	install_element(BGP_NODE, &no_bgp_shutdown_msg_cmd);
+	/* "bgp shutdown" commands: converted to northbound (M7 batch B5),
+	 * see bgp_cli_instance.c.
+	 */
 
 	/* "neighbor remote-as", interface-unnumbered creation and
 	 * "neighbor peer-group" (declare/bind) commands: config_write is

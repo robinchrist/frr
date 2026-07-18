@@ -193,8 +193,13 @@ void neighbor_af_addpath_rx_paths_limit_cli_write(struct vty *vty, const struct 
 void neighbor_af_dampening_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				     bool show_defaults);
 
+void instance_administrative_shutdown_enabled_cli_write(struct vty *vty,
+							       const struct lyd_node *dnode,
+							       bool show_defaults);
 void instance_advertisement_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
+void instance_allow_martian_nexthop_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults);
 void instance_always_compare_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults);
 void instance_bestpath_aigp_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -290,8 +295,13 @@ void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_n
 						    bool show_defaults);
 void instance_enforce_first_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults);
+void instance_fast_convergence_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults);
 void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults);
+void instance_graceful_restart_disable_eor_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults);
 void instance_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults);
 void instance_graceful_restart_notification_cli_write(struct vty *vty,
@@ -363,6 +373,9 @@ void instance_timers_minimum_holdtime_cli_write(struct vty *vty,
 						       bool show_defaults);
 void instance_update_delay_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults);
+void instance_use_underlays_nexthop_weight_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults);
 void instance_write_quanta_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults);
 void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);

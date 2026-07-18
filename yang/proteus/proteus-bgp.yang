@@ -2812,6 +2812,13 @@ module proteus-bgp {
         }
         units "seconds";
       }
+      leaf disable-eor {
+        type boolean;
+        default "false";
+        description
+          "'bgp graceful-restart disable-eor' (hidden command):
+           never send the End-of-RIB marker to peers.";
+      }
     }
 
     container tcp-keepalive {
@@ -3184,12 +3191,26 @@ module proteus-bgp {
          (listen-range) neighbors.";
     }
 
-    leaf shutdown {
-      type boolean;
-      default "false";
+    container administrative-shutdown {
       description
-        "'bgp shutdown': administratively shut the whole
-         instance.";
+        "Administrative shutdown of the whole instance.";
+      leaf enabled {
+        type boolean;
+        default "false";
+        description
+          "'bgp shutdown': administratively shut the whole
+           instance -- every peer session is held down until
+           re-enabled.";
+      }
+      leaf message {
+        type string {
+          length "1..255";
+        }
+        description
+          "'bgp shutdown message MSG...': sent to every peer in
+           the CEASE/Administrative Shutdown notification (RFC
+           9003) when the shutdown takes effect.";
+      }
     }
 
     leaf allow-martian-nexthop {
@@ -3197,6 +3218,15 @@ module proteus-bgp {
       default "false";
       description
         "'bgp allow-martian-nexthop'.";
+    }
+
+    leaf use-underlays-nexthop-weight {
+      type boolean;
+      default "false";
+      description
+        "'use-underlays-nexthop-weight': weight ECMP paths by
+         the resolved (recursive) nexthops' own weights instead
+         of link-bandwidth-derived values.";
     }
 
     leaf fast-convergence {

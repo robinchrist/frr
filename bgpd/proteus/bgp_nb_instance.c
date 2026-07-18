@@ -2990,34 +2990,58 @@ int instance_listen_limit_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
+/* M7 batch B5: misc instance flags. All three mirror pure-assignment
+ * legacy bodies (bgp_allow_martian / bgp_fast_convergence /
+ * bgp_use_underlying_nexthop_weight, bgp_vty.c, retired) with no side
+ * effects, so plain idempotent assignment, no transition guard.
+ */
 int instance_allow_martian_nexthop_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/allow-martian-nexthop");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->allow_martian = yang_dnode_get_bool(args->dnode, NULL);
+
+	return NB_OK;
+}
+
+int instance_use_underlays_nexthop_weight_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		SET_FLAG(bgp->flags, BGP_FLAG_USE_RECURSIVE_WEIGHT);
+	else
+		UNSET_FLAG(bgp->flags, BGP_FLAG_USE_RECURSIVE_WEIGHT);
 
 	return NB_OK;
 }
 
 int instance_fast_convergence_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/fast-convergence");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp->fast_convergence = yang_dnode_get_bool(args->dnode, NULL);
 
 	return NB_OK;
 }

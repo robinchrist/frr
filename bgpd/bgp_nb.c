@@ -593,6 +593,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/disable-eor",
+			.cbs = {
+				.modify = instance_graceful_restart_disable_eor_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/tcp-keepalive/idle",
 			.cbs = {
 				.modify = instance_tcp_keepalive_idle_modify,
@@ -8988,15 +8994,28 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/shutdown",
+			.xpath = "/proteus-bgp:instance/administrative-shutdown/enabled",
 			.cbs = {
-				.modify = instance_shutdown_modify,
+				.modify = instance_administrative_shutdown_enabled_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/administrative-shutdown/message",
+			.cbs = {
+				.modify = instance_administrative_shutdown_message_modify,
+				.destroy = instance_administrative_shutdown_message_destroy,
 			}
 		},
 		{
 			.xpath = "/proteus-bgp:instance/allow-martian-nexthop",
 			.cbs = {
 				.modify = instance_allow_martian_nexthop_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/use-underlays-nexthop-weight",
+			.cbs = {
+				.modify = instance_use_underlays_nexthop_weight_modify,
 			}
 		},
 		{

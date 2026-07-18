@@ -1234,18 +1234,74 @@ int instance_neighbor_graceful_restart_mode_destroy(struct nb_cb_destroy_args *a
 	return NB_OK;
 }
 
-int instance_shutdown_modify(struct nb_cb_modify_args *args)
+/* M7 batch B5: instance administrative shutdown ('bgp shutdown [message
+ * MSG...]', bgp_vty.c, retired). 'enabled' drives the whole thing:
+ * bgp_shutdown_enable()/bgp_shutdown_disable() (bgpd.c) both early-return
+ * when the flag is already at the requested state, so a replay reapplying
+ * the same value (bgp_nb_instance_replay()) never re-fires the
+ * per-peer CEASE-notification/ManualStop side effects -- the legacy
+ * transition-only behavior comes for free. The optional 'message' sibling
+ * is read here at the enabling transition (exactly when legacy consumed
+ * it, feeding the RFC 9003 CEASE payload); legacy had no storage for it
+ * at instance scope at all, so its own callbacks below are accepted
+ * no-ops -- the datastore *is* the storage, and changing the message
+ * while already shut down changes nothing until the next disable/enable
+ * cycle, which matches legacy's early return on a re-issued 'bgp
+ * shutdown message MSG'. Ordering within one commit doesn't matter:
+ * yang_dnode_get() reads the final candidate tree regardless of which
+ * leaf's callback runs first.
+ */
+int instance_administrative_shutdown_enabled_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/shutdown");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
+	struct bgp *bgp;
+	const char *msg = NULL;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL)) {
+		if (yang_dnode_exists(args->dnode, "../message"))
+			msg = yang_dnode_get_string(args->dnode, "../message");
+		bgp_shutdown_enable(bgp, msg);
+	} else {
+		bgp_shutdown_disable(bgp);
 	}
+
+	return NB_OK;
+}
+
+int instance_administrative_shutdown_message_modify(struct nb_cb_modify_args *args)
+{
+	return NB_OK;
+}
+
+int instance_administrative_shutdown_message_destroy(struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/* '[no] bgp graceful-restart disable-eor' (DEFUN_HIDDEN pair, bgp_vty.c,
+ * retired): pure flag assignment, gates BGP_SEND_EOR() (bgpd.h).
+ */
+int instance_graceful_restart_disable_eor_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		SET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
+	else
+		UNSET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
 
 	return NB_OK;
 }

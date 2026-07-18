@@ -1369,6 +1369,39 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/graceful-restart/disable-eor",
+			.cbs = {
+				.cli_show = instance_graceful_restart_disable_eor_cli_write,
+			}
+		},
+		/* M7 B5: instance administrative shutdown; 'enabled' renders the
+		 * whole 'bgp shutdown [message MSG...]' line (the 'message' leaf
+		 * has no cli_show of its own). */
+		{
+			.xpath = "/proteus-bgp:instance/administrative-shutdown/enabled",
+			.cbs = {
+				.cli_show = instance_administrative_shutdown_enabled_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/allow-martian-nexthop",
+			.cbs = {
+				.cli_show = instance_allow_martian_nexthop_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/use-underlays-nexthop-weight",
+			.cbs = {
+				.cli_show = instance_use_underlays_nexthop_weight_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/fast-convergence",
+			.cbs = {
+				.cli_show = instance_fast_convergence_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/ebgp-requires-policy",
 			.cbs = {
 				.cli_show = instance_ebgp_requires_policy_cli_write,

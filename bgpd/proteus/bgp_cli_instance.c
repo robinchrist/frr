@@ -2355,6 +2355,155 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* M7 batch B5: 'bgp graceful-restart disable-eor'. Hidden in legacy
+ * (bgp_graceful_restart_disable_eor's DEFUN_HIDDEN pair, bgp_vty.c,
+ * retired) and stays hidden here.
+ */
+DEFPY_YANG_HIDDEN(
+	bgp_graceful_restart_disable_eor, bgp_graceful_restart_disable_eor_cli_cmd,
+	"bgp graceful-restart disable-eor",
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Disable EOR Check\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/disable-eor", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG_HIDDEN(
+	no_bgp_graceful_restart_disable_eor, no_bgp_graceful_restart_disable_eor_cli_cmd,
+	"no bgp graceful-restart disable-eor",
+	NO_STR
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Disable EOR Check\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/disable-eor", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* M7 batch B5: instance administrative shutdown ('bgp shutdown [message
+ * MSG...]'), the instance-scope twin of neighbor_shutdown*_cli_cmd above
+ * in spirit (bgp_cli_neighbor.c, M4 batch B4) and the same YANG shape
+ * (administrative-shutdown/{enabled,message}). Unlike the neighbor form
+ * legacy never stored the instance message anywhere -- it was consumed by
+ * the CEASE notifications of the enabling transition and then lost, so a
+ * saved config forgot it ('bgp_config_write()' only ever emitted plain
+ * 'bgp shutdown'). Modeling it as a config leaf fixes that round-trip
+ * hole: the message now persists and re-arms across restarts. Both 'no'
+ * forms destroy 'enabled' and 'message' together, mirroring the
+ * neighbor-form composite destroy (see that comment for the rationale of
+ * doing it at the CLI layer).
+ */
+DEFPY_YANG(
+	bgp_instance_shutdown, bgp_instance_shutdown_cli_cmd,
+	"bgp shutdown",
+	BGP_STR
+	"Administrative shutdown of the BGP instance\n")
+{
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/enabled", NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/message", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_instance_shutdown_message, bgp_instance_shutdown_message_cli_cmd,
+	"bgp shutdown message MSG...",
+	BGP_STR
+	"Administrative shutdown of the BGP instance\n"
+	"Add a shutdown message (RFC 8203)\n"
+	"Shutdown message\n")
+{
+	char *msgstr;
+	int ret;
+
+	msgstr = argv_concat(argv, argc, 3);
+
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/enabled", NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/message", NB_OP_MODIFY, msgstr);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	XFREE(MTYPE_TMP, msgstr);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_bgp_instance_shutdown, no_bgp_instance_shutdown_cli_cmd,
+	"no bgp shutdown",
+	NO_STR
+	BGP_STR
+	"Administrative shutdown of the BGP instance\n")
+{
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/enabled", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/message", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Legacy accepts (and ignores) a trailing MSG... on the 'no' form too
+ * (no_bgp_shutdown_msg_cmd's ALIAS, bgp_vty.c, retired).
+ */
+DEFPY_YANG(
+	no_bgp_instance_shutdown_message, no_bgp_instance_shutdown_message_cli_cmd,
+	"no bgp shutdown message MSG...",
+	NO_STR
+	BGP_STR
+	"Administrative shutdown of the BGP instance\n"
+	"Add a shutdown message (RFC 8203)\n"
+	"Shutdown message\n")
+{
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/enabled", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./administrative-shutdown/message", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* M7 batch B5: misc instance flags -- all static default-off booleans
+ * with positive-only emission, so the 'no' forms destroy back to the
+ * YANG default (modify-only callbacks, bgp_nb_instance.c).
+ */
+DEFPY_YANG(
+	bgp_allow_martian, bgp_allow_martian_cli_cmd,
+	"[no]$no bgp allow-martian-nexthop",
+	NO_STR
+	BGP_STR
+	"Allow Martian nexthops to be received in the NLRI from a peer\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./allow-martian-nexthop", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./allow-martian-nexthop", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_use_underlays_nexthop_weight, bgp_use_underlays_nexthop_weight_cli_cmd,
+	"[no]$no use-underlays-nexthop-weight",
+	NO_STR
+	"Tell Zebra when resolving a route to use the underlays nexthop weight for when nexthops are resolved\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./use-underlays-nexthop-weight", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./use-underlays-nexthop-weight", NB_OP_MODIFY,
+				      "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	bgp_fast_convergence, bgp_fast_convergence_cli_cmd,
+	"[no]$no bgp fast-convergence",
+	NO_STR
+	BGP_STR
+	"Fast convergence for bgp sessions\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./fast-convergence", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./fast-convergence", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 /*
  * Milestone 2 batch B2: instance-scoped independent tuning scalars
  * ('write-quanta', 'read-quanta', 'coalesce-time', 'timers bgp'
@@ -5325,6 +5474,57 @@ void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
+void instance_graceful_restart_disable_eor_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp graceful-restart disable-eor\n");
+}
+
+/* M7 batch B5: 'enabled' renders the whole 'bgp shutdown [message
+ * MSG...]' line -- the 'message' leaf has no cli_show of its own, same
+ * split as the neighbor form (bgp_cli_neighbor.c). Legacy only ever
+ * emitted plain 'bgp shutdown' (the message was never stored); emitting
+ * the persisted message is the deliberate round-trip fix, see the
+ * bgp_instance_shutdown*_cli_cmd block comment.
+ */
+void instance_administrative_shutdown_enabled_cli_write(struct vty *vty,
+							       const struct lyd_node *dnode,
+							       bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		return;
+
+	if (yang_dnode_exists(dnode, "../message"))
+		vty_out(vty, " bgp shutdown message %s\n",
+			yang_dnode_get_string(dnode, "../message"));
+	else
+		vty_out(vty, " bgp shutdown\n");
+}
+
+void instance_allow_martian_nexthop_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp allow-martian-nexthop\n");
+}
+
+void instance_use_underlays_nexthop_weight_cli_write(struct vty *vty,
+							    const struct lyd_node *dnode,
+							    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " use-underlays-nexthop-weight\n");
+}
+
+void instance_fast_convergence_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp fast-convergence\n");
+}
+
 void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
@@ -7667,6 +7867,16 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_select_defer_time_cli_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_rib_stale_time_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_rib_stale_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cli_cmd);
+
+	install_element(BGP_NODE, &bgp_instance_shutdown_cli_cmd);
+	install_element(BGP_NODE, &bgp_instance_shutdown_message_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_instance_shutdown_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_instance_shutdown_message_cli_cmd);
+	install_element(BGP_NODE, &bgp_allow_martian_cli_cmd);
+	install_element(BGP_NODE, &bgp_use_underlays_nexthop_weight_cli_cmd);
+	install_element(BGP_NODE, &bgp_fast_convergence_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_wpkt_quanta_cli_cmd);
 	install_element(BGP_NODE, &bgp_rpkt_quanta_cli_cmd);

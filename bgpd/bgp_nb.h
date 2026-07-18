@@ -174,6 +174,7 @@ int instance_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args 
 int instance_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args);
 int instance_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args);
 int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args);
+int instance_graceful_restart_disable_eor_modify(struct nb_cb_modify_args *args);
 int instance_tcp_keepalive_idle_modify(struct nb_cb_modify_args *args);
 int instance_tcp_keepalive_idle_destroy(struct nb_cb_destroy_args *args);
 int instance_tcp_keepalive_interval_modify(struct nb_cb_modify_args *args);
@@ -3654,8 +3655,11 @@ int instance_neighbor_afi_safis_l2vpn_evpn_filters_conditional_advertisement_con
 	struct nb_cb_destroy_args *args);
 int instance_listen_limit_modify(struct nb_cb_modify_args *args);
 int instance_listen_limit_destroy(struct nb_cb_destroy_args *args);
-int instance_shutdown_modify(struct nb_cb_modify_args *args);
+int instance_administrative_shutdown_enabled_modify(struct nb_cb_modify_args *args);
+int instance_administrative_shutdown_message_modify(struct nb_cb_modify_args *args);
+int instance_administrative_shutdown_message_destroy(struct nb_cb_destroy_args *args);
 int instance_allow_martian_nexthop_modify(struct nb_cb_modify_args *args);
+int instance_use_underlays_nexthop_weight_modify(struct nb_cb_modify_args *args);
 int instance_fast_convergence_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv4_unicast_network_create(struct nb_cb_create_args *args);
 int instance_afi_safis_ipv4_unicast_network_destroy(struct nb_cb_destroy_args *args);
