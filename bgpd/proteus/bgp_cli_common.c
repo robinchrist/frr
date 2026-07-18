@@ -488,6 +488,57 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_redistribute_cli_write,
 			}
 		},
+		/* M7 B1: instance-AF VPN leaking simple knobs (af-vpn-leaking's
+		 * export-vpn/import-vpn/import-vrf/import-vrf-route-map),
+		 * ipv4-unicast/ipv6-unicast only. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/export-vpn",
+			.cbs = {
+				.cli_show = afi_safis_export_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/import-vpn",
+			.cbs = {
+				.cli_show = afi_safis_import_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/import-vrf",
+			.cbs = {
+				.cli_show = afi_safis_import_vrf_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/import-vrf-route-map",
+			.cbs = {
+				.cli_show = afi_safis_import_vrf_route_map_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/export-vpn",
+			.cbs = {
+				.cli_show = afi_safis_export_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vpn",
+			.cbs = {
+				.cli_show = afi_safis_import_vpn_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf",
+			.cbs = {
+				.cli_show = afi_safis_import_vrf_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf-route-map",
+			.cbs = {
+				.cli_show = afi_safis_import_vrf_route_map_cli_write,
+			}
+		},
 		/* M5 B12: instance-AF 'maximum-paths'/'table-map'/'bgp
 		 * dampening', all eight instance AFs that 'uses'
 		 * af-route-selection (ipv4/ipv6 x

@@ -6133,6 +6133,151 @@ void afi_safis_table_map_cli_write(struct vty *vty, const struct lyd_node *dnode
 }
 
 /*
+ * M7 batch B1: instance-AF VPN leaking, simple knobs (af-vpn-leaking's
+ * export-vpn/import-vpn/import-vrf/import-vrf-route-map leaves), at
+ * ipv4-unicast/ipv6-unicast. Mirrors the legacy bgp_imexport_vpn /
+ * bgp_imexport_vrf / af_import_vrf_route_map DEFPYs (bgp_vty.c), installed on
+ * BGP_IPV4_NODE/BGP_IPV6_NODE. The 'import vrf route-map NAME' keyword form
+ * shares its 'import vrf ...' prefix with the 'import vrf VIEWVRFNAME'
+ * leaf-list command; CLI keyword-token matching resolves the two.
+ */
+DEFPY_YANG(
+	instance_afi_safis_imexport_vpn, instance_afi_safis_imexport_vpn_cli_cmd,
+	"[no] <import|export>$direction vpn",
+	NO_STR
+	"Import routes to this address-family\n"
+	"Export routes from this address-family\n"
+	"to/from default instance VPN RIB\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/%s-vpn", VTY_CURR_XPATH, container, direction);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_MODIFY, "true");
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_import_vrf, instance_afi_safis_import_vrf_cli_cmd,
+	"[no] import vrf VIEWVRFNAME$import_name",
+	NO_STR
+	"Import routes from another VRF\n"
+	"VRF to import from\n"
+	"The name of the VRF\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/import-vrf[.='%s']", VTY_CURR_XPATH,
+			   container, import_name);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_CREATE, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_import_vrf_route_map, instance_afi_safis_import_vrf_route_map_cli_cmd,
+	"import vrf route-map RMAP$rmap",
+	"Import routes from another VRF\n"
+	"Vrf routes being filtered\n"
+	"Specify route map\n"
+	"name of route-map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/import-vrf-route-map", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, rmap);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_no_import_vrf_route_map,
+	instance_afi_safis_no_import_vrf_route_map_cli_cmd,
+	"no import vrf route-map [RMAP]",
+	NO_STR
+	"Import routes from another VRF\n"
+	"Vrf routes being filtered\n"
+	"Specify route map\n"
+	"name of route-map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/import-vrf-route-map", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+/* Positive-only default-false booleans: emit the line only when set (mirrors
+ * the master writer's SAFI_UNICAST tail, retired for these AFs in M7 B1). */
+void afi_safis_export_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  export vpn\n");
+}
+
+void afi_safis_import_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  import vpn\n");
+}
+
+/* Registered on the import-vrf leaf-list: one line per configured VRF. */
+void afi_safis_import_vrf_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	vty_out(vty, "  import vrf %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+/* Renders bgp_vpn_policy_config_write_afi()'s 'import vrf route-map' line
+ * (retired for these AFs in M7 B1). */
+void afi_safis_import_vrf_route_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	vty_out(vty, "  import vrf route-map %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+/*
  * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
  * (1-255)]]' (af-route-selection/dampening in proteus-bgp.yang), across the
  * same eight instance AFs. Same container shape (and the same
@@ -6947,4 +7092,18 @@ void bgp_cli_instance_init(void)
 	 * above); BGP_IPV6M_NODE/BGP_IPV6L_NODE keep the legacy DEFUN
 	 * installed natively, bgp_vty.c. */
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd);
+
+	/* M7 B1: instance-AF VPN leaking simple knobs ('import|export vpn',
+	 * 'import vrf NAME', 'import vrf route-map NAME'), ipv4-unicast/
+	 * ipv6-unicast only (the only AFs that 'uses' af-vpn-leaking; legacy
+	 * installed these on BGP_IPV4_NODE/BGP_IPV6_NODE). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_imexport_vpn_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_import_vrf_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_import_vrf_route_map_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_no_import_vrf_route_map_cli_cmd);
+
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_imexport_vpn_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_import_vrf_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_import_vrf_route_map_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_import_vrf_route_map_cli_cmd);
 }

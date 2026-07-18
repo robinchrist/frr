@@ -33,6 +33,8 @@
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
+#include "bgpd/bgp_mplsvpn.h"
+#include "lib/routemap.h"
 #include "bgpd/proteus/bgp_nb_local.h"
 
 
@@ -6071,4 +6073,233 @@ int bgp_nb_af_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *arg
 
 	return bgp_nb_af_distance_prefix_set(entry_dnode, afi, safi,
 					     yang_dnode_get_uint8(entry_dnode, "distance"), NULL);
+}
+
+/*
+ * M7 batch B1: instance-AF VPN leaking, simple knobs (af-vpn-leaking in
+ * proteus-bgp.yang: export-vpn/import-vpn/import-vrf/import-vrf-route-map,
+ * ipv4/ipv6-unicast). These reproduce bgp_imexport_vpn / bgp_imexport_vrf /
+ * af_import_vrf_route_map (bgp_vty.c). The critical semantic is the
+ * vpn_leak_prechange()/vpn_leak_postchange() bracketing around every
+ * leak-affecting mutation -- routes are withdrawn under the OLD config and
+ * re-leaked under the NEW -- fired only on real transitions, exactly as the
+ * legacy setters did.
+ */
+
+/* 'import vpn' / 'export vpn': toggle a single BGP_CONFIG_*_{IMPORT,EXPORT}
+ * af_flag. Bracketing mirrors bgp_imexport_vpn(): on a real off->on
+ * transition, postchange (re-)exports; on a real on->off transition,
+ * prechange withdraws first and, unless the default instance retains all
+ * route-targets, vpn_leak_no_retain() cleans up the leaked routes. The leaf
+ * is a positive-only default-false boolean, so 'no' resolves to modify-false
+ * here (never a destroy callback). */
+static int bgp_nb_af_imexport_vpn_apply(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					enum vpn_policy_direction dir, int flag)
+{
+	struct bgp *bgp;
+	struct bgp *bgp_default;
+	bool yes;
+	int previous_state;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_default = bgp_get_default();
+	yes = yang_dnode_get_bool(args->dnode, NULL);
+	previous_state = CHECK_FLAG(bgp->af_flags[afi][safi], flag);
+
+	if (yes) {
+		SET_FLAG(bgp->af_flags[afi][safi], flag);
+		if (!previous_state)
+			vpn_leak_postchange(dir, afi, bgp_default, bgp);
+	} else {
+		if (previous_state)
+			vpn_leak_prechange(dir, afi, bgp_default, bgp);
+		UNSET_FLAG(bgp->af_flags[afi][safi], flag);
+		if (previous_state && bgp_default &&
+		    !CHECK_FLAG(bgp_default->af_flags[afi][SAFI_MPLS_VPN],
+				BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL))
+			vpn_leak_no_retain(bgp, bgp_default, afi);
+	}
+
+	bgp_snmp_init_stats_call(bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_export_vpn_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	return bgp_nb_af_imexport_vpn_apply(args, afi, safi, BGP_VPN_POLICY_DIR_TOVPN,
+					    BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT);
+}
+
+int bgp_nb_af_import_vpn_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	return bgp_nb_af_imexport_vpn_apply(args, afi, safi, BGP_VPN_POLICY_DIR_FROMVPN,
+					    BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT);
+}
+
+/* 'import vrf NAME' (leaf-list entry create/destroy): mirrors
+ * bgp_imexport_vrf(). vrf_import_from_vrf()/vrf_unimport_from_vrf()
+ * (bgp_mplsvpn.c) carry the vpn_leak_prechange()/postchange() bracketing
+ * internally and self-guard against double add / missing entry, so the
+ * callback only resolves the instances plus the auto-created default
+ * instance the shared VPN table hangs off. */
+static int bgp_nb_af_import_vrf_apply(const struct lyd_node *dnode, afi_t afi, safi_t safi,
+				      bool add)
+{
+	struct bgp *bgp;
+	struct bgp *vrf_bgp;
+	struct bgp *bgp_default;
+	const char *import_name = yang_dnode_get_string(dnode, NULL);
+
+	bgp = bgp_nb_instance_lookup(dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_default = bgp_get_default();
+	if (!bgp_default) {
+		as_t as = AS_UNSPECIFIED;
+
+		/* Auto-create the default instance (AS filled in later) so the
+		 * shared VPN table exists; mirrors bgp_imexport_vrf(). */
+		if (bgp_get_vty(&bgp_default, &as, NULL, BGP_INSTANCE_TYPE_DEFAULT, NULL,
+				ASNOTATION_UNDEFINED))
+			return NB_OK;
+
+		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
+	}
+
+	if (strcmp(import_name, VRF_DEFAULT_NAME) == 0)
+		vrf_bgp = bgp_default;
+	else
+		vrf_bgp = bgp_lookup_by_name_filter(import_name, false);
+
+	if (add)
+		vrf_import_from_vrf(bgp, vrf_bgp, import_name, afi, safi);
+	else
+		vrf_unimport_from_vrf(bgp, vrf_bgp, import_name, afi, safi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_import_vrf_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *instance_dnode;
+	const char *import_name;
+	const char *self;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		import_name = yang_dnode_get_string(args->dnode, NULL);
+		/* 'route-map' is the reserved leading token of the sibling
+		 * 'import vrf route-map NAME' command (bgp_imexport_vrf()). */
+		if (strcmp(import_name, "route-map") == 0) {
+			snprintf(args->errmsg, args->errmsg_len, "Must include route-map name");
+			return NB_ERR_VALIDATION;
+		}
+		/* A VRF cannot import from itself. The instance's own identity
+		 * is its 'vrf' key (default instance -> VRF_DEFAULT_NAME). */
+		instance_dnode = yang_dnode_get_parent(args->dnode, "instance");
+		self = yang_dnode_get_string(instance_dnode, "vrf");
+		if (strcmp(import_name, self) == 0) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "Cannot import vrf %s into itself", import_name);
+			return NB_ERR_VALIDATION;
+		}
+		return NB_OK;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_af_import_vrf_apply(args->dnode, afi, safi, true);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_import_vrf_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_import_vrf_apply(args->dnode, afi, safi, false);
+}
+
+/* 'import vrf route-map NAME': mirrors af_import_vrf_route_map_cmd /
+ * af_no_import_vrf_route_map_cmd. The route-map name lives in the shared
+ * rmap_name[FROMVPN] slot (a YANG 'must' forbids co-setting 'route-map vpn
+ * import', which occupies the same slot); setting it also flags the AF for
+ * vrf-to-vrf import. Bracketed by prechange/postchange like the legacy DEFPYs;
+ * the re-leak is deferred until the named route-map actually exists. */
+int bgp_nb_af_import_vrf_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	struct bgp *bgp_default;
+	enum vpn_policy_direction dir = BGP_VPN_POLICY_DIR_FROMVPN;
+	const char *rmap_name;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_default = bgp_get_default();
+	if (!bgp_default) {
+		as_t as = AS_UNSPECIFIED;
+
+		if (bgp_get_vty(&bgp_default, &as, NULL, BGP_INSTANCE_TYPE_DEFAULT, NULL,
+				ASNOTATION_UNDEFINED))
+			return NB_OK;
+
+		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
+	}
+
+	rmap_name = yang_dnode_get_string(args->dnode, NULL);
+
+	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
+
+	XFREE(MTYPE_ROUTE_MAP_NAME, bgp->vpn_policy[afi].rmap_name[dir]);
+	bgp->vpn_policy[afi].rmap_name[dir] = XSTRDUP(MTYPE_ROUTE_MAP_NAME, rmap_name);
+	bgp->vpn_policy[afi].rmap[dir] = route_map_lookup_by_name(rmap_name);
+
+	SET_FLAG(bgp->af_flags[afi][safi], BGP_CONFIG_VRF_TO_VRF_IMPORT);
+
+	if (!bgp->vpn_policy[afi].rmap[dir])
+		return NB_OK;
+
+	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	enum vpn_policy_direction dir = BGP_VPN_POLICY_DIR_FROMVPN;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
+
+	XFREE(MTYPE_ROUTE_MAP_NAME, bgp->vpn_policy[afi].rmap_name[dir]);
+	bgp->vpn_policy[afi].rmap[dir] = NULL;
+
+	if (bgp->vpn_policy[afi].import_vrf->count == 0)
+		UNSET_FLAG(bgp->af_flags[afi][safi], BGP_CONFIG_VRF_TO_VRF_IMPORT);
+
+	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
 }

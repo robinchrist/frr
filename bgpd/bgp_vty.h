@@ -160,6 +160,7 @@ extern int bgp_peer_soft_reset(struct peer *peer, bool is_group);
 #define BGP_ALLOWAS_IN_DEFAULT 3
 
 extern void bgp_vty_init(void);
+extern void bgp_snmp_init_stats_call(struct bgp *bgp);
 extern void community_alias_vty(void);
 extern const char *get_afi_safi_str(afi_t afi, safi_t safi, bool for_json);
 extern int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,

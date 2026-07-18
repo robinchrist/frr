@@ -298,98 +298,32 @@ int instance_afi_safis_ipv6_unicast_distance_prefix_access_list_destroy(
 
 int instance_afi_safis_ipv6_unicast_export_vpn_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/export-vpn");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_export_vpn_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_import_vpn_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vpn");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_import_vpn_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_import_vrf_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_import_vrf_create(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_import_vrf_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_import_vrf_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_import_vrf_route_map_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf-route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_import_vrf_route_map_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv6-unicast/import-vrf-route-map");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_import_vrf_route_map_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv6_unicast_vpn_route_map_import_modify(struct nb_cb_modify_args *args)

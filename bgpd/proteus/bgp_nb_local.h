@@ -394,6 +394,14 @@ int bgp_nb_af_distance_prefix_access_list_modify(struct nb_cb_modify_args *args,
 						 safi_t safi);
 int bgp_nb_af_distance_prefix_access_list_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 						  safi_t safi);
+/* M7 batch B1: instance-AF VPN leaking simple knobs (af-vpn-leaking's
+ * export-vpn/import-vpn/import-vrf/import-vrf-route-map, ipv4/ipv6-unicast). */
+int bgp_nb_af_export_vpn_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_import_vpn_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_import_vrf_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_import_vrf_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_import_vrf_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 
 #ifdef __cplusplus
 }

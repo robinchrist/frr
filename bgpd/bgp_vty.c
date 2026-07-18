@@ -152,6 +152,15 @@ DEFINE_HOOK(bgp_inst_config_write,
 		(bgp, vty));
 DEFINE_HOOK(bgp_snmp_update_last_changed, (struct bgp *bgp), (bgp));
 DEFINE_HOOK(bgp_snmp_init_stats, (struct bgp *bgp), (bgp));
+
+/* hook_call() is private to this translation unit (the DEFINE_HOOK owner), so
+ * expose a thin wrapper for the northbound VPN-leaking apply callbacks (M7 B1,
+ * bgpd/proteus/bgp_nb_util.c) that reproduce bgp_imexport_vpn()'s SNMP stats
+ * re-init side effect. */
+void bgp_snmp_init_stats_call(struct bgp *bgp)
+{
+	hook_call(bgp_snmp_init_stats, bgp);
+}
 DEFINE_HOOK(bgp_snmp_traps_config_write, (struct vty * vty), (vty));
 DEFINE_HOOK(bgp_route_distinguisher_update, (struct bgp *bgp, afi_t afi, bool preconfig),
 	    (bgp, afi, preconfig));
@@ -6553,255 +6562,6 @@ ALIAS (af_route_map_vpn_imexport,
        "Between current address-family and vpn\n"
        "For routes leaked from vpn to current address-family\n"
        "For routes leaked from current address-family to vpn\n")
-
-DEFPY(af_import_vrf_route_map, af_import_vrf_route_map_cmd,
-      "import vrf route-map RMAP$rmap_str",
-      "Import routes from another VRF\n"
-      "Vrf routes being filtered\n"
-      "Specify route map\n"
-      "name of route-map\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	enum vpn_policy_direction dir = BGP_VPN_POLICY_DIR_FROMVPN;
-	afi_t afi;
-	struct bgp *bgp_default;
-
-	afi = vpn_policy_getafi(vty, bgp, true);
-	if (afi == AFI_MAX)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	bgp_default = bgp_get_default();
-	if (!bgp_default) {
-		int32_t ret;
-		as_t as = AS_UNSPECIFIED;
-
-		/* Auto-create with AS_UNSPECIFIED, to be filled in later */
-		ret = bgp_get_vty(&bgp_default, &as, NULL,
-				  BGP_INSTANCE_TYPE_DEFAULT, NULL,
-				  ASNOTATION_UNDEFINED);
-
-		if (ret) {
-			vty_out(vty,
-				"VRF default is not configured as a bgp instance\n");
-			return CMD_WARNING;
-		}
-
-		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
-	}
-
-	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
-
-	if (bgp->vpn_policy[afi].rmap_name[dir])
-		XFREE(MTYPE_ROUTE_MAP_NAME,
-		      bgp->vpn_policy[afi].rmap_name[dir]);
-	bgp->vpn_policy[afi].rmap_name[dir] =
-		XSTRDUP(MTYPE_ROUTE_MAP_NAME, rmap_str);
-	bgp->vpn_policy[afi].rmap[dir] =
-		route_map_lookup_warn_noexist(vty, rmap_str);
-
-	SET_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
-		 BGP_CONFIG_VRF_TO_VRF_IMPORT);
-	if (!bgp->vpn_policy[afi].rmap[dir])
-		return CMD_SUCCESS;
-
-	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(af_no_import_vrf_route_map, af_no_import_vrf_route_map_cmd,
-      "no import vrf route-map [RMAP$rmap_str]",
-      NO_STR
-      "Import routes from another VRF\n"
-      "Vrf routes being filtered\n"
-      "Specify route map\n"
-      "name of route-map\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	enum vpn_policy_direction dir = BGP_VPN_POLICY_DIR_FROMVPN;
-	afi_t afi;
-
-	afi = vpn_policy_getafi(vty, bgp, true);
-	if (afi == AFI_MAX)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
-
-	if (bgp->vpn_policy[afi].rmap_name[dir])
-		XFREE(MTYPE_ROUTE_MAP_NAME,
-		      bgp->vpn_policy[afi].rmap_name[dir]);
-	bgp->vpn_policy[afi].rmap_name[dir] = NULL;
-	bgp->vpn_policy[afi].rmap[dir] = NULL;
-
-	if (bgp->vpn_policy[afi].import_vrf->count == 0)
-		UNSET_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
-			   BGP_CONFIG_VRF_TO_VRF_IMPORT);
-
-	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(bgp_imexport_vrf, bgp_imexport_vrf_cmd,
-      "[no] import vrf VIEWVRFNAME$import_name",
-      NO_STR
-      "Import routes from another VRF\n"
-      "VRF to import from\n"
-      "The name of the VRF\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct listnode *node;
-	struct bgp *vrf_bgp, *bgp_default;
-	int32_t ret = 0;
-	as_t as = bgp->as;
-	bool remove = false;
-	int32_t idx = 0;
-	char *vname;
-	safi_t safi;
-	afi_t afi;
-
-	if (import_name == NULL) {
-		vty_out(vty, "%% Missing import name\n");
-		return CMD_WARNING;
-	}
-
-	if (strcmp(import_name, "route-map") == 0) {
-		vty_out(vty, "%% Must include route-map name\n");
-		return CMD_WARNING;
-	}
-
-	if (argv_find(argv, argc, "no", &idx))
-		remove = true;
-
-	afi = vpn_policy_getafi(vty, bgp, true);
-	if (afi == AFI_MAX)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	safi = bgp_node_safi(vty);
-
-	if (((BGP_INSTANCE_TYPE_DEFAULT == bgp->inst_type)
-	     && (strcmp(import_name, VRF_DEFAULT_NAME) == 0))
-	    || (bgp->name && (strcmp(import_name, bgp->name) == 0))) {
-		vty_out(vty, "%% Cannot %s vrf %s into itself\n",
-			remove ? "unimport" : "import", import_name);
-		return CMD_WARNING;
-	}
-
-	bgp_default = bgp_get_default();
-	if (!bgp_default) {
-		as = AS_UNSPECIFIED;
-
-		/* Auto-create with AS_UNSPECIFIED, to be filled in later */
-		ret = bgp_get_vty(&bgp_default, &as, NULL,
-				  BGP_INSTANCE_TYPE_DEFAULT, NULL,
-				  ASNOTATION_UNDEFINED);
-
-		if (ret) {
-			vty_out(vty,
-				"VRF default is not configured as a bgp instance\n");
-			return CMD_WARNING;
-		}
-
-		SET_FLAG(bgp_default->flags, BGP_FLAG_INSTANCE_HIDDEN);
-	}
-
-	if (strcmp(import_name, VRF_DEFAULT_NAME) == 0)
-		vrf_bgp = bgp_default;
-	else
-		vrf_bgp = bgp_lookup_by_name_filter(import_name, false);
-
-	if (remove) {
-		vrf_unimport_from_vrf(bgp, vrf_bgp, import_name, afi, safi);
-	} else {
-		/* Already importing from "import_vrf"? */
-		for (ALL_LIST_ELEMENTS_RO(bgp->vpn_policy[afi].import_vrf, node,
-					  vname)) {
-			if (strcmp(vname, import_name) == 0)
-				return CMD_WARNING;
-		}
-
-		vrf_import_from_vrf(bgp, vrf_bgp, import_name, afi, safi);
-	}
-
-	return CMD_SUCCESS;
-}
-
-/* This command is valid only in a bgp vrf instance or the default instance */
-DEFPY (bgp_imexport_vpn,
-       bgp_imexport_vpn_cmd,
-       "[no] <import|export>$direction_str vpn",
-       NO_STR
-       "Import routes to this address-family\n"
-       "Export routes from this address-family\n"
-       "to/from default instance VPN RIB\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int previous_state;
-	afi_t afi;
-	safi_t safi;
-	int idx = 0;
-	bool yes = true;
-	int flag;
-	enum vpn_policy_direction dir;
-	struct bgp *bgp_default = bgp_get_default();
-
-	if (argv_find(argv, argc, "no", &idx))
-		yes = false;
-	else {
-		afi = vpn_policy_getafi(vty, bgp, false);
-		if (afi == AFI_MAX)
-			return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (BGP_INSTANCE_TYPE_VRF != bgp->inst_type &&
-		BGP_INSTANCE_TYPE_DEFAULT != bgp->inst_type) {
-
-		vty_out(vty, "%% import|export vpn valid only for bgp vrf or default instance\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	afi = bgp_node_afi(vty);
-	safi = bgp_node_safi(vty);
-	if ((SAFI_UNICAST != safi) || ((AFI_IP != afi) && (AFI_IP6 != afi))) {
-		vty_out(vty, "%% import|export vpn valid only for unicast ipv4|ipv6\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	if (!strcmp(direction_str, "import")) {
-		flag = BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT;
-		dir = BGP_VPN_POLICY_DIR_FROMVPN;
-	} else if (!strcmp(direction_str, "export")) {
-		flag = BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT;
-		dir = BGP_VPN_POLICY_DIR_TOVPN;
-	} else {
-		vty_out(vty, "%% unknown direction %s\n", direction_str);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	previous_state = CHECK_FLAG(bgp->af_flags[afi][safi], flag);
-
-	if (yes) {
-		SET_FLAG(bgp->af_flags[afi][safi], flag);
-		if (!previous_state) {
-			/* trigger export current vrf */
-			vpn_leak_postchange(dir, afi, bgp_default, bgp);
-		}
-	} else {
-		if (previous_state) {
-			/* trigger un-export current vrf */
-			vpn_leak_prechange(dir, afi, bgp_default, bgp);
-		}
-		UNSET_FLAG(bgp->af_flags[afi][safi], flag);
-		if (previous_state && bgp_default &&
-		    !CHECK_FLAG(bgp_default->af_flags[afi][SAFI_MPLS_VPN],
-				BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL))
-			vpn_leak_no_retain(bgp, bgp_default, afi);
-	}
-
-	hook_call(bgp_snmp_init_stats, bgp);
-
-	return CMD_SUCCESS;
-}
 
 DEFPY (af_routetarget_import,
        af_routetarget_import_cmd,
@@ -15858,6 +15618,20 @@ static bool peergroup_af_addpath_check(struct peer *peer, afi_t afi,
 	return false;
 }
 
+/* M7 batch B1: instance-AF VPN leaking simple knobs (af-vpn-leaking's
+ * export-vpn/import-vpn/import-vrf/import-vrf-route-map in proteus-bgp.yang)
+ * is mgmtd-owned for ipv4-unicast/ipv6-unicast -- the only AFs that 'use' the
+ * grouping. 'export vpn'/'import vpn'/'import vrf NAME' are emitted by
+ * afi_safis_export_vpn_cli_write()/_import_vpn_cli_write()/_import_vrf_cli_write()
+ * and 'import vrf route-map NAME' by afi_safis_import_vrf_route_map_cli_write()
+ * (bgpd/proteus/bgp_cli_instance.c) instead. The sibling 'route-map vpn
+ * import' and the rest of the detailed vpn-policy block stay native (M7 B2),
+ * as do the SRv6 'sid export' lines interleaved in the same emitters. */
+static bool bgp_af_vpn_leaking_is_proteus(afi_t afi, safi_t safi)
+{
+	return (afi == AFI_IP || afi == AFI_IP6) && safi == SAFI_UNICAST;
+}
+
 /* This is part of the address-family block (unicast only) */
 static void bgp_vpn_policy_config_write_afi(struct vty *vty, struct bgp *bgp,
 					    afi_t afi)
@@ -15867,11 +15641,14 @@ static void bgp_vpn_policy_config_write_afi(struct vty *vty, struct bgp *bgp,
 
 	if (bgp->vpn_policy[afi].rmap_name[BGP_VPN_POLICY_DIR_FROMVPN]) {
 		if (CHECK_FLAG(bgp->af_flags[afi][SAFI_UNICAST],
-			       BGP_CONFIG_VRF_TO_VRF_IMPORT))
-			vty_out(vty, "%*simport vrf route-map %s\n", indent, "",
-				bgp->vpn_policy[afi]
-				.rmap_name[BGP_VPN_POLICY_DIR_FROMVPN]);
-		else
+			       BGP_CONFIG_VRF_TO_VRF_IMPORT)) {
+			/* 'import vrf route-map': mgmtd-owned (M7 B1). */
+			if (!bgp_af_vpn_leaking_is_proteus(afi, SAFI_UNICAST))
+				vty_out(vty, "%*simport vrf route-map %s\n",
+					indent, "",
+					bgp->vpn_policy[afi]
+					.rmap_name[BGP_VPN_POLICY_DIR_FROMVPN]);
+		} else
 			vty_out(vty, "%*sroute-map vpn import %s\n", indent, "",
 				bgp->vpn_policy[afi]
 				.rmap_name[BGP_VPN_POLICY_DIR_FROMVPN]);
@@ -16762,24 +16539,28 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 
 	if (safi == SAFI_UNICAST) {
 		bgp_vpn_policy_config_write_afi(vty, bgp, afi);
-		if (CHECK_FLAG(bgp->af_flags[afi][safi],
-			       BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT)) {
+		/* 'export vpn'/'import vpn'/'import vrf': mgmtd-owned for
+		 * ipv4-unicast/ipv6-unicast (M7 B1). */
+		if (!bgp_af_vpn_leaking_is_proteus(afi, safi)) {
+			if (CHECK_FLAG(bgp->af_flags[afi][safi],
+				       BGP_CONFIG_VRF_TO_MPLSVPN_EXPORT)) {
 
-			vty_out(vty, "  export vpn\n");
-		}
-		if (CHECK_FLAG(bgp->af_flags[afi][safi],
-			       BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT)) {
+				vty_out(vty, "  export vpn\n");
+			}
+			if (CHECK_FLAG(bgp->af_flags[afi][safi],
+				       BGP_CONFIG_MPLSVPN_TO_VRF_IMPORT)) {
 
-			vty_out(vty, "  import vpn\n");
-		}
-		if (CHECK_FLAG(bgp->af_flags[afi][safi],
-			       BGP_CONFIG_VRF_TO_VRF_IMPORT)) {
-			char *name;
+				vty_out(vty, "  import vpn\n");
+			}
+			if (CHECK_FLAG(bgp->af_flags[afi][safi],
+				       BGP_CONFIG_VRF_TO_VRF_IMPORT)) {
+				char *name;
 
-			for (ALL_LIST_ELEMENTS_RO(
-				     bgp->vpn_policy[afi].import_vrf, node,
-				     name))
-				vty_out(vty, "  import vrf %s\n", name);
+				for (ALL_LIST_ELEMENTS_RO(
+					     bgp->vpn_policy[afi].import_vrf,
+					     node, name))
+					vty_out(vty, "  import vrf %s\n", name);
+			}
 		}
 
 		if (is_srv6_unicast_enabled(bgp, afi)) {
@@ -18216,12 +17997,8 @@ void bgp_vty_init(void)
 	/* redistribute show commands */
 	install_element(VIEW_NODE, &show_bgp_redistribute_cmd);
 
-	/* import|export vpn [route-map RMAP_NAME] */
-	install_element(BGP_IPV4_NODE, &bgp_imexport_vpn_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_imexport_vpn_cmd);
-
-	install_element(BGP_IPV4_NODE, &bgp_imexport_vrf_cmd);
-	install_element(BGP_IPV6_NODE, &bgp_imexport_vrf_cmd);
+	/* 'import|export vpn' and 'import vrf NAME': converted to northbound,
+	 * see bgp_cli_instance_init() (bgp_cli_instance.c, M7 batch B1). */
 
 	/* ttl_security commands: converted to northbound, see
 	 * 'neighbor_ttl_security_cli_cmd' in bgp_cli_neighbor.c (M4 batch
@@ -18268,8 +18045,8 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6_NODE, &af_rt_vpn_imexport_cmd);
 	install_element(BGP_IPV4_NODE, &af_route_map_vpn_imexport_cmd);
 	install_element(BGP_IPV6_NODE, &af_route_map_vpn_imexport_cmd);
-	install_element(BGP_IPV4_NODE, &af_import_vrf_route_map_cmd);
-	install_element(BGP_IPV6_NODE, &af_import_vrf_route_map_cmd);
+	/* 'import vrf route-map NAME': converted to northbound, see
+	 * bgp_cli_instance_init() (bgp_cli_instance.c, M7 batch B1). */
 
 	install_element(BGP_IPV4_NODE, &af_routetarget_import_cmd);
 	install_element(BGP_IPV6_NODE, &af_routetarget_import_cmd);
@@ -18282,8 +18059,7 @@ void bgp_vty_init(void)
 	install_element(BGP_IPV6_NODE, &af_no_rt_vpn_imexport_cmd);
 	install_element(BGP_IPV4_NODE, &af_no_route_map_vpn_imexport_cmd);
 	install_element(BGP_IPV6_NODE, &af_no_route_map_vpn_imexport_cmd);
-	install_element(BGP_IPV4_NODE, &af_no_import_vrf_route_map_cmd);
-	install_element(BGP_IPV6_NODE, &af_no_import_vrf_route_map_cmd);
+	/* 'no import vrf route-map': converted to northbound (M7 batch B1). */
 
 	/* "neighbor ip-transparent" command: converted to northbound,
 	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).

@@ -452,6 +452,17 @@ void afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write(struct vty *vty,
 							     const struct lyd_node *dnode,
 							     bool show_defaults);
 
+/* M7 B1: instance-AF VPN leaking simple knobs (af-vpn-leaking's
+ * export-vpn/import-vpn/import-vrf/import-vrf-route-map, ipv4/ipv6-unicast). */
+void afi_safis_export_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults);
+void afi_safis_import_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults);
+void afi_safis_import_vrf_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults);
+void afi_safis_import_vrf_route_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);
