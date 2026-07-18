@@ -14,11 +14,7 @@ module proteus-bgp-filter {
   description
     "bgpd's global filter objects: AS-path access lists, community /
      large-community / extended-community lists, and community
-     aliases. These are bgpd-global (not per-instance) commands; the
-     running config text of the not-yet-converted lists comes from
-     legacy config_write functions, cited per node
-     (config_write_as_list in bgpd/bgp_filter.c,
-     community_list_config_write in bgpd/bgp_vty.c).
+     aliases. These are bgpd-global (not per-instance) commands.
 
      CLI text:
 
@@ -33,7 +29,10 @@ module proteus-bgp-filter {
      standard, 100-500 = expanded, written without the style keyword)
      are not modeled -- named lists only. The numbered form is just an
      anonymous-name spelling of the same objects and carries no extra
-     expressiveness.
+     expressiveness; the numbered commands survive as deprecated CLI
+     aliases that write a named list whose name is the number's
+     decimal string (inferring standard/expanded from the range), and
+     such a list round-trips as its named spelling.
 
      Community aliases live in this module (not proteus-bgp) so that
      proteus-route-map can leafref 'match alias' without importing

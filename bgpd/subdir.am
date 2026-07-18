@@ -103,6 +103,7 @@ bgpd_libbgp_a_SOURCES = \
 	bgpd/proteus/bgp_nb_evpn.c \
 	bgpd/proteus/bgp_nb_interface.c \
 	bgpd/proteus/bgp_nb_filter.c \
+	bgpd/proteus/bgp_filter_value.c \
 	# end
 
 if ENABLE_BGP_VNC
@@ -217,6 +218,7 @@ noinst_HEADERS += \
 	bgpd/bgp_nhc.h \
 	bgpd/bgp_nb.h \
 	bgpd/proteus/bgp_nb_local.h \
+	bgpd/proteus/bgp_filter_value.h \
 	# end
 
 bgpd_bgpd_SOURCES = bgpd/bgp_main.c

@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /* Copyright (C) 2026 Robin Christ, partimus GmbH */
-/* proteus-bgp-filter northbound apply callbacks (M7 batches B6/B7).
+/* proteus-bgp-filter northbound apply callbacks (M7 batches B6/B7/B8).
  *
  * B6 brought the module from dead schema to live callbacks: bgp_nb.c flips
  * the module registration from its ignore_cfg_cbs stub to the real
  * callback table (whole-module activation -- the complete table must land
  * in the same commit as the flip, or nb_validate_callbacks() exit(1)s at
  * startup; the M6 B9 / M7 B4 regenerate-and-flip rule at module
- * granularity). B6 converted only the community-alias list; B7 (this
- * batch) converts as-path-access-list. The community, large-community and
- * extcommunity list surfaces stay reject-stubbed until M7 B8.
+ * granularity). B6 converted only the community-alias list, B7 the
+ * as-path-access-list, and B8 the community / large-community /
+ * extcommunity lists -- the module has no reject stubs left.
  */
 #include <zebra.h>
 #include "lib/northbound.h"
 #include "bgpd/bgpd.h"
+#include "bgpd/bgp_clist.h"
 #include "bgpd/bgp_community.h"
+#include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_lcommunity.h"
 #include "bgpd/bgp_community_alias.h"
 #include "bgpd/bgp_filter.h"
 #include "bgpd/bgp_regex.h"
 #include "bgpd/bgp_nb.h"
+#include "bgpd/proteus/bgp_filter_value.h"
 
 /*
  * as-path-access-list (M7 batch B7).
@@ -190,870 +193,596 @@ int as_path_access_list_entry_regex_modify(struct nb_cb_modify_args *args)
 }
 
 /*
- * Reject stubs: not-yet-converted proteus-bgp-filter surfaces (M7 B8).
+ * community-list / large-community-list / extcommunity-list (M7 batch B8).
+ *
+ * One 'bgp <kind>-list <standard|expanded> NAME seq SEQ <deny|permit>
+ * VALUE' line per entry[sequence], replacing the retired bgp_vty.c DEFUNs.
+ * The runtime state stays bgp_clist.c's community_list_handler (bgp_clist)
+ * -- the same struct community_list / community_entry the route-map and
+ * update-group machinery reads -- and the apply path goes through the
+ * existing native setters (community_list_set() and friends), which also
+ * carry the transition side effects the retired DEFUNs relied on:
+ * route_map_notify_dependencies() with the matching RMAP_EVENT_*
+ * ADDED/DELETED event on every change.
+ *
+ * The entry's whole value is one legacy line, but in YANG it is a subtree
+ * (typed member lists plus well-known / raw leaf-lists for standard
+ * entries, a regex leaf for expanded ones), so a single re-entered config
+ * line can surface as any mix of child creates/destroys plus an action
+ * modify. Rather than reconstructing entry state from individual child
+ * callbacks (a destroyed child's dnode points into the OLD tree), each
+ * entry list registers an apply_finish callback: it fires exactly once
+ * per changed entry, after all of the entry's child callbacks, with the
+ * entry's NEW-tree dnode -- including when only descendants changed
+ * (nb_transaction_apply_finish() walks destroys up to the surviving
+ * ancestor). apply_finish serializes the entry's current value back to
+ * the legacy space-joined string (bgp_filter_value.c, shared with
+ * mgmtd's cli_show) and calls the native setter; the setter's
+ * sequence-replace path (bgp_clist_seq_check() inside
+ * community_list_entry_add()) makes a re-apply of an existing sequence a
+ * replace, and its duplicate check absorbs idempotent repeats.
+ *
+ * Sequence-key vs. legacy content-match: as in B7, the legacy 'no' forms
+ * resolved their target entry by (direct, value) content match and the
+ * create forms silently absorbed content duplicates; both content-based
+ * resolutions live in the CLI layer (bgpd/proteus/bgp_cli_filter.c),
+ * which also normalizes the deprecated numbered forms onto named lists.
+ * By the time a change reaches here the sequence is resolved, so entry
+ * destroy is a straight by-sequence delete
+ * (community_list_entry_unset_by_seq(), added to bgp_clist.c for this
+ * batch).
+ *
+ * Value parse lifecycle (B7's validate-parse-free pattern): standard
+ * values are proven parseable at NB_EV_VALIDATE by serializing the
+ * candidate set and test-parsing it with the same parser the native
+ * setter will use at apply (community_str2com() / lcommunity_str2com() /
+ * ecommunity_str2com(), freed immediately); expanded regexes are
+ * test-compiled with bgp_regcomp() and freed. Nothing is stashed across
+ * events -- the apply-side setter re-parses from the serialized string it
+ * is handed, exactly as the retired DEFUNs' argv_concat() string was
+ * re-parsed.
+ *
+ * The list-level type leaf has no apply of its own: the style reaches the
+ * native setter with every entry apply. Changing an existing list's type
+ * in place is blocked at the CLI with the legacy conflict errors (and by
+ * the schema's per-entry must pairs while old-case values remain); a
+ * direct northbound edit that still slips a type flip past an existing
+ * native list is refused by the setter's first-entry style check and
+ * logged from clist_entry_apply().
  */
 
-int community_list_create(struct nb_cb_create_args *args)
+/* Serialize the entry's current value and hand it to the native setter --
+ * the shared body of the three apply_finish callbacks. */
+static void clist_entry_apply(const struct lyd_node *entry, int master)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
+	const char *name = yang_dnode_get_string(entry, "../name");
+	bool standard = strmatch(yang_dnode_get_string(entry, "../type"), "standard");
+	int direct = strmatch(yang_dnode_get_string(entry, "action"), "permit") ? COMMUNITY_PERMIT
+										: COMMUNITY_DENY;
+	char seq[16], value[VTY_BUFSIZ];
+	int style = 0, ret = 0;
+
+	snprintf(seq, sizeof(seq), "%u", yang_dnode_get_uint32(entry, "sequence"));
+	bgp_filter_entry_value_str(entry, value, sizeof(value));
+
+	switch (master) {
+	case COMMUNITY_LIST_MASTER:
+		style = standard ? COMMUNITY_LIST_STANDARD : COMMUNITY_LIST_EXPANDED;
+		ret = community_list_set(bgp_clist, name, value, seq, direct, style);
+		break;
+	case LARGE_COMMUNITY_LIST_MASTER:
+		style = standard ? LARGE_COMMUNITY_LIST_STANDARD : LARGE_COMMUNITY_LIST_EXPANDED;
+		ret = lcommunity_list_set(bgp_clist, name, value, seq, direct, style);
+		break;
+	case EXTCOMMUNITY_LIST_MASTER:
+		style = standard ? EXTCOMMUNITY_LIST_STANDARD : EXTCOMMUNITY_LIST_EXPANDED;
+		ret = extcommunity_list_set(bgp_clist, name, value, seq, direct, style);
 		break;
 	}
 
+	/* Unreachable after VALIDATE (malformed values) and the CLI's type
+	 * conflict check; reachable only by a direct northbound type flip on
+	 * a populated list (see the section comment). */
+	if (ret < 0)
+		zlog_warn("%s: native setter rejected %s %s seq %s %s (%d)", __func__,
+			  lyd_parent(entry)->schema->name, name, seq, value, ret);
+}
+
+/* Expanded-entry regex leaves: test-compile at VALIDATE, freed
+ * immediately (the apply-side setter compiles its own copy from the
+ * serialized string). Shared by the three regex_modify callbacks. */
+static int clist_regex_validate(struct nb_cb_modify_args *args)
+{
+	const char *regex = yang_dnode_get_string(args->dnode, NULL);
+	struct frregex *compiled = bgp_regcomp(regex);
+
+	if (!compiled) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
+		return NB_ERR_VALIDATION;
+	}
+	bgp_regex_free(compiled);
+
+	return NB_OK;
+}
+
+int community_list_create(struct nb_cb_create_args *args)
+{
+	/* Lazily created by community_list_set() when the first entry
+	 * lands (community_list_get() inside it), mirroring the retired
+	 * DEFUNs; a list node with no entries has no native counterpart. */
 	return NB_OK;
 }
 
 int community_list_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	/* The legacy delete-whole-list path (str == NULL): frees every
+	 * entry and fires RMAP_EVENT_CLIST_DELETED. The child entries'
+	 * own destroy callbacks never run for a whole-list delete (only
+	 * the topmost destroy is queued), so this is the only teardown. */
+	community_list_unset(bgp_clist, yang_dnode_get_string(args->dnode, "name"), NULL, NULL, 0,
+			     0);
 
 	return NB_OK;
 }
 
 int community_list_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* The style is passed to the native setter with every entry apply
+	 * (see the section comment for the populated-list type-flip case). */
 	return NB_OK;
 }
 
 int community_list_entry_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Real work happens in the entry's apply_finish, once the whole
+	 * value subtree is readable off the new tree. */
 	return NB_OK;
 }
 
 int community_list_entry_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	community_list_entry_unset_by_seq(bgp_clist, COMMUNITY_LIST_MASTER,
+					  yang_dnode_get_string(args->dnode, "../name"),
+					  yang_dnode_get_uint32(args->dnode, "sequence"));
 
 	return NB_OK;
 }
 
+void community_list_entry_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	clist_entry_apply(args->dnode, COMMUNITY_LIST_MASTER);
+}
+
 int community_list_entry_action_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/action");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities");
+	char value[VTY_BUFSIZ];
+	struct community *com;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	/* Test-parse the serialized set with the parser the native setter
+	 * will use at apply (raw tokens are the only part the schema's
+	 * types don't already constrain), freed immediately. */
+	bgp_filter_communities_value_str(args->dnode, value, sizeof(value));
+	com = community_str2com(value);
+	if (!com) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	community_free(&com);
 
 	return NB_OK;
 }
 
 int community_list_entry_communities_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_member_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/member");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_member_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/member");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_well_known_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/well-known");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_well_known_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/well-known");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_communities_raw_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/raw");
+	struct community *com;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	/* A raw token added to an existing set is validated on its own
+	 * (community tokens parse independently, so a valid set cannot be
+	 * invalidated by adding another valid token). */
+	com = community_str2com(yang_dnode_get_string(args->dnode, NULL));
+	if (!com) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	community_free(&com);
 
 	return NB_OK;
 }
 
 int community_list_entry_communities_raw_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/communities/raw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_regex_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_VALIDATE)
+		return clist_regex_validate(args);
 
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int community_list_entry_regex_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:community-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 
 int large_community_list_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Lazily created by lcommunity_list_set() when the first entry
+	 * lands. */
 	return NB_OK;
 }
 
 int large_community_list_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	lcommunity_list_unset(bgp_clist, yang_dnode_get_string(args->dnode, "name"), NULL, NULL, 0,
+			      0);
 
 	return NB_OK;
 }
 
 int large_community_list_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* The style is passed to the native setter with every entry apply. */
 	return NB_OK;
 }
 
 int large_community_list_entry_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Real work happens in the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	community_list_entry_unset_by_seq(bgp_clist, LARGE_COMMUNITY_LIST_MASTER,
+					  yang_dnode_get_string(args->dnode, "../name"),
+					  yang_dnode_get_uint32(args->dnode, "sequence"));
 
 	return NB_OK;
 }
 
+void large_community_list_entry_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	clist_entry_apply(args->dnode, LARGE_COMMUNITY_LIST_MASTER);
+}
+
 int large_community_list_entry_action_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/action");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities");
+	char value[VTY_BUFSIZ];
+	struct lcommunity *lcom;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	bgp_filter_large_communities_value_str(args->dnode, value, sizeof(value));
+	lcom = lcommunity_str2com(value);
+	if (!lcom) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	lcommunity_free(&lcom);
 
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_member_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities/member");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_member_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities/member");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_raw_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities/raw");
+	struct lcommunity *lcom;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	lcom = lcommunity_str2com(yang_dnode_get_string(args->dnode, NULL));
+	if (!lcom) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	lcommunity_free(&lcom);
 
 	return NB_OK;
 }
 
 int large_community_list_entry_large_communities_raw_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/large-communities/raw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_regex_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_VALIDATE)
+		return clist_regex_validate(args);
 
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int large_community_list_entry_regex_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:large-community-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 
 int extcommunity_list_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Lazily created by extcommunity_list_set() when the first entry
+	 * lands. */
 	return NB_OK;
 }
 
 int extcommunity_list_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	extcommunity_list_unset(bgp_clist, yang_dnode_get_string(args->dnode, "name"), NULL, NULL,
+				0, 0);
 
 	return NB_OK;
 }
 
 int extcommunity_list_type_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/type");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* The style is passed to the native setter with every entry apply. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Real work happens in the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	community_list_entry_unset_by_seq(bgp_clist, EXTCOMMUNITY_LIST_MASTER,
+					  yang_dnode_get_string(args->dnode, "../name"),
+					  yang_dnode_get_uint32(args->dnode, "sequence"));
 
 	return NB_OK;
 }
 
+void extcommunity_list_entry_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	clist_entry_apply(args->dnode, EXTCOMMUNITY_LIST_MASTER);
+}
+
 int extcommunity_list_entry_action_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/action");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities");
+	char value[VTY_BUFSIZ];
+	struct ecommunity *ecom;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	/* keyword_included = 1: the serialized string carries the rt/soo
+	 * (or raw, e.g. nt) keyword before every value, exactly the
+	 * extcommunity-list standard form. */
+	bgp_filter_extcommunities_value_str(args->dnode, value, sizeof(value));
+	ecom = ecommunity_str2com(value, 0, 1);
+	if (!ecom) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	ecommunity_free(&ecom);
 
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_target_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-target/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_route_origin_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/route-origin/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_raw_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/raw");
+	struct ecommunity *ecom;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	/* A raw token is a whole 'KEYWORD VALUE' pair (e.g. 'nt
+	 * 192.0.2.1:0'), test-parsed on its own with the keyword-included
+	 * parser. */
+	ecom = ecommunity_str2com(yang_dnode_get_string(args->dnode, NULL), 0, 1);
+	if (!ecom) {
+		snprintf(args->errmsg, args->errmsg_len, "Malformed community-list value");
 		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
 	}
+	ecommunity_free(&ecom);
 
 	return NB_OK;
 }
 
 int extcommunity_list_entry_extcommunities_raw_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/extcommunities/raw");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_regex_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
+	if (args->event == NB_EV_VALIDATE)
+		return clist_regex_validate(args);
 
+	/* Applied via the entry's apply_finish. */
 	return NB_OK;
 }
 
 int extcommunity_list_entry_regex_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp-filter:extcommunity-list/entry/regex");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
+	/* Only reachable as part of a value-case switch; the entry's
+	 * apply_finish re-applies the surviving value. */
 	return NB_OK;
 }
 

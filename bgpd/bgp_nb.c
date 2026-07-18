@@ -11585,10 +11585,13 @@ const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filte
 								  },
 							  } };
 
-/* M7 batch B6: proteus-bgp-filter is live (callbacks in
- * bgpd/proteus/bgp_nb_filter.c). Only community-alias is converted in B6;
- * the as-path / community / large-community / extcommunity lists stay
- * reject-stubbed until their own batches (M7 B7/B8).
+/* M7 batches B6/B7/B8: proteus-bgp-filter is live (callbacks in
+ * bgpd/proteus/bgp_nb_filter.c) and fully converted -- community-alias
+ * (B6), as-path-access-list (B7), community / large-community /
+ * extcommunity lists (B8). The B8 entry lists carry an apply_finish
+ * callback: one legacy config line is a whole YANG subtree there, and
+ * apply_finish fires once per changed entry with its new-tree dnode
+ * (see the design comment in bgp_nb_filter.c).
  */
 const struct frr_yang_module_info proteus_bgp_filter_info = {
 	.name = "proteus-bgp-filter",
@@ -11637,6 +11640,7 @@ const struct frr_yang_module_info proteus_bgp_filter_info = {
 			.cbs = {
 				.create = community_list_entry_create,
 				.destroy = community_list_entry_destroy,
+				.apply_finish = community_list_entry_apply_finish,
 			}
 		},
 		{
@@ -11698,6 +11702,7 @@ const struct frr_yang_module_info proteus_bgp_filter_info = {
 			.cbs = {
 				.create = large_community_list_entry_create,
 				.destroy = large_community_list_entry_destroy,
+				.apply_finish = large_community_list_entry_apply_finish,
 			}
 		},
 		{
@@ -11752,6 +11757,7 @@ const struct frr_yang_module_info proteus_bgp_filter_info = {
 			.cbs = {
 				.create = extcommunity_list_entry_create,
 				.destroy = extcommunity_list_entry_destroy,
+				.apply_finish = extcommunity_list_entry_apply_finish,
 			}
 		},
 		{

@@ -143,6 +143,13 @@ extern void lcommunity_list_unset(struct community_list_handler *ch,
 				  const char *name, const char *str,
 				  const char *seq, int direct, int style);
 
+/* Northbound entry point (M7 batch B8, bgpd/proteus/bgp_nb_filter.c):
+ * sequence-keyed entry delete, for the sequence-keyed proteus-bgp-filter
+ * entry lists (the legacy content-matched delete stays available through
+ * the *_list_unset() functions above). */
+extern void community_list_entry_unset_by_seq(struct community_list_handler *ch, int master,
+					      const char *name, int64_t seq);
+
 extern struct community_list_master *
 community_list_master_lookup(struct community_list_handler *ch, int master);
 

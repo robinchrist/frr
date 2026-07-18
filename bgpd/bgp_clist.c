@@ -1338,6 +1338,48 @@ void lcommunity_list_unset(struct community_list_handler *ch, const char *name,
 	route_map_notify_dependencies(name, RMAP_EVENT_LLIST_DELETED);
 }
 
+/* Northbound entry point (M7 batch B8, bgpd/proteus/bgp_nb_filter.c):
+ * delete one entry by its sequence number. The proteus-bgp-filter entry
+ * list is keyed by sequence, so by the time a destroy reaches the
+ * northbound layer the target entry is already resolved -- unlike the
+ * legacy 'no' commands, which resolved it by (direct, value) content
+ * match through community_list_entry_lookup() (that content resolution
+ * now lives in the CLI layer, bgpd/proteus/bgp_cli_filter.c). Deleting
+ * the last entry deletes the list itself, exactly as the content-based
+ * community_list_unset()/lcommunity_list_unset()/extcommunity_list_unset()
+ * paths do via community_list_entry_delete().
+ */
+void community_list_entry_unset_by_seq(struct community_list_handler *ch, int master,
+				       const char *name, int64_t seq)
+{
+	struct community_list_master *cm;
+	struct community_list *list;
+	struct community_entry *entry;
+
+	cm = community_list_master_lookup(ch, master);
+	list = community_list_lookup(ch, name, 0, master);
+	if (!cm || !list)
+		return;
+
+	entry = bgp_clist_seq_check(list, seq);
+	if (!entry)
+		return;
+
+	community_list_entry_delete(cm, list, entry);
+
+	switch (master) {
+	case COMMUNITY_LIST_MASTER:
+		route_map_notify_dependencies(name, RMAP_EVENT_CLIST_DELETED);
+		break;
+	case EXTCOMMUNITY_LIST_MASTER:
+		route_map_notify_dependencies(name, RMAP_EVENT_ECLIST_DELETED);
+		break;
+	case LARGE_COMMUNITY_LIST_MASTER:
+		route_map_notify_dependencies(name, RMAP_EVENT_LLIST_DELETED);
+		break;
+	}
+}
+
 /* Set extcommunity-list.  */
 int extcommunity_list_set(struct community_list_handler *ch, const char *name,
 			  const char *str, const char *seq, int direct,
