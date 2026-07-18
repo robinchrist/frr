@@ -6383,16 +6383,51 @@ int bgp_nb_af_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args, afi_
 	return bgp_nb_af_vpn_route_map_apply(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, NULL);
 }
 
-/* 'label vpn export <(0-1048575)|auto>': the choice's two cases (each a
- * single leaf) are re-derived from the whole 'label-export' container on
- * every touching callback, same "reread the whole choice, converge
- * regardless of case-switch ordering" idiom as bgp_nb_evpn_vni_rd_set()
- * (bgp_nb_evpn.c) -- a case switch fires a destroy on the old case's leaf and
- * a create/modify on the new one in the same commit, in schema order, and
- * northbound's target tree already holds the final state at APPLY time
- * regardless of which callback runs first. Reproduces af_label_vpn_export_cmd's
- * body: manual label release/registration, auto label release, and the
- * no-change guards that avoid a pointless prechange/postchange churn. */
+/* 'label vpn export <(0-1048575)|auto>': MODIFY callbacks re-derive the
+ * choice from the whole 'label-export' container (their dnode comes from
+ * the final target tree), the "reread the whole choice" idiom of
+ * bgp_nb_evpn_vni_rd_set() (bgp_nb_evpn.c). DESTROY callbacks must NOT do
+ * that -- see bgp_nb_af_vpn_label_export_unset() below. Reproduces
+ * af_label_vpn_export_cmd's body: manual label release/registration, auto
+ * label release, and the no-change guards that avoid a pointless
+ * prechange/postchange churn. */
+/* The 'no' branch of af_label_vpn_export_cmd (label release, flag clear,
+ * re-export with implicit-null). Shared by both leaves' DESTROY callbacks:
+ * unlike MODIFY, a DESTROY's dnode comes from the OLD running tree
+ * (northbound looks deletes up in config1), so re-reading the choice there
+ * would see the pre-delete state and turn 'no label vpn export' into a
+ * no-op via the no-change guards. Destroys sort before creates/modifies in
+ * a commit, so on a case switch the new case's own callback still runs
+ * afterwards against the final tree. */
+static void bgp_nb_af_vpn_label_export_unset(const struct lyd_node *dnode, afi_t afi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(dnode);
+
+	if (!bgp)
+		return;
+
+	if (!CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO) &&
+	    bgp->vpn_policy[afi].tovpn_label == MPLS_LABEL_NONE)
+		/* already unconfigured */
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	if (CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_MANUAL_REG)) {
+		bgp_zebra_release_label_range(bgp->vpn_policy[afi].tovpn_label,
+					      bgp->vpn_policy[afi].tovpn_label);
+		UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_MANUAL_REG);
+	} else if (CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO))
+		bgp_vpn_release_label(bgp, afi, false);
+
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO);
+	bgp->vpn_policy[afi].tovpn_label = MPLS_LABEL_NONE;
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_snmp_update_last_changed_call(bgp);
+}
+
 static void bgp_nb_af_vpn_label_export_set(const struct lyd_node *label_export_dnode, afi_t afi)
 {
 	struct bgp *bgp;
@@ -6410,7 +6445,11 @@ static void bgp_nb_af_vpn_label_export_set(const struct lyd_node *label_export_d
 		   yang_dnode_get_bool(label_export_dnode, "auto")) {
 		label_auto = true;
 	} else {
-		label_auto = false;
+		/* Final state has neither case configured (e.g. the auto
+		 * leaf rewritten to its false default): that is legacy's
+		 * 'no' form, not a manual label of MPLS_LABEL_NONE. */
+		bgp_nb_af_vpn_label_export_unset(label_export_dnode, afi);
+		return;
 	}
 
 	if (label_auto && CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO))
@@ -6459,8 +6498,7 @@ int bgp_nb_af_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args, af
 					     safi_t safi)
 {
 	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
-					       afi);
+		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
 
 	return NB_OK;
 }
@@ -6478,8 +6516,7 @@ int bgp_nb_af_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args, afi
 					    safi_t safi)
 {
 	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
-					       afi);
+		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
 
 	return NB_OK;
 }
