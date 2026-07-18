@@ -539,6 +539,189 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = afi_safis_import_vrf_route_map_cli_write,
 			}
 		},
+		/* M7 B2: instance-AF VPN leaking, detailed vpn-policy block
+		 * (af-vpn-leaking's 'vpn' container), ipv4-unicast/
+		 * ipv6-unicast only. */
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-import",
+			.cbs = {
+				.cli_show = afi_safis_vpn_route_map_import_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-export",
+			.cbs = {
+				.cli_show = afi_safis_vpn_route_map_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/value",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_value_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/auto",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_auto_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/allocation-mode",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_allocation_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as2/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as4/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/ipv4/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/nexthop-export",
+			.cbs = {
+				.cli_show = afi_safis_vpn_nexthop_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/route-map-import",
+			.cbs = {
+				.cli_show = afi_safis_vpn_route_map_import_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/route-map-export",
+			.cbs = {
+				.cli_show = afi_safis_vpn_route_map_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/label-export/value",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_value_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/label-export/auto",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_auto_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/label-export/allocation-mode",
+			.cbs = {
+				.cli_show = afi_safis_vpn_label_export_allocation_mode_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rd-export/as2/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rd-export/as4/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rd-export/ipv4/assigned-number",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rd_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/nexthop-export",
+			.cbs = {
+				.cli_show = afi_safis_vpn_nexthop_export_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-import/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-import/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-import/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_import_ipv4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-export/as2",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_as2_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-export/as4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_as4_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/rt-export/ipv4",
+			.cbs = {
+				.cli_show = afi_safis_vpn_rt_export_ipv4_cli_write,
+			}
+		},
 		/* M5 B12: instance-AF 'maximum-paths'/'table-map'/'bgp
 		 * dampening', all eight instance AFs that 'uses'
 		 * af-route-selection (ipv4/ipv6 x

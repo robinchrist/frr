@@ -161,6 +161,8 @@ extern int bgp_peer_soft_reset(struct peer *peer, bool is_group);
 
 extern void bgp_vty_init(void);
 extern void bgp_snmp_init_stats_call(struct bgp *bgp);
+extern void bgp_snmp_update_last_changed_call(struct bgp *bgp);
+extern void bgp_route_distinguisher_update_call(struct bgp *bgp, afi_t afi, bool preconfig);
 extern void community_alias_vty(void);
 extern const char *get_afi_safi_str(afi_t afi, safi_t safi, bool for_json);
 extern int bgp_get_vty(struct bgp **bgp, as_t *as, const char *name,

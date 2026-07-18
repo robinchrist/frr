@@ -403,6 +403,57 @@ int bgp_nb_af_import_vrf_destroy(struct nb_cb_destroy_args *args, afi_t afi, saf
 int bgp_nb_af_import_vrf_route_map_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 
+/* M7 batch B2: instance-AF VPN leaking, detailed vpn-policy block
+ * (af-vpn-leaking's 'vpn' container, ipv4/ipv6-unicast). */
+int bgp_nb_af_vpn_route_map_import_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_route_map_export_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_label_export_value_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi);
+int bgp_nb_af_vpn_label_export_auto_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					    safi_t safi);
+int bgp_nb_af_vpn_label_export_allocation_mode_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi);
+int bgp_nb_af_vpn_label_export_allocation_mode_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_af_vpn_rd_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_as2_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						      safi_t safi);
+int bgp_nb_af_vpn_rd_export_as2_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_af_vpn_rd_export_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_as4_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						      safi_t safi);
+int bgp_nb_af_vpn_rd_export_as4_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi);
+int bgp_nb_af_vpn_rd_export_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rd_export_ipv4_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi);
+int bgp_nb_af_vpn_rd_export_ipv4_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi);
+int bgp_nb_af_vpn_nexthop_export_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_nexthop_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_import_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+
 #ifdef __cplusplus
 }
 #endif

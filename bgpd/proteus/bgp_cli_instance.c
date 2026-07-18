@@ -6278,6 +6278,618 @@ void afi_safis_import_vrf_route_map_cli_write(struct vty *vty, const struct lyd_
 }
 
 /*
+ * M7 batch B2: instance-AF VPN leaking, detailed vpn-policy block
+ * (af-vpn-leaking's 'vpn' container), ipv4-unicast/ipv6-unicast, installed on
+ * BGP_IPV4_NODE/BGP_IPV6_NODE like B1. Mirrors the legacy
+ * af_route_map_vpn_imexport / af_label_vpn_export{, _allocation_mode} /
+ * af_rd_vpn_export / af_nexthop_vpn_export / af_rt_vpn_imexport DEFPYs
+ * (bgp_vty.c). 'rd vpn export' reuses bgp_cli_soo_parse() exactly like the
+ * per-VNI/per-VRF 'rd' commands above (same ASN:NN_OR_IP-ADDRESS:NN token
+ * grammar and as2/as4/ipv4 case split as str2prefix_rd()); 'rt vpn
+ * <import|export|both>' reuses the same helper plus
+ * bgp_cli_ead_es_rt_case_name() to route each RTLIST token to its keyed list
+ * entry -- unlike bgp_cli_evpn_rt_list() (EVPN VRF/VNI route-target), there
+ * is no wildcard grammar here (af_rt_vpn_imexport_cmd never supported '*'),
+ * so token parsing is the plain soo_parse case only. Tokens are parsed to
+ * completion before the first enqueue, same "no partial enqueue without an
+ * apply" discipline as bgp_cli_evpn_rt_list().
+ */
+DEFPY_YANG(
+	instance_afi_safis_vpn_route_map, instance_afi_safis_vpn_route_map_cli_cmd,
+	"route-map vpn <import$direction|export$direction> RMAP$rmap",
+	"Specify route map\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from vpn to current address-family\n"
+	"For routes leaked from current address-family to vpn\n"
+	"name of route-map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/route-map-%s", VTY_CURR_XPATH, container,
+			   direction);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, rmap);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_route_map, no_instance_afi_safis_vpn_route_map_cli_cmd,
+	"no route-map vpn <import$direction|export$direction> [RMAP]",
+	NO_STR
+	"Specify route map\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from vpn to current address-family\n"
+	"For routes leaked from current address-family to vpn\n"
+	"name of route-map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/route-map-%s", VTY_CURR_XPATH, container,
+			   direction);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_vpn_route_map_import_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	vty_out(vty, "  route-map vpn import %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+void afi_safis_vpn_route_map_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	vty_out(vty, "  route-map vpn export %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_label_export, instance_afi_safis_vpn_label_export_cli_cmd,
+	"label vpn export <(0-1048575)$label_val|auto$label_auto>",
+	"label value for VRF\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Label Value <0-1048575>\n"
+	"Automatically assign a label\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+	/* Declared at function scope, not inside the branch below:
+	 * nb_cli_enqueue_change() stores the passed value pointer as-is
+	 * (does not copy it), so the buffer must stay alive until
+	 * nb_cli_apply_changes() actually consumes the queued change --
+	 * a buffer scoped to the 'else' block was a stack-use-after-scope
+	 * (caught by ASan: mgmtd aborted parsing 'label vpn export N'). */
+	char label_buf[16];
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (label_auto) {
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/label-export/auto",
+				   VTY_CURR_XPATH, container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	} else {
+		snprintf(label_buf, sizeof(label_buf), "%lld", (long long)label_val);
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/label-export/value",
+				   VTY_CURR_XPATH, container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, label_buf);
+	}
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_label_export, no_instance_afi_safis_vpn_label_export_cli_cmd,
+	"no label vpn export [<(0-1048575)|auto>]",
+	NO_STR
+	"label value for VRF\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Label Value <0-1048575>\n"
+	"Automatically assign a label\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/label-export", VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_vpn_label_export_value_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	vty_out(vty, "  label vpn export %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+void afi_safis_vpn_label_export_auto_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  label vpn export auto\n");
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_label_export_allocation_mode,
+	instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd,
+	"label vpn export allocation-mode <per-vrf$per_vrf|per-nexthop$per_nexthop>",
+	"label value for VRF\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Label allocation mode\n"
+	"Allocate one label for all BGP updates of the VRF\n"
+	"Allocate a label per connected next-hop in the VRF\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/label-export/allocation-mode",
+			   VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, per_vrf ? "per-vrf" : "per-nexthop");
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_label_export_allocation_mode,
+	no_instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd,
+	"no label vpn export allocation-mode [<per-vrf|per-nexthop>]",
+	NO_STR
+	"label value for VRF\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Label allocation mode\n"
+	"Allocate one label for all BGP updates of the VRF\n"
+	"Allocate a label per connected next-hop in the VRF\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/label-export/allocation-mode",
+			   VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_vpn_label_export_allocation_mode_cli_write(struct vty *vty,
+							   const struct lyd_node *dnode,
+							   bool show_defaults)
+{
+	if (strmatch(yang_dnode_get_string(dnode, NULL), "per-nexthop"))
+		vty_out(vty, "  label vpn export allocation-mode per-nexthop\n");
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_rd_export, instance_afi_safis_vpn_rd_export_cli_cmd,
+	"rd vpn export ASN:NN_OR_IP-ADDRESS:NN$rd",
+	"Specify route distinguisher\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Route Distinguisher (<as-number>:<number> | <ip-address>:<number>)\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	enum bgp_cli_soo_case rd_case;
+	char administrator[INET_ADDRSTRLEN], assigned_number[12];
+	char *xpath;
+	const char *case_name;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (!bgp_cli_soo_parse(rd, &rd_case, administrator, sizeof(administrator),
+			       assigned_number, sizeof(assigned_number))) {
+		vty_out(vty, "%% Malformed rd\n");
+		return CMD_WARNING;
+	}
+
+	switch (rd_case) {
+	case BGP_CLI_SOO_AS2:
+		case_name = "as2";
+		break;
+	case BGP_CLI_SOO_AS4:
+		case_name = "as4";
+		break;
+	case BGP_CLI_SOO_IPV4:
+	default:
+		case_name = "ipv4";
+		break;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/rd-export/%s/administrator",
+			   VTY_CURR_XPATH, container, case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, administrator);
+	XFREE(MTYPE_TMP, xpath);
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/rd-export/%s/assigned-number",
+			   VTY_CURR_XPATH, container, case_name);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, assigned_number);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_rd_export, no_instance_afi_safis_vpn_rd_export_cli_cmd,
+	"no rd vpn export [ASN:NN_OR_IP-ADDRESS:NN]",
+	NO_STR
+	"Specify route distinguisher\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Route Distinguisher (<as-number>:<number> | <ip-address>:<number>)\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/rd-export", VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_vpn_rd_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults)
+{
+	const struct lyd_node *rd = yang_dnode_get_parent(dnode, "rd-export");
+	const char *case_name;
+
+	if (yang_dnode_exists(rd, "as2"))
+		case_name = "as2";
+	else if (yang_dnode_exists(rd, "as4"))
+		case_name = "as4";
+	else if (yang_dnode_exists(rd, "ipv4"))
+		case_name = "ipv4";
+	else
+		return;
+
+	vty_out(vty, "  rd vpn export %s:%s\n", yang_dnode_get_string(rd, "%s/administrator", case_name),
+		yang_dnode_get_string(rd, "%s/assigned-number", case_name));
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_nexthop_export, instance_afi_safis_vpn_nexthop_export_cli_cmd,
+	"nexthop vpn export <A.B.C.D|X:X::X:X>$nexthop",
+	"Specify next hop to use for VRF advertised prefixes\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"IPv4 prefix\n"
+	"IPv6 prefix\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/nexthop-export", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, nexthop_str);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_nexthop_export, no_instance_afi_safis_vpn_nexthop_export_cli_cmd,
+	"no nexthop vpn export [<A.B.C.D|X:X::X:X>]",
+	NO_STR
+	"Specify next hop to use for VRF advertised prefixes\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"IPv4 prefix\n"
+	"IPv6 prefix\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/nexthop-export", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+void afi_safis_vpn_nexthop_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, "  nexthop vpn export %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+/* One parsed RTLIST token: the xpath fragment below 'vpn/rt-import' or
+ * 'vpn/rt-export' it maps to. No wildcard support -- af_rt_vpn_imexport_cmd
+ * never had one. */
+struct bgp_cli_vpn_rt_token {
+	char suffix[96];
+};
+
+static bool bgp_cli_vpn_rt_token_parse(struct vty *vty, const char *token,
+				       struct bgp_cli_vpn_rt_token *parsed)
+{
+	enum bgp_cli_soo_case rt_case;
+	char global_admin[INET_ADDRSTRLEN], local_admin[12];
+
+	if (!bgp_cli_soo_parse(token, &rt_case, global_admin, sizeof(global_admin), local_admin,
+			       sizeof(local_admin))) {
+		vty_out(vty, "%% Malformed Route Target: %s\n", token);
+		return false;
+	}
+
+	snprintf(parsed->suffix, sizeof(parsed->suffix), "/%s[global-admin='%s'][local-admin='%s']",
+		 bgp_cli_ead_es_rt_case_name(rt_case), global_admin, local_admin);
+	return true;
+}
+
+/* af_rt_vpn_imexport_cmd's positive form unconditionally REPLACES the whole
+ * rtlist[dir] ecommunity on every invocation (bgp_vty.c: ecommunity_free()
+ * the old set, then ecommunity_dup() the freshly parsed one) -- it is not
+ * additive, unlike a plain YANG list create. Reproduce that here at the CLI
+ * layer: DESTROY the whole rt-import/rt-export container for each targeted
+ * direction first, then CREATE an entry for every RTLIST token, all in one
+ * transaction (mirrors the destroy-then-recreate idiom the codebase already
+ * uses for 'no ... [value]' forms elsewhere). The negative form -- like the
+ * legacy ALIAS 'no <rt|route-target> vpn <import|export|both>' -- has no
+ * RTLIST of its own; it just clears the container(s), so it does not go
+ * through this helper at all. */
+static int bgp_cli_vpn_rt_list(struct vty *vty, const char *base_prefix, bool import, bool export,
+			       struct cmd_token **rt_argv, int n_rts)
+{
+	struct bgp_cli_vpn_rt_token *parsed;
+	char xpath[XPATH_MAXLEN];
+
+	parsed = XCALLOC(MTYPE_TMP, n_rts * sizeof(*parsed));
+
+	for (int i = 0; i < n_rts; i++) {
+		if (!bgp_cli_vpn_rt_token_parse(vty, rt_argv[i]->arg, &parsed[i])) {
+			XFREE(MTYPE_TMP, parsed);
+			return CMD_WARNING;
+		}
+	}
+
+	if (import) {
+		snprintf(xpath, sizeof(xpath), "%s/rt-import", base_prefix);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	if (export) {
+		snprintf(xpath, sizeof(xpath), "%s/rt-export", base_prefix);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+
+	for (int i = 0; i < n_rts; i++) {
+		if (import) {
+			snprintf(xpath, sizeof(xpath), "%s/rt-import%s", base_prefix,
+				 parsed[i].suffix);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		}
+		if (export) {
+			snprintf(xpath, sizeof(xpath), "%s/rt-export%s", base_prefix,
+				 parsed[i].suffix);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		}
+	}
+
+	XFREE(MTYPE_TMP, parsed);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Shared body of both negative rt-vpn forms (bare and with-RTLIST, see the
+ * doc comment on no_instance_afi_safis_vpn_rt_list_cli_cmd below): just
+ * destroy the targeted container(s) wholesale. */
+static int bgp_cli_vpn_rt_clear(struct vty *vty, bool import, bool export)
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *base_prefix;
+	char xpath[XPATH_MAXLEN];
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	base_prefix = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn", VTY_CURR_XPATH, container);
+	if (import) {
+		snprintf(xpath, sizeof(xpath), "%s/rt-import", base_prefix);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	if (export) {
+		snprintf(xpath, sizeof(xpath), "%s/rt-export", base_prefix);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	}
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, base_prefix);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	instance_afi_safis_vpn_rt, instance_afi_safis_vpn_rt_cli_cmd,
+	"rt vpn <import$import|export$export|both$both> RTLIST...",
+	"Specify route target list\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from vpn to current address-family: match any\n"
+	"For routes leaked from current address-family to vpn: set\n"
+	"both import: match any and export: set\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *base_prefix;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	base_prefix = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn", VTY_CURR_XPATH, container);
+	/* argv[0]='rt', argv[1]='vpn', argv[2]=direction keyword -- RTLIST
+	 * starts at argv[3] (one more prefix token than
+	 * bgp_cli_evpn_rt_list()'s 'route-target <dir> RTLIST...' callers,
+	 * which skip only 2). */
+	ret = bgp_cli_vpn_rt_list(vty, base_prefix, import || both, export || both, argv + 3,
+				  argc - 3);
+	XFREE(MTYPE_TMP, base_prefix);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_rt, no_instance_afi_safis_vpn_rt_cli_cmd,
+	"no rt vpn <import$import|export$export|both$both>",
+	NO_STR
+	"Specify route target list\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from vpn to current address-family\n"
+	"For routes leaked from current address-family to vpn\n"
+	"both import and export\n")
+{
+	return bgp_cli_vpn_rt_clear(vty, import || both, export || both);
+}
+
+/* af_rt_vpn_imexport_cmd's negative form is reachable two ways in legacy:
+ * the bare ALIAS above ('no rt vpn <dir>', no RTLIST) and the main DEFPY's
+ * own '[no] ... RTLIST...' with 'no' set -- which the topotests actually use
+ * ('no rt vpn import 192.0.2.2:300'). Either way the given RTLIST is
+ * IGNORED for the negative form (bgp_vty.c's dir loop unconditionally frees
+ * rtlist[dir] to NULL when !yes, never consulting the parsed tokens), so
+ * this second command shares bgp_cli_vpn_rt_clear() and only exists to
+ * accept-and-discard the trailing tokens for grammar compatibility. */
+DEFPY_YANG(
+	no_instance_afi_safis_vpn_rt_list, no_instance_afi_safis_vpn_rt_list_cli_cmd,
+	"no rt vpn <import$import|export$export|both$both> RTLIST...",
+	NO_STR
+	"Specify route target list\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from vpn to current address-family\n"
+	"For routes leaked from current address-family to vpn\n"
+	"both import and export\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN)\n")
+{
+	return bgp_cli_vpn_rt_clear(vty, import || both, export || both);
+}
+
+/* Registered per keyed-list entry (as2/as4/ipv4), like the ead-es-route-target
+ * cli_show functions above: one 'rt vpn <import|export> RT' line per entry
+ * rather than legacy's single space-separated line. Loadable either way --
+ * FRR parses repeated single-RT lines and one multi-RT line to the same
+ * final set. */
+void afi_safis_vpn_rt_import_as2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  rt vpn import %u:%u\n", yang_dnode_get_uint16(dnode, "global-admin"),
+		yang_dnode_get_uint32(dnode, "local-admin"));
+}
+
+void afi_safis_vpn_rt_import_as4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  rt vpn import %u:%u\n", yang_dnode_get_uint32(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+void afi_safis_vpn_rt_import_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, "  rt vpn import %s:%u\n", yang_dnode_get_string(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+void afi_safis_vpn_rt_export_as2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  rt vpn export %u:%u\n", yang_dnode_get_uint16(dnode, "global-admin"),
+		yang_dnode_get_uint32(dnode, "local-admin"));
+}
+
+void afi_safis_vpn_rt_export_as4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults)
+{
+	vty_out(vty, "  rt vpn export %u:%u\n", yang_dnode_get_uint32(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+void afi_safis_vpn_rt_export_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	vty_out(vty, "  rt vpn export %s:%u\n", yang_dnode_get_string(dnode, "global-admin"),
+		yang_dnode_get_uint16(dnode, "local-admin"));
+}
+
+/*
  * M5 batch B12: instance-AF 'bgp dampening [(1-45) [(1-20000) (1-50000)
  * (1-255)]]' (af-route-selection/dampening in proteus-bgp.yang), across the
  * same eight instance AFs. Same container shape (and the same
@@ -7106,4 +7718,38 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_import_vrf_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_import_vrf_route_map_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_import_vrf_route_map_cli_cmd);
+
+	/* M7 B2: instance-AF VPN leaking, detailed vpn-policy block
+	 * ('route-map vpn', 'label vpn export [allocation-mode]', 'rd vpn
+	 * export', 'nexthop vpn export', 'rt vpn'), ipv4-unicast/ipv6-unicast
+	 * only (legacy installed these on BGP_IPV4_NODE/BGP_IPV6_NODE too). */
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_route_map_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_route_map_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_label_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_label_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd);
+	install_element(BGP_IPV4_NODE,
+			&no_instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_rd_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_rd_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_nexthop_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_nexthop_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &instance_afi_safis_vpn_rt_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_rt_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_instance_afi_safis_vpn_rt_list_cli_cmd);
+
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_route_map_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_route_map_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_label_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_label_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd);
+	install_element(BGP_IPV6_NODE,
+			&no_instance_afi_safis_vpn_label_export_allocation_mode_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_rd_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_rd_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_nexthop_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_nexthop_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &instance_afi_safis_vpn_rt_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_rt_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_instance_afi_safis_vpn_rt_list_cli_cmd);
 }

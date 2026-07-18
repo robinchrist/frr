@@ -6303,3 +6303,686 @@ int bgp_nb_af_import_vrf_route_map_destroy(struct nb_cb_destroy_args *args, afi_
 
 	return NB_OK;
 }
+
+/*
+ * M7 batch B2: instance-AF VPN leaking, detailed vpn-policy block
+ * (af-vpn-leaking's 'vpn' container: route-map-import/-export,
+ * label-export, rd-export, nexthop-export, rt-import/rt-export). These
+ * reproduce af_route_map_vpn_imexport / af_label_vpn_export{,
+ * _allocation_mode} / af_rd_vpn_export / af_nexthop_vpn_export /
+ * af_rt_vpn_imexport (bgp_vty.c), all bracketed by vpn_leak_prechange()/
+ * vpn_leak_postchange() exactly like B1. 'route-map-import' shares the
+ * rmap_name[FROMVPN] slot with B1's import-vrf-route-map -- the YANG 'must'
+ * (:1895) already forbids co-setting the two, so no runtime guard is needed
+ * here.
+ */
+
+/* 'route-map vpn import' / 'route-map vpn export': one direction each,
+ * unlike legacy's single DEFPY that handles both via a direction token. The
+ * route-map itself is looked up permissively (route_map_lookup_by_name(), no
+ * northbound-side warning), same convention as B1's import-vrf-route-map. */
+static int bgp_nb_af_vpn_route_map_apply(const struct lyd_node *dnode, afi_t afi,
+					 enum vpn_policy_direction dir, const char *rmap_name)
+{
+	struct bgp *bgp;
+
+	bgp = bgp_nb_instance_lookup(dnode);
+	if (!bgp)
+		return NB_OK;
+
+	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
+
+	XFREE(MTYPE_ROUTE_MAP_NAME, bgp->vpn_policy[afi].rmap_name[dir]);
+	if (rmap_name) {
+		bgp->vpn_policy[afi].rmap_name[dir] = XSTRDUP(MTYPE_ROUTE_MAP_NAME, rmap_name);
+		bgp->vpn_policy[afi].rmap[dir] = route_map_lookup_by_name(rmap_name);
+	} else {
+		bgp->vpn_policy[afi].rmap[dir] = NULL;
+	}
+
+	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_route_map_import_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_vpn_route_map_apply(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN,
+					     yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_vpn_route_map_apply(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, NULL);
+}
+
+int bgp_nb_af_vpn_route_map_export_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_vpn_route_map_apply(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN,
+					     yang_dnode_get_string(args->dnode, NULL));
+}
+
+int bgp_nb_af_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return bgp_nb_af_vpn_route_map_apply(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, NULL);
+}
+
+/* 'label vpn export <(0-1048575)|auto>': the choice's two cases (each a
+ * single leaf) are re-derived from the whole 'label-export' container on
+ * every touching callback, same "reread the whole choice, converge
+ * regardless of case-switch ordering" idiom as bgp_nb_evpn_vni_rd_set()
+ * (bgp_nb_evpn.c) -- a case switch fires a destroy on the old case's leaf and
+ * a create/modify on the new one in the same commit, in schema order, and
+ * northbound's target tree already holds the final state at APPLY time
+ * regardless of which callback runs first. Reproduces af_label_vpn_export_cmd's
+ * body: manual label release/registration, auto label release, and the
+ * no-change guards that avoid a pointless prechange/postchange churn. */
+static void bgp_nb_af_vpn_label_export_set(const struct lyd_node *label_export_dnode, afi_t afi)
+{
+	struct bgp *bgp;
+	bool label_auto;
+	mpls_label_t label = MPLS_LABEL_NONE;
+
+	bgp = bgp_nb_instance_lookup(label_export_dnode);
+	if (!bgp)
+		return;
+
+	if (yang_dnode_exists(label_export_dnode, "value")) {
+		label_auto = false;
+		label = (mpls_label_t)yang_dnode_get_uint32(label_export_dnode, "value");
+	} else if (yang_dnode_exists(label_export_dnode, "auto") &&
+		   yang_dnode_get_bool(label_export_dnode, "auto")) {
+		label_auto = true;
+	} else {
+		label_auto = false;
+	}
+
+	if (label_auto && CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO))
+		/* no change */
+		return;
+	if (!label_auto && label == bgp->vpn_policy[afi].tovpn_label &&
+	    !CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO))
+		/* no change */
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	if (CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_MANUAL_REG)) {
+		bgp_zebra_release_label_range(bgp->vpn_policy[afi].tovpn_label,
+					      bgp->vpn_policy[afi].tovpn_label);
+		UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_MANUAL_REG);
+	} else if (CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO))
+		bgp_vpn_release_label(bgp, afi, false);
+
+	if (label_auto) {
+		SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO);
+		bgp->vpn_policy[afi].tovpn_label = MPLS_LABEL_NONE;
+	} else {
+		bgp->vpn_policy[afi].tovpn_label = label;
+		UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_AUTO);
+		if (bgp->vpn_policy[afi].tovpn_label >= MPLS_LABEL_UNRESERVED_MIN &&
+		    bgp_zebra_request_label_range(bgp->vpn_policy[afi].tovpn_label, 1, false))
+			SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_MANUAL_REG);
+	}
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_snmp_update_last_changed_call(bgp);
+}
+
+int bgp_nb_af_vpn_label_export_value_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
+					       afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					     safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
+					       afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_label_export_auto_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
+					       afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+					    safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
+					       afi);
+
+	return NB_OK;
+}
+
+/* 'label vpn export allocation-mode <per-vrf|per-nexthop>': a no-default
+ * enumeration (Tier B/profile tri-state per the modeling guidance) --
+ * DESTROY resolves to the per-vrf default, matching af_label_vpn_export_allocation_mode_cmd's
+ * 'no' form. */
+int bgp_nb_af_vpn_label_export_allocation_mode_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi)
+{
+	struct bgp *bgp;
+	bool per_nexthop;
+	bool old_per_nexthop;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	per_nexthop = strmatch(yang_dnode_get_string(args->dnode, NULL), "per-nexthop");
+	old_per_nexthop = !!CHECK_FLAG(bgp->vpn_policy[afi].flags,
+				       BGP_VPN_POLICY_TOVPN_LABEL_PER_NEXTHOP);
+	if (old_per_nexthop == per_nexthop)
+		return NB_OK;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	if (per_nexthop)
+		SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_PER_NEXTHOP);
+	else
+		UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_PER_NEXTHOP);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_snmp_update_last_changed_call(bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_label_export_allocation_mode_destroy(struct nb_cb_destroy_args *args, afi_t afi,
+							safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (!CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_PER_NEXTHOP))
+		return NB_OK;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_LABEL_PER_NEXTHOP);
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_snmp_update_last_changed_call(bgp);
+
+	return NB_OK;
+}
+
+/* 'rd vpn export <ASN:NN|A.B.C.D:NN>': the presence container's own
+ * create/destroy bracket the RD as a whole (create is a no-op -- the
+ * mandatory-leaved case container's own create, fired after the container's
+ * per the same tree-order reasoning as bgp_nb_evpn_vni_rd_set(), does the
+ * real work); destroy clears back to unconfigured. The 'mac' case is
+ * permanently unreachable (YANG 'must "false()"' blocks it at the
+ * datastore-edit layer before any northbound callback runs) and 'raw' has no
+ * legacy parser (str2prefix_rd() only produces as2/as4/ipv4) -- both stay
+ * reject-stubbed in bgp_nb_afi_safi_ipv4.c/ipv6.c, per the "mis-shaped ->
+ * reject-stub" rule. */
+static void bgp_nb_af_vpn_rd_export_set(const struct lyd_node *rd_export_dnode, afi_t afi)
+{
+	struct bgp *bgp;
+	struct prefix_rd prd;
+	char rd_pretty[64];
+
+	bgp = bgp_nb_instance_lookup(rd_export_dnode);
+	if (!bgp)
+		return;
+
+	memset(&prd, 0, sizeof(prd));
+	prd.family = AF_UNSPEC;
+	prd.prefixlen = 64;
+
+	if (yang_dnode_exists(rd_export_dnode, "as2")) {
+		uint16_t administrator = yang_dnode_get_uint16(rd_export_dnode, "as2/administrator");
+		uint32_t assigned = yang_dnode_get_uint32(rd_export_dnode, "as2/assigned-number");
+
+		prd.val[1] = RD_TYPE_AS;
+		prd.val[2] = (administrator >> 8) & 0xff;
+		prd.val[3] = administrator & 0xff;
+		prd.val[4] = (assigned >> 24) & 0xff;
+		prd.val[5] = (assigned >> 16) & 0xff;
+		prd.val[6] = (assigned >> 8) & 0xff;
+		prd.val[7] = assigned & 0xff;
+		snprintf(rd_pretty, sizeof(rd_pretty), "%u:%u", administrator, assigned);
+	} else if (yang_dnode_exists(rd_export_dnode, "as4")) {
+		uint32_t administrator = yang_dnode_get_uint32(rd_export_dnode, "as4/administrator");
+		uint16_t assigned = yang_dnode_get_uint16(rd_export_dnode, "as4/assigned-number");
+
+		prd.val[1] = RD_TYPE_AS4;
+		prd.val[2] = (administrator >> 24) & 0xff;
+		prd.val[3] = (administrator >> 16) & 0xff;
+		prd.val[4] = (administrator >> 8) & 0xff;
+		prd.val[5] = administrator & 0xff;
+		prd.val[6] = (assigned >> 8) & 0xff;
+		prd.val[7] = assigned & 0xff;
+		snprintf(rd_pretty, sizeof(rd_pretty), "%u:%u", administrator, assigned);
+	} else if (yang_dnode_exists(rd_export_dnode, "ipv4")) {
+		struct in_addr ip;
+		uint16_t assigned = yang_dnode_get_uint16(rd_export_dnode, "ipv4/assigned-number");
+		char ip_str[INET_ADDRSTRLEN];
+
+		yang_dnode_get_ipv4(&ip, rd_export_dnode, "ipv4/administrator");
+
+		prd.val[1] = RD_TYPE_IP;
+		memcpy(&prd.val[2], &ip, 4);
+		prd.val[6] = (assigned >> 8) & 0xff;
+		prd.val[7] = assigned & 0xff;
+
+		inet_ntop(AF_INET, &ip, ip_str, sizeof(ip_str));
+		snprintf(rd_pretty, sizeof(rd_pretty), "%s:%u", ip_str, assigned);
+	} else {
+		/* Case not yet materialized (fired from the presence
+		 * container's own create, or a case switch in progress) --
+		 * the case's own create/modify (same commit) re-drives this. */
+		return;
+	}
+
+	if (bgp->vpn_policy[afi].tovpn_rd_pretty &&
+	    strmatch(rd_pretty, bgp->vpn_policy[afi].tovpn_rd_pretty))
+		/* no change */
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_route_distinguisher_update_call(bgp, afi, true);
+
+	XFREE(MTYPE_BGP_NAME, bgp->vpn_policy[afi].tovpn_rd_pretty);
+	bgp->vpn_policy[afi].tovpn_rd_pretty = XSTRDUP(MTYPE_BGP_NAME, rd_pretty);
+	bgp->vpn_policy[afi].tovpn_rd = prd;
+	SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_RD_SET);
+	SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_RD_CLI_SET);
+
+	bgp_route_distinguisher_update_call(bgp, afi, false);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+}
+
+int bgp_nb_af_vpn_rd_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	/* No-op: the mandatory-choice case's own create does the real work
+	 * once the case's leaves exist in the target tree (see the doc
+	 * comment above). */
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp || !bgp->vpn_policy[afi].tovpn_rd_pretty)
+		return NB_OK;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp_route_distinguisher_update_call(bgp, afi, true);
+	XFREE(MTYPE_BGP_NAME, bgp->vpn_policy[afi].tovpn_rd_pretty);
+	bgp->vpn_policy[afi].tovpn_rd_pretty = NULL;
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_RD_SET);
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_RD_CLI_SET);
+	bgp_route_distinguisher_update_call(bgp, afi, false);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	/* No-op: fires only on a case switch, see bgp_nb_af_vpn_rd_export_set()'s
+	 * doc comment -- the new case's own create re-drives the setter. */
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as2_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						      safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as2_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as4_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						      safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_as4_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_ipv4_administrator_modify(struct nb_cb_modify_args *args, afi_t afi,
+						       safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rd_export_ipv4_assigned_number_modify(struct nb_cb_modify_args *args, afi_t afi,
+							 safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rd_export_set(
+			yang_dnode_get_parent(args->dnode, "rd-export"), afi);
+
+	return NB_OK;
+}
+
+/* 'nexthop vpn export <A.B.C.D|X:X::X:X>': the union leaf's string form is
+ * exactly the legacy DEFPY's $nexthop_su token -- reuse str2sockunion()/
+ * sockunion2hostprefix() verbatim, same idiom instance_neighbor_update_source_modify()
+ * (bgp_nb_neighbor.c) uses for its own address-union leaf. */
+int bgp_nb_af_vpn_nexthop_export_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	union sockunion su;
+	struct prefix p;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (str2sockunion(yang_dnode_get_string(args->dnode, NULL), &su) != 0)
+		return NB_OK;
+	if (!sockunion2hostprefix(&su, &p))
+		return NB_OK;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp->vpn_policy[afi].tovpn_nexthop = p;
+	SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_NEXTHOP_SET);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_nexthop_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_NEXTHOP_SET);
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	return NB_OK;
+}
+
+/* 'rt vpn <import|export|both> RTLIST': unlike af_rt_vpn_imexport_cmd, which
+ * replaces the whole ecommunity set in one call, the YANG models each RT as
+ * its own keyed list entry -- bgp->vpn_policy[afi].rtlist[dir] is a single
+ * opaque ecommunity blob (no per-entry identity), so each entry's
+ * create/destroy is applied incrementally with ecommunity_add_val()/
+ * ecommunity_del_val() directly on that blob (lazily allocated on the first
+ * add, freed back to NULL when the last entry is removed), bracketed by
+ * vpn_leak_prechange()/postchange() exactly like the legacy whole-set
+ * replace. A create/destroy of a list entry is always a real content change
+ * (northbound only calls these for genuine adds/removes at that xpath), so
+ * there is no "no-op on unchanged value" guard here, unlike the scalar
+ * leaves above. */
+static void bgp_nb_af_vpn_rt_apply(const struct lyd_node *dnode, afi_t afi,
+				   enum vpn_policy_direction dir, struct ecommunity_val *eval,
+				   bool del)
+{
+	struct bgp *bgp;
+	struct ecommunity *ecom;
+
+	bgp = bgp_nb_instance_lookup(dnode);
+	if (!bgp)
+		return;
+
+	vpn_leak_prechange(dir, afi, bgp_get_default(), bgp);
+
+	ecom = bgp->vpn_policy[afi].rtlist[dir];
+	if (del) {
+		if (ecom) {
+			ecommunity_del_val(ecom, eval);
+			if (ecom->size == 0) {
+				ecommunity_free(&ecom);
+				bgp->vpn_policy[afi].rtlist[dir] = NULL;
+			}
+		}
+	} else {
+		if (!ecom) {
+			ecom = ecommunity_new();
+			bgp->vpn_policy[afi].rtlist[dir] = ecom;
+		}
+		ecommunity_add_val(ecom, eval, true, false);
+	}
+
+	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
+}
+
+static void bgp_nb_af_vpn_rt_as2(const struct lyd_node *dnode, afi_t afi,
+				 enum vpn_policy_direction dir, bool del)
+{
+	struct ecommunity_val eval;
+
+	encode_route_target_as(yang_dnode_get_uint16(dnode, "global-admin"),
+			       yang_dnode_get_uint32(dnode, "local-admin"), &eval, true);
+	bgp_nb_af_vpn_rt_apply(dnode, afi, dir, &eval, del);
+}
+
+static void bgp_nb_af_vpn_rt_as4(const struct lyd_node *dnode, afi_t afi,
+				 enum vpn_policy_direction dir, bool del)
+{
+	struct ecommunity_val eval;
+
+	encode_route_target_as4(yang_dnode_get_uint32(dnode, "global-admin"),
+				yang_dnode_get_uint16(dnode, "local-admin"), &eval, true);
+	bgp_nb_af_vpn_rt_apply(dnode, afi, dir, &eval, del);
+}
+
+static void bgp_nb_af_vpn_rt_ipv4(const struct lyd_node *dnode, afi_t afi,
+				  enum vpn_policy_direction dir, bool del)
+{
+	struct ecommunity_val eval;
+	struct in_addr ip;
+
+	yang_dnode_get_ipv4(&ip, dnode, "global-admin");
+	encode_route_target_ip(&ip, yang_dnode_get_uint16(dnode, "local-admin"), &eval, true);
+	bgp_nb_af_vpn_rt_apply(dnode, afi, dir, &eval, del);
+}
+
+int bgp_nb_af_vpn_rt_import_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as2(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_import_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as2(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_import_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as4(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_import_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as4(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_import_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_ipv4(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_import_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_ipv4(args->dnode, afi, BGP_VPN_POLICY_DIR_FROMVPN, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_as2_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as2(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_as2_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as2(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_as4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as4(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_as4(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, true);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_ipv4(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, false);
+
+	return NB_OK;
+}
+
+int bgp_nb_af_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event == NB_EV_APPLY)
+		bgp_nb_af_vpn_rt_ipv4(args->dnode, afi, BGP_VPN_POLICY_DIR_TOVPN, true);
+
+	return NB_OK;
+}

@@ -463,6 +463,36 @@ void afi_safis_import_vrf_cli_write(struct vty *vty, const struct lyd_node *dnod
 void afi_safis_import_vrf_route_map_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					      bool show_defaults);
 
+/* M7 B2: instance-AF VPN leaking, detailed vpn-policy block
+ * (af-vpn-leaking's 'vpn' container, ipv4/ipv6-unicast). */
+void afi_safis_vpn_route_map_import_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void afi_safis_vpn_route_map_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void afi_safis_vpn_label_export_value_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults);
+void afi_safis_vpn_label_export_auto_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					       bool show_defaults);
+void afi_safis_vpn_label_export_allocation_mode_cli_write(struct vty *vty,
+							   const struct lyd_node *dnode,
+							   bool show_defaults);
+void afi_safis_vpn_rd_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults);
+void afi_safis_vpn_nexthop_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
+void afi_safis_vpn_rt_import_as2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+void afi_safis_vpn_rt_import_as4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+void afi_safis_vpn_rt_import_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
+void afi_safis_vpn_rt_export_as2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+void afi_safis_vpn_rt_export_as4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					   bool show_defaults);
+void afi_safis_vpn_rt_export_ipv4_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

@@ -333,396 +333,136 @@ int instance_afi_safis_ipv4_unicast_import_vrf_route_map_destroy(struct nb_cb_de
 
 int instance_afi_safis_ipv4_unicast_vpn_route_map_import_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-import");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_route_map_import_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-import");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_route_map_import_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_route_map_export_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_route_map_export_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/route-map-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_route_map_export_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_value_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/value");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_value_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/value");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_value_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_auto_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/auto");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_auto_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/auto");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_auto_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_allocation_mode_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/allocation-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_allocation_mode_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_label_export_allocation_mode_destroy(
 	struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/allocation-mode");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_label_export_allocation_mode_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as2_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as2_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_administrator_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as2/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as2_administrator_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as2_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as2/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as2_assigned_number_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_ipv4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_ipv4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_administrator_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/ipv4/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_ipv4_administrator_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_ipv4_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/ipv4/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_ipv4_assigned_number_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_administrator_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as4/administrator");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as4_administrator_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_as4_assigned_number_modify(
 	struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rd-export/as4/assigned-number");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rd_export_as4_assigned_number_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
+/* 'mac' is permanently unreachable: proteus-bgp.yang's rd-export/mac case
+ * carries 'must "false()"', so libyang rejects any attempt to configure it
+ * before this callback ever runs (M7 batch B2, "mis-shaped -> reject-stub"
+ * rule). */
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_mac_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
@@ -755,6 +495,9 @@ int instance_afi_safis_ipv4_unicast_vpn_rd_export_mac_destroy(struct nb_cb_destr
 	return NB_OK;
 }
 
+/* 'raw' stays reject-stubbed permanently: FRR's str2prefix_rd() only ever
+ * produces as2/as4/ipv4 RDs, so there is no legacy parser to reproduce for an
+ * arbitrary raw RD string (M7 batch B2, "mis-shaped -> reject-stub" rule). */
 int instance_afi_safis_ipv4_unicast_vpn_rd_export_raw_modify(struct nb_cb_modify_args *args)
 {
 	switch (args->event) {
@@ -789,226 +532,72 @@ int instance_afi_safis_ipv4_unicast_vpn_rd_export_raw_destroy(struct nb_cb_destr
 
 int instance_afi_safis_ipv4_unicast_vpn_nexthop_export_modify(struct nb_cb_modify_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/nexthop-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_nexthop_export_modify(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_nexthop_export_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/nexthop-export");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_nexthop_export_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_as2_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_as2_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_as4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_as4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_ipv4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_import_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-import/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_import_ipv4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_as2_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_as2_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_as2_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as2");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_as2_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_as4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_as4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_as4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/as4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_as4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_ipv4_create(struct nb_cb_create_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_ipv4_create(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_unicast_vpn_rt_export_ipv4_destroy(struct nb_cb_destroy_args *args)
 {
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/rt-export/ipv4");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
-		break;
-	}
-
-	return NB_OK;
+	return bgp_nb_af_vpn_rt_export_ipv4_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
 int instance_afi_safis_ipv4_multicast_network_create(struct nb_cb_create_args *args)
