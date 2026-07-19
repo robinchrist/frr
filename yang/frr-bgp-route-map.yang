@@ -1246,9 +1246,12 @@ identity set-extcommunity-color {
       description
         "Set the originator ID";
       leaf originator-id {
-        type inet:ipv4-address;
+        type yang:dotted-quad;
         description
-          "Specifies the originator ID value";
+          "Originator identifier attribute in the form of an IPv4
+           address; it identifies a router, not a reachable
+           address, so zoned IPv4 address spellings are not
+           accepted.";
       }
     }
 
