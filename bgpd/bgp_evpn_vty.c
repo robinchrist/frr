@@ -3820,7 +3820,8 @@ static void write_vni_config(struct vty *vty, struct bgpevpn *vpn)
  * (bgp_cli_instance.c) and bgp_config_write_evpn_info's two blocks are
  * gated off for it below. The family had been reject-stubbed by B7: the
  * 'route-map' leaf was then a real require-instance leafref into the
- * unpopulated proteus-route-map tree, so mgmtd's candidate validation
+ * unpopulated tree of proteus-route-map (a module since retired and
+ * deleted in favor of frr-route-map), so mgmtd's candidate validation
  * rejected legacy configs that define the route-map after the 'router
  * bgp ... vrf ...' block referencing it (bgp_evpn_rt5's r2 does exactly
  * that); M6 batch B9a retyped it to a plain string, unblocking this.

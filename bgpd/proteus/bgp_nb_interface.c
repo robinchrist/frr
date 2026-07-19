@@ -7,8 +7,8 @@
  * the frr-zebra pattern): the interface list itself is lib's surface
  * (frr_interface_info in lib/if.c, registered by bgp_main.c), bgpd only
  * implements the two leaves under its own 'bgp' container. The leaves were
- * previously modeled in the standalone proteus-interface module; that
- * module is now dormant (ignore_cfg_cbs stub in bgp_nb.c) pending removal.
+ * previously modeled in the standalone proteus-interface module, which has
+ * since been deleted.
  *
  * No create/destroy callbacks are needed here: the 'bgp' container is a
  * non-presence container and both leaves carry defaults, so every change

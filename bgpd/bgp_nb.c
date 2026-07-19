@@ -12804,25 +12804,6 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 	}
 };
 
-/*
- * proteus-types and proteus-bgp-evpn contribute no data nodes of their own
- * (typedefs / groupings only, inlined via import + uses into proteus-bgp)
- * and need no frr_yang_module_info. The still-dormant support modules below
- * do define data nodes but have no converted batch yet; register them with
- * ignore_cfg_cbs so libyang's auto-implement of their standalone trees
- * doesn't hit nb_validate_callbacks() with uncallbacked config nodes.
- * proteus-bgp-filter went live in M7 batch B6 (real table further down);
- * proteus-interface went live in M7 batch B4 and is dormant again since
- * workstream C moved its flags onto the frr-interface augment.
- */
-const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filter",
-							  .ignore_cfg_cbs = true,
-							  .nodes = {
-								  {
-									  .xpath = NULL,
-								  },
-							  } };
-
 /* M7 batches B6/B7/B8: proteus-bgp-filter is live (callbacks in
  * bgpd/proteus/bgp_nb_filter.c) and fully converted -- community-alias
  * (B6), as-path-access-list (B7), community / large-community /
@@ -13086,6 +13067,14 @@ const struct frr_yang_module_info proteus_bgp_filter_info = {
 	}
 };
 
+/*
+ * proteus-types and proteus-bgp-evpn contribute no data nodes of their own
+ * (typedefs / groupings only, inlined via import + uses into proteus-bgp)
+ * and need no frr_yang_module_info. proteus-bfd does define data nodes but
+ * has no converted batch yet; register it with ignore_cfg_cbs so libyang's
+ * auto-implement of its standalone tree doesn't hit nb_validate_callbacks()
+ * with uncallbacked config nodes.
+ */
 const struct frr_yang_module_info proteus_bfd_info = { .name = "proteus-bfd",
 						       .ignore_cfg_cbs = true,
 						       .nodes = {
@@ -13093,28 +13082,6 @@ const struct frr_yang_module_info proteus_bfd_info = { .name = "proteus-bfd",
 								       .xpath = NULL,
 							       },
 						       } };
-
-/* Workstream C: proteus-interface is dormant again. bgpd's two
- * 'mpls bgp ...' flags moved onto proteus-bgp's augment of frr-interface
- * (callbacks registered in proteus_bgp_nb_info above); nothing references
- * this module's tree anymore. The stub keeps it loadable until the module
- * is deleted outright in a follow-up.
- */
-const struct frr_yang_module_info proteus_interface_info = { .name = "proteus-interface",
-							     .ignore_cfg_cbs = true,
-							     .nodes = {
-								     {
-									     .xpath = NULL,
-								     },
-							     } };
-
-const struct frr_yang_module_info proteus_route_map_info = { .name = "proteus-route-map",
-							     .ignore_cfg_cbs = true,
-							     .nodes = {
-								     {
-									     .xpath = NULL,
-								     },
-							     } };
 
 /* M7 batch B9: proteus-bgp-dump (MRT dump, the module's initial revision
  * and its conversion land together). Each presence container is one

@@ -412,12 +412,9 @@ static const struct frr_yang_module_info *const bgpd_yang_modules[] = {
 	&frr_vrf_info,
 	&frr_bgp_route_map_info,
 	&proteus_bgp_nb_info,
-	&proteus_filter_info,
 	&proteus_bgp_filter_info,
 	&proteus_bgp_dump_info,
 	&proteus_bfd_info,
-	&proteus_interface_info,
-	&proteus_route_map_info,
 };
 
 /* clang-format off */

@@ -113,12 +113,9 @@ endif
 if BGPD
 nodist_mgmtd_mgmtd_SOURCES += \
 	yang/proteus/proteus-types.yang.c \
-	yang/proteus/proteus-filter.yang.c \
 	yang/proteus/proteus-bgp-filter.yang.c \
 	yang/proteus/proteus-bgp-dump.yang.c \
 	yang/proteus/proteus-bfd.yang.c \
-	yang/proteus/proteus-interface.yang.c \
-	yang/proteus/proteus-route-map.yang.c \
 	yang/proteus/proteus-bgp-evpn.yang.c \
 	yang/proteus/proteus-bgp.yang.c \
 	yang/frr-bgp-route-map.yang.c \

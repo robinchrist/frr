@@ -150,34 +150,17 @@ const struct frr_yang_module_info zebra_route_map_info = {
 };
 
 #ifdef HAVE_BGPD
-/*
- * proteus-types and proteus-bgp-evpn contribute no data nodes of their own
- * (typedefs / groupings only); the rest of the proteus-bgp import set has
- * no mgmtd-side commands in this milestone, so they're stubbed the same
- * way as zebra_route_map_info above.
- */
-const struct frr_yang_module_info proteus_filter_cli_info = {
-	.name = "proteus-filter",
-	.ignore_cfg_cbs = true,
-	.nodes = { { .xpath = NULL } },
-};
-
 /* proteus_bgp_filter_cli_info went live in M7 batch B6 -- defined with its
  * cli_show callbacks in bgpd/proteus/bgp_cli_filter.c (bgpd/bgp_cli.h). */
 
+/*
+ * proteus-types and proteus-bgp-evpn contribute no data nodes of their own
+ * (typedefs / groupings only); proteus-bfd has no mgmtd-side commands in
+ * this milestone, so it's stubbed the same way as zebra_route_map_info
+ * above.
+ */
 const struct frr_yang_module_info proteus_bfd_cli_info = {
 	.name = "proteus-bfd",
-	.ignore_cfg_cbs = true,
-	.nodes = { { .xpath = NULL } },
-};
-
-/* proteus-interface is not loaded here anymore: workstream C moved bgpd's
- * interface-level 'mpls bgp ...' flags onto proteus-bgp's augment of
- * frr-interface (cli_show callbacks now in proteus_bgp_cli_info); the
- * module awaits deletion. */
-
-const struct frr_yang_module_info proteus_route_map_cli_info = {
-	.name = "proteus-route-map",
 	.ignore_cfg_cbs = true,
 	.nodes = { { .xpath = NULL } },
 };
@@ -248,11 +231,9 @@ static const struct frr_yang_module_info *const mgmt_yang_modules[] = {
 #endif
 #ifdef HAVE_BGPD
 	&proteus_bgp_cli_info,
-	&proteus_filter_cli_info,
 	&proteus_bgp_filter_cli_info,
 	&proteus_bgp_dump_cli_info,
 	&proteus_bfd_cli_info,
-	&proteus_route_map_cli_info,
 	&frr_bgp_route_map_cli_info,
 #endif
 #ifdef HAVE_MGMTD_TESTC

@@ -279,12 +279,9 @@ nodist_bgpd_bgpd_SOURCES = \
 	yang/frr-deviations-bgp-datacenter.yang.c \
 	yang/frr-bgp-route-map.yang.c \
 	yang/proteus/proteus-types.yang.c \
-	yang/proteus/proteus-filter.yang.c \
 	yang/proteus/proteus-bgp-filter.yang.c \
 	yang/proteus/proteus-bgp-dump.yang.c \
 	yang/proteus/proteus-bfd.yang.c \
-	yang/proteus/proteus-interface.yang.c \
-	yang/proteus/proteus-route-map.yang.c \
 	yang/proteus/proteus-bgp-evpn.yang.c \
 	yang/proteus/proteus-bgp.yang.c \
 	# end

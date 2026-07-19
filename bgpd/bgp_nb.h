@@ -218,16 +218,13 @@ int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
 #endif
 
 extern const struct frr_yang_module_info proteus_bgp_nb_info;
-extern const struct frr_yang_module_info proteus_filter_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_info;
 extern const struct frr_yang_module_info proteus_bgp_dump_info;
 extern const struct frr_yang_module_info proteus_bfd_info;
-extern const struct frr_yang_module_info proteus_interface_info;
-extern const struct frr_yang_module_info proteus_route_map_info;
 
 /* Interface-level 'mpls bgp ...' flags, on proteus-bgp's augment of
  * frr-interface's interface list (workstream C; formerly modeled in the
- * now-dormant proteus-interface module). Bodies in
+ * since-deleted proteus-interface module). Bodies in
  * bgpd/proteus/bgp_nb_interface.c, registered in proteus_bgp_nb_info. */
 int lib_interface_bgp_mpls_bgp_forwarding_modify(struct nb_cb_modify_args *args);
 int lib_interface_bgp_mpls_bgp_l3vpn_multi_domain_switching_modify(struct nb_cb_modify_args *args);
