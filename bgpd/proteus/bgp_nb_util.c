@@ -6741,6 +6741,53 @@ int bgp_nb_af_srv6_sid_export_create(struct nb_cb_create_args *args, afi_t afi, 
 	return NB_OK;
 }
 
+/* Case-leaf VALIDATE: the async unicast SID machinery does not converge
+ * through a withdraw + re-request inside one commit (caught by
+ * bgp_srv6_unicast test_bgp_srv6_no_locator: the replacement SID never
+ * arrives), so any sid respec while configured requires negating first.
+ * Legacy silently IGNORED same-mode value changes (returning success
+ * while keeping the old SID) - rejecting loudly is stricter but avoids
+ * the datastore silently diverging from the runtime. An identical
+ * re-spec (config reload) passes. */
+int bgp_nb_af_srv6_sid_export_case_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+	const char *leaf, *val;
+	bool have_auto, want_same = false;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp || !is_srv6_unicast_enabled(bgp, afi))
+		return NB_OK;
+
+	leaf = args->dnode->schema->name;
+	val = yang_dnode_get_string(args->dnode, NULL);
+	have_auto = CHECK_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_SID_AUTO);
+
+	if (strmatch(leaf, "auto"))
+		want_same = have_auto && strmatch(val, "true");
+	else if (strmatch(leaf, "index"))
+		want_same = !have_auto && bgp->srv6_unicast[afi].sid_index != 0 &&
+			    (uint32_t)atol(val) == bgp->srv6_unicast[afi].sid_index;
+	else if (strmatch(leaf, "explicit")) {
+		struct in6_addr sid;
+
+		want_same = bgp->srv6_unicast[afi].sid_explicit &&
+			    inet_pton(AF_INET6, val, &sid) == 1 &&
+			    IPV6_ADDR_SAME(&sid, bgp->srv6_unicast[afi].sid_explicit);
+	}
+
+	if (!want_same) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "SID export is already configured. Unconfigure it first to change the SID.");
+		return NB_ERR_VALIDATION;
+	}
+
+	return NB_OK;
+}
+
 /* candidate-side DT46 pairing check, registered on the behavior-dt46 leaf */
 int bgp_nb_af_srv6_sid_export_dt46_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
 {

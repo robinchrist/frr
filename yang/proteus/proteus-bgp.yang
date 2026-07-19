@@ -736,6 +736,88 @@ module proteus-bgp {
     }
   }
 
+  grouping neighbor-af-flowspec {
+    description
+      "Per-neighbor settings of a flowspec address-family (M8.5
+       B-fs-af): exactly the nine arms the legacy flowspec nodes
+       installed - activate, soft-reconfiguration inbound,
+       attribute-unchanged, route-reflector-client,
+       route-server-client, and the prefix-list / filter-list /
+       route-map filters. Deliberately NOT 'uses neighbor-af': the
+       broad grouping would model per-AF knobs the flowspec CLI
+       never offered.";
+
+    leaf activate {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X activate' for this flowspec AF.";
+    }
+
+    leaf soft-reconfiguration-inbound {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X soft-reconfiguration inbound'.";
+    }
+
+    container attribute-unchanged {
+      description
+        "'neighbor X attribute-unchanged [as-path|next-hop|med]'.";
+
+      leaf as-path {
+        type boolean;
+        default "false";
+      }
+      leaf next-hop {
+        type boolean;
+        default "false";
+      }
+      leaf med {
+        type boolean;
+        default "false";
+      }
+    }
+
+    leaf route-reflector-client {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X route-reflector-client'.";
+    }
+
+    leaf route-server-client {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X route-server-client'.";
+    }
+
+    container filters {
+      description
+        "Flowspec per-peer filters.";
+
+      leaf prefix-list-in {
+        type string;
+      }
+      leaf prefix-list-out {
+        type string;
+      }
+      leaf filter-list-in {
+        type string;
+      }
+      leaf filter-list-out {
+        type string;
+      }
+      leaf route-map-in {
+        type string;
+      }
+      leaf route-map-out {
+        type string;
+      }
+    }
+  }
+
   grouping neighbor-af {
     description
       "Per-neighbor settings inside an 'address-family' block
@@ -3335,6 +3417,12 @@ module proteus-bgp {
           uses neighbor-af-filters-ipv6;
           uses neighbor-af-encap-vpn;
         }
+        container ipv4-flowspec {
+          uses neighbor-af-flowspec;
+        }
+        container ipv6-flowspec {
+          uses neighbor-af-flowspec;
+        }
         container l2vpn-evpn {
           uses neighbor-af;
           uses neighbor-af-filters-evpn;
@@ -3447,6 +3535,12 @@ module proteus-bgp {
           uses neighbor-af;
           uses neighbor-af-filters-ipv6;
           uses neighbor-af-encap-vpn;
+        }
+        container ipv4-flowspec {
+          uses neighbor-af-flowspec;
+        }
+        container ipv6-flowspec {
+          uses neighbor-af-flowspec;
         }
         container l2vpn-evpn {
           description
@@ -3561,6 +3655,14 @@ module proteus-bgp {
         uses af-retain-route-target;
       }
 
+      container ipv4-flowspec {
+        description
+          "'address-family ipv4 flowspec' (M8.5 B-fs-af).
+           Default-instance-only (legacy address_family arms reject
+           non-default instances). Instance-level content arrives in
+           B-fs-extras (local-install).";
+      }
+
       container ipv6-unicast {
         description
           "'address-family ipv6 unicast'.";
@@ -3605,6 +3707,11 @@ module proteus-bgp {
         uses af-route-selection;
         uses af-distance-ipv6;
         uses af-retain-route-target;
+      }
+
+      container ipv6-flowspec {
+        description
+          "'address-family ipv6 flowspec' (M8.5 B-fs-af).";
       }
 
       container l2vpn-evpn {

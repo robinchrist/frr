@@ -1850,7 +1850,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4, address_family_ipv4_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, address_family_flowspecv4, address_family_flowspecv4_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv4, address_family_flowspecv4_cmd,
 	"address-family ipv4 flowspec",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1860,7 +1860,7 @@ DEFUNSH(VTYSH_BGPD, address_family_flowspecv4, address_family_flowspecv4_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, address_family_flowspecv6, address_family_flowspecv6_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv6, address_family_flowspecv6_cmd,
 	"address-family ipv6 flowspec",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR

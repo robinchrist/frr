@@ -2365,3 +2365,99 @@ int instance_neighbor_afi_safis_ipv6_vpn_encapsulation_mpls_modify(struct nb_cb_
 	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_MPLS_VPN,
 					      PEER_FLAG_CONFIG_ENCAPSULATION_MPLS);
 }
+
+/* M8.5 B-fs-af: flowspec AF arms. */
+int instance_neighbor_afi_safis_ipv6_flowspec_activate_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP6, SAFI_FLOWSPEC);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_soft_reconfiguration_inbound_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_SOFT_RECONFIG);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_route_reflector_client_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_REFLECTOR_CLIENT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_route_server_client_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_RSERVER_CLIENT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_attribute_unchanged_as_path_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_AS_PATH_UNCHANGED);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_attribute_unchanged_next_hop_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_NEXTHOP_UNCHANGED);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_attribute_unchanged_med_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_FLOWSPEC, PEER_FLAG_MED_UNCHANGED);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_prefix_list_in_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_prefix_list_modify(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_prefix_list_in_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_prefix_list_destroy(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_prefix_list_out_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_prefix_list_modify(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_prefix_list_out_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_prefix_list_destroy(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_filter_list_in_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_filter_list_modify(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_filter_list_in_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_filter_list_destroy(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_filter_list_out_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_filter_list_modify(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_filter_list_out_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_filter_list_destroy(args, AFI_IP6, SAFI_FLOWSPEC, FILTER_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_route_map_in_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_modify(args, AFI_IP6, SAFI_FLOWSPEC, RMAP_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_route_map_in_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_destroy(args, AFI_IP6, SAFI_FLOWSPEC, RMAP_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_route_map_out_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_modify(args, AFI_IP6, SAFI_FLOWSPEC, RMAP_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_flowspec_filters_route_map_out_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_destroy(args, AFI_IP6, SAFI_FLOWSPEC, RMAP_OUT);
+}

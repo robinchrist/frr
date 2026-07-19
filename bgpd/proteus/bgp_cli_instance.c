@@ -141,6 +141,9 @@ static const struct {
 	{ BGP_IPV6L_NODE, "ipv6-labeled-unicast", "ipv6 labeled-unicast" },
 	{ BGP_VPNV6_NODE, "ipv6-vpn", "ipv6 vpn" },
 	{ BGP_EVPN_NODE, "l2vpn-evpn", "l2vpn evpn" },
+	/* M8.5 B-fs-af: flowspec joins the modeled AFs (9 -> 11). */
+	{ BGP_FLOWSPECV4_NODE, "ipv4-flowspec", "ipv4 flowspec" },
+	{ BGP_FLOWSPECV6_NODE, "ipv6-flowspec", "ipv6 flowspec" },
 };
 
 /* Reverse of bgp_node_type(): the proteus afi-safis child container name

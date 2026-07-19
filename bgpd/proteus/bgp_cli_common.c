@@ -1309,6 +1309,20 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-flowspec",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-flowspec",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.cli_show = instance_srv6_cli_write,
@@ -2640,6 +2654,270 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/route-server-client",
 			.cbs = {
 				.cli_show = neighbor_af_route_server_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/soft-reconfiguration-inbound",
+			.cbs = {
+				.cli_show = neighbor_af_soft_reconfiguration_inbound_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/route-reflector-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_reflector_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/route-server-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_server_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/attribute-unchanged",
+			.cbs = {
+				.cli_show = neighbor_af_attribute_unchanged_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-flowspec/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/soft-reconfiguration-inbound",
+			.cbs = {
+				.cli_show = neighbor_af_soft_reconfiguration_inbound_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/route-reflector-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_reflector_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/route-server-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_server_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/attribute-unchanged",
+			.cbs = {
+				.cli_show = neighbor_af_attribute_unchanged_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-flowspec/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/soft-reconfiguration-inbound",
+			.cbs = {
+				.cli_show = neighbor_af_soft_reconfiguration_inbound_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/route-reflector-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_reflector_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/route-server-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_server_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/attribute-unchanged",
+			.cbs = {
+				.cli_show = neighbor_af_attribute_unchanged_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-flowspec/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/soft-reconfiguration-inbound",
+			.cbs = {
+				.cli_show = neighbor_af_soft_reconfiguration_inbound_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/route-reflector-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_reflector_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/route-server-client",
+			.cbs = {
+				.cli_show = neighbor_af_route_server_client_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/attribute-unchanged",
+			.cbs = {
+				.cli_show = neighbor_af_attribute_unchanged_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/prefix-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/prefix-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/filter-list-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/filter-list-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-flowspec/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
 			}
 		},
 		{

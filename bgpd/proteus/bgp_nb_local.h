@@ -416,6 +416,7 @@ int bgp_nb_peer_group_af_encap_modify(struct nb_cb_modify_args *args, afi_t afi,
 int bgp_nb_peer_group_af_encap_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_srv6_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_srv6_sid_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_srv6_sid_export_case_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_srv6_sid_export_dt46_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
 					    safi_t safi);

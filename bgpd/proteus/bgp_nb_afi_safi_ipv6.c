@@ -346,6 +346,11 @@ int instance_afi_safis_ipv6_unicast_vpn_route_map_export_destroy(struct nb_cb_de
 	return bgp_nb_af_vpn_route_map_export_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
+int instance_afi_safis_ipv6_unicast_srv6_sid_export_case_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_af_srv6_sid_export_case_modify(args, AFI_IP6, SAFI_UNICAST);
+}
+
 int instance_afi_safis_ipv6_unicast_srv6_sid_export_create(struct nb_cb_create_args *args)
 {
 	return bgp_nb_af_srv6_sid_export_create(args, AFI_IP6, SAFI_UNICAST);

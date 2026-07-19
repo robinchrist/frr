@@ -6751,6 +6751,23 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_EVPN_NODE, &neighbor_route_server_client_cli_cmd);
 
 	/* as-override: legacy never reached BGP_EVPN_NODE. */
+	/* M8.5 B-fs-af: flowspec AF arms. */
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_prefix_list_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_prefix_list_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_filter_list_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_filter_list_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_map_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_map_cli_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cli_cmd);
 	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &neighbor_encap_srv6_or_mpls_cli_cmd);
