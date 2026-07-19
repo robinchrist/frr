@@ -2485,3 +2485,131 @@ int instance_neighbor_afi_safis_ipv6_flowspec_filters_route_map_out_destroy(
 {
 	return bgp_nb_neighbor_af_route_map_destroy(args, AFI_IP6, SAFI_FLOWSPEC, RMAP_OUT);
 }
+
+/* M9: unreachability AF arms (flowspec wrapper pattern). */
+int instance_neighbor_afi_safis_ipv6_unreachability_activate_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_activate_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_count_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_count_destroy(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_threshold_destroy(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_warning_only_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_modify(args, AFI_IP6,
+									 SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_restart_interval_destroy(args, AFI_IP6,
+									  SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_force_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_out_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_maximum_prefix_out_destroy(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_enabled_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_count_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_count_destroy(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_origin_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_route_map_modify(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_allowas_in_route_map_destroy(args, AFI_IP6, SAFI_UNREACH);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_modify(args, AFI_IP6, SAFI_UNREACH, RMAP_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_destroy(args, AFI_IP6, SAFI_UNREACH, RMAP_IN);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_modify(args, AFI_IP6, SAFI_UNREACH, RMAP_OUT);
+}
+
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_route_map_destroy(args, AFI_IP6, SAFI_UNREACH, RMAP_OUT);
+}

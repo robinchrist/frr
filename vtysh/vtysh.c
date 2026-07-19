@@ -1870,7 +1870,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv6, address_family_flow
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, address_family_ipv4_unreachability, address_family_ipv4_unreachability_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_unreachability, address_family_ipv4_unreachability_cmd,
 	"address-family ipv4 unreachability",
 	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
 {
@@ -1878,7 +1878,7 @@ DEFUNSH(VTYSH_BGPD, address_family_ipv4_unreachability, address_family_ipv4_unre
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, address_family_ipv6_unreachability, address_family_ipv6_unreachability_cmd,
+DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_unreachability, address_family_ipv6_unreachability_cmd,
 	"address-family ipv6 unreachability",
 	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
 {

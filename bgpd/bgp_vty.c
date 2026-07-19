@@ -14239,237 +14239,6 @@ DEFUN (no_bgp_redistribute_ipv6,
  * coexistence install is needed.
  */
 
-DEFPY(bgp_ls_distribute_bgp_fabric,
-      bgp_ls_distribute_bgp_fabric_cmd,
-      "distribute bgp-fabric-link-state [instance-id WORD$instance_id_str]",
-      "Distribute BGP link-state topology information\n"
-      "Enable BGP fabric link-state topology distribution\n"
-      "BGP-LS instance identifier\n"
-      "Instance ID value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	uint64_t instance_id = 0;
-	char *endp = NULL;
-
-	if (!bgp->ls_info) {
-		vty_out(vty, "%% BGP-LS not initialized\n");
-		return CMD_WARNING;
-	}
-
-	if (instance_id_str) {
-		errno = 0;
-		instance_id = strtoull(instance_id_str, &endp, 10);
-		if (errno == ERANGE || endp == instance_id_str || *endp != '\0') {
-			vty_out(vty, "%% Invalid instance-id\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	if (bgp->ls_info->enable_distribution && bgp->ls_info->instance_id == instance_id)
-		return CMD_SUCCESS;
-
-	/*
-	 * If already enabled with a different instance-id, withdraw all
-	 * existing NLRIs before re-exporting with the new instance-id.
-	 */
-	if (bgp->ls_info->enable_distribution && bgp->ls_info->instance_id != instance_id)
-		bgp_ls_withdraw_all(bgp);
-
-	bgp->ls_info->instance_id = instance_id;
-	bgp->ls_info->enable_distribution = true;
-
-	bgp_redist_add(bgp, AFI_IP6, ZEBRA_ROUTE_ALL, 0);
-	if (bgp_redistribute_set(bgp, AFI_IP6, ZEBRA_ROUTE_ALL, 0, false) != CMD_SUCCESS)
-		zlog_warn("%s: failed to subscribe to IPv6 ZEBRA_ROUTE_ALL redistribution",
-			  __func__);
-
-	if (bgp_zclient && bgp_zclient->sock >= 0)
-		bgp_zebra_srv6_manager_get_locator(NULL);
-
-	if (bgp_ls_export_bgp_topology(bgp) != 0) {
-		vty_out(vty, "%% Failed to export BGP topology\n");
-		return CMD_WARNING;
-	}
-
-	if (BGP_DEBUG(linkstate, LINKSTATE))
-		vty_out(vty,
-			"BGP-LS: BGP fabric topology export enabled (instance-id %" PRIu64 ")\n",
-			instance_id);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_bgp_ls_distribute_bgp_fabric,
-      no_bgp_ls_distribute_bgp_fabric_cmd,
-      "no distribute bgp-fabric-link-state [instance-id WORD$instance_id_str]",
-      NO_STR
-      "Distribute BGP link-state topology information\n"
-      "Disable BGP fabric link-state topology distribution\n"
-      "BGP-LS instance identifier\n"
-      "Instance ID value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	char *endp = NULL;
-
-	if (instance_id_str) {
-		errno = 0;
-		strtoull(instance_id_str, &endp, 10);
-		if (errno == ERANGE || endp == instance_id_str || *endp != '\0') {
-			vty_out(vty, "%% Invalid instance-id\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	if (bgp->ls_info) {
-		if (!bgp->ls_info->enable_distribution)
-			return CMD_SUCCESS;
-
-		bgp_redistribute_unset(bgp, AFI_IP6, ZEBRA_ROUTE_ALL, 0);
-
-		bgp->ls_info->enable_distribution = false;
-		bgp->ls_info->instance_id = 0;
-		bgp_ls_withdraw_all(bgp);
-	}
-
-	if (BGP_DEBUG(linkstate, LINKSTATE))
-		vty_out(vty, "BGP-LS: BGP fabric topology export disabled\n");
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(neighbor_ls_local_link_id,
-      neighbor_ls_local_link_id_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str local-link-id (1-4294967295)$link_id",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Configure local link ID for BGP-LS topology\n"
-      "Link identifier value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	/* If link ID unchanged, nothing to do. */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID) &&
-	    peer->ls_local_link_id == link_id)
-		return CMD_SUCCESS;
-
-	/* Withdraw the existing link NLRI before changing the key. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_withdraw_bgp_link(bgp, peer);
-
-	peer->ls_local_link_id = link_id;
-	SET_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID);
-
-	/* Re-originate with the new local link ID. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_originate_bgp_link(bgp, peer);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_neighbor_ls_local_link_id,
-      no_neighbor_ls_local_link_id_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str local-link-id [(1-4294967295)$link_id]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Configure local link ID for BGP-LS topology\n"
-      "Link identifier value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!CHECK_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID))
-		return CMD_SUCCESS;
-
-	/* Withdraw the existing link NLRI before clearing the key. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_withdraw_bgp_link(bgp, peer);
-
-	peer->ls_local_link_id = 0;
-	UNSET_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID);
-
-	/* Re-originate using the fallback local link ID (ifindex). */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_originate_bgp_link(bgp, peer);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(neighbor_ls_remote_link_id,
-      neighbor_ls_remote_link_id_cmd,
-      "neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str remote-link-id (1-4294967295)$link_id",
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Configure remote link ID for BGP-LS topology\n"
-      "Link identifier value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	/* If link ID unchanged, nothing to do. */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID) &&
-	    peer->ls_remote_link_id == link_id)
-		return CMD_SUCCESS;
-
-	/* Withdraw the existing link NLRI before changing the key. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_withdraw_bgp_link(bgp, peer);
-
-	peer->ls_remote_link_id = link_id;
-	SET_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID);
-
-	/* Re-originate with the new remote link ID. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_originate_bgp_link(bgp, peer);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY(no_neighbor_ls_remote_link_id,
-      no_neighbor_ls_remote_link_id_cmd,
-      "no neighbor <A.B.C.D|X:X::X:X|WORD>$peer_str remote-link-id [(1-4294967295)$link_id]",
-      NO_STR
-      NEIGHBOR_STR
-      NEIGHBOR_ADDR_STR2
-      "Configure remote link ID for BGP-LS topology\n"
-      "Link identifier value\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct peer *peer;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (!CHECK_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID))
-		return CMD_SUCCESS;
-
-	/* Withdraw the existing link NLRI before clearing the key. */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_withdraw_bgp_link(bgp, peer);
-
-	peer->ls_remote_link_id = 0;
-	UNSET_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID);
-
-	/* Re-originate using the fallback remote link ID (0). */
-	if (bgp->ls_info && bgp->ls_info->enable_distribution)
-		bgp_ls_originate_bgp_link(bgp, peer);
-
-	return CMD_SUCCESS;
-}
 
 /* M5 batch B11: instance-AF 'redistribute' (af-redistribute in
  * proteus-bgp.yang) is mgmtd-owned for the two unicast-only instance AFs;
@@ -14924,11 +14693,8 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M4 batch B7).
 	 */
 
-	/* BGP-LS link identifiers */
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_LOCAL_LINK_ID))
-		vty_out(vty, " neighbor %s local-link-id %u\n", addr, peer->ls_local_link_id);
-	if (CHECK_FLAG(peer->flags, PEER_FLAG_LS_REMOTE_LINK_ID))
-		vty_out(vty, " neighbor %s remote-link-id %u\n", addr, peer->ls_remote_link_id);
+	/* BGP-LS link identifiers: converted to northbound, emitted by
+	 * bgp_cli_write_session_scalars() (bgp_cli_neighbor.c, M9). */
 
 	/* advertisement-interval, timers (+ connect, + delayopen): converted
 	 * to northbound, see bgp_cli_write_session_scalars()
@@ -15770,8 +15536,8 @@ int bgp_config_write(struct vty *vty)
 		/* FLOWSPEC v4 configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_IP, SAFI_FLOWSPEC);
 
-		/* IPv4 Unreachability configuration.  */
-		bgp_config_write_family(vty, bgp, AFI_IP, SAFI_UNREACH);
+		/* IPv4 unreachability: emitted by mgmtd (M9,
+		 * neighbor-af-unreachability in proteus-bgp.yang). */
 
 		/* IPv6 unicast configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_IP6, SAFI_UNICAST);
@@ -15792,14 +15558,13 @@ int bgp_config_write(struct vty *vty)
 		/* FLOWSPEC v6 configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_IP6, SAFI_FLOWSPEC);
 
-		/* IPv6 Unreachability configuration.  */
-		bgp_config_write_family(vty, bgp, AFI_IP6, SAFI_UNREACH);
+		/* IPv6 unreachability: emitted by mgmtd (M9). */
 
 		/* EVPN configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_L2VPN, SAFI_EVPN);
 
-		/* BGP-LS configuration.  */
-		bgp_config_write_family(vty, bgp, AFI_BGP_LS, SAFI_BGP_LS);
+		/* BGP-LS (link-state link-state): emitted by mgmtd (M9,
+		 * incl. 'distribute bgp-fabric-link-state'). */
 
 		hook_call(bgp_inst_config_write, bgp, vty);
 
@@ -16307,25 +16072,17 @@ void bgp_vty_init(void)
 	 * seed-bridge, once mgmtd's priority-ordered transaction became
 	 * the only peer-creation path. */
 
-	/* "neighbor activate" commands. The nine proteus address families
-	 * (ipv4/ipv6 {unicast,multicast,labeled-unicast,vpn}, l2vpn evpn) are
-	 * converted to mgmtd (M5 batch B1: neighbor_activate_cli_cmd in
-	 * bgpd/proteus/bgp_cli_neighbor.c); only encap/flowspec/unreachability/
-	 * link-state and the hidden BGP_NODE alias stay native here. */
+	/* "neighbor activate" commands: converted to mgmtd for every
+	 * modeled address family (M5 B1; flowspec M8.5; unreachability and
+	 * link-state M9); only the hidden BGP_NODE alias stays native. */
 	install_element(BGP_NODE, &neighbor_activate_hidden_cmd);
 	_install_element(BGP_FLOWSPECV4_NODE, &neighbor_activate_cmd);
 	_install_element(BGP_FLOWSPECV6_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_activate_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_activate_cmd);
-	install_element(BGP_LS_NODE, &neighbor_activate_cmd);
 
 	/* "no neighbor activate" commands (see the note above). */
 	install_element(BGP_NODE, &no_neighbor_activate_hidden_cmd);
 	_install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_activate_cmd);
 	_install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV4U_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_IPV6U_NODE, &no_neighbor_activate_cmd);
-	install_element(BGP_LS_NODE, &no_neighbor_activate_cmd);
 
 	/* "neighbor softreconfiguration inbound" commands: converted to
 	 * mgmtd for the nine proteus AFs (M5 batch B4,
@@ -16591,12 +16348,6 @@ void bgp_vty_init(void)
 	_install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_route_map_cmd);
 	_install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_map_cmd);
 	_install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV4U_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_IPV6U_NODE, &no_neighbor_route_map_cmd);
-	install_element(BGP_LS_NODE, &neighbor_route_map_cmd);
-	install_element(BGP_LS_NODE, &no_neighbor_route_map_cmd);
 
 	/* "neighbor unsuppress-map" commands (see the distribute-list note
 	 * above). */
@@ -16615,20 +16366,16 @@ void bgp_vty_init(void)
 	 * the eight proteus AFs it reaches, see bgp_cli_neighbor_init()
 	 * (bgp_cli_neighbor.c, M5 batch B6); the bare non-hidden BGP_NODE
 	 * install (operating on the default ipv4-unicast AF -- there is no
-	 * ALIAS_HIDDEN for this command) and the unreachability
-	 * BGP_IPV4U_NODE/BGP_IPV6U_NODE installs stay native. */
+	 * ALIAS_HIDDEN for this command) stays native; the unreachability
+	 * nodes converted in M9. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_out_cmd);
 	install_element(BGP_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV4U_NODE, &no_neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_out_cmd);
-	install_element(BGP_IPV6U_NODE, &no_neighbor_maximum_prefix_out_cmd);
 
 	/* "neighbor maximum-prefix" commands: converted to northbound for all
 	 * nine proteus AFs (including BGP_EVPN_NODE), see
 	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M5 batch B6); the
-	 * hidden BGP_NODE aliases and the unreachability BGP_IPV4U_NODE/
-	 * BGP_IPV6U_NODE installs stay native. */
+	 * hidden BGP_NODE aliases stay native; the unreachability nodes
+	 * converted in M9. */
 	install_element(BGP_NODE, &neighbor_maximum_prefix_hidden_cmd);
 	install_element(BGP_NODE,
 			&neighbor_maximum_prefix_threshold_hidden_cmd);
@@ -16640,29 +16387,10 @@ void bgp_vty_init(void)
 			&neighbor_maximum_prefix_threshold_restart_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_maximum_prefix_hidden_cmd);
 
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV4U_NODE, &no_neighbor_maximum_prefix_cmd);
-
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_threshold_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_warning_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_threshold_warning_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_restart_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_threshold_restart_cmd);
-	install_element(BGP_IPV6U_NODE, &no_neighbor_maximum_prefix_cmd);
 
 	/* "neighbor allowas-in" */
 	install_element(BGP_NODE, &neighbor_allowas_in_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_allowas_in_hidden_cmd);
-	install_element(BGP_IPV4U_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV4U_NODE, &no_neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6U_NODE, &neighbor_allowas_in_cmd);
-	install_element(BGP_IPV6U_NODE, &no_neighbor_allowas_in_cmd);
 
 	/* "neighbor accept-own": all nine proteus AFs converted to mgmtd (M5
 	 * batch B4: neighbor_accept_own_cli_cmd in
@@ -16857,12 +16585,6 @@ void bgp_vty_init(void)
 	_install_element(BGP_NODE, &no_bgp_sid_vpn_export_cmd);
 
 	/* BGP-LS commands */
-	install_element(BGP_LS_NODE, &bgp_ls_distribute_bgp_fabric_cmd);
-	install_element(BGP_LS_NODE, &no_bgp_ls_distribute_bgp_fabric_cmd);
-	install_element(BGP_NODE, &neighbor_ls_local_link_id_cmd);
-	install_element(BGP_NODE, &no_neighbor_ls_local_link_id_cmd);
-	install_element(BGP_NODE, &neighbor_ls_remote_link_id_cmd);
-	install_element(BGP_NODE, &no_neighbor_ls_remote_link_id_cmd);
 
 	/*
 	 * Coexistence node-drop fix (converted per-AF commands keep their

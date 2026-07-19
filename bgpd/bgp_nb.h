@@ -10,6 +10,204 @@
 
 #ifdef __cplusplus
 extern "C" {
+/* M9: link-state AF - 'distribute bgp-fabric-link-state' + BGP-LS link
+ * identifiers (bgp_nb_ls.c). */
+int instance_afi_safis_link_state_distribute_create(struct nb_cb_create_args *args);
+int instance_afi_safis_link_state_distribute_destroy(struct nb_cb_destroy_args *args);
+void instance_afi_safis_link_state_distribute_apply_finish(struct nb_cb_apply_finish_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_local_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_local_link_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_destroy(struct nb_cb_destroy_args *args);
+
+/* M9: unreachability + link-state neighbor/peer-group AF wrappers. */
+int instance_neighbor_afi_safis_ipv4_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+
 #endif
 
 extern const struct frr_yang_module_info proteus_bgp_nb_info;
@@ -4639,6 +4837,204 @@ int dump_routes_mrt_interval_destroy(struct nb_cb_destroy_args *args);
 
 #ifdef __cplusplus
 }
+/* M9: link-state AF - 'distribute bgp-fabric-link-state' + BGP-LS link
+ * identifiers (bgp_nb_ls.c). */
+int instance_afi_safis_link_state_distribute_create(struct nb_cb_create_args *args);
+int instance_afi_safis_link_state_distribute_destroy(struct nb_cb_destroy_args *args);
+void instance_afi_safis_link_state_distribute_apply_finish(struct nb_cb_apply_finish_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_local_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_local_link_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_destroy(struct nb_cb_destroy_args *args);
+
+/* M9: unreachability + link-state neighbor/peer-group AF wrappers. */
+int instance_neighbor_afi_safis_ipv4_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+
 #endif
 
 /* M8.5 encapsulation wrappers. */
@@ -4817,5 +5213,203 @@ int instance_afi_safis_ipv4_flowspec_local_install_destroy(struct nb_cb_destroy_
 void instance_afi_safis_ipv6_flowspec_local_install_apply_finish(
 	struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_ipv6_flowspec_local_install_destroy(struct nb_cb_destroy_args *args);
+
+/* M9: link-state AF - 'distribute bgp-fabric-link-state' + BGP-LS link
+ * identifiers (bgp_nb_ls.c). */
+int instance_afi_safis_link_state_distribute_create(struct nb_cb_create_args *args);
+int instance_afi_safis_link_state_distribute_destroy(struct nb_cb_destroy_args *args);
+void instance_afi_safis_link_state_distribute_apply_finish(struct nb_cb_apply_finish_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_link_state_distribute_instance_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_local_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_local_link_id_destroy(struct nb_cb_destroy_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_modify(struct nb_cb_modify_args *args);
+int bgp_nb_neighbor_ls_remote_link_id_destroy(struct nb_cb_destroy_args *args);
+
+/* M9: unreachability + link-state neighbor/peer-group AF wrappers. */
+int instance_neighbor_afi_safis_ipv4_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv4_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_activate_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_threshold_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_warning_only_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_restart_interval_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_force_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_maximum_prefix_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_enabled_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_count_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_origin_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_allowas_in_route_map_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_ipv6_unreachability_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_neighbor_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_activate_modify(struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_in_destroy(
+	struct nb_cb_destroy_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
+	struct nb_cb_modify_args *args);
+int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
 
 #endif

@@ -482,6 +482,25 @@ module proteus-bgp {
          a foreign/transparent address.";
     }
 
+    leaf ls-local-link-id {
+      type uint32 {
+        range "1..4294967295";
+      }
+      description
+        "'neighbor X local-link-id (1-4294967295)': pin the BGP-LS
+         local link identifier for the link NLRI describing this
+         session (M9; the fallback is the kernel ifindex).";
+    }
+
+    leaf ls-remote-link-id {
+      type uint32 {
+        range "1..4294967295";
+      }
+      description
+        "'neighbor X remote-link-id (1-4294967295)': pin the BGP-LS
+         remote link identifier.";
+    }
+
     leaf advertisement-interval {
       type uint16 {
         range "0..600";
@@ -814,6 +833,156 @@ module proteus-bgp {
       }
       leaf route-map-out {
         type string;
+      }
+    }
+  }
+
+  grouping neighbor-af-unreachability {
+    description
+      "Per-neighbor settings of an unreachability address-family
+       (M9): exactly the arms the legacy unreachability nodes
+       installed - activate, route-map filters, the maximum-prefix
+       family, maximum-prefix-out and allowas-in. Deliberately NOT
+       'uses neighbor-af': the broad grouping would model per-AF
+       knobs the unreachability CLI never offered.";
+
+    leaf activate {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X activate' for this unreachability AF.";
+    }
+
+    container maximum-prefix {
+      description
+        "'neighbor X maximum-prefix (1-4294967295) [(1-100)]
+         [restart (1-65535)] [warning-only] [force]'.";
+      leaf count {
+        type uint32 {
+          range "1..4294967295";
+        }
+        description
+          "Prefix limit; the rest of this container is meaningless
+           without it.";
+      }
+      leaf threshold {
+        type uint8 {
+          range "1..100";
+        }
+        units "percent";
+        description
+          "Warn at this percentage of the limit (FRR default 75,
+           which it does not write back).";
+      }
+      leaf warning-only {
+        type boolean;
+        default "false";
+        description
+          "Log instead of tearing the session down.";
+      }
+      leaf restart-interval {
+        type uint16 {
+          range "1..65535";
+        }
+        units "minutes";
+        description
+          "Re-establish automatically after this interval.";
+      }
+      leaf force {
+        type boolean;
+        default "false";
+        description
+          "Count all received prefixes, not just accepted ones
+           (needs soft-reconfiguration inbound).";
+      }
+    }
+
+    leaf maximum-prefix-out {
+      type uint32 {
+        range "1..4294967295";
+      }
+      description
+        "'neighbor X maximum-prefix-out (1-4294967295)'.";
+    }
+
+    container allowas-in {
+      description
+        "'neighbor X allowas-in [<(1-10)|origin>]' and
+         'neighbor X allowas-in route-map NAME [<(1-10)|origin>]':
+         accept routes containing our own AS. Bare 'allowas-in'
+         (count unset, origin false) means FRR's default of 3.";
+      leaf enabled {
+        type boolean;
+        default "false";
+      }
+      leaf count {
+        type uint8 {
+          range "1..10";
+        }
+        description
+          "Maximum own-AS occurrences.";
+      }
+      leaf origin {
+        type boolean;
+        default "false";
+        must ". = 'false' or not(../count)" {
+          error-message
+            "allowas-in origin and count are mutually exclusive";
+        }
+        description
+          "Only accept if our AS is the origin. Mutually exclusive
+           with count -- one CLI slot (the 'must').";
+      }
+      leaf route-map {
+        type string;
+        description
+          "Restrict allowas-in to routes the route-map permits.";
+      }
+    }
+
+    container filters {
+      description
+        "Unreachability per-peer filters.";
+
+      leaf route-map-in {
+        type string;
+        description
+          "'neighbor X route-map NAME in'.";
+      }
+      leaf route-map-out {
+        type string;
+        description
+          "'neighbor X route-map NAME out'.";
+      }
+    }
+  }
+
+  grouping neighbor-af-link-state {
+    description
+      "Per-neighbor settings of the link-state address-family (M9):
+       exactly the arms the legacy BGP_LS_NODE installed - activate
+       and the route-map filters.";
+
+    leaf activate {
+      type boolean;
+      default "false";
+      description
+        "'neighbor X activate' for the link-state AF.";
+    }
+
+    container filters {
+      description
+        "Link-state per-peer filters.";
+
+      leaf route-map-in {
+        type string;
+        description
+          "'neighbor X route-map NAME in'.";
+      }
+      leaf route-map-out {
+        type string;
+        description
+          "'neighbor X route-map NAME out'.";
       }
     }
   }
@@ -3446,12 +3615,21 @@ module proteus-bgp {
         container ipv4-flowspec {
           uses neighbor-af-flowspec;
         }
+        container ipv4-unreachability {
+          uses neighbor-af-unreachability;
+        }
         container ipv6-flowspec {
           uses neighbor-af-flowspec;
+        }
+        container ipv6-unreachability {
+          uses neighbor-af-unreachability;
         }
         container l2vpn-evpn {
           uses neighbor-af;
           uses neighbor-af-filters-evpn;
+        }
+        container link-state {
+          uses neighbor-af-link-state;
         }
       }
     }
@@ -3565,8 +3743,14 @@ module proteus-bgp {
         container ipv4-flowspec {
           uses neighbor-af-flowspec;
         }
+        container ipv4-unreachability {
+          uses neighbor-af-unreachability;
+        }
         container ipv6-flowspec {
           uses neighbor-af-flowspec;
+        }
+        container ipv6-unreachability {
+          uses neighbor-af-unreachability;
         }
         container l2vpn-evpn {
           description
@@ -3575,6 +3759,9 @@ module proteus-bgp {
              simply doesn't emit the meaningless ones there).";
           uses neighbor-af;
           uses neighbor-af-filters-evpn;
+        }
+        container link-state {
+          uses neighbor-af-link-state;
         }
       }
     }
@@ -3761,6 +3948,14 @@ module proteus-bgp {
         uses af-retain-route-target;
       }
 
+      container ipv4-unreachability {
+        description
+          "'address-family ipv4 unreachability' (M9). No
+           instance-level knobs: maximum-paths is pinned to 1 for
+           the informational unreachability RIB and the legacy node
+           installed only per-neighbor commands.";
+      }
+
       container ipv6-flowspec {
         description
           "'address-family ipv6 flowspec' (M8.5 B-fs-af).";
@@ -3782,11 +3977,38 @@ module proteus-bgp {
         }
       }
 
+      container ipv6-unreachability {
+        description
+          "'address-family ipv6 unreachability' (M9). See
+           ipv4-unreachability.";
+      }
+
       container l2vpn-evpn {
         description
           "'address-family l2vpn evpn'. Field definitions live in
            proteus-bgp-evpn.yang.";
         uses evpn:instance-l2vpn-evpn;
+      }
+
+      container link-state {
+        description
+          "'address-family link-state link-state' (M9, RFC 9552).";
+
+        container distribute-bgp-fabric-link-state {
+          presence
+            "'distribute bgp-fabric-link-state [instance-id WORD]'
+             is configured: export the BGP fabric topology as BGP-LS
+             NLRIs.";
+          description
+            "Distribute BGP link-state topology information.";
+
+          leaf instance-id {
+            type uint64;
+            description
+              "BGP-LS instance identifier; absent means 0 (and 0 is
+               not written back).";
+          }
+        }
       }
     }
   }

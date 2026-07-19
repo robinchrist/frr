@@ -144,6 +144,10 @@ static const struct {
 	/* M8.5 B-fs-af: flowspec joins the modeled AFs (9 -> 11). */
 	{ BGP_FLOWSPECV4_NODE, "ipv4-flowspec", "ipv4 flowspec" },
 	{ BGP_FLOWSPECV6_NODE, "ipv6-flowspec", "ipv6 flowspec" },
+	/* M9: unreachability + link-state complete the set (11 -> 14). */
+	{ BGP_IPV4U_NODE, "ipv4-unreachability", "ipv4 unreachability" },
+	{ BGP_IPV6U_NODE, "ipv6-unreachability", "ipv6 unreachability" },
+	{ BGP_LS_NODE, "link-state", "link-state link-state" },
 };
 
 /* Reverse of bgp_node_type(): the proteus afi-safis child container name
@@ -704,9 +708,6 @@ void afi_safis_fs_redirect_import_cli_write(struct vty *vty, const struct lyd_no
 	vty_out(vty, "\n");
 }
 
-/* No proteus container for link-state; the node exists here only so mgmtd
- * tracks the block and accepts its exit-address-family (LS subcommands stay
- * native to bgpd). */
 DEFPY_YANG_NOSH(
 	address_family_link_state, address_family_link_state_cli_cmd,
 	"address-family link-state [link-state]",
@@ -715,6 +716,64 @@ DEFPY_YANG_NOSH(
 	"Link-State Subsequent Address Family\n")
 {
 	return bgp_af_node_enter(vty, BGP_LS_NODE);
+}
+
+/* 'distribute bgp-fabric-link-state [instance-id WORD]' (M9): presence
+ * container + optional uint64 instance-id. Full-replace on every positive
+ * form (an instance-id change is modeled as container re-create so the
+ * absent-leaf case truly deletes a previously set id); the WORD token is
+ * range-checked here exactly like the retired DEFPY (strtoull). */
+DEFPY_YANG(
+	bgp_ls_distribute_bgp_fabric, bgp_ls_distribute_bgp_fabric_cli_cmd,
+	"[no] distribute bgp-fabric-link-state [instance-id WORD$instance_id_str]",
+	NO_STR
+	"Distribute BGP link-state topology information\n"
+	"Enable BGP fabric link-state topology distribution\n"
+	"BGP-LS instance identifier\n"
+	"Instance ID value\n")
+{
+	const char *xpath = "./afi-safis/link-state/distribute-bgp-fabric-link-state";
+	char id_val[32];
+
+	if (no) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+		return nb_cli_apply_changes(vty, NULL);
+	}
+
+	if (instance_id_str) {
+		uint64_t instance_id;
+		char *endp = NULL;
+
+		errno = 0;
+		instance_id = strtoull(instance_id_str, &endp, 10);
+		if (errno == ERANGE || endp == instance_id_str || *endp != '\0') {
+			vty_out(vty, "%% Invalid instance-id\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		snprintfrr(id_val, sizeof(id_val), "%" PRIu64, instance_id);
+	}
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	if (instance_id_str)
+		nb_cli_enqueue_change(vty,
+				      "./afi-safis/link-state/distribute-bgp-fabric-link-state/instance-id",
+				      NB_OP_MODIFY, id_val);
+	else
+		nb_cli_enqueue_change(vty,
+				      "./afi-safis/link-state/distribute-bgp-fabric-link-state/instance-id",
+				      NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void instance_ls_distribute_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "instance-id"))
+		vty_out(vty, "  distribute bgp-fabric-link-state instance-id %s\n",
+			yang_dnode_get_string(dnode, "instance-id"));
+	else
+		vty_out(vty, "  distribute bgp-fabric-link-state\n");
 }
 
 DEFPY_YANG_NOSH(
@@ -8261,6 +8320,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV4U_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV6U_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_LS_NODE, &exit_address_family_cli_cmd);
+	install_element(BGP_LS_NODE, &bgp_ls_distribute_bgp_fabric_cli_cmd);
 
 	/* M6 B1: 'vni N' ... 'exit-vni' sub-node (mgmtd side). */
 	install_node(&bgp_evpn_vni_node);

@@ -91,6 +91,7 @@ bgpd_libbgp_a_SOURCES = \
 	bgpd/proteus/bgp_nb_instance.c \
 	bgpd/proteus/bgp_nb_instance_gr.c \
 	bgpd/proteus/bgp_nb_neighbor.c \
+	bgpd/proteus/bgp_nb_ls.c \
 	bgpd/proteus/bgp_nb_neighbor_afi_ipv4.c \
 	bgpd/proteus/bgp_nb_neighbor_afi_ipv6.c \
 	bgpd/proteus/bgp_nb_neighbor_afi_l2vpn.c \

@@ -876,6 +876,74 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* BGP-LS link identifiers (M9): plain optional uint32 session leaves. */
+static int bgp_cli_neighbor_ls_link_id(struct vty *vty, const char *peer, const char *leaf,
+				       bool negate, const char *value)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/%s", xpath, leaf);
+	nb_cli_enqueue_change(vty, xpath_child, negate ? NB_OP_DESTROY : NB_OP_MODIFY,
+			      negate ? NULL : value);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	neighbor_ls_local_link_id, neighbor_ls_local_link_id_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-link-id (1-4294967295)$link_id",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure local link ID for BGP-LS topology\n"
+	"Link identifier value\n")
+{
+	return bgp_cli_neighbor_ls_link_id(vty, peer, "ls-local-link-id", false, link_id_str);
+}
+
+DEFPY_YANG(
+	no_neighbor_ls_local_link_id, no_neighbor_ls_local_link_id_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer local-link-id [(1-4294967295)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure local link ID for BGP-LS topology\n"
+	"Link identifier value\n")
+{
+	return bgp_cli_neighbor_ls_link_id(vty, peer, "ls-local-link-id", true, NULL);
+}
+
+DEFPY_YANG(
+	neighbor_ls_remote_link_id, neighbor_ls_remote_link_id_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer remote-link-id (1-4294967295)$link_id",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure remote link ID for BGP-LS topology\n"
+	"Link identifier value\n")
+{
+	return bgp_cli_neighbor_ls_link_id(vty, peer, "ls-remote-link-id", false, link_id_str);
+}
+
+DEFPY_YANG(
+	no_neighbor_ls_remote_link_id, no_neighbor_ls_remote_link_id_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer remote-link-id [(1-4294967295)]",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Configure remote link ID for BGP-LS topology\n"
+	"Link identifier value\n")
+{
+	return bgp_cli_neighbor_ls_link_id(vty, peer, "ls-remote-link-id", true, NULL);
+}
+
 DEFPY_YANG(
 	neighbor_tcp_mss, neighbor_tcp_mss_cli_cmd,
 	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer tcp-mss (1-65535)$tcp_mss",
@@ -3686,6 +3754,16 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "ip-transparent") &&
 	    yang_dnode_get_bool(dnode, "ip-transparent"))
 		vty_out(vty, " neighbor %s ip-transparent\n", addr);
+
+	/* BGP-LS link identifiers (M9): same slot as legacy
+	 * bgp_config_write_peer_global() (after ip-transparent, before the
+	 * capabilities block). */
+	if (yang_dnode_exists(dnode, "ls-local-link-id"))
+		vty_out(vty, " neighbor %s local-link-id %s\n", addr,
+			yang_dnode_get_string(dnode, "ls-local-link-id"));
+	if (yang_dnode_exists(dnode, "ls-remote-link-id"))
+		vty_out(vty, " neighbor %s remote-link-id %s\n", addr,
+			yang_dnode_get_string(dnode, "ls-remote-link-id"));
 
 	/* capabilities container (M4 batch B8): reproduces
 	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired) capability-
@@ -6793,6 +6871,39 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_filter_list_cli_cmd);
 	install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_map_cli_cmd);
 	install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_map_cli_cmd);
+	/* M9: the no-forms were missing at the flowspec nodes (M8.5 gap). */
+	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_route_map_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_route_map_cli_cmd);
+
+	/* M9: unreachability AF arms. */
+	install_element(BGP_IPV4U_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &neighbor_route_map_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &neighbor_route_map_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &no_neighbor_route_map_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &no_neighbor_route_map_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_IPV4U_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_IPV6U_NODE, &neighbor_allowas_in_cli_cmd);
+
+	/* M9: link-state AF arms. */
+	install_element(BGP_LS_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_LS_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_LS_NODE, &neighbor_route_map_cli_cmd);
+	install_element(BGP_LS_NODE, &no_neighbor_route_map_cli_cmd);
+
+	/* M9: BGP-LS link identifiers (session-level). */
+	install_element(BGP_NODE, &neighbor_ls_local_link_id_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_ls_local_link_id_cli_cmd);
+	install_element(BGP_NODE, &neighbor_ls_remote_link_id_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_ls_remote_link_id_cli_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cli_cmd);
 	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &neighbor_encap_srv6_or_mpls_cli_cmd);

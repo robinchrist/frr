@@ -5982,6 +5982,255 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/link-state",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/link-state",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unreachability",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/link-state",
+			.cbs = {
+				.cli_show = afi_safi_cli_write,
+				.cli_show_end = afi_safi_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unreachability/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unreachability/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/link-state/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/link-state/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/link-state/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unreachability/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/maximum-prefix",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/maximum-prefix-out",
+			.cbs = {
+				.cli_show = neighbor_af_maximum_prefix_out_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/allowas-in",
+			.cbs = {
+				.cli_show = neighbor_af_allowas_in_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unreachability/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/link-state/activate",
+			.cbs = {
+				.cli_show = neighbor_af_activate_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/link-state/filters/route-map-in",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/link-state/filters/route-map-out",
+			.cbs = {
+				.cli_show = neighbor_af_filter_dir_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/link-state/distribute-bgp-fabric-link-state",
+			.cbs = {
+				.cli_show = instance_ls_distribute_cli_write,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}

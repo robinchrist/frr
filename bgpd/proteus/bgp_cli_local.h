@@ -18,6 +18,8 @@ extern "C" {
  * per-AF leaf commands (B1+) to build their xpath from vty->node. */
 void afi_safi_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
 void afi_safi_cli_write_end(struct vty *vty, const struct lyd_node *dnode);
+void instance_ls_distribute_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
 const char *bgp_afi_safi_container_name(int node);
 
 /* M6 B1: 'vni N' ... 'exit-vni' list-entry frame (instance l2vpn-evpn). */
