@@ -49,9 +49,10 @@ module proteus-bgp {
      bgp_config_write() emits (bgpd/bgp_vty.c), i.e. everything the
      'router bgp' CLI tree can persist, with these deliberate
      exclusions (each also marked where it would appear):
-     - SRv6 (segment-routing srv6, sid vpn export, per-AF 'sid
-       export', encapsulation-srv6 neighbor knobs) -- out of scope
-       until there's an SRv6 story.
+     - SRv6: CONVERTING in M8.5 (2026-07-19 ruling). The
+       segment-routing-srv6 block is modeled below (B-srv6-block);
+       sid vpn export, per-AF 'sid export' and the
+       encapsulation-srv6 neighbor knobs follow in the M8.5 train.
      - 'rt|rt6 redirect import' (flowspec redirect, the tail of
        bgp_vpn_policy_config_write_afi) -- excluded together with the
        flowspec address family. The rest of that function's MPLS
@@ -2446,6 +2447,57 @@ module proteus-bgp {
       description
         "'[no] bgp hard-administrative-reset' (RFC 8538 handling of
          CEASE/Administrative Reset; default on).";
+    }
+
+    container segment-routing-srv6 {
+      presence
+        "The 'segment-routing srv6' block is configured. Presence so
+         'no segment-routing srv6' is one whole-container DESTROY
+         running the composite legacy unset (locator teardown, encap
+         reset, srv6-only back to default). Entering the node alone
+         does not create it; the first child leaf does (matching
+         legacy, where a bare empty block was never emitted and so
+         never survived a restart).";
+      description
+        "'segment-routing srv6' ... 'exit' block (BGP_SRV6_NODE,
+         M8.5 B-srv6-block).";
+
+      leaf locator {
+        type string;
+        description
+          "'locator NAME': SRv6 locator to allocate SIDs from,
+           fetched asynchronously from zebra's SRv6 manager. Plain
+           string, not a leafref into zebra's locator list (house
+           rule: forward references allowed, cross-daemon state).
+           Changing it while set is rejected (legacy 'srv6 locator
+           is already configured'); delete first.";
+      }
+
+      leaf encap-behavior {
+        type enumeration {
+          enum H_Encaps;
+          enum H_Encaps_Red;
+        }
+        default "H_Encaps";
+        description
+          "'encap-behavior <H_Encaps|H_Encaps_Red>'. Enum names
+           mirror the CLI tokens verbatim for token-driven xpaths.
+           Legacy wart preserved: the setter operates on the default
+           instance regardless of which instance's block it appears
+           in (bgp_get_default() in the legacy handler).";
+      }
+
+      leaf srv6-only {
+        type boolean;
+        default "true";
+        description
+          "'[no] srv6-only': prefer SRv6 over MPLS for VPN routes.
+           Tier A default-on: the 'no srv6-only' line renders iff
+           false. Deliberate divergence from legacy's 'no
+           segment-routing srv6' handler, which forced this false
+           (leaving a stray 'no srv6-only' emission after the block
+           was removed): container destroy restores the default.";
+      }
     }
 
     container default {

@@ -1279,6 +1279,31 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
+			.cbs = {
+				.cli_show = instance_srv6_cli_write,
+				.cli_show_end = instance_srv6_cli_write_end,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/locator",
+			.cbs = {
+				.cli_show = instance_srv6_locator_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/encap-behavior",
+			.cbs = {
+				.cli_show = instance_srv6_encap_behavior_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/srv6-only",
+			.cbs = {
+				.cli_show = instance_srv6_only_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/default/shutdown",
 			.cbs = {
 				.cli_show = instance_default_shutdown_cli_write,

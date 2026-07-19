@@ -253,23 +253,19 @@ DEFPY_YANG_NOSH(
 	return bgp_af_node_enter(vty, BGP_EVPN_NODE);
 }
 
-/* Parallel no-op 'segment-routing srv6' sub-node. mgmtd reads split
- * bgpd.conf too (mgmt_daemons[] includes bgpd since M2); without this node
- * the config reader's parent walkup matches bgpd's ' segment-routing srv6'
- * block header against ZEBRA's top-level 'segment-routing' tree instead,
- * conjuring a prefixless zebra locator that fails YANG validation and
- * aborts mgmtd's whole bgpd.conf load (every converted leaf in the file is
- * then silently dropped -- this took out the entire srv6/vpn topotest
- * cluster). The sub-commands are accepted as no-ops with help strings
- * byte-identical to bgpd's native ones so the generated vtysh entries
- * merge into one dual-routed command instead of parsing as ambiguous.
- * Retired when the srv6 batch converts for real. */
+/* 'segment-routing srv6' sub-node (M8.5 B-srv6-block): the M8 no-op parse
+ * shims became the real mgmtd-side implementation. The node is entered
+ * without touching the datastore; the presence container is created
+ * implicitly by the first child change (libyang creates presence ancestors
+ * on descendant edits). 'no segment-routing srv6' destroys the whole
+ * container, whose backend DESTROY runs the composite legacy unset.
+ * bgpd's native DEFPYs stay installed via the bare _install_element for
+ * its own split-config file read, emission-retired. */
 static struct cmd_node bgp_srv6_cmd_node = {
 	.name = "bgp srv6",
 	.node = BGP_SRV6_NODE,
 	.parent_node = BGP_NODE,
 	.prompt = "%s(config-router-srv6)# ",
-	.no_xpath = true,
 };
 
 DEFPY_YANG_NOSH(
@@ -278,8 +274,27 @@ DEFPY_YANG_NOSH(
 	"Segment-Routing configuration\n"
 	"Segment-Routing SRv6 configuration\n")
 {
-	vty->node = BGP_SRV6_NODE;
-	return CMD_SUCCESS;
+	char xpath[XPATH_MAXLEN];
+	int rv;
+
+	if (vty->xpath_index == 0) {
+		vty_out(vty, "%% Not in a BGP instance context\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	/* Real CREATE on entry (the M6 vni NOSH pattern): the presence
+	 * container must exist in the candidate before relative child edits
+	 * pass nb_cli_apply_changes' xpath liveness check. An empty block
+	 * still emits nothing (vty_frame suppression), matching legacy's
+	 * bare-entry-not-persisted behavior. */
+	snprintf(xpath, sizeof(xpath), "%s/segment-routing-srv6", VTY_CURR_XPATH);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+
+	rv = nb_cli_apply_changes(vty, NULL);
+	if (rv == CMD_SUCCESS)
+		VTY_PUSH_XPATH(BGP_SRV6_NODE, xpath);
+
+	return rv;
 }
 
 DEFPY_YANG(
@@ -289,7 +304,8 @@ DEFPY_YANG(
 	"Segment-Routing configuration\n"
 	"Segment-Routing SRv6 configuration\n")
 {
-	return CMD_SUCCESS;
+	nb_cli_enqueue_change(vty, "./segment-routing-srv6", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
@@ -298,7 +314,8 @@ DEFPY_YANG(
 	"Specify SRv6 locator\n"
 	"Specify SRv6 locator\n")
 {
-	return CMD_SUCCESS;
+	nb_cli_enqueue_change(vty, "./locator", NB_OP_MODIFY, name);
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
@@ -308,7 +325,19 @@ DEFPY_YANG(
 	"Specify SRv6 locator\n"
 	"Specify SRv6 locator\n")
 {
-	return CMD_SUCCESS;
+	/* Legacy validates the name matches the configured locator; the
+	 * northbound destroy is tolerant of an absent leaf, so only the
+	 * mismatch case needs the guard here. */
+	if (yang_dnode_existsf(vty->candidate_config->dnode, "%s/locator", VTY_CURR_XPATH) &&
+	    !strmatch(yang_dnode_get_string(vty->candidate_config->dnode, "%s/locator",
+					    VTY_CURR_XPATH),
+		      name)) {
+		vty_out(vty, "%% No srv6 locator is configured\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	nb_cli_enqueue_change(vty, "./locator", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
@@ -317,7 +346,13 @@ DEFPY_YANG(
 	NO_STR
 	"Only allow SRv6 and disallow MPLS routes\n")
 {
-	return CMD_SUCCESS;
+	/* Tier A default-on: 'no' writes an explicit false, the positive
+	 * form destroys back to the true default. */
+	if (no)
+		nb_cli_enqueue_change(vty, "./srv6-only", NB_OP_MODIFY, "false");
+	else
+		nb_cli_enqueue_change(vty, "./srv6-only", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
@@ -328,7 +363,46 @@ DEFPY_YANG(
 	"H.Encaps\n"
 	"H.Encaps.Red\n")
 {
-	return CMD_SUCCESS;
+	/* Token strings equal the enum names. Tier A default
+	 * (H_Encaps): negative form destroys back to it. */
+	if (no)
+		nb_cli_enqueue_change(vty, "./encap-behavior", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./encap-behavior", NB_OP_MODIFY, encap_behavior);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Emitters: vty_frame/vty_endframe reproduce legacy's empty-block
+ * suppression (bgp_config_write's srv6 arm) byte-for-byte. */
+void instance_srv6_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	vty_frame(vty, " !\n segment-routing srv6\n");
+}
+
+void instance_srv6_cli_write_end(struct vty *vty, const struct lyd_node *dnode)
+{
+	vty_endframe(vty, " exit\n");
+}
+
+void instance_srv6_locator_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults)
+{
+	vty_out(vty, "  locator %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+void instance_srv6_encap_behavior_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	if (strmatch(yang_dnode_get_string(dnode, NULL), "H_Encaps"))
+		return;
+	vty_out(vty, "  encap-behavior %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+void instance_srv6_only_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  no srv6-only\n");
 }
 
 /* No proteus container for link-state; the node exists here only so mgmtd

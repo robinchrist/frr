@@ -32,14 +32,12 @@
 #include "bgpd/bgp_snmp_clippy.c"
 
 
-
 /* '[no] bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>': converted to
  * northbound (M8.5 B-snmp), see bgp_snmp_traps_cli_cmd in
  * bgpd/proteus/bgp_cli_process.c. The trap flags and their compiled-in
  * defaults are core bgpd state (set in bgp_master_init) so config and
  * defaults hold regardless of whether this module is loaded; this module
  * only consumes the flags in the trap emitters below. */
-
 
 
 int bgpTrapEstablished(struct peer *peer)

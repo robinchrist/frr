@@ -343,7 +343,7 @@ static const char *get_afi_safi_json_str(afi_t afi, safi_t safi)
 	return "Unknown";
 }
 
-static void bgp_srv6_sids_unset(struct bgp *bgp)
+void bgp_srv6_sids_unset(struct bgp *bgp)
 {
 	struct listnode *node, *nnode;
 	struct srv6_locator_chunk *chunk;
@@ -461,7 +461,7 @@ static void bgp_srv6_sids_unset(struct bgp *bgp)
 }
 
 /* unset srv6 locator */
-static int bgp_srv6_locator_unset(struct bgp *bgp)
+int bgp_srv6_locator_unset(struct bgp *bgp)
 {
 	/* clear function, sids */
 	bgp_srv6_sids_unset(bgp);
@@ -6153,7 +6153,7 @@ DEFUN_NOSH (bgp_segment_routing_srv6,
 	return CMD_SUCCESS;
 }
 
-static void bgp_segment_routing_srv6_hencaps_refresh(struct bgp *bgp)
+void bgp_segment_routing_srv6_hencaps_refresh(struct bgp *bgp)
 {
 	struct bgp *bgp_inst;
 	struct listnode *node;
@@ -6167,7 +6167,7 @@ static void bgp_segment_routing_srv6_hencaps_refresh(struct bgp *bgp)
 	}
 }
 
-static void bgp_srv6_only_change(struct bgp *bgp, bool enable)
+void bgp_srv6_only_change(struct bgp *bgp, bool enable)
 {
 	/* pre-change */
 	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP, bgp_get_default(), bgp);
@@ -16432,20 +16432,10 @@ int bgp_config_write(struct vty *vty)
 		 * '/proteus-bgp:instance/ipv6-auto-ra' cli_show in bgp_cli.c.
 		 */
 
-		if (bgp_srv6_locator_is_configured(bgp) || bgp->srv6_only == false ||
-		    bgp->srv6_encap_behavior != SRV6_HEADEND_BEHAVIOR_H_ENCAPS) {
-			vty_frame(vty, " !\n segment-routing srv6\n");
-			if (strlen(bgp->srv6_locator_name))
-				vty_out(vty, "  locator %s\n",
-					bgp->srv6_locator_name);
-			if (bgp->srv6_encap_behavior != SRV6_HEADEND_BEHAVIOR_H_ENCAPS)
-				vty_out(vty, "  encap-behavior %s\n",
-					srv6_headend_behavior2str(bgp->srv6_encap_behavior, true));
-			if (bgp->srv6_only == false)
-				vty_out(vty, "  no srv6-only\n");
-
-			vty_endframe(vty, " exit\n");
-		}
+		/* 'segment-routing srv6' block: emitted by mgmtd (M8.5
+		 * B-srv6-block, instance_srv6_cli_write and friends); native
+		 * parse DEFUNs stay via _install_element for bgpd's own
+		 * split-config file read. */
 
 		tovpn_sid_index = bgp->tovpn_sid_index;
 		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_AUTO)) {
@@ -17594,11 +17584,11 @@ void bgp_vty_init(void)
 	/* srv6 commands */
 	install_element(VIEW_NODE, &show_bgp_srv6_cmd);
 	install_element(BGP_NODE, &bgp_segment_routing_srv6_cmd);
-	install_element(BGP_NODE, &no_bgp_segment_routing_srv6_cmd);
-	install_element(BGP_SRV6_NODE, &bgp_srv6_locator_cmd);
-	install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cmd);
-	install_element(BGP_SRV6_NODE, &bgp_srv6_only_cmd);
-	install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cmd);
+	_install_element(BGP_NODE, &no_bgp_segment_routing_srv6_cmd);
+	_install_element(BGP_SRV6_NODE, &bgp_srv6_locator_cmd);
+	_install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cmd);
+	_install_element(BGP_SRV6_NODE, &bgp_srv6_only_cmd);
+	_install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cmd);
 	install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cmd);
 	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cmd);
 	install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);

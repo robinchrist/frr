@@ -416,6 +416,32 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_srv6_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/locator",
+			.cbs = {
+				.modify = instance_srv6_locator_modify,
+				.destroy = instance_srv6_locator_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/srv6-only",
+			.cbs = {
+				.modify = instance_srv6_only_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/segment-routing-srv6/encap-behavior",
+			.cbs = {
+				.modify = instance_srv6_encap_behavior_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/default/shutdown",
 			.cbs = {
 				.modify = instance_default_shutdown_modify,

@@ -1017,6 +1017,148 @@ int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'segment-routing srv6' block (M8.5 B-srv6-block). The presence
+ * container's DESTROY runs the composite legacy unset
+ * (no_bgp_segment_routing_srv6): locator teardown (SID withdraw/release,
+ * async-safe via bgp_srv6_locator_unset), encap reset + refresh, and -
+ * deliberate divergence from the legacy wart - srv6-only back to its
+ * true default instead of forced false (legacy left a stray 'no
+ * srv6-only' emission after removing the block). */
+int instance_srv6_create(struct nb_cb_create_args *args)
+{
+	/* Presence marker only; children carry the state. */
+	return NB_OK;
+}
+
+int instance_srv6_destroy(struct nb_cb_destroy_args *args)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (strlen(bgp->srv6_locator_name) > 0)
+		bgp_srv6_locator_unset(bgp);
+
+	if (bgp->srv6_encap_behavior != SRV6_HEADEND_BEHAVIOR_H_ENCAPS) {
+		bgp->srv6_encap_behavior = SRV6_HEADEND_BEHAVIOR_H_ENCAPS;
+		bgp_segment_routing_srv6_hencaps_refresh(bgp);
+	}
+
+	if (!bgp->srv6_only)
+		bgp_srv6_only_change(bgp, true);
+
+	return NB_OK;
+}
+
+int instance_srv6_locator_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+	const char *name;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		/* Legacy rejects changing a configured locator without
+		 * deleting it first; compare against the runtime name (the
+		 * lookup is absent during a fresh config load, where any
+		 * name is fine). */
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (bgp && strlen(bgp->srv6_locator_name) > 0 &&
+		    !strmatch(yang_dnode_get_string(args->dnode, NULL), bgp->srv6_locator_name)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "srv6 locator is already configured");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		name = yang_dnode_get_string(args->dnode, NULL);
+		if (strmatch(bgp->srv6_locator_name, name))
+			break;
+		bgp_srv6_sids_unset(bgp);
+		snprintf(bgp->srv6_locator_name, sizeof(bgp->srv6_locator_name), "%s", name);
+		/* Asynchronous: the locator (and subsequent SIDs) arrive via
+		 * the zebra SRv6 manager reply. */
+		bgp_zebra_srv6_manager_get_locator(name);
+		break;
+	}
+
+	return NB_OK;
+}
+
+int instance_srv6_locator_destroy(struct nb_cb_destroy_args *args)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	if (strlen(bgp->srv6_locator_name) > 0)
+		bgp_srv6_locator_unset(bgp);
+
+	return NB_OK;
+}
+
+int instance_srv6_only_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+	bool val;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	val = yang_dnode_get_bool(args->dnode, NULL);
+	if (val != bgp->srv6_only)
+		bgp_srv6_only_change(bgp, val);
+
+	return NB_OK;
+}
+
+int instance_srv6_encap_behavior_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+	enum srv6_headend_behavior behavior;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	/* Legacy wart preserved: always operates on the default instance,
+	 * whichever instance's block carried the line. */
+	bgp = bgp_get_default();
+	if (!bgp)
+		return NB_OK;
+
+	if (strmatch(yang_dnode_get_string(args->dnode, NULL), "H_Encaps_Red"))
+		behavior = SRV6_HEADEND_BEHAVIOR_H_ENCAPS_RED;
+	else
+		behavior = SRV6_HEADEND_BEHAVIOR_H_ENCAPS;
+
+	if (behavior == bgp->srv6_encap_behavior)
+		return NB_OK;
+
+	bgp->srv6_encap_behavior = behavior;
+	bgp_segment_routing_srv6_hencaps_refresh(bgp);
+
+	return NB_OK;
+}
+
 /* 'bgp default shutdown' (M8 batch B2). Deliberately NOT in the reseed
  * bridge: legacy emits this line AFTER the neighbor lines precisely so a
  * restart's file replay does not shut peers that already exist (FRR

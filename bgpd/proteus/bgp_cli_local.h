@@ -418,6 +418,14 @@ void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_n
 						    bool show_defaults);
 void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults);
+void instance_srv6_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults);
+void instance_srv6_cli_write_end(struct vty *vty, const struct lyd_node *dnode);
+void instance_srv6_locator_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults);
+void instance_srv6_encap_behavior_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
+void instance_srv6_only_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				  bool show_defaults);
 void process_snmp_traps_rfc4273_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults);
 void process_snmp_traps_rfc4382_cli_write(struct vty *vty, const struct lyd_node *dnode,

@@ -231,4 +231,11 @@ extern void bgp_ipv6_nexthop_prefer_global_set(struct bgp *bgp, afi_t afi, safi_
 					       bool enable);
 extern bool bgp_ipv6_nexthop_prefer_global_default(void);
 
+/* SRv6 block helpers, shared with the northbound callbacks
+ * (bgpd/proteus/bgp_nb_instance.c, M8.5 B-srv6-block). */
+extern void bgp_srv6_sids_unset(struct bgp *bgp);
+extern int bgp_srv6_locator_unset(struct bgp *bgp);
+extern void bgp_srv6_only_change(struct bgp *bgp, bool enable);
+extern void bgp_segment_routing_srv6_hencaps_refresh(struct bgp *bgp);
+
 #endif /* _QUAGGA_BGP_VTY_H */
