@@ -16437,15 +16437,8 @@ int bgp_config_write(struct vty *vty)
 		 * parse DEFUNs stay via _install_element for bgpd's own
 		 * split-config file read. */
 
-		tovpn_sid_index = bgp->tovpn_sid_index;
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_AUTO)) {
-			vty_out(vty, " sid vpn per-vrf export auto\n");
-		} else if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_EXPLICIT)) {
-			vty_out(vty, " sid vpn per-vrf export explicit %pI6\n",
-				bgp->tovpn_sid_explicit);
-		} else if (tovpn_sid_index != 0) {
-			vty_out(vty, " sid vpn per-vrf export %u\n", tovpn_sid_index);
-		}
+		/* 'sid vpn per-vrf export': emitted by mgmtd (M8.5
+		 * B-srv6-pervrf, instance_sid_vpn_export_cli_write). */
 
 		/* IPv4 unicast configuration.  */
 		bgp_config_write_family(vty, bgp, AFI_IP, SAFI_UNICAST);
@@ -17591,12 +17584,12 @@ void bgp_vty_init(void)
 	_install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cmd);
 	install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cmd);
 	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cmd);
-	install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);
+	_install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);
 	install_element(BGP_IPV4_NODE, &sid_export_cmd);
 	install_element(BGP_IPV6_NODE, &sid_export_cmd);
 	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cmd);
-	install_element(BGP_NODE, &no_bgp_sid_vpn_export_cmd);
+	_install_element(BGP_NODE, &no_bgp_sid_vpn_export_cmd);
 
 	/* BGP-LS commands */
 	install_element(BGP_LS_NODE, &bgp_ls_distribute_bgp_fabric_cmd);

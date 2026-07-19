@@ -416,6 +416,35 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/sid-vpn-export",
+			.cbs = {
+				.create = instance_sid_vpn_export_create,
+				.destroy = instance_sid_vpn_export_destroy,
+				.apply_finish = instance_sid_vpn_export_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/sid-vpn-export/index",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/sid-vpn-export/auto",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/sid-vpn-export/explicit",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.create = instance_srv6_create,

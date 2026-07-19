@@ -16,6 +16,8 @@
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
+#include "bgpd/bgp_mplsvpn.h"
+#include "bgpd/bgp_srv6.h"
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_nb.h"
 #include "bgpd/bgp_io.h"
@@ -1157,6 +1159,140 @@ int instance_srv6_encap_behavior_modify(struct nb_cb_modify_args *args)
 	bgp_segment_routing_srv6_hencaps_refresh(bgp);
 
 	return NB_OK;
+}
+
+/* 'sid vpn per-vrf export' (M8.5 B-srv6-pervrf). Convergence model:
+ * the presence container's apply_finish reads the FINAL choice state and
+ * reconciles the runtime once per commit (mode changes and value changes
+ * are one prechange/withdraw + one postchange/re-leak cycle); the case
+ * leaves have no callbacks of their own. Full 'no sid vpn per-vrf
+ * export' is the container DESTROY (a destroyed container's own
+ * apply_finish is skipped). Exclusions vs the per-AF and unicast sid
+ * forms plus legacy's mode-change rejection are checked at VALIDATE
+ * against the runtime; the sibling forms convert later in the M8.5
+ * train, at which point these can move into the model. */
+static void bgp_nb_sid_vpn_export_unset(struct bgp *bgp)
+{
+	if (!is_srv6_vpn_vrf_enabled(bgp))
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP, bgp_get_default(), bgp);
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP6, bgp_get_default(), bgp);
+
+	bgp->tovpn_sid_index = 0;
+	UNSET_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_AUTO);
+	UNSET_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_EXPLICIT);
+	XFREE(MTYPE_BGP_SRV6_SID, bgp->tovpn_sid_explicit);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP, bgp_get_default(), bgp);
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP6, bgp_get_default(), bgp);
+}
+
+/* Case-leaf callbacks: no-ops (the container apply_finish converges from
+ * the final tree), but nb_validate_callbacks requires them to exist for
+ * every config-bearing node. */
+int instance_sid_vpn_export_leaf_modify(struct nb_cb_modify_args *args)
+{
+	return NB_OK;
+}
+
+int instance_sid_vpn_export_leaf_destroy(struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+int instance_sid_vpn_export_create(struct nb_cb_create_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (is_srv6_vpn_afi_enabled(bgp, AFI_IP) || is_srv6_vpn_afi_enabled(bgp, AFI_IP6)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "per-vrf sid and per-af sid are mutually exclusive");
+			return NB_ERR_VALIDATION;
+		}
+		if (is_srv6_unicast_enabled(bgp, AFI_IP) || is_srv6_unicast_enabled(bgp, AFI_IP6)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "sid export is configured on unicast");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+	case NB_EV_APPLY:
+		break;
+	}
+
+	return NB_OK;
+}
+
+int instance_sid_vpn_export_destroy(struct nb_cb_destroy_args *args)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_nb_sid_vpn_export_unset(bgp);
+
+	return NB_OK;
+}
+
+void instance_sid_vpn_export_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(args->dnode);
+	bool want_auto, have_auto, have_explicit;
+	uint32_t want_idx = 0;
+	const char *want_explicit = NULL;
+	struct in6_addr sid;
+
+	if (!bgp)
+		return;
+
+	want_auto = yang_dnode_exists(args->dnode, "auto") &&
+		    yang_dnode_get_bool(args->dnode, "auto");
+	if (yang_dnode_exists(args->dnode, "index"))
+		want_idx = yang_dnode_get_uint32(args->dnode, "index");
+	if (yang_dnode_exists(args->dnode, "explicit"))
+		want_explicit = yang_dnode_get_string(args->dnode, "explicit");
+
+	have_auto = CHECK_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_AUTO);
+	have_explicit = CHECK_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_EXPLICIT);
+
+	/* no change */
+	if (want_auto == have_auto && want_idx == bgp->tovpn_sid_index &&
+	    !want_explicit == !have_explicit &&
+	    (!want_explicit ||
+	     (bgp->tovpn_sid_explicit && inet_pton(AF_INET6, want_explicit, &sid) == 1 &&
+	      IPV6_ADDR_SAME(&sid, bgp->tovpn_sid_explicit))))
+		return;
+
+	/* one withdraw/re-leak cycle: clear the old mode, set the new */
+	bgp_nb_sid_vpn_export_unset(bgp);
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP, bgp_get_default(), bgp);
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP6, bgp_get_default(), bgp);
+
+	if (want_auto) {
+		SET_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_AUTO);
+	} else if (want_idx != 0) {
+		bgp->tovpn_sid_index = want_idx;
+	} else if (want_explicit) {
+		bgp->tovpn_sid_explicit = XCALLOC(MTYPE_BGP_SRV6_SID, sizeof(struct in6_addr));
+		inet_pton(AF_INET6, want_explicit, bgp->tovpn_sid_explicit);
+		SET_FLAG(bgp->vrf_flags, BGP_VRF_TOVPN_SID_EXPLICIT);
+	}
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP, bgp_get_default(), bgp);
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, AFI_IP6, bgp_get_default(), bgp);
 }
 
 /* 'bgp default shutdown' (M8 batch B2). Deliberately NOT in the reseed

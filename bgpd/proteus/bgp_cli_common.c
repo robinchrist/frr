@@ -1279,6 +1279,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/sid-vpn-export",
+			.cbs = {
+				.cli_show = instance_sid_vpn_export_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.cli_show = instance_srv6_cli_write,

@@ -2500,6 +2500,51 @@ module proteus-bgp {
       }
     }
 
+    container sid-vpn-export {
+      presence
+        "'sid vpn per-vrf export ...' is configured (one SRv6 SID for
+         both address families' VPN leaking). Presence + choice,
+         the label-export house shape; 'no sid vpn per-vrf export'
+         destroys the container.";
+      description
+        "'[no] sid vpn per-vrf export
+         <(1-4294967295)|auto|explicit X:X::X:X>' (M8.5
+         B-srv6-pervrf). Mutually exclusive with the per-AF
+         'sid vpn export' and unicast 'sid export' forms; mode
+         changes (index/auto/explicit) require negating first,
+         both enforced at VALIDATE against the runtime (the sibling
+         forms convert later in the M8.5 train). SID allocation is
+         asynchronous via zebra's SRv6 manager; runtime convergence
+         happens once per commit in the container apply_finish.";
+
+      choice sid {
+        case index {
+          leaf index {
+            type uint32 {
+              range "1..4294967295";
+            }
+            description
+              "SID allocation index-mode.";
+          }
+        }
+        case auto {
+          leaf auto {
+            type boolean;
+            default "false";
+            description
+              "SID allocation auto-mode.";
+          }
+        }
+        case explicit {
+          leaf explicit {
+            type inet:ipv6-address-no-zone;
+            description
+              "Explicitly assigned SID value.";
+          }
+        }
+      }
+    }
+
     container default {
       description
         "The 'bgp default ...' family of per-instance defaults

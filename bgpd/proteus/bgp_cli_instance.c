@@ -398,11 +398,71 @@ void instance_srv6_encap_behavior_cli_write(struct vty *vty, const struct lyd_no
 	vty_out(vty, "  encap-behavior %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
-void instance_srv6_only_cli_write(struct vty *vty, const struct lyd_node *dnode,
-				  bool show_defaults)
+void instance_srv6_only_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "  no srv6-only\n");
+}
+
+/* 'sid vpn per-vrf export' (M8.5 B-srv6-pervrf): presence container +
+ * choice, converged once per commit in the container apply_finish
+ * (bgp_nb_instance.c). Mutual exclusions and mode-change rejection live
+ * in the container VALIDATE. */
+DEFPY_YANG(
+	bgp_sid_vpn_export, bgp_sid_vpn_export_cli_cmd,
+	"[no] sid vpn per-vrf export <(1-4294967295)$sid_idx|auto$sid_auto|explicit$sid_explicit X:X::X:X$sid_value>",
+	NO_STR
+	"sid value for VRF\n"
+	"Between current vrf and vpn\n"
+	"sid per-VRF (both IPv4 and IPv6 address families)\n"
+	"For routes leaked from current vrf to vpn\n"
+	"Sid allocation index\n"
+	"Automatically assign a label\n"
+	"Explicitly assign a sid value\n"
+	"Sid value\n")
+{
+	char xpath[XPATH_MAXLEN];
+
+	if (no) {
+		nb_cli_enqueue_change(vty, "./sid-vpn-export", NB_OP_DESTROY, NULL);
+		return nb_cli_apply_changes(vty, NULL);
+	}
+
+	if (sid_auto) {
+		snprintf(xpath, sizeof(xpath), "./sid-vpn-export/auto");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	} else if (sid_explicit) {
+		snprintf(xpath, sizeof(xpath), "./sid-vpn-export/explicit");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_value_str);
+	} else {
+		snprintf(xpath, sizeof(xpath), "./sid-vpn-export/index");
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_idx_str);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+ALIAS (bgp_sid_vpn_export,
+       no_bgp_sid_vpn_export_cli_cmd,
+       "no$no sid vpn per-vrf export",
+       NO_STR
+       "sid value for VRF\n"
+       "Between current vrf and vpn\n"
+       "sid per-VRF (both IPv4 and IPv6 address families)\n"
+       "For routes leaked from current vrf to vpn\n")
+
+/* One ' sid vpn per-vrf export <auto|N|explicit X>' line, matching
+ * bgp_config_write()'s retired arm byte-for-byte (position: right after
+ * the segment-routing srv6 block). */
+void instance_sid_vpn_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				       bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "auto") && yang_dnode_get_bool(dnode, "auto"))
+		vty_out(vty, " sid vpn per-vrf export auto\n");
+	else if (yang_dnode_exists(dnode, "explicit"))
+		vty_out(vty, " sid vpn per-vrf export explicit %s\n",
+			yang_dnode_get_string(dnode, "explicit"));
+	else if (yang_dnode_exists(dnode, "index"))
+		vty_out(vty, " sid vpn per-vrf export %s\n", yang_dnode_get_string(dnode, "index"));
 }
 
 /* No proteus container for link-state; the node exists here only so mgmtd
@@ -7937,6 +7997,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cli_cmd);
 	install_element(BGP_SRV6_NODE, &bgp_srv6_only_cli_cmd);
 	install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cli_cmd);
+	install_element(BGP_NODE, &bgp_sid_vpn_export_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_sid_vpn_export_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);
