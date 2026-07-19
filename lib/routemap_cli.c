@@ -1213,6 +1213,36 @@ DEFUN_YANG (no_set_srte_color,
 }
 
 
+/* Render a structured community set (frr-bgp-route-map's communities
+ * container) as the legacy space-separated token line: members as
+ * 'AA:NN', then well-known names, then raw tokens verbatim, then
+ * 'additive'. */
+static void route_map_communities_show(struct vty *vty,
+				       const struct lyd_node *container)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "member"))
+			vty_out(vty, " %u:%u",
+				yang_dnode_get_uint16(child, "global-admin"),
+				yang_dnode_get_uint16(child, "local-admin"));
+	}
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "well-known"))
+			vty_out(vty, " %s",
+				yang_dnode_get_string(child, NULL));
+	}
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "raw"))
+			vty_out(vty, " %s",
+				yang_dnode_get_string(child, NULL));
+	}
+	if (yang_dnode_get_bool(container, "additive"))
+		vty_out(vty, " additive");
+	vty_out(vty, "\n");
+}
+
 void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 			   bool show_defaults)
 {
@@ -1408,14 +1438,12 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 				vty_out(vty, " set large-community none\n");
 		}
 	} else if (IS_SET_COMMUNITY(action)) {
-		if (yang_dnode_exists(
-			    dnode,
-			    "./rmap-set-action/frr-bgp-route-map:community-string"))
-			vty_out(vty, " set community %s\n",
-				yang_dnode_get_string(
-					dnode,
-					"./rmap-set-action/frr-bgp-route-map:community-string"));
-		else {
+		ln = yang_dnode_get(
+			dnode, "rmap-set-action/frr-bgp-route-map:communities");
+		if (ln) {
+			vty_out(vty, " set community");
+			route_map_communities_show(vty, ln);
+		} else {
 			if (true
 			    == yang_dnode_get_bool(
 				    dnode,

@@ -406,10 +406,38 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 			}
 		},
 		{
-			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:community-string",
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:communities",
 			.cbs = {
-				.modify = lib_route_map_entry_set_action_rmap_set_action_community_string_modify,
-				.destroy = lib_route_map_entry_set_action_rmap_set_action_community_string_destroy,
+				.create = lib_route_map_entry_set_action_rmap_set_action_communities_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_communities_destroy,
+				.apply_finish = lib_route_map_entry_set_action_rmap_set_action_communities_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:communities/member",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_communities_member_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_communities_member_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:communities/well-known",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_communities_well_known_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_communities_well_known_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:communities/raw",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_communities_raw_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_communities_raw_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:communities/additive",
+			.cbs = {
+				.modify = lib_route_map_entry_set_action_rmap_set_action_communities_additive_modify,
 			}
 		},
 		{

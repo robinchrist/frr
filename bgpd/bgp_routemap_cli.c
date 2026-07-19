@@ -65,6 +65,7 @@
 #include "bgpd/bgp_clist.h"
 #include "bgpd/bgp_filter.h"
 #include "bgpd/bgp_mplsvpn.h"
+#include "bgpd/proteus/bgp_filter_value.h"
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_lcommunity.h"
 #include "bgpd/bgp_vty.h"
@@ -3038,6 +3039,31 @@ DEFUN_YANG (set_aspath_exclude,
 	return ret;
 }
 
+/* Parse an 'AA:NN' token: both halves all-digit decimal <= 65535
+ * (community_gettoken()'s numeric acceptance). */
+static bool set_community_token_member(const char *token, unsigned long *ga,
+				       unsigned long *la)
+{
+	const char *lstart;
+	char *endptr;
+
+	if (!isdigit((unsigned char)token[0]))
+		return false;
+	errno = 0;
+	*ga = strtoul(token, &endptr, 10);
+	if (errno || *endptr != ':' || *ga > UINT16_MAX)
+		return false;
+	lstart = endptr + 1;
+	if (!isdigit((unsigned char)*lstart))
+		return false;
+	errno = 0;
+	*la = strtoul(lstart, &endptr, 10);
+	if (errno || *endptr != '\0' || *la > UINT16_MAX)
+		return false;
+
+	return true;
+}
+
 DEFUN_YANG (set_community,
 	    set_community_cmd,
 	    "set community AA:NN...",
@@ -3047,69 +3073,76 @@ DEFUN_YANG (set_community,
 {
 	int idx_aa_nn = 2;
 	int i;
-	int first = 0;
-	int additive = 0;
-	struct buffer *b;
-	char *str;
+	int nqueued;
 	int ret;
 
 	const char *xpath = "./set-action[action='frr-bgp-route-map:set-community']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_comm[XPATH_MAXLEN];
+	char xpath_value[XPATH_MAXLEN * 2];
+
+	snprintf(xpath_comm, sizeof(xpath_comm),
+		 "%s/rmap-set-action/frr-bgp-route-map:communities", xpath);
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-set-action/frr-bgp-route-map:community-string", xpath);
+	/* Replace, not merge, whatever an earlier 'set community' left. */
+	nb_cli_enqueue_change(vty, xpath_comm, NB_OP_DESTROY, NULL);
+	nqueued = 2;
 
-	b = buffer_new(1024);
-
+	/* One config line's tokens can exceed one transaction's change
+	 * budget (VTY_MAXCFGCHANGES); apply in batches. Only the first
+	 * batch carries the replace-destroy above, later ones merge
+	 * more tokens into the already-created container. */
 	for (i = idx_aa_nn; i < argc; i++) {
-		if (strncmp(argv[i]->arg, "additive", strlen(argv[i]->arg)) == 0) {
-			additive = 1;
+		const char *tok = argv[i]->arg;
+		unsigned long ga, la;
+
+		if (nqueued == VTY_MAXCFGCHANGES) {
+			ret = nb_cli_apply_changes(vty, NULL);
+			if (ret != CMD_SUCCESS)
+				return ret;
+			nqueued = 0;
+		}
+		nqueued++;
+
+		if (strncmp(tok, "additive", strlen(tok)) == 0) {
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/additive", xpath_comm);
+			nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY,
+					      "true");
 			continue;
 		}
 
-		if (first)
-			buffer_putc(b, ' ');
+		/* The legacy command expanded these user-typed
+		 * abbreviations itself; keep accepting them. */
+		if (strncmp(tok, "local-AS", strlen(tok)) == 0)
+			tok = "local-AS";
+		else if (strncmp(tok, "no-a", strlen("no-a")) == 0 &&
+			 strncmp(tok, "no-advertise", strlen(tok)) == 0)
+			tok = "no-advertise";
+		else if (strncmp(tok, "no-e", strlen("no-e")) == 0 &&
+			 strncmp(tok, "no-export", strlen(tok)) == 0)
+			tok = "no-export";
+		else if (strncmp(tok, "blackhole", strlen(tok)) == 0)
+			tok = "blackhole";
+		else if (strncmp(tok, "graceful-shutdown", strlen(tok)) == 0)
+			tok = "graceful-shutdown";
+
+		if (bgp_filter_well_known_community(tok, NULL))
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/well-known[.='%s']", xpath_comm, tok);
+		else if (set_community_token_member(tok, &ga, &la))
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/member[global-admin='%lu'][local-admin='%lu']",
+				 xpath_comm, ga, la);
 		else
-			first = 1;
-
-		if (strncmp(argv[i]->arg, "local-AS", strlen(argv[i]->arg)) == 0) {
-			buffer_putstr(b, "local-AS");
-			continue;
-		}
-		if (strncmp(argv[i]->arg, "no-a", strlen("no-a")) == 0 &&
-		    strncmp(argv[i]->arg, "no-advertise", strlen(argv[i]->arg)) == 0) {
-			buffer_putstr(b, "no-advertise");
-			continue;
-		}
-		if (strncmp(argv[i]->arg, "no-e", strlen("no-e")) == 0 &&
-		    strncmp(argv[i]->arg, "no-export", strlen(argv[i]->arg)) == 0) {
-			buffer_putstr(b, "no-export");
-			continue;
-		}
-		if (strncmp(argv[i]->arg, "blackhole", strlen(argv[i]->arg)) == 0) {
-			buffer_putstr(b, "blackhole");
-			continue;
-		}
-		if (strncmp(argv[i]->arg, "graceful-shutdown", strlen(argv[i]->arg)) == 0) {
-			buffer_putstr(b, "graceful-shutdown");
-			continue;
-		}
-		buffer_putstr(b, argv[i]->arg);
+			/* Kept verbatim; the apply-time compile rejects
+			 * it, as it did for the old free-form string. */
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/raw[.='%s']", xpath_comm, tok);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
 	}
-	if (additive)
-		buffer_putstr(b, " additive");
-	buffer_putc(b, '\0');
 
-	str = buffer_getstr(b);
-	buffer_free(b);
-
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-
-	XFREE(MTYPE_TMP, str);
-
-	return ret;
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 #ifdef KEEP_OLD_VPN_COMMANDS

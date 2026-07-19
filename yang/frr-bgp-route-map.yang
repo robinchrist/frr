@@ -23,6 +23,10 @@ module frr-bgp-route-map {
     prefix bgpfilter;
   }
 
+  import proteus-types {
+    prefix pt;
+  }
+
   import frr-route-types {
     prefix frr-route-types;
   }
@@ -1422,13 +1426,26 @@ identity set-extcommunity-color {
           }
         }
 
-        case community-string {
+        case communities {
           description
-            "Community string";
-          leaf community-string {
-            type string;
+            "Explicit set of communities";
+          container communities {
             description
-              "Specifies the value of the community attribute as a string";
+              "Communities the action installs on the route, written
+               as the space-separated tokens of
+               'set community AA:NN...': structured members, well-known
+               names, then raw fallback tokens. By default the set
+               replaces the attribute; with additive it is appended to
+               the communities already present.";
+            uses pt:community-set;
+
+            leaf additive {
+              type boolean;
+              default "false";
+              description
+                "Append the communities to the existing attribute
+                 instead of replacing it ('additive').";
+            }
           }
         }
       }
