@@ -425,7 +425,10 @@ FRR_DAEMON_INFO(bgpd, BGP,
 	.vty_port = BGP_VTY_PORT,
 	.proghelp = "Implementation of the BGP routing protocol.",
 
-	.flags = FRR_MGMTD_BACKEND,
+	/* FRR_NO_SPLIT_CONFIG (M9): bgpd no longer reads bgpd.conf itself -
+	 * mgmtd owns the config file and delivers everything through the
+	 * backend init/commit path (the staticd model, static_main.c). */
+	.flags = FRR_NO_SPLIT_CONFIG | FRR_MGMTD_BACKEND,
 
 	.signals = bgp_signals,
 	.n_signals = array_size(bgp_signals),
@@ -616,6 +619,12 @@ int main(int argc, char **argv)
 	bgp_if_init();
 
 	bgpd_mgmt_be_client = mgmt_be_client_create("bgpd", &bgpd_be_client_data, 0, bm->master);
+
+	/* Unlike staticd (static_main.c), deliberately NO host_config_set()
+	 * here: bgpd's own config_write renders none of the modeled config
+	 * (the cli_show emitters live in mgmtd), so letting bgpd answer
+	 * vtysh's per-daemon 'write memory' would clobber the bgpd.conf that
+	 * mgmtd - which holds the full modeled view - writes. */
 
 	frr_config_fork();
 	/* must be called after fork() */
