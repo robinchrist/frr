@@ -19,8 +19,8 @@ module frr-bgp-route-map {
     prefix filter;
   }
 
-  import frr-bgp-filter {
-    prefix bgp-filter;
+  import proteus-bgp-filter {
+    prefix bgpfilter;
   }
 
   import frr-route-types {
@@ -962,7 +962,24 @@ identity set-extcommunity-color {
           "Specifies the community list for BGP routes";
 
         leaf comm-list-name {
-          type bgp-filter:bgp-list-name;
+          // Inline + strict on purpose: BGP wants require-instance true (default).
+          // Not reusing a *-ref typedef - those are require-instance false and
+          // shared with other daemons.
+          // Union: this one leaf serves 'match community', 'match
+          // large-community' and 'match extcommunity' (see the case's when
+          // expression), so the referenced name may live in any of the three
+          // list types.
+          type union {
+            type leafref {
+              path "/bgpfilter:community-list/bgpfilter:name";
+            }
+            type leafref {
+              path "/bgpfilter:large-community-list/bgpfilter:name";
+            }
+            type leafref {
+              path "/bgpfilter:extcommunity-list/bgpfilter:name";
+            }
+          }
           mandatory true;
           description
             "Specifies the name of the community list";
@@ -1392,7 +1409,20 @@ identity set-extcommunity-color {
       when "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:large-comm-list-delete') or "
         + "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:extended-comm-list-delete')";
       leaf comm-list-name {
-        type bgp-filter:bgp-list-name;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing a *-ref typedef - those are require-instance false and
+        // shared with other daemons.
+        // Union: this one leaf serves both 'set large-comm-list ... delete'
+        // and 'set extcomm-list ... delete' (see the case's when expression),
+        // so the referenced name may live in either list type.
+        type union {
+          type leafref {
+            path "/bgpfilter:large-community-list/bgpfilter:name";
+          }
+          type leafref {
+            path "/bgpfilter:extcommunity-list/bgpfilter:name";
+          }
+        }
       }
     }
 
@@ -1401,7 +1431,12 @@ identity set-extcommunity-color {
       description
 	"Set the community list name";
       leaf comm-list-name-delete {
-        type bgp-filter:bgp-list-name;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing a *-ref typedef - those are require-instance false and
+        // shared with other daemons.
+        type leafref {
+          path "/bgpfilter:community-list/bgpfilter:name";
+        }
 	description
 	  "Set the community list name value";
       }
@@ -1412,7 +1447,12 @@ identity set-extcommunity-color {
       description
         "Set the community list name";
       leaf comm-list-name-add {
-        type bgp-filter:bgp-list-name;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing a *-ref typedef - those are require-instance false and
+        // shared with other daemons.
+        type leafref {
+          path "/bgpfilter:community-list/bgpfilter:name";
+        }
 	description
 	  "Set the community list name value";
       }
@@ -1423,7 +1463,12 @@ identity set-extcommunity-color {
       description
         "Set the community list name";
       leaf comm-list-name-replace {
-        type bgp-filter:bgp-list-name;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing a *-ref typedef - those are require-instance false and
+        // shared with other daemons.
+        type leafref {
+          path "/bgpfilter:community-list/bgpfilter:name";
+        }
         description
           "Set the community list name value";
       }
