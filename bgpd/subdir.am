@@ -267,16 +267,6 @@ clippy_scan += \
 	# end
 
 nodist_bgpd_bgpd_SOURCES = \
-	yang/frr-bgp-types.yang.c \
-	yang/frr-bgp.yang.c \
-	yang/frr-bgp-common-structure.yang.c \
-	yang/frr-bgp-common.yang.c \
-	yang/frr-bgp-common-multiprotocol.yang.c \
-	yang/frr-bgp-neighbor.yang.c \
-	yang/frr-bgp-peer-group.yang.c \
-	yang/frr-bgp-bmp.yang.c \
-	yang/frr-bgp-rpki.yang.c \
-	yang/frr-deviations-bgp-datacenter.yang.c \
 	yang/frr-bgp-route-map.yang.c \
 	yang/proteus/proteus-types.yang.c \
 	yang/proteus/proteus-bgp-filter.yang.c \

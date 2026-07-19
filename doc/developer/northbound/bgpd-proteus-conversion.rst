@@ -13,15 +13,15 @@ Overview
 
 bgpd is being converted to the northbound/mgmtd architecture using a
 separate, self-contained YANG model suite (``yang/proteus/``,
-``proteus-*.yang``) instead of FRR's dormant ``frr-bgp*.yang`` stack.
+``proteus-*.yang``) instead of FRR's superseded ``frr-bgp*.yang`` stack.
 The proteus models are augment-free, strongly typed, and CLI-mirrored
 (every leaf description cites the emitting legacy ``*_config_write*``
 function), which makes them a better fit for an incremental,
 command-by-command conversion than the existing frr-bgp stack. The
-proteus models will eventually replace all of bgpd's configuration
-surface, including route-maps and filters; until then the dormant
-frr-bgp stack and the already-converted ``frr-bgp-route-map.yang``
-remain untouched and unrelated to this effort.
+proteus models now cover all of bgpd's configuration surface except
+route-maps; the frr-bgp stack has been archived to ``yang/archive/``
+(kept for reference, not built), while the already-converted
+``frr-bgp-route-map.yang`` stays live and was improved in place.
 
 Milestone 1 is a thin vertical slice proving the whole pipeline end to
 end: bgpd becomes an ``mgmt_be_client`` backend, ``bgpd/bgp_cli.c`` is
