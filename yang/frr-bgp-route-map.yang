@@ -1281,9 +1281,19 @@ identity set-extcommunity-color {
       description
         "Set the aigp metric";
       leaf aigp-metric {
-        type string;
+        type union {
+          type enumeration {
+            enum "igp-metric" {
+              description
+                "Use the metric computed by the IGP protocol";
+            }
+          }
+          type uint32;
+        }
         description
-          "Set the aigp metric value";
+          "AIGP metric to apply: either the metric computed by the IGP
+           protocol ('igp-metric') or a manual metric value
+           (0-4294967295).";
       }
     }
 
