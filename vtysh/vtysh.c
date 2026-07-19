@@ -3777,6 +3777,23 @@ DEFUN (vtysh_show_running_config,
 	return vtysh_write_terminal(self, vty, argc, argv);
 }
 
+/*
+ * mgmtd's northbound view of the running configuration. The plain form shows
+ * the configuration as configured (explicitly set leaves only); with-defaults
+ * shows the effective configuration with all schema defaults materialized.
+ * Forwarded to mgmtd, which owns the datastore.
+ */
+DEFUN (vtysh_show_config_running,
+       vtysh_show_config_running_cmd,
+       "show configuration running [with-defaults]",
+       SHOW_STR
+       "Configuration information\n"
+       "Running configuration\n"
+       "Show default values\n")
+{
+	return show_one_daemon(vty, argv, argc, "mgmtd");
+}
+
 static void show_route_map_send(const char *route_map, bool unused, bool json)
 {
 	unsigned int i;
@@ -5899,6 +5916,7 @@ void vtysh_init_vty(void)
 			&vtysh_end_all_cmd);
 
 	install_element(ENABLE_NODE, &vtysh_show_running_config_cmd);
+	install_element(ENABLE_NODE, &vtysh_show_config_running_cmd);
 	install_element(ENABLE_NODE, &vtysh_copy_running_config_cmd);
 	install_element(ENABLE_NODE, &vtysh_copy_to_running_cmd);
 
