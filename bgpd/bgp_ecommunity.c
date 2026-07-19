@@ -733,7 +733,11 @@ static const char *ecommunity_gettoken(const char *str, void *eval_ptr,
 			goto error;
 
 		*token = ecommunity_token_val6;
-		while (isdigit((unsigned char)*p) || *p == ':' || *p == '.') {
+		/* isxdigit, not isdigit: an IPv6 address containing hex
+		 * letters (e.g. 2001:db8::1) would otherwise be consumed
+		 * only up to the first letter, and the caller would retry
+		 * from there without ever advancing - an infinite loop. */
+		while (isxdigit((unsigned char)*p) || *p == ':' || *p == '.') {
 			p++;
 		}
 		return p;
