@@ -15,9 +15,6 @@ module proteus-bgp {
   import proteus-bfd {
     prefix bfd;
   }
-  import proteus-interface {
-    prefix intf;
-  }
   import proteus-bgp-evpn {
     prefix evpn;
   }
@@ -115,6 +112,13 @@ module proteus-bgp {
      the corresponding DEFPY grammars. Do not add leaves whose CLI
      rendering has not been verified there.";
 
+  revision 2026-07-19 {
+    description
+      "Move the bgpd-owned interface-level 'mpls bgp ...' flags here,
+       as an augment of frr-interface's interface list (they were
+       modeled in the standalone proteus-interface module, now left
+       unreferenced), and drop the proteus-interface import.";
+  }
   revision 2026-07-05 {
     description
       "Initial revision (step 1 scope), then expanded the same day to
@@ -4336,6 +4340,45 @@ module proteus-bgp {
                not written back).";
           }
         }
+      }
+    }
+  }
+
+  /*
+   * bgpd's interface-level settings. The 'interface NAME' block itself
+   * is frr-interface's surface (lib/if.c owns the list and its CLI);
+   * bgpd only contributes these two flags, so they hang off
+   * frr-interface's interface list as an augment, the same way zebra's
+   * interface knobs do (frr-zebra.yang), instead of living in a
+   * standalone interface module.
+   */
+  augment "/frr-interface:lib/frr-interface:interface" {
+    description
+      "Extends the interface model with bgpd's interface-level
+       parameters: the two 'mpls bgp ...' flags (DEFPYs installed at
+       INTERFACE_NODE, written back inside the 'interface NAME'
+       block).";
+    container bgp {
+      description
+        "BGP interface parameters.";
+
+      leaf mpls-bgp-forwarding {
+        type boolean;
+        default "false";
+        description
+          "'mpls bgp forwarding': enable MPLS forwarding for directly
+           connected eBGP peers on this interface. Only the positive
+           form is ever written back.";
+      }
+
+      leaf mpls-bgp-l3vpn-multi-domain-switching {
+        type boolean;
+        default "false";
+        description
+          "'mpls bgp l3vpn-multi-domain-switching': bind a local MPLS
+           label to incoming L3VPN updates (inter-AS option B /
+           multi-domain). Only the positive form is ever written
+           back.";
       }
     }
   }
