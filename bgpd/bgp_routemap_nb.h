@@ -127,9 +127,19 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_raw_create(
 	struct nb_cb_create_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_raw_destroy(
 	struct nb_cb_destroy_args *args);
-int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_modify(
-	struct nb_cb_modify_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_create(
+	struct nb_cb_create_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_destroy(
+	struct nb_cb_destroy_args *args);
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_finish(
+	struct nb_cb_apply_finish_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_node_id_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_node_id_destroy(
+	struct nb_cb_destroy_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_raw_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_raw_destroy(
 	struct nb_cb_destroy_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_create(
 	struct nb_cb_create_args *args);

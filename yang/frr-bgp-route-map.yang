@@ -1083,10 +1083,24 @@ identity set-extcommunity-color {
       when "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:set-extcommunity-nt')";
       description
         "Value of the ext-community";
-      leaf extcommunity-nt {
-        type string;
+      container extcommunity-nt {
         description
-          "Set BGP ext-community node-target attribute";
+          "Node targets the action installs on the route, written as
+           the space-separated tokens of 'set extcommunity nt ...' in
+           the canonical order node ids, then raw fallback tokens.";
+        leaf-list node-id {
+          type yang:dotted-quad;
+          description
+            "The IPv4 node id of one node target. A node target
+             carries only this address; it renders as
+             '<A.B.C.D>:0'.";
+        }
+        leaf-list raw {
+          type string;
+          description
+            "A node target kept verbatim as typed when it is not a
+             plain IPv4 node id.";
+        }
       }
     }
 

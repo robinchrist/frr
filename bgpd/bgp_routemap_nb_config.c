@@ -1982,36 +1982,9 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_raw_destroy(
  * XPath:
  * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-nt
  */
-int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_modify(
-	struct nb_cb_modify_args *args)
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_create(
+	struct nb_cb_create_args *args)
 {
-	struct routemap_hook_context *rhc;
-	const char *str;
-	int rv;
-
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		str = yang_dnode_get_string(args->dnode, NULL);
-
-		/* Set destroy information. */
-		rhc->rhc_shook = generic_set_delete;
-		rhc->rhc_rule = "extcommunity nt";
-		rhc->rhc_event = RMAP_EVENT_SET_DELETED;
-
-		rv = generic_set_add(rhc->rhc_rmi, "extcommunity nt", str,
-				     args->errmsg, args->errmsg_len);
-		if (rv != CMD_SUCCESS) {
-			rhc->rhc_shook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
-
 	return NB_OK;
 }
 
@@ -2027,6 +2000,77 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_destroy(
 		return lib_route_map_entry_set_destroy(args);
 	}
 
+	return NB_OK;
+}
+
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const struct lyd_node *child;
+	char str[VTY_BUFSIZ] = "";
+	char token[32];
+	int rv;
+
+	/* Add configuration. */
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "node-id"))
+			continue;
+		/* A node target carries only the node id; the daemon
+		 * renders it with a zero value part. */
+		snprintf(token, sizeof(token), "%s:0",
+			 yang_dnode_get_string(child, NULL));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (strmatch(child->schema->name, "raw"))
+			routemap_communities_token_append(
+				str, sizeof(str),
+				yang_dnode_get_string(child, NULL));
+	}
+
+	/* Set destroy information. */
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "extcommunity nt";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, "extcommunity nt", str,
+			     args->errmsg, args->errmsg_len);
+	if (rv != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-nt/node-id
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_node_id_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_node_id_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-nt/raw
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_raw_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_raw_destroy(
+	struct nb_cb_destroy_args *args)
+{
 	return NB_OK;
 }
 

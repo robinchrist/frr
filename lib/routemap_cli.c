@@ -1303,6 +1303,28 @@ static void route_map_ecommunity_target_set_show(struct vty *vty,
 	vty_out(vty, "\n");
 }
 
+/* Render a structured node-target set (frr-bgp-route-map's
+ * extcommunity-nt container) as the legacy space-separated token
+ * line: node ids as 'A.B.C.D:0' (the zero value part is what the
+ * daemon itself renders), then raw tokens verbatim. */
+static void route_map_ecommunity_nt_show(struct vty *vty,
+					 const struct lyd_node *container)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "node-id"))
+			vty_out(vty, " %s:0",
+				yang_dnode_get_string(child, NULL));
+	}
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "raw"))
+			vty_out(vty, " %s",
+				yang_dnode_get_string(child, NULL));
+	}
+	vty_out(vty, "\n");
+}
+
 void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 			   bool show_defaults)
 {
@@ -1518,10 +1540,13 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 			route_map_ecommunity_target_set_show(vty, ln);
 		}
 	} else if (IS_SET_EXTCOMMUNITY_NT(action)) {
-		vty_out(vty, " set extcommunity nt %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-set-action/frr-bgp-route-map:extcommunity-nt"));
+		ln = yang_dnode_get(
+			dnode,
+			"rmap-set-action/frr-bgp-route-map:extcommunity-nt");
+		if (ln) {
+			vty_out(vty, " set extcommunity nt");
+			route_map_ecommunity_nt_show(vty, ln);
+		}
 	} else if (IS_SET_EXTCOMMUNITY_SOO(action)) {
 		ln = yang_dnode_get(
 			dnode,

@@ -2538,6 +2538,32 @@ ALIAS_YANG (no_set_ecommunity_lb,
             "BGP extended community attribute\n"
             "Link bandwidth extended community\n")
 
+/* A node target is just an IPv4 node id; the daemon encodes only the
+ * address and renders it back as 'A.B.C.D:0', so a ':NN' decimal
+ * suffix is accepted and stripped here. */
+static bool set_ecommunity_nt_token_node_id(const char *token, char *addr,
+					    size_t addr_size)
+{
+	const char *colon = strchr(token, ':');
+	const char *end = colon ? colon : token + strlen(token);
+	const char *p;
+	struct in_addr ip;
+
+	if (colon) {
+		if (*(colon + 1) == '\0')
+			return false;
+		for (p = colon + 1; *p != '\0'; p++)
+			if (!isdigit((unsigned char)*p))
+				return false;
+	}
+	if ((size_t)(end - token) >= addr_size)
+		return false;
+	memcpy(addr, token, end - token);
+	addr[end - token] = '\0';
+
+	return inet_pton(AF_INET, addr, &ip) == 1;
+}
+
 DEFPY_YANG (set_ecommunity_nt,
 	    set_ecommunity_nt_cmd,
 	    "set extcommunity nt RTLIST...",
@@ -2547,21 +2573,48 @@ DEFPY_YANG (set_ecommunity_nt,
 	    "Node Target ID\n")
 {
 	int idx_nt = 3;
-	char *str;
-	int ret;
+	int i, nqueued, ret;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-nt']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_nt[XPATH_MAXLEN];
+	char xpath_value[XPATH_MAXLEN * 2];
+
+	snprintf(xpath_nt, sizeof(xpath_nt),
+		 "%s/rmap-set-action/frr-bgp-route-map:extcommunity-nt", xpath);
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	/* Replace, not merge, whatever an earlier line left. */
+	nb_cli_enqueue_change(vty, xpath_nt, NB_OP_DESTROY, NULL);
+	nqueued = 2;
 
-	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-set-action/frr-bgp-route-map:extcommunity-nt", xpath);
-	str = argv_concat(argv, argc, idx_nt);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+	/* One config line's tokens can exceed one transaction's change
+	 * budget (VTY_MAXCFGCHANGES); apply in batches. Only the first
+	 * batch carries the replace-destroy above, later ones merge
+	 * more tokens into the already-created container. */
+	for (i = idx_nt; i < argc; i++) {
+		const char *tok = argv[i]->arg;
+		char addr[INET_ADDRSTRLEN];
+
+		if (nqueued == VTY_MAXCFGCHANGES) {
+			ret = nb_cli_apply_changes(vty, NULL);
+			if (ret != CMD_SUCCESS)
+				return ret;
+			nqueued = 0;
+		}
+		nqueued++;
+
+		if (set_ecommunity_nt_token_node_id(tok, addr, sizeof(addr)))
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/node-id[.='%s']", xpath_nt, addr);
+		else
+			/* Kept verbatim; the apply-time compile rejects
+			 * it, as it did for the old free-form string. */
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/raw[.='%s']", xpath_nt, tok);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG (no_set_ecommunity_nt,
