@@ -15522,22 +15522,6 @@ static void bgp_config_write_filter(struct vty *vty, struct peer *peer,
 }
 
 /* BGP peer configuration display function. */
-/* Emit the neighbor's remote-as line from its as_type. Kept in bgpd's native
- * config_write during the M4 legacy/northbound coexistence so a split-config
- * bgpd.conf remains self-sufficient for peer creation on a bgpd-only restart
- * (see bgp_config_write_peer_global()). */
-static void bgp_config_write_peer_remote_as(struct vty *vty, struct peer *peer, const char *addr)
-{
-	if (peer->as_type == AS_SPECIFIED)
-		vty_out(vty, " neighbor %s remote-as %s\n", addr, peer->as_pretty);
-	else if (peer->as_type == AS_INTERNAL)
-		vty_out(vty, " neighbor %s remote-as internal\n", addr);
-	else if (peer->as_type == AS_EXTERNAL)
-		vty_out(vty, " neighbor %s remote-as external\n", addr);
-	else if (CHECK_FLAG(peer->as_type, AS_AUTO))
-		vty_out(vty, " neighbor %s remote-as auto\n", addr);
-}
-
 static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 					 struct peer *peer)
 {
@@ -15552,30 +15536,14 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 	else
 		addr = peer->host;
 
-	/* remote-as / peer-group membership: mgmtd's running-config is owned by
-	 * northbound's neighbor_cli_write()/peer_group_cli_write() (bgp_cli.c,
-	 * M4 batch B1), but bgpd must still emit the peer-creation line into its
-	 * OWN per-daemon config. A split-config 'write memory' followed by a
-	 * bgpd-only restart reloads bgpd.conf natively and eagerly (peer_new()
-	 * runs as the file is read), before mgmtd re-pushes its batched commit;
-	 * without the remote-as line here the peer is not recreated in file
-	 * order, so every still-native per-neighbor subcommand that follows
-	 * ('neighbor <addr> activate', ...) fails with "Specify remote-as first"
-	 * and its state is lost. Restores the pre-B1 emission. */
-	if (peer_group_active(peer)) {
-		struct peer *g_peer = peer->group->conf;
-
-		vty_out(vty, " neighbor %s peer-group %s\n", addr, peer->group->name);
-
-		if (g_peer->as_type != peer->as_type ||
-		    (peer->as_type == AS_SPECIFIED && g_peer->as != peer->as))
-			bgp_config_write_peer_remote_as(vty, peer, addr);
-	} else {
-		if (CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP))
-			vty_out(vty, " neighbor %s peer-group\n", addr);
-
-		bgp_config_write_peer_remote_as(vty, peer, addr);
-	}
+	/* Creation (remote-as / peer-group create+bind / interface-peer):
+	 * northbound-authoritative since M8 B1. mgmtd's neighbor_cli_write()/
+	 * peer_group_cli_write() (bgp_cli_neighbor.c) are the sole emitters;
+	 * the native parse DEFUNs stay as demoted idempotent coexistence
+	 * fallbacks so bgpd's own split-config file read can still create
+	 * peers ahead of the residue lines that attach to them (e.g.
+	 * 'neighbor X encapsulation-srv6'). Emitting them here too produced
+	 * duplicate creation lines in the merged running config. */
 
 	/* interface-peer/v6only: converted,
 	 * see peer_group_cli_write()/neighbor_cli_write() in bgp_cli.c

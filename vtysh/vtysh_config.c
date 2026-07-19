@@ -324,17 +324,6 @@ void vtysh_config_parse_line(void *arg, const char *line)
 				   config->index == INTERFACE_NODE ||
 				   config->index == VTY_NODE)
 				config_add_line_uniq(config->line, line);
-			else if (config->index == BGP_NODE &&
-				 strncmp(line, " neighbor ",
-					 strlen(" neighbor ")) == 0 &&
-				 strstr(line, " remote-as "))
-				/* Dual-emitted during the bgpd proteus
-				 * coexistence window: mgmtd renders the
-				 * converted remote-as leaf while bgpd keeps
-				 * its native line so a split bgpd.conf stays
-				 * self-sufficient (bgp_config_write_peer_
-				 * remote_as). Identical text, keep one. */
-				config_add_line_uniq(config->line, line);
 			else if (config->index == RPKI_VRF_NODE &&
 				 strncmp(line, "  exit", strlen("  exit")) == 0) {
 				config_add_line(config->line, line);
