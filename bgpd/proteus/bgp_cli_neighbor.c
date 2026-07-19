@@ -6439,6 +6439,31 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_set_peer_group_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_set_peer_group_cli_cmd);
 
+	/* AF-node convenience aliases for the bind/unbind, matching the
+	 * node list of the retired native *_hidden_cmd aliases (M9: the
+	 * natives went away with the replay bridge). The DEFPY bodies use
+	 * the instance-relative './neighbor' xpath, which resolves
+	 * identically at the AF nodes: the address-family NOSH entries
+	 * keep VTY_CURR_XPATH at the instance. */
+	install_element(BGP_IPV4_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_set_peer_group_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_set_peer_group_cli_cmd);
+
 	/* "bgp listen range ... peer-group PGNAME" dynamic neighbors (M4
 	 * batch B2). */
 	install_element(BGP_NODE, &bgp_listen_range_cli_cmd);

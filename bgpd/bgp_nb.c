@@ -9,6 +9,37 @@
 
 #include "bgpd/bgp_nb.h"
 
+/*
+ * Instance-level BGP defaults that seed a peer at creation time:
+ * peer_new()/peer_create() copy bgp->flags (enforce-first-as, the
+ * software-version / link-local / dynamic capabilities) and
+ * bgp->default_af[][] into every newly created peer. Legacy replayed
+ * these from the config file BEFORE any "neighbor ..." line, so new
+ * peers inherited them. In the northbound world a single config-load
+ * transaction would otherwise run the neighbor/peer-group CREATE
+ * callbacks before these instance-default MODIFY callbacks, creating
+ * peers without the defaults and never seeding them retroactively.
+ * Giving these leaves (and their ancestor containers, so the child >=
+ * parent priority invariant still holds) a priority just below
+ * NB_DFLT_PRIORITY makes the diff replay them defaults-first, mirroring
+ * the legacy file order. Interactive semantics are untouched: a single
+ * toggle is a one-change transaction, and (as in legacy) it only seeds
+ * future peers, never retroactively updates existing ones.
+ */
+#define BGP_NB_PRIO_INSTANCE_DEFAULT (NB_DFLT_PRIORITY - 1)
+
+/*
+ * The mirror case: 'bgp default shutdown' must replay AFTER the
+ * neighbor CREATEs. Legacy emitted the line after all "neighbor ..."
+ * lines precisely so a restart's file replay does not resurrect it onto
+ * the peers already present in the file (FRR #2286: only peers
+ * configured later start administratively down). Schema order would
+ * otherwise apply this /default leaf before the neighbor list within
+ * the same-priority batch, seeding bgp->autoshutdown into every
+ * replayed peer and bringing the whole config up shut.
+ */
+#define BGP_NB_PRIO_INSTANCE_DEFAULT_SHUTDOWN (NB_DFLT_PRIORITY + 1)
+
 const struct frr_yang_module_info proteus_bgp_nb_info = {
 	.name = "proteus-bgp",
 	.nodes = {
@@ -161,7 +192,8 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.create = instance_create,
 				.destroy = instance_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/instance-type",
@@ -266,7 +298,8 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_enforce_first_as_modify,
 				.destroy = instance_enforce_first_as_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/labeled-unicast-explicit-null",
@@ -296,70 +329,91 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			/*
+			 * Non-presence container carried here only to hold a
+			 * priority so its peer-seeding child leaves can sort
+			 * below NB_DFLT_PRIORITY without violating the
+			 * child >= parent priority invariant.
+			 */
+			.xpath = "/proteus-bgp:instance/default",
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
+		},
+		{
 			.xpath = "/proteus-bgp:instance/default/ipv4-unicast",
 			.cbs = {
 				.modify = instance_default_ipv4_unicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv4-multicast",
 			.cbs = {
 				.modify = instance_default_ipv4_multicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv4-labeled-unicast",
 			.cbs = {
 				.modify = instance_default_ipv4_labeled_unicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv4-vpn",
 			.cbs = {
 				.modify = instance_default_ipv4_vpn_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv4-flowspec",
 			.cbs = {
 				.modify = instance_default_ipv4_flowspec_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv6-unicast",
 			.cbs = {
 				.modify = instance_default_ipv6_unicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv6-multicast",
 			.cbs = {
 				.modify = instance_default_ipv6_multicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv6-labeled-unicast",
 			.cbs = {
 				.modify = instance_default_ipv6_labeled_unicast_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv6-vpn",
 			.cbs = {
 				.modify = instance_default_ipv6_vpn_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/ipv6-flowspec",
 			.cbs = {
 				.modify = instance_default_ipv6_flowspec_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/l2vpn-evpn",
 			.cbs = {
 				.modify = instance_default_l2vpn_evpn_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/local-preference",
@@ -386,28 +440,32 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_default_software_version_capability_modify,
 				.destroy = instance_default_software_version_capability_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/software-version-capability-latest-encoding",
 			.cbs = {
 				.modify = instance_default_software_version_capability_latest_encoding_modify,
 				.destroy = instance_default_software_version_capability_latest_encoding_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/link-local-capability",
 			.cbs = {
 				.modify = instance_default_link_local_capability_modify,
 				.destroy = instance_default_link_local_capability_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/dynamic-capability",
 			.cbs = {
 				.modify = instance_default_dynamic_capability_modify,
 				.destroy = instance_default_dynamic_capability_destroy,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/default/subgroup-pkt-queue-max",
@@ -968,7 +1026,8 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/default/shutdown",
 			.cbs = {
 				.modify = instance_default_shutdown_modify,
-			}
+			},
+			.priority = BGP_NB_PRIO_INSTANCE_DEFAULT_SHUTDOWN,
 		},
 		{
 			.xpath = "/proteus-bgp:instance/client-to-client-reflection",
