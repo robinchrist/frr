@@ -6746,9 +6746,26 @@ int bgp_nb_af_srv6_sid_export_dt46_modify(struct nb_cb_modify_args *args, afi_t 
 {
 	const struct lyd_node *mine, *other;
 	const char *other_af;
+	struct bgp *bgp;
 
 	if (args->event != NB_EV_VALIDATE)
 		return NB_OK;
+
+	/* Legacy parity kept for this one knob: changing the DT46 behavior
+	 * of an already-configured sid export requires unconfiguring first.
+	 * Unlike the mode/value relaxations, the shared cross-AF DT46 SID's
+	 * allocation lifecycle does not converge cleanly through a
+	 * withdraw/re-request inside one commit (bgp_srv6_unicast
+	 * test_bgp_srv6_no_locator caught the fallout). */
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (bgp && is_srv6_unicast_enabled(bgp, afi) &&
+	    yang_dnode_get_bool(args->dnode, NULL) !=
+		    !!CHECK_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_BEHAVIOR_DT46)) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "SID export is already configured. Unconfigure it first to reconfigure with a different behavior.");
+		return NB_ERR_VALIDATION;
+	}
+
 	if (!yang_dnode_get_bool(args->dnode, NULL))
 		return NB_OK;
 
