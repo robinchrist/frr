@@ -31,6 +31,57 @@
  * stays tri-state (no YANG default, absence = inherit the process leaf),
  * keeping the enabled|disabled scheme with deprecated bare aliases.
  */
+/* 'bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>' (M8.5 B-snmp). rfc4273 and
+ * rfc4382 are Tier A default-on (negative form writes an explicit false,
+ * positive form destroys back to the true default); bgp4-mibv2 is Tier A
+ * default-off (positive modifies true, negative destroys). The token
+ * string equals the leaf name, so the xpath is built from it directly. */
+DEFPY_YANG(
+	bgp_snmp_traps, bgp_snmp_traps_cli_cmd,
+	"[no] bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>$trap",
+	NO_STR
+	BGP_STR
+	"Configure BGP SNMP\n"
+	"Configure SNMP traps for BGP\n"
+	"Configure use of rfc4273 SNMP traps for BGP\n"
+	"Configure use of rfc4382 SNMP traps for BGP\n"
+	"Configure use of BGP4-MIBv2 SNMP traps for BGP\n")
+{
+	char xpath[XPATH_MAXLEN];
+	bool negate = (no != NULL);
+	bool dflt_on = !strmatch(trap, "bgp4-mibv2");
+
+	snprintf(xpath, sizeof(xpath), "/proteus-bgp:process/snmp-traps/%s", trap);
+	if (negate == dflt_on)
+		/* explicit non-default value */
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, negate ? "false" : "true");
+	else
+		/* back to the leaf's default */
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void process_snmp_traps_rfc4273_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "no bgp snmp traps rfc4273\n");
+}
+
+void process_snmp_traps_rfc4382_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "no bgp snmp traps rfc4382\n");
+}
+
+void process_snmp_traps_bgp4_mibv2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "bgp snmp traps bgp4-mibv2\n");
+}
+
 DEFPY_YANG(
 	bgp_process_ipv6_auto_ra, bgp_process_ipv6_auto_ra_cli_cmd,
 	"bgp ipv6-auto-ra",
@@ -606,6 +657,7 @@ void process_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 
 void bgp_cli_process_init(void)
 {
+	install_element(CONFIG_NODE, &bgp_snmp_traps_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_suppress_fib_pending_cli_cmd);

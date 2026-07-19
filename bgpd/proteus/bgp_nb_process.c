@@ -287,6 +287,37 @@ int process_ipv6_auto_ra_modify(struct nb_cb_modify_args *args)
 	return process_ipv6_auto_ra_apply(yang_dnode_get_bool(args->dnode, NULL));
 }
 
+/* 'bgp snmp traps ...' (M8.5 B-snmp): bm->options flag toggles. Default
+ * resolution: destroy on these default-bearing leaves redispatches as a
+ * modify-with-default, so only .modify exists. */
+static int process_snmp_trap_flag_modify(struct nb_cb_modify_args *args, uint32_t flag)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		SET_FLAG(bm->options, flag);
+	else
+		UNSET_FLAG(bm->options, flag);
+
+	return NB_OK;
+}
+
+int process_snmp_traps_rfc4273_modify(struct nb_cb_modify_args *args)
+{
+	return process_snmp_trap_flag_modify(args, BGP_OPT_TRAPS_RFC4273);
+}
+
+int process_snmp_traps_rfc4382_modify(struct nb_cb_modify_args *args)
+{
+	return process_snmp_trap_flag_modify(args, BGP_OPT_TRAPS_RFC4382);
+}
+
+int process_snmp_traps_bgp4_mibv2_modify(struct nb_cb_modify_args *args)
+{
+	return process_snmp_trap_flag_modify(args, BGP_OPT_TRAPS_BGP4MIBV2);
+}
+
 int process_session_dscp_modify(struct nb_cb_modify_args *args)
 {
 	if (args->event != NB_EV_APPLY)

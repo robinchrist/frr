@@ -9465,6 +9465,11 @@ void bgp_master_init(struct event_loop *master, const int buffer_size,
 	zebra_announce_init(&bm->zebra_announce_head);
 	zebra_announce_init(&bm->zebra_announce_early_head);
 	zebra_l2_vni_init(&bm->zebra_l2_vni_head);
+	/* SNMP trap-family defaults (bm->options is core state; the flags are
+	 * consumed by the optional bgpd_snmp module but owned here so the
+	 * proteus snmp-traps YANG defaults hold without the module). */
+	SET_FLAG(bm->options, BGP_OPT_TRAPS_RFC4273);
+	SET_FLAG(bm->options, BGP_OPT_TRAPS_RFC4382);
 	bm->bgp = list_new();
 	bm->listen_sockets = list_new();
 	bm->port = BGP_PORT_DEFAULT;

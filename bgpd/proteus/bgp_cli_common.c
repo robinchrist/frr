@@ -1500,6 +1500,24 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/snmp-traps/rfc4273",
+			.cbs = {
+				.cli_show = process_snmp_traps_rfc4273_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/snmp-traps/rfc4382",
+			.cbs = {
+				.cli_show = process_snmp_traps_rfc4382_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/snmp-traps/bgp4-mibv2",
+			.cbs = {
+				.cli_show = process_snmp_traps_bgp4_mibv2_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/session-dscp",
 			.cbs = {
 				.cli_show = process_session_dscp_cli_write,

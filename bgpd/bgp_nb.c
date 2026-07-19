@@ -20,6 +20,24 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/snmp-traps/rfc4273",
+			.cbs = {
+				.modify = process_snmp_traps_rfc4273_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/snmp-traps/rfc4382",
+			.cbs = {
+				.modify = process_snmp_traps_rfc4382_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:process/snmp-traps/bgp4-mibv2",
+			.cbs = {
+				.modify = process_snmp_traps_bgp4_mibv2_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/update-delay/delay",
 			.cbs = {
 				.modify = process_update_delay_delay_modify,

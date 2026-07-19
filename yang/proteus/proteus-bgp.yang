@@ -2017,6 +2017,39 @@ module proteus-bgp {
       description
         "'bgp route-map delay-timer (0-600)'.";
     }
+
+    container snmp-traps {
+      description
+        "'bgp snmp traps ...' (M8.5 B-snmp): trap-family toggles on
+         bm->options. Core bgpd state; the SNMP module only consumes
+         the flags, so they are settable regardless of whether the
+         bgpd_snmp module is loaded (the compiled-in defaults moved
+         from the module init to bgp_master_init for exactly that
+         parity).";
+
+      leaf rfc4273 {
+        type boolean;
+        default "true";
+        description
+          "'bgp snmp traps rfc4273'. Tier A default-on: the legacy
+           'no ...' line renders iff false.";
+      }
+
+      leaf rfc4382 {
+        type boolean;
+        default "true";
+        description
+          "'bgp snmp traps rfc4382'. Tier A default-on.";
+      }
+
+      leaf bgp4-mibv2 {
+        type boolean;
+        default "false";
+        description
+          "'bgp snmp traps bgp4-mibv2'. Tier A default-off,
+           positive-only emission.";
+      }
+    }
     container update-delay {
       description
         "'bgp update-delay (0-3600) [(1-3600)]' (process-wide;

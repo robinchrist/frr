@@ -418,6 +418,12 @@ void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_n
 						    bool show_defaults);
 void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults);
+void process_snmp_traps_rfc4273_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void process_snmp_traps_rfc4382_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					  bool show_defaults);
+void process_snmp_traps_bgp4_mibv2_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults);
 void process_session_dscp_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults);
 void process_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
