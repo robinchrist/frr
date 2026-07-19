@@ -6844,10 +6844,11 @@ void bgp_cli_neighbor_init(void)
 
 	/* per-AF plain PEER_FLAG_* booleans, neighbor + peer-group (M5 batch
 	 * B4). Each install set matches the retired legacy DEFUN's per-AF
-	 * install_element() calls exactly; where legacy kept a hidden
-	 * BGP_NODE alias (or, for next-hop-self, a hidden 'all' alias
-	 * reachable inside every AF node), that alias is left native and
-	 * untouched in bgp_vty.c. */
+	 * install_element() calls exactly; the hidden BGP_NODE aliases (and
+	 * next-hop-self's hidden per-AF 'all' aliases) that once kept the
+	 * native DEFUNs reachable were retired in the M9 cleanup, the
+	 * BGP_NODE installs above and neighbor_nexthop_self_all_cli_cmd
+	 * cover them. */
 	install_element(BGP_IPV4_NODE, &neighbor_route_reflector_client_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_route_reflector_client_cli_cmd);
 	install_element(BGP_IPV4L_NODE, &neighbor_route_reflector_client_cli_cmd);
@@ -7185,10 +7186,10 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_EVPN_NODE, &neighbor_addpath_paths_limit_cli_cmd);
 
 	/* per-neighbor dampening (M5 batch B8): legacy reached only the six
-	 * ipv4/ipv6 {unicast,multicast,labeled-unicast} nodes (plus the
-	 * hidden BGP_NODE alias, which bgp_afi_safi_container_name() cannot
-	 * map to a proteus container and is intentionally left
-	 * unconverted), never vpnv4/vpnv6/l2vpn-evpn. */
+	 * ipv4/ipv6 {unicast,multicast,labeled-unicast} nodes plus BGP_NODE
+	 * (converted via the BGP_NODE install above once
+	 * bgp_afi_safi_container_name() learned to map BGP_NODE to
+	 * ipv4-unicast in M9), never vpnv4/vpnv6/l2vpn-evpn. */
 	install_element(BGP_IPV4_NODE, &neighbor_damp_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_damp_cli_cmd);
 	install_element(BGP_IPV4L_NODE, &neighbor_damp_cli_cmd);

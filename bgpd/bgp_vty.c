@@ -2081,251 +2081,29 @@ void bgp_may_stop_listening(struct bgp *bgp, struct vty *vty)
  * 'neighbor_rpki_strict_cli_cmd' in bgp_cli_neighbor.c (M4 batch B13).
  */
 
-static int peer_af_flag_modify_vty(struct vty *vty, const char *peer_str,
-				   afi_t afi, safi_t safi, uint64_t flag,
-				   int set)
-{
-	int ret;
-	struct peer *peer;
+/* neighbor capability orf prefix-list: fully converted to mgmtd, see
+ * 'neighbor_capability_orf_prefix_cli_cmd' in bgp_cli_neighbor.c (M5 batch
+ * B5 for the six proteus AFs; the hidden BGP_NODE alias retired in the M9
+ * cleanup once bgp_afi_safi_container_name() learned to map BGP_NODE to
+ * ipv4-unicast).
+ */
 
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (set)
-		ret = peer_af_flag_set(peer, afi, safi, flag);
-	else
-		ret = peer_af_flag_unset(peer, afi, safi, flag);
-
-	return bgp_vty_return(vty, ret);
-}
-
-static int peer_af_flag_set_vty(struct vty *vty, const char *peer_str,
-				afi_t afi, safi_t safi, uint64_t flag)
-{
-	return peer_af_flag_modify_vty(vty, peer_str, afi, safi, flag, 1);
-}
-
-static int peer_af_flag_unset_vty(struct vty *vty, const char *peer_str,
-				  afi_t afi, safi_t safi, uint64_t flag)
-{
-	return peer_af_flag_modify_vty(vty, peer_str, afi, safi, flag, 0);
-}
-
-/* neighbor capability orf prefix-list. */
-
-DEFUN (no_neighbor_capability_orf_prefix,
-       no_neighbor_capability_orf_prefix_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Advertise capability to the peer\n"
-       "Advertise ORF capability to the peer\n"
-       "Advertise prefixlist ORF capability to this neighbor\n"
-       "Capability to SEND and RECEIVE the ORF to/from this neighbor\n"
-       "Capability to RECEIVE the ORF from this neighbor\n"
-       "Capability to SEND the ORF to this neighbor\n")
-{
-	int idx_send_recv = 6;
-	char *peer_str = argv[2]->arg;
-	struct peer *peer;
-	afi_t afi = bgp_node_afi(vty);
-	safi_t safi = bgp_node_safi(vty);
-	int ret;
-
-	peer = peer_and_group_lookup_vty(vty, peer_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	if (strmatch(argv[idx_send_recv]->text, "send")) {
-		ret = peer_af_flag_unset_vty(vty, peer_str, afi, safi,
-					     PEER_FLAG_ORF_PREFIX_SM);
-		bgp_capability_send(peer->connection, afi, safi, CAPABILITY_CODE_ORF,
-				    CAPABILITY_ACTION_UNSET);
-		return ret;
-	}
-
-	if (strmatch(argv[idx_send_recv]->text, "receive")) {
-		ret = peer_af_flag_unset_vty(vty, peer_str, afi, safi,
-					     PEER_FLAG_ORF_PREFIX_RM);
-		bgp_capability_send(peer->connection, afi, safi, CAPABILITY_CODE_ORF,
-				    CAPABILITY_ACTION_UNSET);
-		return ret;
-	}
-
-	if (strmatch(argv[idx_send_recv]->text, "both")) {
-		ret = peer_af_flag_unset_vty(vty, peer_str, afi, safi,
-					     PEER_FLAG_ORF_PREFIX_SM) |
-		      peer_af_flag_unset_vty(vty, peer_str, afi, safi,
-					     PEER_FLAG_ORF_PREFIX_RM);
-		bgp_capability_send(peer->connection, afi, safi, CAPABILITY_CODE_ORF,
-				    CAPABILITY_ACTION_UNSET);
-		return ret;
-	}
-
-	return CMD_WARNING_CONFIG_FAILED;
-}
-
-ALIAS_HIDDEN(
-	no_neighbor_capability_orf_prefix,
-	no_neighbor_capability_orf_prefix_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> capability orf prefix-list <both|send|receive>",
-	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Advertise capability to the peer\n"
-	"Advertise ORF capability to the peer\n"
-	"Advertise prefixlist ORF capability to this neighbor\n"
-	"Capability to SEND and RECEIVE the ORF to/from this neighbor\n"
-	"Capability to RECEIVE the ORF from this neighbor\n"
-	"Capability to SEND the ORF to this neighbor\n")
-
-/* neighbor next-hop-self. */
-
-/* neighbor next-hop-self. */
-
-
-DEFUN (no_neighbor_nexthop_self_force,
-       no_neighbor_nexthop_self_force_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self force",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Disable the next hop calculation for this neighbor\n"
-       "Set the next hop to self for reflected routes\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg,
-				      bgp_node_afi(vty), bgp_node_safi(vty),
-				      PEER_FLAG_FORCE_NEXTHOP_SELF);
-}
-
-ALIAS_HIDDEN(no_neighbor_nexthop_self_force,
-	     no_neighbor_nexthop_self_all_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> next-hop-self all",
-	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	     "Disable the next hop calculation for this neighbor\n"
-	     "Set the next hop to self for reflected routes\n")
+/* neighbor next-hop-self (+ force, + the deprecated 'all' spelling of
+ * force): fully converted to mgmtd, see
+ * 'neighbor_nexthop_self_cli_cmd'/'neighbor_nexthop_self_all_cli_cmd' in
+ * bgp_cli_neighbor.c (M5 batch B4; the hidden per-AF 'all' aliases retired
+ * in the M9 cleanup, the legacy-compat 'all' DEFPY covers every node they
+ * reached).
+ */
 
 /* neighbor as-override */
 
 
-/* neighbor remove-private-AS. */
-
-
-DEFUN (neighbor_remove_private_as_replace_as,
-       neighbor_remove_private_as_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Remove private ASNs in outbound updates\n"
-       "Replace private ASNs with our ASN in outbound updates\n")
-{
-	int idx_peer = 1;
-	return peer_af_flag_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-				    bgp_node_safi(vty),
-				    PEER_FLAG_REMOVE_PRIVATE_AS_REPLACE);
-}
-
-ALIAS_HIDDEN(neighbor_remove_private_as_replace_as,
-	     neighbor_remove_private_as_replace_as_hidden_cmd,
-	     "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
-	     NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	     "Remove private ASNs in outbound updates\n"
-	     "Replace private ASNs with our ASN in outbound updates\n")
-
-DEFUN (neighbor_remove_private_as_all_replace_as,
-       neighbor_remove_private_as_all_replace_as_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Remove private ASNs in outbound updates\n"
-       "Apply to all AS numbers\n"
-       "Replace private ASNs with our ASN in outbound updates\n")
-{
-	int idx_peer = 1;
-	return peer_af_flag_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-				    bgp_node_safi(vty),
-				    PEER_FLAG_REMOVE_PRIVATE_AS_ALL_REPLACE);
-}
-
-ALIAS_HIDDEN(
-	neighbor_remove_private_as_all_replace_as,
-	neighbor_remove_private_as_all_replace_as_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
-	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Remove private ASNs in outbound updates\n"
-	"Apply to all AS numbers\n"
-	"Replace private ASNs with our ASN in outbound updates\n")
-
-
-DEFUN (no_neighbor_remove_private_as_all,
-       no_neighbor_remove_private_as_all_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Remove private ASNs in outbound updates\n"
-       "Apply to all AS numbers\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg,
-				      bgp_node_afi(vty), bgp_node_safi(vty),
-				      PEER_FLAG_REMOVE_PRIVATE_AS_ALL);
-}
-
-ALIAS_HIDDEN(no_neighbor_remove_private_as_all,
-	     no_neighbor_remove_private_as_all_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all",
-	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	     "Remove private ASNs in outbound updates\n"
-	     "Apply to all AS numbers\n")
-
-DEFUN (no_neighbor_remove_private_as_replace_as,
-       no_neighbor_remove_private_as_replace_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Remove private ASNs in outbound updates\n"
-       "Replace private ASNs with our ASN in outbound updates\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg,
-				      bgp_node_afi(vty), bgp_node_safi(vty),
-				      PEER_FLAG_REMOVE_PRIVATE_AS_REPLACE);
-}
-
-ALIAS_HIDDEN(no_neighbor_remove_private_as_replace_as,
-	     no_neighbor_remove_private_as_replace_as_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS replace-AS",
-	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	     "Remove private ASNs in outbound updates\n"
-	     "Replace private ASNs with our ASN in outbound updates\n")
-
-DEFUN (no_neighbor_remove_private_as_all_replace_as,
-       no_neighbor_remove_private_as_all_replace_as_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Remove private ASNs in outbound updates\n"
-       "Apply to all AS numbers\n"
-       "Replace private ASNs with our ASN in outbound updates\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg,
-				      bgp_node_afi(vty), bgp_node_safi(vty),
-				      PEER_FLAG_REMOVE_PRIVATE_AS_ALL_REPLACE);
-}
-
-ALIAS_HIDDEN(
-	no_neighbor_remove_private_as_all_replace_as,
-	no_neighbor_remove_private_as_all_replace_as_hidden_cmd,
-	"no neighbor <A.B.C.D|X:X::X:X|WORD> remove-private-AS all replace-AS",
-	NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Remove private ASNs in outbound updates\n"
-	"Apply to all AS numbers\n"
-	"Replace private ASNs with our ASN in outbound updates\n")
+/* neighbor remove-private-AS (+ all, + replace-AS): fully converted to
+ * mgmtd, see 'neighbor_remove_private_as_cli_cmd' in bgp_cli_neighbor.c
+ * (M5 batch B5, one DEFPY covering all four spellings; the hidden BGP_NODE
+ * aliases retired in the M9 cleanup).
+ */
 
 
 /* neighbor send-community. */
@@ -2337,24 +2115,10 @@ ALIAS_HIDDEN(
 /* neighbor soft-reconfig. */
 
 
-DEFUN (no_neighbor_route_reflector_client,
-       no_neighbor_route_reflector_client_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
-       NO_STR
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Configure a neighbor as Route Reflector client\n")
-{
-	int idx_peer = 2;
-	return peer_af_flag_unset_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-				      bgp_node_safi(vty), PEER_FLAG_REFLECTOR_CLIENT);
-}
-
-ALIAS_HIDDEN(no_neighbor_route_reflector_client,
-	     no_neighbor_route_reflector_client_hidden_cmd,
-	     "no neighbor <A.B.C.D|X:X::X:X|WORD> route-reflector-client",
-	     NO_STR NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	     "Configure a neighbor as Route Reflector client\n")
+/* neighbor route-reflector-client: fully converted to mgmtd, see
+ * 'neighbor_route_reflector_client_cli_cmd' in bgp_cli_neighbor.c (M5
+ * batch B4; the hidden BGP_NODE alias retired in the M9 cleanup).
+ */
 
 /* neighbor route-server-client. */
 
@@ -2442,156 +2206,15 @@ ALIAS_HIDDEN(no_neighbor_route_reflector_client,
  */
 
 
-static int peer_maximum_prefix_set_vty(struct vty *vty, const char *ip_str, afi_t afi, safi_t safi,
-				       const char *num_str, const char *threshold_str, int warning,
-				       const char *restart_str, const char *force_str)
-{
-	int ret;
-	struct peer *peer;
-	uint32_t max;
-	uint8_t threshold;
-	uint16_t restart;
-
-	peer = peer_and_group_lookup_vty(vty, ip_str);
-	if (!peer)
-		return CMD_WARNING_CONFIG_FAILED;
-
-	max = strtoul(num_str, NULL, 10);
-	if (threshold_str)
-		threshold = atoi(threshold_str);
-	else
-		threshold = MAXIMUM_PREFIX_THRESHOLD_DEFAULT;
-
-	if (restart_str)
-		restart = atoi(restart_str);
-	else
-		restart = 0;
-
-	ret = peer_maximum_prefix_set(peer, afi, safi, max, threshold, warning, restart,
-				      force_str ? true : false);
-
-	return bgp_vty_return(vty, ret);
-}
-
-
 /* Maximum number of prefix to be sent to the neighbor. */
 
 
-/* Maximum number of prefix configuration. Prefix count is different
-   for each peer configuration. So this configuration can be set for
-   each peer configuration. */
-
-DEFUN (neighbor_maximum_prefix_threshold,
-       neighbor_maximum_prefix_threshold_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Maximum number of prefix accept from this peer\n"
-       "maximum no. of prefix limit\n"
-       "Threshold value (%) at which to generate a warning msg\n"
-       "Force checking all received routes not only accepted\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	int idx_number_2 = 4;
-	int idx_force = 0;
-	char *force = NULL;
-
-	if (argv_find(argv, argc, "force", &idx_force))
-		force = argv[idx_force]->arg;
-
-	return peer_maximum_prefix_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-					   bgp_node_safi(vty), argv[idx_number]->arg,
-					   argv[idx_number_2]->arg, 0, NULL, force);
-}
-
-ALIAS_HIDDEN(
-	neighbor_maximum_prefix_threshold,
-	neighbor_maximum_prefix_threshold_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) [force]",
-	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Maximum number of prefix accept from this peer\n"
-	"maximum no. of prefix limit\n"
-	"Threshold value (%) at which to generate a warning msg\n"
-	"Force checking all received routes not only accepted\n")
-
-
-DEFUN (neighbor_maximum_prefix_threshold_warning,
-       neighbor_maximum_prefix_threshold_warning_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Maximum number of prefix accept from this peer\n"
-       "maximum no. of prefix limit\n"
-       "Threshold value (%) at which to generate a warning msg\n"
-       "Only give warning message when limit is exceeded\n"
-       "Force checking all received routes not only accepted\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	int idx_number_2 = 4;
-	int idx_force = 0;
-	char *force = NULL;
-
-	if (argv_find(argv, argc, "force", &idx_force))
-		force = argv[idx_force]->arg;
-
-	return peer_maximum_prefix_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-					   bgp_node_safi(vty), argv[idx_number]->arg,
-					   argv[idx_number_2]->arg, 1, NULL, force);
-}
-
-ALIAS_HIDDEN(
-	neighbor_maximum_prefix_threshold_warning,
-	neighbor_maximum_prefix_threshold_warning_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) warning-only [force]",
-	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Maximum number of prefix accept from this peer\n"
-	"maximum no. of prefix limit\n"
-	"Threshold value (%) at which to generate a warning msg\n"
-	"Only give warning message when limit is exceeded\n"
-	"Force checking all received routes not only accepted\n")
-
-
-DEFUN (neighbor_maximum_prefix_threshold_restart,
-       neighbor_maximum_prefix_threshold_restart_cmd,
-       "neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
-       NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR2
-       "Maximum number of prefixes to accept from this peer\n"
-       "maximum no. of prefix limit\n"
-       "Threshold value (%) at which to generate a warning msg\n"
-       "Restart bgp connection after limit is exceeded\n"
-       "Restart interval in minutes\n"
-       "Force checking all received routes not only accepted\n")
-{
-	int idx_peer = 1;
-	int idx_number = 3;
-	int idx_number_2 = 4;
-	int idx_number_3 = 6;
-	int idx_force = 0;
-	char *force = NULL;
-
-	if (argv_find(argv, argc, "force", &idx_force))
-		force = argv[idx_force]->arg;
-
-	return peer_maximum_prefix_set_vty(vty, argv[idx_peer]->arg, bgp_node_afi(vty),
-					   bgp_node_safi(vty), argv[idx_number]->arg,
-					   argv[idx_number_2]->arg, 0, argv[idx_number_3]->arg,
-					   force);
-}
-
-ALIAS_HIDDEN(
-	neighbor_maximum_prefix_threshold_restart,
-	neighbor_maximum_prefix_threshold_restart_hidden_cmd,
-	"neighbor <A.B.C.D|X:X::X:X|WORD> maximum-prefix (1-4294967295) (1-100) restart (1-65535) [force]",
-	NEIGHBOR_STR NEIGHBOR_ADDR_STR2
-	"Maximum number of prefixes to accept from this peer\n"
-	"maximum no. of prefix limit\n"
-	"Threshold value (%) at which to generate a warning msg\n"
-	"Restart bgp connection after limit is exceeded\n"
-	"Restart interval in minutes\n"
-	"Force checking all received routes not only accepted\n")
+/* neighbor maximum-prefix (+ threshold, + warning-only, + restart, +
+ * force): fully converted to mgmtd, see 'neighbor_maximum_prefix_cli_cmd'
+ * in bgp_cli_neighbor.c (M5 batch B6, one superset DEFPY covering every
+ * legacy combination; the hidden BGP_NODE aliases retired in the M9
+ * cleanup).
+ */
 
 
 /* "neighbor accept-own": fully converted to mgmtd for the nine proteus AFs
@@ -10551,311 +10174,23 @@ DEFUN(show_ip_bgp_peer_groups, show_ip_bgp_peer_groups_cmd,
 /* Redistribute VTY commands.  */
 
 
-DEFUN (bgp_redistribute_ipv4_rmap_metric,
-       bgp_redistribute_ipv4_rmap_metric_cmd,
-       "redistribute " FRR_IP_REDIST_STR_BGPD " route-map RMAP_NAME metric (0-4294967295)",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP_REDIST_HELP_STR_BGPD
-       "Route map reference\n"
-       "Pointer to route-map entries\n"
-       "Metric for redistributed routes\n"
-       "Default metric\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_word = 3;
-	int idx_number = 5;
-	uint8_t type;
-	uint32_t metric;
-	struct bgp_redist *red;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	type = proto_redistnum(AFI_IP, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	metric = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP, type, 0);
-	changed =
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP, type, metric);
-	return bgp_redistribute_set(bgp, AFI_IP, type, 0, changed);
-}
-
-ALIAS_HIDDEN(
-	bgp_redistribute_ipv4_rmap_metric,
-	bgp_redistribute_ipv4_rmap_metric_hidden_cmd,
-	"redistribute " FRR_IP_REDIST_STR_BGPD
-	" route-map RMAP_NAME metric (0-4294967295)",
-	"Redistribute information from another routing protocol\n" FRR_IP_REDIST_HELP_STR_BGPD
-	"Route map reference\n"
-	"Pointer to route-map entries\n"
-	"Metric for redistributed routes\n"
-	"Default metric\n")
-
-DEFUN (bgp_redistribute_ipv4_metric_rmap,
-       bgp_redistribute_ipv4_metric_rmap_cmd,
-       "redistribute " FRR_IP_REDIST_STR_BGPD " metric (0-4294967295) route-map RMAP_NAME",
-       "Redistribute information from another routing protocol\n"
-       FRR_IP_REDIST_HELP_STR_BGPD
-       "Metric for redistributed routes\n"
-       "Default metric\n"
-       "Route map reference\n"
-       "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_protocol = 1;
-	int idx_number = 3;
-	int idx_word = 5;
-	uint8_t type;
-	uint32_t metric;
-	struct bgp_redist *red;
-	bool changed;
-	struct route_map *route_map = route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	type = proto_redistnum(AFI_IP, argv[idx_protocol]->text);
-	if (type == ZEBRA_ROUTE_ERROR) {
-		vty_out(vty, "%% Invalid route type\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-	metric = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP, type, 0);
-	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP, type, metric);
-	changed |= bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	return bgp_redistribute_set(bgp, AFI_IP, type, 0, changed);
-}
-
-ALIAS_HIDDEN(
-	bgp_redistribute_ipv4_metric_rmap,
-	bgp_redistribute_ipv4_metric_rmap_hidden_cmd,
-	"redistribute " FRR_IP_REDIST_STR_BGPD
-	" metric (0-4294967295) route-map RMAP_NAME",
-	"Redistribute information from another routing protocol\n" FRR_IP_REDIST_HELP_STR_BGPD
-	"Metric for redistributed routes\n"
-	"Default metric\n"
-	"Route map reference\n"
-	"Pointer to route-map entries\n")
-
-
-DEFUN (bgp_redistribute_ipv4_ospf_metric,
-       bgp_redistribute_ipv4_ospf_metric_cmd,
-       "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295)",
-       "Redistribute information from another routing protocol\n"
-       "Open Shortest Path First (OSPFv2)\n"
-       "Non-main Kernel Routing Table\n"
-       "Non-main Kernel Routing Table - Direct\n"
-       "Instance ID/Table ID\n"
-       "Metric for redistributed routes\n"
-       "Default metric\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_ospf_table = 1;
-	int idx_number = 2;
-	int idx_number_2 = 4;
-	uint32_t metric;
-	struct bgp_redist *red;
-	unsigned short instance;
-	int protocol;
-	bool changed;
-
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
-		protocol = ZEBRA_ROUTE_OSPF;
-	else {
-		if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
-			    strlen("table-direct")) == 0) {
-			protocol = ZEBRA_ROUTE_TABLE_DIRECT;
-			if (instance == RT_TABLE_MAIN ||
-			    instance == RT_TABLE_LOCAL) {
-				vty_out(vty,
-					"%% 'table-direct', can not use %u routing table\n",
-					instance);
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-		} else
-			protocol = ZEBRA_ROUTE_TABLE;
-	}
-
-	metric = strtoul(argv[idx_number_2]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
-	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP, protocol,
-						metric);
-	return bgp_redistribute_set(bgp, AFI_IP, protocol, instance, changed);
-}
-
-ALIAS_HIDDEN(bgp_redistribute_ipv4_ospf_metric,
-	     bgp_redistribute_ipv4_ospf_metric_hidden_cmd,
-	     "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295)",
-	     "Redistribute information from another routing protocol\n"
-	     "Open Shortest Path First (OSPFv2)\n"
-	     "Non-main Kernel Routing Table\n"
-	     "Non-main Kernel Routing Table - Direct\n"
-	     "Instance ID/Table ID\n"
-	     "Metric for redistributed routes\n"
-	     "Default metric\n")
-
-DEFUN (bgp_redistribute_ipv4_ospf_rmap_metric,
-       bgp_redistribute_ipv4_ospf_rmap_metric_cmd,
-       "redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
-       "Redistribute information from another routing protocol\n"
-       "Open Shortest Path First (OSPFv2)\n"
-       "Non-main Kernel Routing Table\n"
-       "Non-main Kernel Routing Table - Direct\n"
-       "Instance ID/Table ID\n"
-       "Route map reference\n"
-       "Pointer to route-map entries\n"
-       "Metric for redistributed routes\n"
-       "Default metric\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_ospf_table = 1;
-	int idx_number = 2;
-	int idx_word = 4;
-	int idx_number_2 = 6;
-	uint32_t metric;
-	struct bgp_redist *red;
-	unsigned short instance;
-	int protocol;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
-		protocol = ZEBRA_ROUTE_OSPF;
-	else {
-		if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
-			    strlen("table-direct")) == 0) {
-			protocol = ZEBRA_ROUTE_TABLE_DIRECT;
-			if (instance == RT_TABLE_MAIN ||
-			    instance == RT_TABLE_LOCAL) {
-				vty_out(vty,
-					"%% 'table-direct', can not use %u routing table\n",
-					instance);
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-		} else
-			protocol = ZEBRA_ROUTE_TABLE;
-	}
-
-	metric = strtoul(argv[idx_number_2]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
-	changed =
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	changed |= bgp_redistribute_metric_set(bgp, red, AFI_IP, protocol,
-						metric);
-	return bgp_redistribute_set(bgp, AFI_IP, protocol, instance, changed);
-}
-
-ALIAS_HIDDEN(
-	bgp_redistribute_ipv4_ospf_rmap_metric,
-	bgp_redistribute_ipv4_ospf_rmap_metric_hidden_cmd,
-	"redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
-	"Redistribute information from another routing protocol\n"
-	"Open Shortest Path First (OSPFv2)\n"
-	"Non-main Kernel Routing Table\n"
-        "Non-main Kernel Routing Table - Direct\n"
-	"Instance ID/Table ID\n"
-	"Route map reference\n"
-	"Pointer to route-map entries\n"
-	"Metric for redistributed routes\n"
-	"Default metric\n")
-
-DEFUN (bgp_redistribute_ipv4_ospf_metric_rmap,
-       bgp_redistribute_ipv4_ospf_metric_rmap_cmd,
-       "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
-       "Redistribute information from another routing protocol\n"
-       "Open Shortest Path First (OSPFv2)\n"
-       "Non-main Kernel Routing Table\n"
-       "Non-main Kernel Routing Table - Direct\n"
-       "Instance ID/Table ID\n"
-       "Metric for redistributed routes\n"
-       "Default metric\n"
-       "Route map reference\n"
-       "Pointer to route-map entries\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_ospf_table = 1;
-	int idx_number = 2;
-	int idx_number_2 = 4;
-	int idx_word = 6;
-	uint32_t metric;
-	struct bgp_redist *red;
-	unsigned short instance;
-	int protocol;
-	bool changed;
-	struct route_map *route_map =
-		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
-
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
-
-	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
-		protocol = ZEBRA_ROUTE_OSPF;
-	else {
-		if (strncmp(argv[idx_ospf_table]->arg, "table-direct", strlen("table-direct")) == 0) {
-			protocol = ZEBRA_ROUTE_TABLE_DIRECT;
-			if (instance == RT_TABLE_MAIN ||
-			    instance == RT_TABLE_LOCAL) {
-				vty_out(vty,
-					"%% 'table-direct', can not use %u routing table\n",
-					instance);
-				return CMD_WARNING_CONFIG_FAILED;
-			}
-		} else
-			protocol = ZEBRA_ROUTE_TABLE;
-	}
-
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
-	metric = strtoul(argv[idx_number_2]->arg, NULL, 10);
-
-	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
-	changed = bgp_redistribute_metric_set(bgp, red, AFI_IP, protocol,
-						metric);
-	changed |=
-		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
-	return bgp_redistribute_set(bgp, AFI_IP, protocol, instance, changed);
-}
-
-ALIAS_HIDDEN(
-	bgp_redistribute_ipv4_ospf_metric_rmap,
-	bgp_redistribute_ipv4_ospf_metric_rmap_hidden_cmd,
-	"redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
-	"Redistribute information from another routing protocol\n"
-	"Open Shortest Path First (OSPFv2)\n"
-	"Non-main Kernel Routing Table\n"
-        "Non-main Kernel Routing Table - Direct\n"
-	"Instance ID/Table ID\n"
-	"Metric for redistributed routes\n"
-	"Default metric\n"
-	"Route map reference\n"
-	"Pointer to route-map entries\n")
+/* redistribute (ipv4): fully converted to mgmtd, see
+ * 'instance_afi_safis_redistribute_cli_cmd'/
+ * 'instance_afi_safis_redistribute_instance_cli_cmd' in bgp_cli_instance.c
+ * (M5 batch B11 for the per-AF nodes; the hidden BGP_NODE aliases retired
+ * in the M9 cleanup once bgp_afi_safi_container_name() learned to map
+ * BGP_NODE to ipv4-unicast; the converted {metric|route-map} grammar
+ * accepts both legacy orderings).
+ */
 
 
 /*
- * bgp_redistribute_ipv6[_rmap|_metric|_rmap_metric|_metric_rmap], the
- * numbered table-direct pair (bgp_redistribute_ipv6_table/
- * no_bgp_redistribute_ipv6_table) and no_bgp_redistribute_ipv6 are converted
- * to northbound (M5 batch B11); config emission is retired and mgmtd renders
- * them (see instance_afi_safis_redistribute_cli_cmd in bgp_cli_instance.c).
- * The native DEFUN/DEFPY bodies below are RESTORED for the coexistence
- * window (retired wholesale at M8): bgpd's config reader must still match
- * 'redistribute ...' at BGP_IPV6_NODE natively. There is no ipv6-specific
- * BGP_NODE hidden alias, but the surviving ipv4 hidden redistribute at
- * BGP_NODE (FRR_IP_REDIST_STR_BGPD) matches the source keywords ipv4 and
- * ipv6 share (kernel/connected/local/static/isis/nhrp/vnc/babel/openfabric),
- * so a walk-up from BGP_IPV6_NODE would otherwise match it, wrongly apply
- * the redistribute to ipv4-unicast AND pop vty->node out of the ipv6 block,
- * stranding the following native lines. See
- * doc/developer/northbound/bgpd-proteus-conversion.rst (coexistence).
+ * redistribute (ipv6): fully converted to mgmtd, same commands as ipv4
+ * above (M5 batch B11, see instance_afi_safis_redistribute_cli_cmd in
+ * bgp_cli_instance.c). The native ipv6 bodies briefly returned during the
+ * M5-M8 coexistence window (bgpd's config reader had to match
+ * 'redistribute ...' at BGP_IPV6_NODE natively) and were retired wholesale
+ * at M8; see doc/developer/northbound/bgpd-proteus-conversion.rst.
  */
 
 
@@ -12684,20 +12019,19 @@ void bgp_vty_init(void)
 	 * seed-bridge, once mgmtd's priority-ordered transaction became
 	 * the only peer-creation path. */
 
-	/* "neighbor activate" commands: converted to mgmtd for every
-	 * modeled address family (M5 B1; flowspec M8.5; unreachability and
-	 * link-state M9); only the hidden BGP_NODE alias stays native. */
+	/* "neighbor activate" commands: fully converted to mgmtd for every
+	 * modeled address family, BGP_NODE included (M5 B1; flowspec M8.5;
+	 * unreachability and link-state M9). */
 
 	/* "no neighbor activate" commands (see the note above). */
 
-	/* "neighbor softreconfiguration inbound" commands: converted to
-	 * mgmtd for the nine proteus AFs (M5 batch B4,
-	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias and the
-	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
+	/* "neighbor softreconfiguration inbound" commands: fully converted
+	 * to mgmtd (M5 batch B4 for the nine proteus AFs,
+	 * bgpd/proteus/bgp_cli_neighbor.c; flowspec M8.5; BGP_NODE M9). */
 
-	/* "neighbor attribute-unchanged" commands: converted to mgmtd for the
-	 * nine proteus AFs (M5 batch B4); hidden BGP_NODE alias + flowspec
-	 * stay native. */
+	/* "neighbor attribute-unchanged" commands: fully converted to mgmtd
+	 * (M5 batch B4 for the nine proteus AFs; flowspec M8.5; BGP_NODE
+	 * M9). */
 
 
 	/* "nexthop-local unchanged" commands: fully converted to mgmtd for
@@ -12706,75 +12040,45 @@ void bgp_vty_init(void)
 	 * reached any flowspec node, so nothing keeps this DEFUN reachable;
 	 * removed per the per-milestone rule. */
 
-	/* "neighbor next-hop-self" commands: converted to mgmtd for the nine
-	 * proteus AFs (M5 batch B4); the hidden BGP_NODE alias keeps this
-	 * DEFUN reachable. */
+	/* "neighbor next-hop-self" commands: fully converted to mgmtd for
+	 * the nine proteus AFs (M5 batch B4, bgp_cli_neighbor.c). */
 
-	/* "neighbor next-hop-self force" commands: converted to mgmtd for
-	 * the nine proteus AFs (M5 batch B4); the hidden BGP_NODE aliases
-	 * (force and the deprecated 'all' spelling) keep this DEFUN
-	 * reachable, and the 'all' spelling's per-AF hidden aliases (not
-	 * converted, still a distinct legacy command) stay installed on
-	 * every AF exactly as before. */
-	install_element(BGP_IPV4_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV4M_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV4L_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6M_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_IPV6L_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_VPNV4_NODE, &no_neighbor_nexthop_self_all_hidden_cmd);
-	install_element(BGP_VPNV6_NODE,
-			&no_neighbor_nexthop_self_all_hidden_cmd);
+	/* "neighbor next-hop-self force" commands (+ the deprecated 'all'
+	 * spelling): fully converted to mgmtd (M5 batch B4;
+	 * neighbor_nexthop_self_all_cli_cmd covers the 'all' spelling at
+	 * BGP_NODE and every AF node the retired hidden aliases reached,
+	 * see the M9 cleanup). */
 
-	/* "neighbor as-override" commands: converted to mgmtd for the eight
-	 * proteus AFs it reaches (M5 batch B4; never l2vpn evpn, matching
-	 * legacy's install set); the hidden BGP_NODE alias keeps this DEFUN
-	 * reachable. */
+	/* "neighbor as-override" commands: fully converted to mgmtd for the
+	 * eight proteus AFs it reaches plus BGP_NODE (M5 batch B4; never
+	 * l2vpn evpn, matching legacy's install set). */
 
-	/* "neighbor remove-private-AS" commands: converted to mgmtd for the
-	 * eight proteus AFs the legacy DEFUNs reached (M5 batch B5; never
-	 * l2vpn evpn); the hidden BGP_NODE aliases keep these DEFUNs
-	 * reachable. */
-	install_element(BGP_NODE,
-			&no_neighbor_remove_private_as_all_hidden_cmd);
-	install_element(BGP_NODE,
-			&neighbor_remove_private_as_replace_as_hidden_cmd);
-	install_element(BGP_NODE,
-			&no_neighbor_remove_private_as_replace_as_hidden_cmd);
-	install_element(BGP_NODE,
-			&neighbor_remove_private_as_all_replace_as_hidden_cmd);
-	install_element(
-		BGP_NODE,
-		&no_neighbor_remove_private_as_all_replace_as_hidden_cmd);
+	/* "neighbor remove-private-AS" commands: fully converted to mgmtd
+	 * for the eight proteus AFs the legacy DEFUNs reached plus BGP_NODE
+	 * (M5 batch B5; never l2vpn evpn); one DEFPY
+	 * (neighbor_remove_private_as_cli_cmd, bgp_cli_neighbor.c) covers
+	 * all four spellings, the hidden BGP_NODE aliases retired in the M9
+	 * cleanup. */
 
-	/* "neighbor send-community" commands: converted to mgmtd for the eight
-	 * proteus AFs the legacy DEFUNs reached (M5 batch B5; never l2vpn
-	 * evpn); the hidden BGP_NODE aliases keep these DEFUNs reachable.
-	 * neighbor_ecommunity_rpki_cmd's bare BGP_NODE install (not hidden --
-	 * it operates on the default ipv4-unicast AF when entered outside any
-	 * address-family block) is likewise left native and untouched; only
-	 * its per-AF installs below were converted. */
+	/* "neighbor send-community" commands (incl. ecommunity rpki): fully
+	 * converted to mgmtd for the eight proteus AFs the legacy DEFUNs
+	 * reached plus BGP_NODE (M5 batch B5; never l2vpn evpn). */
 
-	/* "neighbor route-reflector" commands: converted to mgmtd for the
-	 * nine proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
-	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
-	install_element(BGP_NODE, &no_neighbor_route_reflector_client_hidden_cmd);
+	/* "neighbor route-reflector" commands: fully converted to mgmtd (M5
+	 * batch B4 for the nine proteus AFs; flowspec M8.5; the hidden
+	 * BGP_NODE alias retired in the M9 cleanup,
+	 * neighbor_route_reflector_client_cli_cmd is installed at BGP_NODE
+	 * too). */
 
-	/* "neighbor route-server" commands: converted to mgmtd for the nine
-	 * proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
-	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
+	/* "neighbor route-server" commands: fully converted to mgmtd (M5
+	 * batch B4 for the nine proteus AFs; flowspec M8.5; BGP_NODE M9). */
 
 	/* "neighbor disable-addpath-rx", "neighbor addpath-tx-all-paths",
 	 * "neighbor addpath-tx-best-selected", "neighbor
 	 * addpath-tx-bestpath-per-AS" and "neighbor addpath-rx-paths-limit"
 	 * commands: converted to northbound, see bgp_cli_neighbor_init()
-	 * (bgp_cli_neighbor.c, M5 batch B7). tx-all-paths and
-	 * tx-bestpath-per-AS keep their hidden BGP_NODE aliases native;
-	 * addpath-rx-paths-limit keeps its bare non-hidden BGP_NODE install
-	 * (operating on the default ipv4-unicast AF, same as
-	 * maximum-prefix-out's B6 precedent). disable-addpath-rx and
-	 * addpath-tx-best-selected had neither a hidden alias nor a bare
-	 * install, so their DEFUN/DEFPY bodies are removed outright below. */
+	 * (bgp_cli_neighbor.c, M5 batch B7); all five families are fully
+	 * converted, BGP_NODE installs included. */
 
 	/* "neighbor sender-as-path-loop-detection" commands: converted to
 	 * northbound, see bgp_cli_neighbor_init() (bgp_cli_neighbor.c,
@@ -12796,12 +12100,10 @@ void bgp_vty_init(void)
 	/* "neighbor rpki strict" commands: converted to northbound, see
 	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B13). */
 
-	/* "neighbor capability orf prefix-list" commands: converted to mgmtd
-	 * for the six proteus AFs the legacy DEFUN reached (M5 batch B5;
-	 * never the two vpn AFs or l2vpn evpn); the hidden BGP_NODE alias
-	 * keeps this DEFUN reachable. */
-	install_element(BGP_NODE,
-			&no_neighbor_capability_orf_prefix_hidden_cmd);
+	/* "neighbor capability orf prefix-list" commands: fully converted to
+	 * mgmtd for the six proteus AFs the legacy DEFUN reached plus
+	 * BGP_NODE (M5 batch B5; never the two vpn AFs or l2vpn evpn); the
+	 * hidden BGP_NODE alias retired in the M9 cleanup. */
 
 	/* "neighbor capability dynamic"/"neighbor dont-capability-negotiate"/
 	 * "neighbor capability fqdn" commands: converted to northbound, see
@@ -12829,13 +12131,11 @@ void bgp_vty_init(void)
 	 */
 
 	/* "neighbor default-originate" commands: converted to northbound for
-	 * the six proteus AFs it reaches, see bgp_cli_neighbor_init()
-	 * (bgp_cli_neighbor.c, M5 batch B6); the hidden BGP_NODE aliases stay
-	 * native. */
+	 * the six proteus AFs it reaches plus BGP_NODE, see
+	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M5 batch B6). */
 
 	/* "neighbor weight" commands: converted to northbound for the eight
-	 * proteus AFs it reaches (M5 batch B6); the hidden BGP_NODE aliases
-	 * stay native. */
+	 * proteus AFs it reaches plus BGP_NODE (M5 batch B6). */
 
 	/* "neighbor encapsulation-srv6|encapsulation-mpls" commands. */
 
@@ -12853,18 +12153,18 @@ void bgp_vty_init(void)
 	/* "neighbor distribute" commands. The eight proteus AFs with a
 	 * distribute-list surface (ipv4/ipv6 {unicast,multicast,
 	 * labeled-unicast,vpn}; l2vpn evpn never had one) are converted to
-	 * mgmtd (M5 batch B2: neighbor_distribute_list_cli_cmd in
-	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias stays
-	 * native. */
+	 * mgmtd, BGP_NODE included (M5 batch B2:
+	 * neighbor_distribute_list_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c). */
 
-	/* "neighbor prefix-list" commands (see the note above; flowspec has
-	 * no proteus per-AF surface and stays native). */
+	/* "neighbor prefix-list" commands (see the note above). */
 
 	/* "neighbor filter-list" commands (see the note above). */
 
 	/* "neighbor route-map" commands. The nine proteus AFs (including
 	 * l2vpn evpn, unlike the other four families above) are converted to
-	 * mgmtd; encap/flowspec/unreachability/link-state stay native. */
+	 * mgmtd; flowspec followed in M8.5, unreachability and link-state in
+	 * M9. */
 
 	/* "neighbor unsuppress-map" commands (see the distribute-list note
 	 * above). */
@@ -12872,25 +12172,22 @@ void bgp_vty_init(void)
 	/* "neighbor advertise-map" commands. The eight proteus AFs with a
 	 * legacy advertise-map surface (ipv4/ipv6 {unicast,multicast,
 	 * labeled-unicast,vpn}; l2vpn evpn never had one) are converted to
-	 * mgmtd (M5 batch B3: neighbor_advertise_map_cli_cmd in
-	 * bgpd/proteus/bgp_cli_neighbor.c); the hidden BGP_NODE alias stays
-	 * native. */
+	 * mgmtd, BGP_NODE included (M5 batch B3:
+	 * neighbor_advertise_map_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c). */
 
-	/* neighbor maximum-prefix-out commands: converted to northbound for
-	 * the eight proteus AFs it reaches, see bgp_cli_neighbor_init()
-	 * (bgp_cli_neighbor.c, M5 batch B6); the bare non-hidden BGP_NODE
-	 * install (operating on the default ipv4-unicast AF -- there is no
-	 * ALIAS_HIDDEN for this command) stays native; the unreachability
-	 * nodes converted in M9. */
-
-	/* "neighbor maximum-prefix" commands: converted to northbound for all
-	 * nine proteus AFs (including BGP_EVPN_NODE), see
+	/* neighbor maximum-prefix-out commands: fully converted to
+	 * northbound for the eight proteus AFs it reaches plus BGP_NODE, see
 	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M5 batch B6); the
-	 * hidden BGP_NODE aliases stay native; the unreachability nodes
-	 * converted in M9. */
-	install_element(BGP_NODE, &neighbor_maximum_prefix_threshold_hidden_cmd);
-	install_element(BGP_NODE, &neighbor_maximum_prefix_threshold_warning_hidden_cmd);
-	install_element(BGP_NODE, &neighbor_maximum_prefix_threshold_restart_hidden_cmd);
+	 * unreachability nodes converted in M9. */
+
+	/* "neighbor maximum-prefix" commands: fully converted to northbound
+	 * for all nine proteus AFs (including BGP_EVPN_NODE) plus BGP_NODE,
+	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M5 batch B6); the
+	 * unreachability nodes converted in M9, and the hidden BGP_NODE
+	 * threshold aliases retired in the M9 cleanup
+	 * (neighbor_maximum_prefix_cli_cmd's superset grammar parses every
+	 * legacy threshold/warning-only/restart spelling). */
 
 
 	/* "neighbor allowas-in" */
@@ -12905,15 +12202,13 @@ void bgp_vty_init(void)
 	 * bgpd/proteus/bgp_cli_neighbor.c). soo has no hidden BGP_NODE alias
 	 * to keep native. */
 
-	/* "neighbor dampening": all six ipv4/ipv6 {unicast,multicast,
-	 * labeled-unicast} per-AF installs converted to mgmtd (M5 batch B8:
-	 * neighbor_damp_cli_cmd in bgpd/proteus/bgp_cli_neighbor.c, matching
-	 * B6's weight precedent for asymmetric install reach -- legacy never
-	 * reached vpnv4/vpnv6/l2vpn-evpn). The bare BGP_NODE install stays
-	 * native: bgp_afi_safi_container_name() cannot map BGP_NODE to a
-	 * proteus container, so 'neighbor X dampening' typed directly under
-	 * 'router bgp' (defaulting to ipv4 unicast via bgp_node_afi/safi())
-	 * has nothing else to keep it reachable. */
+	/* "neighbor dampening": fully converted to mgmtd, the six ipv4/ipv6
+	 * {unicast,multicast,labeled-unicast} per-AF installs plus BGP_NODE
+	 * (M5 batch B8: neighbor_damp_cli_cmd in
+	 * bgpd/proteus/bgp_cli_neighbor.c, matching B6's weight precedent
+	 * for asymmetric install reach; legacy never reached
+	 * vpnv4/vpnv6/l2vpn-evpn; bgp_afi_safi_container_name() maps
+	 * BGP_NODE to ipv4-unicast since M9). */
 	install_element(VIEW_NODE, &show_ip_bgp_neighbor_damp_param_cmd);
 
 	/* address-family commands. */
@@ -12983,24 +12278,14 @@ void bgp_vty_init(void)
 	/* "show bgp aggregate-address" command */
 	install_element(VIEW_NODE, &show_bgp_aggregate_cmd);
 
-	/* "redistribute" commands.  */
-	install_element(BGP_NODE,
-			&bgp_redistribute_ipv4_rmap_metric_hidden_cmd);
-	install_element(BGP_NODE, &bgp_redistribute_ipv4_metric_rmap_hidden_cmd);
-	install_element(BGP_NODE,
-			&bgp_redistribute_ipv4_ospf_metric_hidden_cmd);
-	install_element(BGP_NODE,
-			&bgp_redistribute_ipv4_ospf_rmap_metric_hidden_cmd);
-	install_element(BGP_NODE,
-			&bgp_redistribute_ipv4_ospf_metric_rmap_hidden_cmd);
-	/* BGP_IPV4_NODE/BGP_IPV6_NODE 'redistribute' installs retired in M5
-	 * batch B11 -- mgmtd now owns both (instance_afi_safis_redistribute_
-	 * cli_cmd/_instance_cli_cmd, bgp_cli_instance.c). The ipv4 DEFUNs stay
-	 * reachable via the BGP_NODE hidden aliases installed above (bare
-	 * 'redistribute ...' under 'router bgp' always meant ipv4-unicast,
-	 * matching the bare-BGP_NODE precedent B6-B10 established); ipv6 had
-	 * no such fallback, so its DEFUNs are deleted outright below (B7/B9
-	 * precedent for commands left with no reachable install site). */
+	/* "redistribute" commands: fully converted to mgmtd, the
+	 * BGP_IPV4_NODE/BGP_IPV6_NODE installs in M5 batch B11 and BGP_NODE
+	 * in the M9 cleanup (instance_afi_safis_redistribute_cli_cmd/
+	 * _instance_cli_cmd, bgp_cli_instance.c; bare 'redistribute ...'
+	 * under 'router bgp' always meant ipv4-unicast, which
+	 * bgp_afi_safi_container_name() maps BGP_NODE to since M9, and the
+	 * converted {metric|route-map} grammar parses both legacy
+	 * orderings). */
 
 	/* redistribute show commands */
 	install_element(VIEW_NODE, &show_bgp_redistribute_cmd);
