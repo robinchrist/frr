@@ -499,79 +499,6 @@ int bgp_fs_config_write_pbr(struct vty *vty, struct bgp *bgp,
 	return 0;
 }
 
-static int bgp_fs_local_install_interface(struct bgp *bgp,
-					  const char *no, const char *ifname,
-					  afi_t afi)
-{
-	struct bgp_pbr_interface *pbr_if;
-	struct bgp_pbr_config *bgp_pbr_cfg = bgp->bgp_pbr_cfg;
-	struct bgp_pbr_interface_head *head;
-	bool *bgp_pbr_interface_any;
-
-	if (!bgp_pbr_cfg)
-		return CMD_SUCCESS;
-	if (afi == AFI_IP) {
-		head = &(bgp_pbr_cfg->ifaces_by_name_ipv4);
-		bgp_pbr_interface_any = &(bgp_pbr_cfg->pbr_interface_any_ipv4);
-	} else {
-		head = &(bgp_pbr_cfg->ifaces_by_name_ipv6);
-		bgp_pbr_interface_any = &(bgp_pbr_cfg->pbr_interface_any_ipv6);
-	}
-	if (no) {
-		if (!ifname) {
-			if (*bgp_pbr_interface_any) {
-				*bgp_pbr_interface_any = false;
-				/* remove all other interface list */
-				bgp_pbr_reset(bgp, afi);
-			}
-			return CMD_SUCCESS;
-		}
-		pbr_if = bgp_pbr_interface_lookup(ifname, head);
-		if (!pbr_if)
-			return CMD_SUCCESS;
-		RB_REMOVE(bgp_pbr_interface_head, head, pbr_if);
-		return CMD_SUCCESS;
-	}
-	if (ifname) {
-		pbr_if = bgp_pbr_interface_lookup(ifname, head);
-		if (pbr_if)
-			return CMD_SUCCESS;
-		pbr_if = XCALLOC(MTYPE_TMP,
-				 sizeof(struct bgp_pbr_interface));
-		strlcpy(pbr_if->name, ifname, IFNAMSIZ);
-		RB_INSERT(bgp_pbr_interface_head, head, pbr_if);
-		*bgp_pbr_interface_any = false;
-	} else {
-		/* set to default */
-		if (!*bgp_pbr_interface_any) {
-			/* remove all other interface list
-			 */
-			bgp_pbr_reset(bgp, afi);
-			*bgp_pbr_interface_any = true;
-		}
-	}
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_fs_local_install_ifname,
-	bgp_fs_local_install_ifname_cmd,
-	"[no] local-install INTERFACE",
-	NO_STR
-	"Apply local policy routing\n"
-	"Interface name\n")
-{
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	int idx = 0;
-	const char *no = strmatch(argv[0]->text, "no") ? "no" : NULL;
-	char *ifname = argv_find(argv, argc, "INTERFACE", &idx) ?
-		argv[idx]->arg : NULL;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	return bgp_fs_local_install_interface(bgp, no, ifname,
-					      bgp_node_afi(vty));
-}
 
 extern int bgp_flowspec_display_match_per_ip(afi_t afi, struct bgp_table *rib,
 					     struct prefix *match,
@@ -604,9 +531,5 @@ extern int bgp_flowspec_display_match_per_ip(afi_t afi, struct bgp_table *rib,
 void bgp_flowspec_vty_init(void)
 {
 	install_element(ENABLE_NODE, &debug_bgp_flowspec_cmd);
-	install_element(CONFIG_NODE, &debug_bgp_flowspec_cmd);
 	install_element(ENABLE_NODE, &no_debug_bgp_flowspec_cmd);
-	install_element(CONFIG_NODE, &no_debug_bgp_flowspec_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE, &bgp_fs_local_install_ifname_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE, &bgp_fs_local_install_ifname_cmd);
 }

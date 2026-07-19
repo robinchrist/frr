@@ -12767,6 +12767,20 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/nexthop-prefer-global",
+			.cbs = {
+				.modify = instance_afi_safis_ipv6_multicast_nexthop_prefer_global_modify,
+				.destroy = instance_afi_safis_ipv6_multicast_nexthop_prefer_global_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/nexthop-prefer-global",
+			.cbs = {
+				.modify = instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_modify,
+				.destroy = instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy,
+			}
+		},
+		{
 			.xpath = NULL,
 		},
 	}

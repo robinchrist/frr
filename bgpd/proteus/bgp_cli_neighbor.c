@@ -5178,6 +5178,22 @@ DEFPY_YANG(
 					       no ? "false" : "true");
 }
 
+/* Legacy compat (M9): 'next-hop-self all' was a hidden alias for 'force',
+ * installed at BGP_NODE and every AF node, so old config files keep
+ * loading; emission always renders 'force'. */
+DEFPY_YANG(
+	neighbor_nexthop_self_all, neighbor_nexthop_self_all_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer next-hop-self all",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disable the next hop calculation for this neighbor\n"
+	"Set the next hop to self for reflected routes\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "next-hop-self/force",
+					       no ? "false" : "true");
+}
+
 void neighbor_af_next_hop_self_enabled_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults)
 {
@@ -6898,6 +6914,55 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_LS_NODE, &no_neighbor_activate_cli_cmd);
 	install_element(BGP_LS_NODE, &neighbor_route_map_cli_cmd);
 	install_element(BGP_LS_NODE, &no_neighbor_route_map_cli_cmd);
+
+	/* M9 flat-style compat aliases (ipv4-unicast semantics at BGP_NODE),
+	 * matching the retired legacy hidden aliases + bare BGP_NODE
+	 * installs; see bgp_afi_safi_map's BGP_NODE entry. */
+	install_element(BGP_NODE, &neighbor_activate_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_activate_cli_cmd);
+	install_element(BGP_NODE, &neighbor_addpath_paths_limit_cli_cmd);
+	install_element(BGP_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
+	install_element(BGP_NODE, &neighbor_addpath_tx_bestpath_per_as_cli_cmd);
+	install_element(BGP_NODE, &neighbor_advertise_map_cli_cmd);
+	install_element(BGP_NODE, &neighbor_allowas_in_cli_cmd);
+	install_element(BGP_NODE, &neighbor_as_override_cli_cmd);
+	install_element(BGP_NODE, &neighbor_attribute_unchanged_cli_cmd);
+	install_element(BGP_NODE, &neighbor_capability_orf_prefix_cli_cmd);
+	install_element(BGP_NODE, &neighbor_damp_cli_cmd);
+	install_element(BGP_NODE, &neighbor_default_originate_cli_cmd);
+	install_element(BGP_NODE, &neighbor_distribute_list_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_distribute_list_cli_cmd);
+	install_element(BGP_NODE, &neighbor_ecommunity_rpki_cli_cmd);
+	install_element(BGP_NODE, &neighbor_filter_list_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_filter_list_cli_cmd);
+	install_element(BGP_NODE, &neighbor_maximum_prefix_cli_cmd);
+	install_element(BGP_NODE, &neighbor_maximum_prefix_out_cli_cmd);
+	install_element(BGP_NODE, &neighbor_nexthop_self_cli_cmd);
+	install_element(BGP_NODE, &neighbor_prefix_list_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_prefix_list_cli_cmd);
+	install_element(BGP_NODE, &neighbor_remove_private_as_cli_cmd);
+	install_element(BGP_NODE, &neighbor_route_map_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_route_map_cli_cmd);
+	install_element(BGP_NODE, &neighbor_route_reflector_client_cli_cmd);
+	install_element(BGP_NODE, &neighbor_route_server_client_cli_cmd);
+	install_element(BGP_NODE, &neighbor_send_community_cli_cmd);
+	install_element(BGP_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_NODE, &neighbor_soft_reconfiguration_cli_cmd);
+	install_element(BGP_NODE, &neighbor_unsuppress_map_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_unsuppress_map_cli_cmd);
+	install_element(BGP_NODE, &neighbor_weight_cli_cmd);
+
+	/* 'next-hop-self all' compat alias: BGP_NODE + the AF nodes legacy
+	 * covered. */
+	install_element(BGP_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV4_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_nexthop_self_all_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_nexthop_self_all_cli_cmd);
 
 	/* M9: BGP-LS link identifiers (session-level). */
 	install_element(BGP_NODE, &neighbor_ls_local_link_id_cli_cmd);

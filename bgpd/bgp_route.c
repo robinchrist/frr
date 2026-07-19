@@ -9401,21 +9401,6 @@ void bgp_table_map_unset(struct bgp *bgp, afi_t afi, safi_t safi)
 		bgp_zebra_announce_table(bgp, afi, safi);
 }
 
-static int bgp_table_map_set_vty(struct vty *vty, afi_t afi, safi_t safi, const char *rmap_name)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_table_map_set(bgp, afi, safi, rmap_name);
-	return CMD_SUCCESS;
-}
-
-static int bgp_table_map_unset_vty(struct vty *vty, afi_t afi, safi_t safi)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_table_map_unset(bgp, afi, safi);
-	return CMD_SUCCESS;
-}
 
 void bgp_config_write_table_map(struct vty *vty, struct bgp *bgp, afi_t afi,
 				safi_t safi)
@@ -9426,25 +9411,6 @@ void bgp_config_write_table_map(struct vty *vty, struct bgp *bgp, afi_t afi,
 	}
 }
 
-DEFUN (bgp_table_map,
-       bgp_table_map_cmd,
-       "table-map WORD",
-       "BGP table to RIB route download filter\n"
-       "Name of the route map\n")
-{
-	int idx_word = 1;
-	return bgp_table_map_set_vty(vty, bgp_node_afi(vty), bgp_node_safi(vty),
-				     argv[idx_word]->arg);
-}
-DEFUN (no_bgp_table_map,
-       no_bgp_table_map_cmd,
-       "no table-map WORD",
-       NO_STR
-       "BGP table to RIB route download filter\n"
-       "Name of the route map\n")
-{
-	return bgp_table_map_unset_vty(vty, bgp_node_afi(vty), bgp_node_safi(vty));
-}
 
 /* Reachable only via the bare BGP_NODE install now (M5 batch B9): the eight
  * proteus 'network' AFs (ipv4/ipv6 x unicast/multicast/labeled-unicast) are
@@ -9452,46 +9418,6 @@ DEFUN (no_bgp_table_map,
  * under 'router bgp' has no other AF context to fall back to -- it always
  * meant ipv4-unicast (bgp_node_safi()'s default case), so this stays native
  * for that one entry point, matching B6-B8's bare-BGP_NODE precedent. */
-DEFPY(bgp_network,
-	bgp_network_cmd,
-	"[no] network \
-	<A.B.C.D/M$prefix|A.B.C.D$address [mask A.B.C.D$netmask]> \
-	[{route-map RMAP_NAME$map_name|label-index (0-1048560)$label_index| \
-	backdoor$backdoor}]",
-	NO_STR
-	"Specify a network to announce via BGP\n"
-	"IPv4 prefix\n"
-	"Network number\n"
-	"Network mask\n"
-	"Network mask\n"
-	"Route-map to modify the attributes\n"
-	"Name of the route map\n"
-	"Label index to associate with the prefix\n"
-	"Label index value\n"
-	"Specify a BGP backdoor route\n")
-{
-	char addr_prefix_str[BUFSIZ];
-
-	if (address_str) {
-		int ret;
-
-		ret = netmask_str2prefix_str(address_str, netmask_str,
-					     addr_prefix_str,
-					     sizeof(addr_prefix_str));
-		if (!ret) {
-			vty_out(vty, "%% Inconsistent address and mask\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	return bgp_static_set_vty(vty, no,
-			      address_str ? addr_prefix_str : prefix_str, NULL,
-			      NULL, AFI_IP, bgp_node_safi(vty), map_name,
-			      backdoor ? 1 : 0,
-			      label_index ? (uint32_t)label_index
-					  : BGP_INVALID_LABEL_INDEX,
-			      0, NULL, NULL, NULL, NULL);
-}
 
 static struct bgp_aggregate *bgp_aggregate_new(void)
 {
@@ -10614,24 +10540,6 @@ int bgp_aggregate_unset(struct bgp *bgp, const char *prefix_str, afi_t afi, safi
 	return 0;
 }
 
-/* vty-facing wrapper: resolves the bgp instance from the vty context and
- * turns bgp_aggregate_unset()'s errmsg/-1 into the CLI's vty_out()/
- * CMD_WARNING_CONFIG_FAILED idiom, for the ipv4-unicast bgp_aggregate
- * DEFPY, which stays reachable only via the bare BGP_NODE install now that
- * the six proteus 'aggregate-address' AFs are mgmtd-owned (M5 batch B10). */
-static int bgp_aggregate_unset_vty(struct vty *vty, const char *prefix_str, afi_t afi,
-				   safi_t safi)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	char errmsg[256];
-
-	if (bgp_aggregate_unset(bgp, prefix_str, afi, safi, errmsg, sizeof(errmsg))) {
-		vty_out(vty, "%% %s\n", errmsg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return CMD_SUCCESS;
-}
 
 static bool bgp_aggregate_cmp_params(struct bgp_aggregate *aggregate, const char *rmap,
 				     uint8_t summary_only, uint8_t as_set, uint8_t origin,
@@ -10764,26 +10672,6 @@ int bgp_aggregate_set(struct bgp *bgp, const char *prefix_str, afi_t afi, safi_t
 	return 0;
 }
 
-/* vty-facing wrapper: resolves the bgp instance from the vty context and
- * turns bgp_aggregate_set()'s errmsg/-1 into the CLI's vty_out()/
- * CMD_WARNING_CONFIG_FAILED idiom, for the ipv4-unicast bgp_aggregate
- * DEFPY, which stays reachable only via the bare BGP_NODE install now that
- * the six proteus 'aggregate-address' AFs are mgmtd-owned (M5 batch B10). */
-static int bgp_aggregate_set_vty(struct vty *vty, const char *prefix_str, afi_t afi, safi_t safi,
-				 const char *rmap, uint8_t summary_only, uint8_t as_set,
-				 uint8_t origin, bool match_med, const char *suppress_map)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	char errmsg[256];
-
-	if (bgp_aggregate_set(bgp, prefix_str, afi, safi, rmap, summary_only, as_set, origin,
-			      match_med, suppress_map, errmsg, sizeof(errmsg))) {
-		vty_out(vty, "%% %s\n", errmsg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return CMD_SUCCESS;
-}
 
 /* Reachable only via the bare BGP_NODE install now (M5 batch B10): the six
  * proteus 'aggregate-address' AFs (ipv4/ipv6 x
@@ -10792,69 +10680,6 @@ static int bgp_aggregate_set_vty(struct vty *vty, const char *prefix_str, afi_t 
  * under 'router bgp' has no other AF context to fall back to -- it always
  * meant ipv4-unicast (bgp_node_safi()'s default case), so this stays native
  * for that one entry point, matching B9's bare-BGP_NODE precedent. */
-DEFPY(aggregate_addressv4, aggregate_addressv4_cmd,
-      "[no] aggregate-address <A.B.C.D/M$prefix|A.B.C.D$addr A.B.C.D$mask> [{"
-      "as-set$as_set_s"
-      "|summary-only$summary_only"
-      "|route-map RMAP_NAME$rmap_name"
-      "|origin <egp|igp|incomplete>$origin_s"
-      "|matching-MED-only$match_med"
-      "|suppress-map RMAP_NAME$suppress_map"
-      "}]",
-      NO_STR
-      "Configure BGP aggregate entries\n"
-      "Aggregate prefix\n"
-      "Aggregate address\n"
-      "Aggregate mask\n"
-      "Generate AS set path information\n"
-      "Filter more specific routes from updates\n"
-      "Apply route map to aggregate network\n"
-      "Route map name\n"
-      "BGP origin code\n"
-      "Remote EGP\n"
-      "Local IGP\n"
-      "Unknown heritage\n"
-      "Only aggregate routes with matching MED\n"
-      "Suppress the selected more specific routes\n"
-      "Route map with the route selectors\n")
-{
-	const char *prefix_s = NULL;
-	safi_t safi = bgp_node_safi(vty);
-	uint8_t origin = BGP_ORIGIN_UNSPECIFIED;
-	int as_set = AGGREGATE_AS_UNSET;
-	char prefix_buf[PREFIX2STR_BUFFER];
-
-	if (addr_str) {
-		if (netmask_str2prefix_str(addr_str, mask_str, prefix_buf,
-					   sizeof(prefix_buf))
-		    == 0) {
-			vty_out(vty, "%% Inconsistent address and mask\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		prefix_s = prefix_buf;
-	} else
-		prefix_s = prefix_str;
-
-	if (origin_s) {
-		if (strcmp(origin_s, "egp") == 0)
-			origin = BGP_ORIGIN_EGP;
-		else if (strcmp(origin_s, "igp") == 0)
-			origin = BGP_ORIGIN_IGP;
-		else if (strcmp(origin_s, "incomplete") == 0)
-			origin = BGP_ORIGIN_INCOMPLETE;
-	}
-
-	if (as_set_s)
-		as_set = AGGREGATE_AS_SET;
-
-	/* Handle configuration removal, otherwise installation. */
-	if (no)
-		return bgp_aggregate_unset_vty(vty, prefix_s, AFI_IP, safi);
-
-	return bgp_aggregate_set_vty(vty, prefix_s, AFI_IP, safi, rmap_name,
-				     summary_only != NULL, as_set, origin,
-				     match_med != NULL, suppress_map);
-}
 
 void bgp_free_aggregate_info(struct bgp_aggregate *aggregate)
 {
@@ -18321,24 +18146,6 @@ int bgp_distance_prefix_set(afi_t afi, safi_t safi, uint8_t distance,
 	return 0;
 }
 
-/* Legacy CLI wrapper: derive afi/safi from the vty's AF sub-node and route
- * errors to vty_out(), for the still-native per-prefix 'distance (1-255)
- * PREFIX [ACCESSLIST]' DEFUNs (only the bare BGP_NODE ipv4-unicast fallback
- * survives M5 batch B13). */
-static int bgp_distance_set_vty(struct vty *vty, const char *distance_str,
-				const char *ip_str, const char *access_list_str)
-{
-	char errmsg[128] = {};
-
-	if (bgp_distance_prefix_set(bgp_node_afi(vty), bgp_node_safi(vty),
-				    atoi(distance_str), ip_str, access_list_str,
-				    errmsg, sizeof(errmsg)) < 0) {
-		vty_out(vty, "%s\n", errmsg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return CMD_SUCCESS;
-}
 
 /* Per-prefix distance override removal, vty-free core (M5 batch B13).
  * match_distance != 0 enforces legacy's "distance must match configured"
@@ -18386,20 +18193,6 @@ int bgp_distance_prefix_unset(afi_t afi, safi_t safi, uint8_t match_distance,
 	return 0;
 }
 
-static int bgp_distance_unset_vty(struct vty *vty, const char *distance_str,
-				  const char *ip_str)
-{
-	char errmsg[128] = {};
-
-	if (bgp_distance_prefix_unset(bgp_node_afi(vty), bgp_node_safi(vty),
-				      atoi(distance_str), ip_str, errmsg,
-				      sizeof(errmsg)) < 0) {
-		vty_out(vty, "%s\n", errmsg);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	return CMD_SUCCESS;
-}
 
 void bgp_address_family_distance_delete(void)
 {
@@ -18543,105 +18336,6 @@ void bgp_distance_admin_set(struct bgp *bgp, afi_t afi, safi_t safi,
 	bgp_announce_routes_distance_update(bgp, afi, safi);
 }
 
-DEFUN (bgp_distance,
-       bgp_distance_cmd,
-       "distance bgp (1-255) (1-255) (1-255)",
-       "Define an administrative distance\n"
-       "BGP distance\n"
-       "Distance for routes external to the AS\n"
-       "Distance for routes internal to the AS\n"
-       "Distance for local routes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_number = 2;
-	int idx_number_2 = 3;
-	int idx_number_3 = 4;
-
-	bgp_distance_admin_set(bgp, bgp_node_afi(vty), bgp_node_safi(vty),
-			       atoi(argv[idx_number]->arg),
-			       atoi(argv[idx_number_2]->arg),
-			       atoi(argv[idx_number_3]->arg));
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_distance,
-       no_bgp_distance_cmd,
-       "no distance bgp [(1-255) (1-255) (1-255)]",
-       NO_STR
-       "Define an administrative distance\n"
-       "BGP distance\n"
-       "Distance for routes external to the AS\n"
-       "Distance for routes internal to the AS\n"
-       "Distance for local routes\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-
-	bgp_distance_admin_set(bgp, bgp_node_afi(vty), bgp_node_safi(vty), 0, 0,
-			       0);
-	return CMD_SUCCESS;
-}
-
-
-DEFUN (bgp_distance_source,
-       bgp_distance_source_cmd,
-       "distance (1-255) A.B.C.D/M",
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n")
-{
-	int idx_number = 1;
-	int idx_ipv4_prefixlen = 2;
-	bgp_distance_set_vty(vty, argv[idx_number]->arg,
-			     argv[idx_ipv4_prefixlen]->arg, NULL);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_distance_source,
-       no_bgp_distance_source_cmd,
-       "no distance (1-255) A.B.C.D/M",
-       NO_STR
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n")
-{
-	int idx_number = 2;
-	int idx_ipv4_prefixlen = 3;
-	bgp_distance_unset_vty(vty, argv[idx_number]->arg,
-			       argv[idx_ipv4_prefixlen]->arg);
-	return CMD_SUCCESS;
-}
-
-DEFUN (bgp_distance_source_access_list,
-       bgp_distance_source_access_list_cmd,
-       "distance (1-255) A.B.C.D/M WORD",
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n"
-       "Access list name\n")
-{
-	int idx_number = 1;
-	int idx_ipv4_prefixlen = 2;
-	int idx_word = 3;
-	bgp_distance_set_vty(vty, argv[idx_number]->arg,
-			     argv[idx_ipv4_prefixlen]->arg, argv[idx_word]->arg);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_distance_source_access_list,
-       no_bgp_distance_source_access_list_cmd,
-       "no distance (1-255) A.B.C.D/M WORD",
-       NO_STR
-       "Define an administrative distance\n"
-       "Administrative distance\n"
-       "IP source prefix\n"
-       "Access list name\n")
-{
-	int idx_number = 2;
-	int idx_ipv4_prefixlen = 3;
-	bgp_distance_unset_vty(vty, argv[idx_number]->arg,
-			       argv[idx_ipv4_prefixlen]->arg);
-	return CMD_SUCCESS;
-}
 
 /* The IPv6 per-prefix 'distance' DEFUNs (ipv6_bgp_distance_source and its
  * access-list/no variants) were converted to proteus/northbound in M5 batch
@@ -18649,66 +18343,6 @@ DEFUN (no_bgp_distance_source_access_list,
  * install to keep them reachable -- so they are removed outright, per the
  * B9/B11 precedent for commands left with no install site. */
 
-DEFUN (bgp_damp_set,
-       bgp_damp_set_cmd,
-       "bgp dampening [(1-45) [(1-20000) (1-50000) (1-255)]]",
-       "BGP Specific commands\n"
-       "Enable route-flap dampening\n"
-       "Half-life time for the penalty\n"
-       "Value to start reusing a route\n"
-       "Value to start suppressing a route\n"
-       "Maximum duration to suppress a stable route\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	int idx_half_life = 2;
-	int idx_reuse = 3;
-	int idx_suppress = 4;
-	int idx_max_suppress = 5;
-	int half = DEFAULT_HALF_LIFE * 60;
-	int reuse = DEFAULT_REUSE;
-	int suppress = DEFAULT_SUPPRESS;
-	int max = 4 * half;
-
-	if (argc == 6) {
-		half = atoi(argv[idx_half_life]->arg) * 60;
-		reuse = atoi(argv[idx_reuse]->arg);
-		suppress = atoi(argv[idx_suppress]->arg);
-		max = atoi(argv[idx_max_suppress]->arg) * 60;
-	} else if (argc == 3) {
-		half = atoi(argv[idx_half_life]->arg) * 60;
-		max = 4 * half;
-	}
-
-	/*
-	 * These can't be 0 but our SA doesn't understand the
-	 * way our cli is constructed
-	 */
-	assert(reuse);
-	assert(half);
-	if (suppress < reuse) {
-		vty_out(vty,
-			"Suppress value cannot be less than reuse value \n");
-		return 0;
-	}
-
-	return bgp_damp_enable(bgp, bgp_node_afi(vty), bgp_node_safi(vty), half,
-			       reuse, suppress, max);
-}
-
-DEFUN (bgp_damp_unset,
-       bgp_damp_unset_cmd,
-       "no bgp dampening [(1-45) [(1-20000) (1-50000) (1-255)]]",
-       NO_STR
-       "BGP Specific commands\n"
-       "Enable route-flap dampening\n"
-       "Half-life time for the penalty\n"
-       "Value to start reusing a route\n"
-       "Value to start suppressing a route\n"
-       "Maximum duration to suppress a stable route\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	return bgp_damp_disable(bgp, bgp_node_afi(vty), bgp_node_safi(vty));
-}
 
 /* Display specified route of BGP table. */
 static int bgp_clear_damp_route(struct vty *vty, const char *view_name,
@@ -19137,11 +18771,7 @@ void bgp_route_init(void)
 		bgp_distance_table[afi][safi] = bgp_table_init(NULL, afi, safi);
 
 	/* IPv4 BGP commands. */
-	install_element(BGP_NODE, &bgp_table_map_cmd);
-	install_element(BGP_NODE, &bgp_network_cmd);
-	install_element(BGP_NODE, &no_bgp_table_map_cmd);
 
-	install_element(BGP_NODE, &aggregate_addressv4_cmd);
 
 	/* 'table-map' commands: converted to northbound for the eight
 	 * proteus AFs (M5 batch B12), see bgp_cli_instance_init()
@@ -19198,20 +18828,12 @@ void bgp_route_init(void)
 	 * per-AF IPV4/IPV4M/IPV6/IPV6M installs are retired, and the IPv6
 	 * per-prefix DEFUNs -- which had no bare fallback -- are deleted
 	 * outright above. */
-	install_element(BGP_NODE, &bgp_distance_cmd);
-	install_element(BGP_NODE, &no_bgp_distance_cmd);
-	install_element(BGP_NODE, &bgp_distance_source_cmd);
-	install_element(BGP_NODE, &no_bgp_distance_source_cmd);
-	install_element(BGP_NODE, &bgp_distance_source_access_list_cmd);
-	install_element(BGP_NODE, &no_bgp_distance_source_access_list_cmd);
 
 	/* BGP dampening: converted to northbound for the eight proteus AFs
 	 * (M5 batch B12), see bgp_cli_instance_init() (bgp_cli_instance.c);
 	 * the bare BGP_NODE install stays native (bare 'bgp dampening ...'
 	 * under 'router bgp' always meant ipv4-unicast, matching the
 	 * bare-BGP_NODE precedent B6-B11 established). */
-	install_element(BGP_NODE, &bgp_damp_set_cmd);
-	install_element(BGP_NODE, &bgp_damp_unset_cmd);
 
 	/* Large Communities */
 	install_element(VIEW_NODE, &show_ip_bgp_large_community_list_cmd);
@@ -19242,45 +18864,6 @@ void bgp_route_init(void)
 	 * See doc/developer/northbound/bgpd-proteus-conversion.rst
 	 * (coexistence).
 	 */
-	_install_element(BGP_IPV4_NODE, &bgp_network_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_network_cmd);
-	_install_element(BGP_IPV4L_NODE, &bgp_network_cmd);
-	_install_element(BGP_IPV4_NODE, &aggregate_addressv4_cmd);
-	_install_element(BGP_IPV4M_NODE, &aggregate_addressv4_cmd);
-	_install_element(BGP_IPV4L_NODE, &aggregate_addressv4_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_table_map_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_table_map_cmd);
-	_install_element(BGP_IPV6_NODE, &bgp_table_map_cmd);
-	_install_element(BGP_IPV4_NODE, &no_bgp_table_map_cmd);
-	_install_element(BGP_IPV4M_NODE, &no_bgp_table_map_cmd);
-	_install_element(BGP_IPV6_NODE, &no_bgp_table_map_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV4L_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV6_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV6M_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV6L_NODE, &bgp_damp_set_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV4L_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV6_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV6M_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV6L_NODE, &bgp_damp_unset_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_distance_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_distance_cmd);
-	_install_element(BGP_IPV6_NODE, &bgp_distance_cmd);
-	_install_element(BGP_IPV6M_NODE, &bgp_distance_cmd);
-	_install_element(BGP_IPV4_NODE, &no_bgp_distance_cmd);
-	_install_element(BGP_IPV4M_NODE, &no_bgp_distance_cmd);
-	_install_element(BGP_IPV6_NODE, &no_bgp_distance_cmd);
-	_install_element(BGP_IPV6M_NODE, &no_bgp_distance_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_distance_source_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_distance_source_cmd);
-	_install_element(BGP_IPV4_NODE, &no_bgp_distance_source_cmd);
-	_install_element(BGP_IPV4M_NODE, &no_bgp_distance_source_cmd);
-	_install_element(BGP_IPV4_NODE, &bgp_distance_source_access_list_cmd);
-	_install_element(BGP_IPV4M_NODE, &bgp_distance_source_access_list_cmd);
-	_install_element(BGP_IPV4_NODE, &no_bgp_distance_source_access_list_cmd);
 }
 
 void bgp_route_finish(void)

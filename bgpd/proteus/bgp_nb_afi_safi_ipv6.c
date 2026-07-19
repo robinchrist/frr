@@ -1487,3 +1487,91 @@ int instance_afi_safis_ipv6_flowspec_local_install_destroy(struct nb_cb_destroy_
 {
 	return bgp_nb_fs_local_install_destroy(args, AFI_IP6, SAFI_FLOWSPEC);
 }
+
+/* M9: the multicast/labeled-unicast twins (legacy supported all three). */
+
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_MULTICAST,
+						   yang_dnode_get_bool(args->dnode, NULL));
+		break;
+	}
+
+	return NB_OK;
+}
+
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_MULTICAST,
+						   bgp_ipv6_nexthop_prefer_global_default());
+		break;
+	}
+
+	return NB_OK;
+}
+
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_modify(
+	struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_LABELED_UNICAST,
+						   yang_dnode_get_bool(args->dnode, NULL));
+		break;
+	}
+
+	return NB_OK;
+}
+
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp_ipv6_nexthop_prefer_global_set(bgp, AFI_IP6, SAFI_LABELED_UNICAST,
+						   bgp_ipv6_nexthop_prefer_global_default());
+		break;
+	}
+
+	return NB_OK;
+}

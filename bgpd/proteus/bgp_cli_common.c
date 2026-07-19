@@ -1019,9 +1019,21 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 		/* M5 B14: instance-AF 'nexthop prefer-global', ipv6-unicast
 		 * only (proteus-bgp.yang models the leaf under ipv6-unicast
 		 * alone, even though the legacy DEFUN is also installed on
-		 * BGP_IPV6M_NODE/BGP_IPV6L_NODE -- those two stay native). */
+		 * BGP_IPV6M_NODE/BGP_IPV6L_NODE joined in M9). */
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/nexthop-prefer-global",
+			.cbs = {
+				.cli_show = afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-multicast/nexthop-prefer-global",
+			.cbs = {
+				.cli_show = afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-labeled-unicast/nexthop-prefer-global",
 			.cbs = {
 				.cli_show = afi_safis_ipv6_unicast_nexthop_prefer_global_cli_write,
 			}

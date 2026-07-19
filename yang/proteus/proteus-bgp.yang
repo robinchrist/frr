@@ -3928,6 +3928,13 @@ module proteus-bgp {
         uses af-aggregate-ipv6;
         uses af-route-selection;
         uses af-distance-ipv6;
+        leaf nexthop-prefer-global {
+          type boolean;
+          description
+            "'[no] nexthop prefer-global': prefer the global IPv6
+             next hop over the link-local
+             (bgp_config_write_ipv6_nexthop_prefer_global).";
+        }
       }
 
       container ipv6-labeled-unicast {
@@ -3937,6 +3944,13 @@ module proteus-bgp {
         uses af-aggregate-ipv6;
         uses af-route-selection;
         uses af-distance-ipv6;
+        leaf nexthop-prefer-global {
+          type boolean;
+          description
+            "'[no] nexthop prefer-global': prefer the global IPv6
+             next hop over the link-local
+             (bgp_config_write_ipv6_nexthop_prefer_global).";
+        }
       }
 
       container ipv6-vpn {

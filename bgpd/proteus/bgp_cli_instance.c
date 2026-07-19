@@ -148,6 +148,14 @@ static const struct {
 	{ BGP_IPV4U_NODE, "ipv4-unreachability", "ipv4 unreachability" },
 	{ BGP_IPV6U_NODE, "ipv6-unreachability", "ipv6 unreachability" },
 	{ BGP_LS_NODE, "link-state", "link-state link-state" },
+	/* M9 flat-style compat: legacy accepted the pre-address-family
+	 * config style (per-AF lines directly under 'router bgp', hidden
+	 * aliases in bgp_vty.c, ipv4-unicast semantics). With mgmtd the
+	 * only file parser, BGP_NODE resolves to ipv4-unicast so the
+	 * converted per-AF commands installed at BGP_NODE keep accepting
+	 * that style. Placed last: container->header lookups must keep
+	 * finding BGP_IPV4_NODE's entry first. */
+	{ BGP_NODE, "ipv4-unicast", "ipv4 unicast" },
 };
 
 /* Reverse of bgp_node_type(): the proteus afi-safis child container name
@@ -8244,8 +8252,11 @@ DEFPY_YANG(
 	"Nexthop\n"
 	"Prefer global over link-local if both exist\n")
 {
-	nb_cli_enqueue_change(vty, "./afi-safis/ipv6-unicast/nexthop-prefer-global",
-			      no ? NB_OP_DESTROY : NB_OP_MODIFY, no ? NULL : "true");
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "./afi-safis/%s/nexthop-prefer-global", container);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_MODIFY, no ? NULL : "true");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -8321,6 +8332,22 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV6U_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_LS_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_LS_NODE, &bgp_ls_distribute_bgp_fabric_cli_cmd);
+
+	/* M9 flat-style compat aliases (ipv4-unicast semantics at BGP_NODE),
+	 * matching the retired legacy hidden aliases + bare BGP_NODE installs. */
+	install_element(BGP_NODE, &instance_afi_safis_network_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_aggregate_address_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_redistribute_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_redistribute_instance_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_no_maximum_paths_ibgp_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_table_map_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_dampening_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_distance_bgp_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_no_distance_bgp_cli_cmd);
+	install_element(BGP_NODE, &instance_afi_safis_distance_source_cli_cmd);
 
 	/* M6 B1: 'vni N' ... 'exit-vni' sub-node (mgmtd side). */
 	install_node(&bgp_evpn_vni_node);
@@ -8739,6 +8766,10 @@ void bgp_cli_instance_init(void)
 	 * above); BGP_IPV6M_NODE/BGP_IPV6L_NODE keep the legacy DEFUN
 	 * installed natively, bgp_vty.c. */
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd);
+	install_element(BGP_IPV6M_NODE,
+			&instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd);
+	install_element(BGP_IPV6L_NODE,
+			&instance_afi_safis_ipv6_unicast_nexthop_prefer_global_cli_cmd);
 
 	/* M7 B1: instance-AF VPN leaking simple knobs ('import|export vpn',
 	 * 'import vrf NAME', 'import vrf route-map NAME'), ipv4-unicast/

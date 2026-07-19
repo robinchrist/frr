@@ -208,6 +208,13 @@ int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
 int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
 	struct nb_cb_destroy_args *args);
 
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
+	struct nb_cb_destroy_args *args);
+
 #endif
 
 extern const struct frr_yang_module_info proteus_bgp_nb_info;
@@ -5035,6 +5042,13 @@ int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
 int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
 	struct nb_cb_destroy_args *args);
 
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
+	struct nb_cb_destroy_args *args);
+
 #endif
 
 /* M8.5 encapsulation wrappers. */
@@ -5410,6 +5424,13 @@ int instance_peer_group_afi_safis_link_state_filters_route_map_in_destroy(
 int instance_peer_group_afi_safis_link_state_filters_route_map_out_modify(
 	struct nb_cb_modify_args *args);
 int instance_peer_group_afi_safis_link_state_filters_route_map_out_destroy(
+	struct nb_cb_destroy_args *args);
+
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_multicast_nexthop_prefer_global_destroy(struct nb_cb_destroy_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_modify(
+	struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
 	struct nb_cb_destroy_args *args);
 
 #endif
