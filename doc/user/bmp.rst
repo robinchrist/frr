@@ -104,6 +104,16 @@ All other configuration is managed per targets:
    If BMP sessions have the same configuration, putting them in the same
    ``bmp targets`` will reduce overhead.
 
+
+.. warning::
+
+   BMP configuration currently does **not persist across a bgpd restart**
+   when per-daemon split config files are used: since the bgpd
+   management-daemon conversion, ``bgpd.conf`` is read by ``mgmtd``,
+   which cannot parse the still-unconverted BMP commands, and ``bgpd``
+   itself no longer reads the file. Use the integrated ``frr.conf``
+   (``service integrated-vtysh-config``) to persist BMP configuration.
+
 BMP session configuration
 -------------------------
 

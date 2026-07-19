@@ -47,164 +47,44 @@ bodies). The generated table covers every config-bearing node in
 ``proteus-bgp.yang`` (~1,700 nodes), not just the milestone 1 slice --
 see "Stub-rejection posture" below for why.
 
-Coexistence with the legacy CLI
---------------------------------
+Post-flip architecture (M9): mgmtd owns the config file
+--------------------------------------------------------
 
-**Split config: both daemons read** ``bgpd.conf``. bgpd is listed in
-mgmtd's ``mgmt_daemons[]`` (``mgmtd/mgmt_vty_frontend.c``), so in
-split-config mode mgmtd reads ``bgpd.conf`` at startup and applies the
-converted lines through the datastore (the staticd pattern), while
-bgpd keeps reading the same file for the lines it still owns (it does
-not set ``FRR_NO_SPLIT_CONFIG``). Each side warns about the other's
-lines -- mgmtd logs errors for legacy lines it doesn't recognize, bgpd
-logs "No such command" for converted lines -- which is cosmetic and
-expected in the mixed state; neither parser aborts the file. Config
-sourced this way round-trips through ``show running-config`` because
-the converted lines live in mgmtd's datastore, where ``cli_show``
-renders them. Integrated ``frr.conf`` (``vtysh -b``) works unchanged.
+As of M9 bgpd sets ``FRR_NO_SPLIT_CONFIG`` (``bgp_main.c``): bgpd never
+reads ``bgpd.conf``. mgmtd reads it (bgpd is listed in
+``mgmt_daemons[]``), northbound-commits it, and delivers the result to
+bgpd - at boot and on every bgpd (re)connect - as one priority-ordered
+backend transaction (``txn_cfg_be_client_connect``,
+``mgmtd/mgmt_txn_cfg.c``). This is the staticd model. Node priorities
+order the replay: the instance-default leaves that ``peer_new()`` copies
+into new peers carry ``NB_DFLT_PRIORITY - 1`` so they apply before the
+neighbor CREATEs, and ``bgp default shutdown`` carries
+``NB_DFLT_PRIORITY + 1`` so it applies after them (FRR #2286 semantics),
+both in ``bgp_nb.c``.
 
-**Dual header emission, single merged block.** bgpd keeps its legacy
-``router bgp ...`` header and ``exit``/``!`` trailer in
-``bgp_config_write`` (it still owns every unconverted line inside the
-block); mgmtd's ``cli_show`` for ``/proteus-bgp:instance`` reproduces
-that exact same header. vtysh's ``show running-config`` merges
-same-context blocks by **byte-identical header text**
-(``vtysh/vtysh_config.c``), so the two emissions fold into one
-``router bgp`` block instead of splitting into two. This invariant
-applies to every future node-entry command conversion in bgpd, not
-just this milestone: any change to how bgpd renders the ``router bgp``
-header line must be mirrored in ``bgp_cli.c``'s ``instance_cli_write``,
-and vice versa.
+The native config-command surface was deleted in the same milestone:
+the only config commands left in bgpd's own graph are the node-entry
+NOSHes (``router bgp``, the address-family entries,
+``segment-routing srv6`` - kept for bgpd's own vty and the BMP/VNC
+plugin contexts) plus the plugin surfaces themselves. bgpd does not set
+a host config file, so vtysh's per-daemon ``write memory`` is answered
+by mgmtd (which holds the full modeled view), never by bgpd.
 
-**Legacy ``router_bgp`` DEFUN_NOSH stays.** Interactive commits are
-synchronous through mgmtd (it defers the CLI response until the
-backend applies the change), but file loads batch mgmtd commits until
-the ``XFRR_start_configuration`` end marker while legacy lines hit
-bgpd immediately. The legacy DEFUN_NOSH has to remain so a bgp
-instance exists for legacy subcommands to attach to mid-load;
-``bgp_get()`` is idempotent, so both the legacy and northbound paths
-creating the same instance is safe. vtysh's ``router_bgp`` DEFUNSH
-routes to both ``VTYSH_BGPD`` and ``VTYSH_MGMTD``.
+Flat-style compatibility: legacy accepted per-AF lines directly under
+``router bgp`` (hidden aliases, ipv4-unicast semantics). mgmtd keeps
+accepting that style through the ``bgp_afi_safi_map`` entry mapping
+``BGP_NODE`` to ``ipv4-unicast`` plus BGP_NODE installs of the
+converted per-AF commands (``bgp_cli_neighbor.c``,
+``bgp_cli_instance.c``).
 
-**Legacy neighbor/peer-group lifecycle DEFUNs stay.** Same reasoning as
-``router_bgp`` above, one level down: ``neighbor <addr|WORD>
-remote-as ...`` (all forms), ``neighbor WORD interface ...`` (all
-forms), ``neighbor WORD peer-group`` (create), ``neighbor <addr|WORD>
-peer-group PGNAME`` (bind), and their ``no`` forms stay in
-``bgp_vty.c`` even though ``instance_neighbor_create()`` /
-``instance_peer_group_create()`` and the ``remote-as``/peer-group-bind
-leaf callbacks in ``bgp_nb_config.c`` (M4 batch B1) are the real
-northbound implementation -- config_write for these lines is mgmtd-only
-(``peer_group_cli_write()``/``neighbor_cli_write()`` in
-``bgp_cli.c``). Without the legacy DEFUNs, a peer or peer-group
-created only through mgmtd's batched, end-of-file-triggered backend
-push does not exist yet when a legacy line later in the same file
-(e.g. ``neighbor X timers 3 10``, still unconverted) tries to
-configure it, and bgpd rejects it ("Specify remote-as or peer-group
-commands first"), aborting the rest of the block.
-
-vtysh dual-routes each of these exactly like ``router_bgp``: defining
-the same CLI grammar in both ``bgp_vty.c`` (picked up under
-``VTYSH_BGPD``) and ``bgp_cli.c`` (``VTYSH_MGMTD``) makes
-``python/xref2vtysh.py`` merge the two ``CommandEntry`` objects (same
-normalized command string, in the same CLI node) into one dual-daemon
-install rather than erroring on a duplicate -- this is the general
-mechanism the ``router_bgp`` DEFUNSH double-definition relies on too,
-just automated instead of hand-written in ``vtysh.c``. For interactive
-use, ``vtysh_client[]`` lists ``mgmtd`` before ``bgpd``, so mgmtd's
-northbound callback typically applies first and bgpd's legacy DEFUN
-runs against an already-converged (or, for destroy, already-absent)
-target. Every legacy setter here (``peer_remote_as()``,
-``peer_group_remote_as()``, ``peer_group_bind()``, ``peer_group_get()``,
-``peer_create()`` via the interface path) is idempotent by
-construction, so creates/modifies converge regardless of ordering; the
-``no ...`` DEFUNs additionally had to be changed to tolerate "peer or
-peer-group already gone" as a silent no-op instead of the pre-B1
-``CMD_WARNING_CONFIG_FAILED``, since that is now the common case rather
-than a user error. The hidden address-family-context aliases for
-``neighbor ... peer-group PGNAME`` are not reinstalled (pure CLI
-convenience, no functional loss); reconciling a peer-group member's
-stale northbound ``neighbor`` list entry after ``peer_group_delete()``
-remains a known gap, per the M4 batch B1 commit message.
-
-**mgmtd log noise.** Split-config mode logs errors for legacy
-``bgpd.conf`` lines mgmtd doesn't recognize. This is cosmetic and
-expected during the transition; it does not indicate a conversion bug.
-
-**Converted commands retire emission only -- native sub-node installs
-stay until M8.** bgpd still reads ``bgpd.conf`` natively (it does not
-set ``FRR_NO_SPLIT_CONFIG``), so it must be able to *match* every line
-in the file at its current node, including the converted ones. The
-proteus ``_cli_cmd`` twins do not help here: they are installed only in
-mgmtd's command tree (``bgp_cli_init()`` is called from
-``mgmtd/mgmt_vty.c``, never from bgpd), so in bgpd's own node graph the
-converted line has no command at the address-family/vni sub-node. bgpd's
-config reader, ``command_config_read_one_line()`` (``lib/command.c``),
-first strict-matches the current sub-node; on a miss it walks up the
-parent nodes, and each level it tries calls ``cmd_exit()`` on the way.
-If a walk-up reaches an ancestor node that *does* carry a command of the
-same grammar, the match succeeds **at the ancestor** -- and because
-``cmd_exit()`` already popped ``vty->node`` out of the block, every
-still-native line that follows in that same block is now read at the
-wrong node and rejected with "No such command", silently stranding the
-rest of the block. (This bit the VPN suites: ``neighbor X activate`` in
-an ``address-family ipv4 vpn`` block matched the surviving hidden
-``BGP_NODE`` alias on walk-up and stranded the block's still-native
-``label vpn`` / ``rd vpn`` / ``rt vpn`` / ``exit-vrf`` lines.) So the
-"No such command" noise above is only cosmetic when the walk-up finds
-**no** ancestor match; when it finds one, it drops the node.
-
-The rule: a converted per-AF/vni command retires its config **emission**
-only (mgmtd's ``cli_show`` renders it); its native command stays
-installed on the address-family/vni sub-nodes until the whole native
-surface is retired at M8. The native DEFUN/DEFPY handlers are idempotent,
-so both the mgmtd datastore path and the bgpd native read converge on the
-same result. The reinstated installs are collected in one block per
-``init`` function -- ``bgp_vty_init()`` (``bgp_vty.c``) for the neighbor
-per-AF families plus instance maximum-paths / ipv4+ipv6 redistribute /
-ipv6 nexthop prefer-global, and ``bgp_route_init()`` (``bgp_route.c``)
-for network / aggregate-address / table-map / dampening / distance --
-each carrying a comment back to this section.
-
-These blocks call ``_install_element()`` (the bare installer in
-``lib/command.c``), **not** the ``install_element()`` macro. The macro
-additionally emits an ``XREFT_INSTALL_ELEMENT`` xref that
-``python/xref2vtysh.py`` turns into a vtysh ``DEFSH``. Because
-``bgp_cli_neighbor.c`` is linked into bgpd as well as mgmtd, the proteus
-twin's install xref is already present in bgpd's binary and vtysh already
-has a command for the grammar; adding the native command's install xref
-for the same node would give vtysh **two** matching commands whenever the
-proteus DEFPY consolidated grammar the legacy DEFUNs kept split -- e.g.
-proteus ``[no] neighbor X next-hop-self [force]`` versus the separate
-native ``neighbor X next-hop-self`` / ``... force`` / ``no ...`` DEFUNs,
-or the consolidated ``redistribute`` and ``route-map`` forms. vtysh then
-reports ``% Ambiguous command`` when it applies an integrated
-``frr.conf`` (``vtysh -f``, the topojson test framework's config path),
-because the typed line completes against both. ``_install_element()``
-adds the command to bgpd's *runtime* command graph only -- which is all
-bgpd needs to strict-match its own ``bgpd.conf`` -- and leaves vtysh's
-tree to the single proteus twin. (bgpd's runtime graph never carries the
-proteus twins itself: ``bgp_cli_init()`` runs only in mgmtd, so the bgpd
-side is unambiguous either way.)
-
-Stranding needs a surviving ancestor of matching grammar, so not every
-converted command is affected. The affected ones are those whose family
-kept a hidden ``BGP_NODE`` alias (most per-AF ``neighbor`` commands, e.g.
-``activate``, ``route-map``, ``soft-reconfiguration``,
-``send-community``, ``maximum-prefix``) or a bare ``BGP_NODE`` install
-(``network``, ``distance``, ``table-map``, ``maximum-paths``,
-``dampening``, ``aggregate-address``, ipv4 ``redistribute``). ipv6
-``redistribute`` counts too even though it has no ipv6-specific
-``BGP_NODE`` alias: the surviving ipv4 hidden ``redistribute`` at
-``BGP_NODE`` matches the source keywords ipv4 and ipv6 share
-(``kernel``/``connected``/``local``/``static``/``isis``/``nhrp``/``vnc``/
-``babel``/``openfabric``), so a walk-up from ``BGP_IPV6_NODE`` would
-match it -- its deleted DEFUN/DEFPY bodies are restored in ``bgp_vty.c``
-for the coexistence window. The EVPN instance and per-vni commands are
-**not** affected: walking up from ``BGP_EVPN_NODE`` / ``BGP_EVPN_VNI_NODE``
-reaches only ``vni`` / ``exit-vni`` / ``BGP_NODE``, none of which carry
-those grammars, so their config lines fail in place (single line, no
-node drop) and no native reinstall is required.
+Unconverted plugin config: RPKI and BMP (dropped from conversion scope
+for now, TODO #31) and VNC (support-dropped) remain native-only. Their
+commands still work interactively on bgpd's vty and persist under
+integrated ``frr.conf`` (vtysh collects bgpd's native
+``config_write``), but they do **not** persist in split-config mode:
+mgmtd cannot parse their lines from ``bgpd.conf``, and bgpd no longer
+reads that file. Deployments using RPKI/BMP/VNC must use integrated
+``frr.conf`` until the plugins are converted.
 
 Backend daemons must not run mgmtd-owned northbound CLI locally
 ----------------------------------------------------------------
@@ -426,40 +306,21 @@ adds the real northbound callback and CLI wiring for that command (or
 immediately after, if there's a reason to land the two adjacent rather
 than squashed -- e.g. testing for vtysh double-definition issues in the
 interim). Do not leave a command converted-but-still-legacy across
-multiple commits; the coexistence rules above only hold as long as
-each command has exactly one implementation reachable from the CLI at
-a time.
+multiple commits; the single-implementation invariant only holds as
+long as each command has exactly one implementation reachable from the
+CLI at a time.
 
-M8 status: creation-authoritative under preserved split-config
-----------------------------------------------------------------
+M9 status: flipped
+-------------------
 
-As of M8 batches B1/B2 the ownership picture is:
-
-- **Creation is northbound-authoritative and mgmtd-emitted** (B1).
-  ``instance_create``/``instance_neighbor_create``/
-  ``instance_peer_group_create`` and the remote-as / peer-group-bind
-  leaf callbacks are the authoritative path; the merged
-  ``router bgp`` block's creation lines come solely from
-  ``neighbor_cli_write()``/``peer_group_cli_write()``. bgpd's native
-  creation DEFUNs remain **as demoted, idempotent parse fallbacks
-  only** -- bgpd's own split-config file read must still create peers
-  ahead of native residue lines that attach to them
-  (``neighbor X encapsulation-srv6``); they no longer emit anything.
-- **``bgp default shutdown`` is converted** (B2). The FRR #2286
-  emission-position race dissolved with B1; the leaf is
-  future-peers-only, so line position is no longer load-bearing and no
-  seed-bridge extension exists for it (deliberately -- reseeding would
-  reintroduce the restart-shutdown behavior the legacy late emission
-  existed to prevent).
-- **The daemon remains split-config.** ``FRR_NO_SPLIT_CONFIG``, native
-  surface deletion, the parked ``saved/peer-seeding-priority`` patch,
-  and seed-bridge retirement are all coupled to the M9 residue
-  elimination gate (RPKI/BMP plugin conversion plus an
-  SRv6/flowspec/VNC/SNMP disposition). The coexistence rules in this
-  document, the ``_install_element()`` reinstalls, and the seed-bridge
-  are **intentional standing structure until that gate**, not debt to
-  remove opportunistically; the per-milestone rule above still applies
-  to every newly converted command.
+M9 executed the residue-elimination gate (2026-07-19): the
+peer-seeding-priority patch is applied and the seed-bridge deleted (the
+priority-ordered init transaction replaced it), the link-state and
+unreachability address families and the BGP-LS link identifiers are
+converted (the last testable native surfaces), ``FRR_NO_SPLIT_CONFIG``
+is set, and the native config-command surface is deleted. See
+"Post-flip architecture" above. The per-milestone rule still applies to
+every future conversion (RPKI/BMP, #31).
 
 M9 dispositions (ruled 2026-07-19)
 ------------------------------------

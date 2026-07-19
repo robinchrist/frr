@@ -99,6 +99,16 @@ Note that the RPKI commands will be available in vtysh when running
 
 .. _configuring-rpki-rtr-cache-servers:
 
+
+.. warning::
+
+   RPKI configuration currently does **not persist across a bgpd restart**
+   when per-daemon split config files are used: since the bgpd
+   management-daemon conversion, ``bgpd.conf`` is read by ``mgmtd``,
+   which cannot parse the still-unconverted RPKI commands, and ``bgpd``
+   itself no longer reads the file. Use the integrated ``frr.conf``
+   (``service integrated-vtysh-config``) to persist RPKI configuration.
+
 Configuring RPKI/RTR Cache Servers
 ----------------------------------
 

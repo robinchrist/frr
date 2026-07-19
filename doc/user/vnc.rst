@@ -28,6 +28,16 @@ a `lifetime` in seconds is associated with all registrations and responses.
 
 The chapter also provides sample configurations for basic example scenarios.
 
+
+.. warning::
+
+   VNC configuration currently does **not persist across a bgpd restart**
+   when per-daemon split config files are used: since the bgpd
+   management-daemon conversion, ``bgpd.conf`` is read by ``mgmtd``,
+   which cannot parse the still-unconverted VNC commands, and ``bgpd``
+   itself no longer reads the file. Use the integrated ``frr.conf``
+   (``service integrated-vtysh-config``) to persist VNC configuration.
+
 .. _configuring-vnc:
 
 Configuring VNC
