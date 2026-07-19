@@ -1625,13 +1625,10 @@ DEFPY_YANG(
 	"AS path access list name\n"
 	"Define the configured AS number\n")
 {
-	char *str;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:as-path-replace']";
 	char xpath_value[XPATH_MAXLEN];
 	as_t as_configured_value;
-	char replace_value[ASN_STRING_MAX_SIZE * 2];
-	int ret;
 
 	if (configured_asn_str &&
 	    !asn_str2asn(configured_asn_str, &as_configured_value)) {
@@ -1640,19 +1637,24 @@ DEFPY_YANG(
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	str = argv_concat(argv, argc, 3);
-
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
 
-	snprintf(replace_value, sizeof(replace_value), "%s %s", aspath_filter_name, str);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list",
+		 xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY,
+			      aspath_filter_name);
 
 	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-set-action/frr-bgp-route-map:replace-as-path", xpath);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
+		 "%s/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list-configured-asn",
+		 xpath);
+	if (configured_asn_str)
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY,
+				      configured_asn_str);
+	else
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_DESTROY, NULL);
 
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
@@ -1749,23 +1751,19 @@ DEFPY_YANG(set_aspath_exclude_access_list, set_aspath_exclude_access_list_cmd,
 	   "Specify an as path access list name\n"
 	   "AS path access list name\n")
 {
-	char *str;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:as-path-exclude']";
 	char xpath_value[XPATH_MAXLEN];
-	int ret;
-
-	str = argv_concat(argv, argc, 3);
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
 
 	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-set-action/frr-bgp-route-map:exclude-as-path", xpath);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
+		 "%s/rmap-set-action/frr-bgp-route-map:exclude-as-path-access-list",
+		 xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY,
+			      as_path_filter_name);
 
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(no_set_aspath_exclude_access_list, no_set_aspath_exclude_access_list_cmd,

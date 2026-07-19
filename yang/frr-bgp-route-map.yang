@@ -1311,10 +1311,34 @@ identity set-extcommunity-color {
       when "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:as-path-exclude')";
       description
         "Exclude the mentioned AS-path";
-      leaf exclude-as-path {
-        type string;
+      choice as-path-exclude {
         description
-          "Values in the as-path ACL are excluded from the as-path.";
+          "How the ASes to exclude from the AS path are specified";
+        case exclude-as-path {
+          leaf exclude-as-path {
+            type string;
+            description
+              "Space-separated AS numbers to exclude from the AS path,
+               or 'all' to exclude every AS
+               ('set as-path exclude <all|ASNUM...>').";
+          }
+        }
+
+        case exclude-as-path-access-list {
+          leaf exclude-as-path-access-list {
+            // Inline + strict on purpose: BGP wants require-instance true (default).
+            // Not reusing a *-ref typedef - those are require-instance false and
+            // shared with other daemons.
+            type leafref {
+              path "/bgpfilter:as-path-access-list/bgpfilter:name";
+            }
+            description
+              "AS numbers matched by this AS-path access-list are
+               excluded from the AS path
+               ('set as-path exclude as-path-access-list
+               AS_PATH_FILTER_NAME').";
+          }
+        }
       }
     }
 
@@ -1322,10 +1346,42 @@ identity set-extcommunity-color {
       when "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:as-path-replace')";
       description
         "Set the replaced AS path";
-      leaf replace-as-path {
-        type string;
+      choice as-path-replace {
         description
-          "Set the replaced AS path value";
+          "How the ASes to replace in the AS path are specified";
+        case replace-as-path {
+          leaf replace-as-path {
+            type string;
+            description
+              "Set the replaced AS path value";
+          }
+        }
+
+        case replace-as-path-access-list {
+          leaf replace-as-path-access-list {
+            // Inline + strict on purpose: BGP wants require-instance true (default).
+            // Not reusing a *-ref typedef - those are require-instance false and
+            // shared with other daemons.
+            type leafref {
+              path "/bgpfilter:as-path-access-list/bgpfilter:name";
+            }
+            description
+              "AS numbers matched by this AS-path access-list are
+               replaced with the local AS number, or with the
+               configured AS number if one is set
+               ('set as-path replace as-path-access-list
+               AS_PATH_FILTER_NAME [ASNUM]').";
+          }
+
+          leaf replace-as-path-access-list-configured-asn {
+            type string;
+            description
+              "AS number substituted for the matched ASes instead of
+               the local AS number
+               ('set as-path replace as-path-access-list
+               AS_PATH_FILTER_NAME ASNUM').";
+          }
+        }
       }
     }
 

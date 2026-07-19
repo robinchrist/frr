@@ -366,6 +366,14 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 			.cbs = {
 				.modify = lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_modify,
 				.destroy = lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_destroy,
+				.apply_finish = lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:exclude-as-path-access-list",
+			.cbs = {
+				.modify = lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_access_list_modify,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_access_list_destroy,
 			}
 		},
 		{
@@ -373,6 +381,21 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 			.cbs = {
 				.modify = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_modify,
 				.destroy = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_destroy,
+				.apply_finish = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list",
+			.cbs = {
+				.modify = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_modify,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list-configured-asn",
+			.cbs = {
+				.modify = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_configured_asn_modify,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_configured_asn_destroy,
 			}
 		},
 		{

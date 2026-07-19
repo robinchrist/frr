@@ -2815,6 +2815,100 @@ lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_destroy(
 }
 
 /*
+ * When the exclude-as-path/exclude-as-path-access-list (or
+ * replace-as-path/replace-as-path-access-list) choice switches forms in
+ * one commit, the diff visits the nodes in schema order, so the destroy
+ * of the old form's leaf can run after the modify of the new form's
+ * leaf and would tear down the just-installed rule.  The apply_finish
+ * callback runs after all config callbacks and only for nodes that
+ * still exist, so re-adding the rule here makes the final state
+ * independent of the callback order.
+ */
+void lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const char *type;
+
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+	type = yang_dnode_get_string(args->dnode, NULL);
+
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "as-path exclude";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	if (generic_set_add(rhc->rhc_rmi, "as-path exclude", type,
+			    args->errmsg, args->errmsg_len) != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
+/* Install "as-path exclude as-path-access-list ACL" for the given acl name. */
+static int bgp_route_set_aspath_exclude_acl_add(struct routemap_hook_context *rhc,
+						const char *acl, char *errmsg,
+						size_t errmsg_len)
+{
+	char *argstr;
+	int rv;
+
+	argstr = XMALLOC(MTYPE_ROUTE_MAP_COMPILED,
+			 strlen("as-path-access-list ") + strlen(acl) + 1);
+	sprintf(argstr, "as-path-access-list %s", acl);
+
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "as-path exclude";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, "as-path exclude", argstr, errmsg,
+			     errmsg_len);
+	XFREE(MTYPE_ROUTE_MAP_COMPILED, argstr);
+	if (rv != CMD_SUCCESS) {
+		rhc->rhc_shook = NULL;
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:exclude-as-path-access-list
+ */
+int lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_access_list_modify(
+	struct nb_cb_modify_args *args)
+{
+	struct routemap_hook_context *rhc;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		rhc = nb_running_get_entry(args->dnode, NULL, true);
+		return bgp_route_set_aspath_exclude_acl_add(
+			rhc, yang_dnode_get_string(args->dnode, NULL),
+			args->errmsg, args->errmsg_len);
+	}
+
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_exclude_as_path_access_list_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return lib_route_map_entry_set_destroy(args);
+	}
+
+	return NB_OK;
+}
+
+/*
  * XPath:
  * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:replace-as-path
  */
@@ -2861,6 +2955,179 @@ int lib_route_map_entry_set_action_rmap_set_action_replace_as_path_destroy(
 		break;
 	case NB_EV_APPLY:
 		return lib_route_map_entry_set_destroy(args);
+	}
+
+	return NB_OK;
+}
+
+/* See the exclude-as-path apply_finish comment for why this exists. */
+void lib_route_map_entry_set_action_rmap_set_action_replace_as_path_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const char *type;
+
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+	type = yang_dnode_get_string(args->dnode, NULL);
+
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "as-path replace";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	if (generic_set_add(rhc->rhc_rmi, "as-path replace", type,
+			    args->errmsg, args->errmsg_len) != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
+/*
+ * Install "as-path replace as-path-access-list ACL [ASN]" for the given
+ * acl name and optional configured ASN.
+ */
+static int bgp_route_set_aspath_replace_acl_add(struct routemap_hook_context *rhc,
+						const char *acl, const char *asn,
+						char *errmsg, size_t errmsg_len)
+{
+	char *argstr;
+	size_t len;
+	int rv;
+
+	len = strlen("as-path-access-list ") + strlen(acl) + 1;
+	if (asn)
+		len += strlen(asn) + 1;
+	argstr = XMALLOC(MTYPE_ROUTE_MAP_COMPILED, len);
+	snprintf(argstr, len, "as-path-access-list %s%s%s", acl,
+		 asn ? " " : "", asn ? asn : "");
+
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "as-path replace";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, "as-path replace", argstr, errmsg,
+			     errmsg_len);
+	XFREE(MTYPE_ROUTE_MAP_COMPILED, argstr);
+	if (rv != CMD_SUCCESS) {
+		rhc->rhc_shook = NULL;
+		return NB_ERR_INCONSISTENCY;
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list
+ */
+int lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_modify(
+	struct nb_cb_modify_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const char *asn = NULL;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		rhc = nb_running_get_entry(args->dnode, NULL, true);
+		if (yang_dnode_exists(
+			    args->dnode,
+			    "../replace-as-path-access-list-configured-asn"))
+			asn = yang_dnode_get_string(
+				args->dnode,
+				"../replace-as-path-access-list-configured-asn");
+		return bgp_route_set_aspath_replace_acl_add(
+			rhc, yang_dnode_get_string(args->dnode, NULL), asn,
+			args->errmsg, args->errmsg_len);
+	}
+
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return lib_route_map_entry_set_destroy(args);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:replace-as-path-access-list-configured-asn
+ */
+int lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_configured_asn_modify(
+	struct nb_cb_modify_args *args)
+{
+	struct routemap_hook_context *rhc;
+	as_t as_value;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		if (!asn_str2asn(yang_dnode_get_string(args->dnode, NULL),
+				 &as_value)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "invalid AS number");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		/*
+		 * The access-list leaf is created in the same commit or
+		 * already present; re-install the rule with the full
+		 * "access-list + configured ASN" argument.
+		 */
+		if (!yang_dnode_exists(args->dnode,
+				       "../replace-as-path-access-list"))
+			break;
+		rhc = nb_running_get_entry(args->dnode, NULL, true);
+		return bgp_route_set_aspath_replace_acl_add(
+			rhc,
+			yang_dnode_get_string(args->dnode,
+					      "../replace-as-path-access-list"),
+			yang_dnode_get_string(args->dnode, NULL), args->errmsg,
+			args->errmsg_len);
+	}
+
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_replace_as_path_access_list_configured_asn_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	struct routemap_hook_context *rhc;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		/*
+		 * Dropping only the configured ASN: re-install the rule
+		 * with the still-configured access-list name.  When the
+		 * whole access-list form goes away its own leaf destroy
+		 * (or the set-action destroy) removes the rule.
+		 */
+		if (!yang_dnode_exists(args->dnode,
+				       "../replace-as-path-access-list"))
+			break;
+		rhc = nb_running_get_entry(args->dnode, NULL, true);
+		return bgp_route_set_aspath_replace_acl_add(
+			rhc,
+			yang_dnode_get_string(args->dnode,
+					      "../replace-as-path-access-list"),
+			NULL, args->errmsg, args->errmsg_len);
 	}
 
 	return NB_OK;

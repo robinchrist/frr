@@ -1484,15 +1484,42 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 				dnode,
 				"./rmap-set-action/frr-bgp-route-map:aggregator/aggregator-address"));
 	} else if (IS_SET_AS_EXCLUDE(action)) {
-		vty_out(vty, " set as-path exclude %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-set-action/frr-bgp-route-map:exclude-as-path"));
+		if (yang_dnode_exists(
+			    dnode,
+			    "./rmap-set-action/frr-bgp-route-map:exclude-as-path-access-list"))
+			vty_out(vty,
+				" set as-path exclude as-path-access-list %s\n",
+				yang_dnode_get_string(
+					dnode,
+					"./rmap-set-action/frr-bgp-route-map:exclude-as-path-access-list"));
+		else
+			vty_out(vty, " set as-path exclude %s\n",
+				yang_dnode_get_string(
+					dnode,
+					"./rmap-set-action/frr-bgp-route-map:exclude-as-path"));
 	} else if (IS_SET_AS_REPLACE(action)) {
-		vty_out(vty, " set as-path replace %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-set-action/frr-bgp-route-map:replace-as-path"));
+		if (yang_dnode_exists(
+			    dnode,
+			    "./rmap-set-action/frr-bgp-route-map:replace-as-path-access-list")) {
+			const char *asn = NULL;
+
+			if (yang_dnode_exists(
+				    dnode,
+				    "./rmap-set-action/frr-bgp-route-map:replace-as-path-access-list-configured-asn"))
+				asn = yang_dnode_get_string(
+					dnode,
+					"./rmap-set-action/frr-bgp-route-map:replace-as-path-access-list-configured-asn");
+			vty_out(vty,
+				" set as-path replace as-path-access-list %s%s%s\n",
+				yang_dnode_get_string(
+					dnode,
+					"./rmap-set-action/frr-bgp-route-map:replace-as-path-access-list"),
+				asn ? " " : "", asn ? asn : "");
+		} else
+			vty_out(vty, " set as-path replace %s\n",
+				yang_dnode_get_string(
+					dnode,
+					"./rmap-set-action/frr-bgp-route-map:replace-as-path"));
 	} else if (IS_SET_AS_PREPEND(action)) {
 		if (yang_dnode_exists(
 			    dnode,
