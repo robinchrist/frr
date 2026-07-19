@@ -429,3 +429,34 @@ interim). Do not leave a command converted-but-still-legacy across
 multiple commits; the coexistence rules above only hold as long as
 each command has exactly one implementation reachable from the CLI at
 a time.
+
+M8 status: creation-authoritative under preserved split-config
+----------------------------------------------------------------
+
+As of M8 batches B1/B2 the ownership picture is:
+
+- **Creation is northbound-authoritative and mgmtd-emitted** (B1).
+  ``instance_create``/``instance_neighbor_create``/
+  ``instance_peer_group_create`` and the remote-as / peer-group-bind
+  leaf callbacks are the authoritative path; the merged
+  ``router bgp`` block's creation lines come solely from
+  ``neighbor_cli_write()``/``peer_group_cli_write()``. bgpd's native
+  creation DEFUNs remain **as demoted, idempotent parse fallbacks
+  only** -- bgpd's own split-config file read must still create peers
+  ahead of native residue lines that attach to them
+  (``neighbor X encapsulation-srv6``); they no longer emit anything.
+- **``bgp default shutdown`` is converted** (B2). The FRR #2286
+  emission-position race dissolved with B1; the leaf is
+  future-peers-only, so line position is no longer load-bearing and no
+  seed-bridge extension exists for it (deliberately -- reseeding would
+  reintroduce the restart-shutdown behavior the legacy late emission
+  existed to prevent).
+- **The daemon remains split-config.** ``FRR_NO_SPLIT_CONFIG``, native
+  surface deletion, the parked ``saved/peer-seeding-priority`` patch,
+  and seed-bridge retirement are all coupled to the M9 residue
+  elimination gate (RPKI/BMP plugin conversion plus an
+  SRv6/flowspec/VNC/SNMP disposition). The coexistence rules in this
+  document, the ``_install_element()`` reinstalls, and the seed-bridge
+  are **intentional standing structure until that gate**, not debt to
+  remove opportunistically; the per-milestone rule above still applies
+  to every newly converted command.

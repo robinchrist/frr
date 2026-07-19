@@ -65,10 +65,18 @@ Converted To Northbound With Issues
 - eigrp
 - isisd
 
+Mostly Converted To MGMTD (coexistence window)
+""""""""""""""""""""""""""""""""""""""""""""""
+- bgpd (proteus-bgp model; creation, session, per-AF, filter and dump
+  config are mgmtd-owned and mgmtd-emitted as of M8 B1/B2; the daemon
+  deliberately remains split-config with demoted native parse fallbacks
+  until the native residue - SRv6, flowspec, VNC, SNMP traps, and the
+  RPKI/BMP plugins - is converted or dropped; see
+  :doc:`northbound/bgpd-proteus-conversion`)
+
 Unconverted
 """""""""""
 - babel
-- bgpd
 - ldpd
 - lib/event
 - lib/nexthop_group
