@@ -196,7 +196,7 @@ static void zebra_import_kernel_table_cli_write(struct vty *vty, const struct ly
 	if (safi == SAFI_MULTICAST)
 		vty_out(vty, " mrib");
 
-	if (distance != ZEBRA_TABLE_DISTANCE_DEFAULT)
+	if (!yang_dnode_is_default(dnode, "distance") || show_defaults)
 		vty_out(vty, " distance %u", distance);
 
 	if (rmap)
@@ -2583,13 +2583,15 @@ static void lib_vrf_zebra_resolve_via_default_cli_write(
 {
 	bool resolve_via_default = yang_dnode_get_bool(dnode, NULL);
 
-	if (resolve_via_default != SAVE_ZEBRA_IP_NHT_RESOLVE_VIA_DEFAULT ||
-	    show_defaults) {
-		zebra_vrf_indent_cli_write(vty, dnode);
+	/*
+	 * The leaf has no schema default (the effective default is
+	 * profile-dependent), so it only exists when explicitly configured
+	 * and must then always be rendered, even at the profile's default
+	 * value.
+	 */
+	zebra_vrf_indent_cli_write(vty, dnode);
 
-		vty_out(vty, "%sip nht resolve-via-default\n",
-			resolve_via_default ? "" : "no ");
-	}
+	vty_out(vty, "%sip nht resolve-via-default\n", resolve_via_default ? "" : "no ");
 }
 
 DEFPY_YANG (ipv6_nht_default_route,
@@ -2615,13 +2617,12 @@ static void lib_vrf_zebra_ipv6_resolve_via_default_cli_write(
 {
 	bool resolve_via_default = yang_dnode_get_bool(dnode, NULL);
 
-	if (resolve_via_default != SAVE_ZEBRA_IP_NHT_RESOLVE_VIA_DEFAULT ||
-	    show_defaults) {
-		zebra_vrf_indent_cli_write(vty, dnode);
+	/* No schema default (profile-dependent), same rationale as the
+	 * IPv4 variant above: explicit config always renders.
+	 */
+	zebra_vrf_indent_cli_write(vty, dnode);
 
-		vty_out(vty, "%sipv6 nht resolve-via-default\n",
-			resolve_via_default ? "" : "no ");
-	}
+	vty_out(vty, "%sipv6 nht resolve-via-default\n", resolve_via_default ? "" : "no ");
 }
 
 DEFPY_YANG (mpls_fec_nexthop_resolution, mpls_fec_nexthop_resolution_cmd,
