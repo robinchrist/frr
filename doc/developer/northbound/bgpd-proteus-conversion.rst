@@ -460,3 +460,21 @@ As of M8 batches B1/B2 the ownership picture is:
   are **intentional standing structure until that gate**, not debt to
   remove opportunistically; the per-milestone rule above still applies
   to every newly converted command.
+
+M9 dispositions (ruled 2026-07-19)
+------------------------------------
+
+- **RPKI and BMP plugin config: file-config support is dropped for the
+  M9 flip, conversion is TODO** (roadmap #31). Under
+  ``FRR_NO_SPLIT_CONFIG`` the plugins' CLI config (RPKI cache servers
+  and timers, BMP targets) does not persist across a bgpd restart until
+  the plugin CLI is converted to a mgmtd-linked TU with a
+  backend-in-plugin apply path. This limitation must be called out in
+  the user-facing release notes when the flip ships.
+- **VNC/rfapi: documented support-drop.** Its ~133-command CLI surface
+  is not converted; file-config support ends at the flip and the
+  feature is deprecated-for-removal upstream-side.
+- **SRv6, flowspec (full grammar) and ``bgp snmp traps`` are converted
+  in M8.5** ahead of the flip; the M8 mgmtd parse shims for the
+  ``segment-routing srv6`` and link-state blocks are replaced by real
+  implementations there.
