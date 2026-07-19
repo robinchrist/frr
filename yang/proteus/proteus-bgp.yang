@@ -21,6 +21,18 @@ module proteus-bgp {
   import proteus-bgp-evpn {
     prefix evpn;
   }
+  import proteus-bgp-filter {
+    prefix bgpfilter;
+  }
+  import frr-route-map {
+    prefix frr-route-map;
+  }
+  import frr-filter {
+    prefix frr-filter;
+  }
+  import frr-interface {
+    prefix frr-interface;
+  }
 
   organization
     "frr-proteus";
@@ -39,11 +51,18 @@ module proteus-bgp {
      top-down, in one place (with EVPN's field definitions split into
      proteus-bgp-evpn.yang, pulled in with plain import + uses -- never
      'augment'). Policy-attachment names (route-map, prefix-list,
-     access-list, AS-path filter-list, distribute-list) are plain
-     strings, not leafrefs: like legacy FRR they are free-form,
-     forward-reference-tolerant references to entities owned by
-     frr-route-map / frr-filter (lib), which may be defined after the
-     attachment or by another daemon.
+     access-list, AS-path filter-list, distribute-list) are strict
+     inline leafrefs into the owning modules (frr-route-map and
+     frr-filter's lib containers, proteus-bgp-filter for AS-path
+     lists): an attachment must name an entity that exists in the
+     datastore. mgmtd validates the whole datastore in one commit,
+     so a policy object defined in the same commit as its attachment
+     -- in either order -- still validates; only genuinely dangling
+     names are rejected. Interface-name references (update-source,
+     source-interface, unnumbered neighbor addresses, flowspec
+     local-install) are instead lax leafrefs (require-instance
+     false): they routinely name kernel interfaces that have no
+     'interface' config stanza at all.
 
      Coverage: the full config surface that bgpd's own
      bgp_config_write() emits (bgpd/bgp_vty.c), i.e. everything the
@@ -343,16 +362,23 @@ module proteus-bgp {
     }
 
     leaf source-interface {
-      type string;
+      // Inline leafref with require-instance false on purpose (C.4 test,
+      // libyang, 2026-07-19): a strict interface ref rejects a name that
+      // is a real kernel interface with no 'interface' config stanza -
+      // a real workflow for this knob.
+      type leafref {
+        path "/frr-interface:lib/frr-interface:interface/frr-interface:name";
+        require-instance false;
+      }
       description
         "'neighbor X interface IFNAME' (peer->ifname, the 'Local
          interface name' line in bgp_config_write_peer_global). Note
          this is a legacy knob distinct from update-source and from
-         unnumbered interface peers. Plain string, not a leafref into
-         frr-interface: the interface is forward-referenceable (legacy
-         accepts names that appear later or never, and mgmtd loads
-         bgpd.conf before the interface tree exists -- a leafref here
-         aborted the whole file's commit).";
+         unnumbered interface peers. Lax leafref into frr-interface
+         (require-instance false): interface names that have no
+         'interface' config stanza -- plain kernel interfaces -- must
+         remain acceptable here, so the reference documents the
+         target without demanding a configured instance.";
     }
 
     leaf tcp-mss {
@@ -461,17 +487,20 @@ module proteus-bgp {
     leaf update-source {
       type union {
         type inet:ip-address-no-zone;
-        type string;
+        // Interface-name branch: lax leafref (require-instance false) per
+        // the C.4 test (libyang, 2026-07-19) - kernel interfaces without
+        // an 'interface' config stanza must remain accepted.
+        type leafref {
+          path "/frr-interface:lib/frr-interface:interface/frr-interface:name";
+          require-instance false;
+        }
       }
       description
         "'neighbor X update-source <A.B.C.D|X:X::X:X|IFNAME>'.
-         // The interface-name branch stays a plain string even
-         // though interfaces are modeled now (proteus-interface):
-         // the pybind-dataclass backend only records leafref
-         // metadata for direct leafref-typed leaves (pyang sets
-         // i_leafref only when the resolved type is a PathTypeSpec),
-         // so a leafref union member would compile but validate
-         // nothing -- worse than an honest string.";
+         The interface-name branch is a lax leafref
+         (require-instance false): update-source routinely names
+         kernel interfaces that have no 'interface' config stanza,
+         and those must remain acceptable.";
     }
 
     leaf ip-transparent {
@@ -817,22 +846,58 @@ module proteus-bgp {
         "Flowspec per-peer filters.";
 
       leaf prefix-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
       }
       leaf prefix-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
       }
       leaf filter-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // The target list is BGP-owned (proteus-bgp-filter), so there is no
+        // shared lax typedef to avoid and strict affects bgpd only.
+        type leafref {
+          path "/bgpfilter:as-path-access-list/bgpfilter:name";
+        }
       }
       leaf filter-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // The target list is BGP-owned (proteus-bgp-filter), so there is no
+        // shared lax typedef to avoid and strict affects bgpd only.
+        type leafref {
+          path "/bgpfilter:as-path-access-list/bgpfilter:name";
+        }
       }
       leaf route-map-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
       }
       leaf route-map-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
       }
     }
   }
@@ -934,7 +999,12 @@ module proteus-bgp {
            with count -- one CLI slot (the 'must').";
       }
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "Restrict allowas-in to routes the route-map permits.";
       }
@@ -945,12 +1015,22 @@ module proteus-bgp {
         "Unreachability per-peer filters.";
 
       leaf route-map-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'neighbor X route-map NAME in'.";
       }
       leaf route-map-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'neighbor X route-map NAME out'.";
       }
@@ -975,12 +1055,22 @@ module proteus-bgp {
         "Link-state per-peer filters.";
 
       leaf route-map-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'neighbor X route-map NAME in'.";
       }
       leaf route-map-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'neighbor X route-map NAME out'.";
       }
@@ -1154,7 +1244,12 @@ module proteus-bgp {
         default "false";
       }
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "Advertise the default only if the route-map permits.";
       }
@@ -1263,7 +1358,12 @@ module proteus-bgp {
            with count -- one CLI slot (the 'must').";
       }
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "Restrict allowas-in to routes the route-map permits.";
       }
@@ -1379,27 +1479,52 @@ module proteus-bgp {
        (bgp_config_write_filter in bgpd/bgp_vty.c).";
 
     leaf filter-list-in {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // The target list is BGP-owned (proteus-bgp-filter), so there is no
+      // shared lax typedef to avoid and strict affects bgpd only.
+      type leafref {
+        path "/bgpfilter:as-path-access-list/bgpfilter:name";
+      }
       description
         "'neighbor X filter-list NAME in' (AS-path filter).";
     }
     leaf filter-list-out {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // The target list is BGP-owned (proteus-bgp-filter), so there is no
+      // shared lax typedef to avoid and strict affects bgpd only.
+      type leafref {
+        path "/bgpfilter:as-path-access-list/bgpfilter:name";
+      }
       description
         "'neighbor X filter-list NAME out'.";
     }
     leaf route-map-in {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "'neighbor X route-map NAME in'.";
     }
     leaf route-map-out {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "'neighbor X route-map NAME out'.";
     }
     leaf unsuppress-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "'neighbor X unsuppress-map NAME': advertise
          aggregate-suppressed routes the map permits.";
@@ -1409,7 +1534,12 @@ module proteus-bgp {
         "'neighbor X advertise-map NAME <exist-map|non-exist-map>
          NAME' (conditional advertisement, always outbound).";
       leaf advertise-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
       }
       leaf condition {
         type enumeration {
@@ -1425,7 +1555,12 @@ module proteus-bgp {
         }
       }
       leaf condition-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
       }
     }
   }
@@ -1451,22 +1586,54 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME out'.";
       }
@@ -1495,22 +1662,54 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME out'.";
       }
@@ -1539,22 +1738,54 @@ module proteus-bgp {
          and prefix-list are mutually exclusive per direction (the
          'must' pair).";
       leaf distribute-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME in'.";
       }
       leaf distribute-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's access-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys access-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+        }
         description
           "'neighbor X distribute-list NAME out'.";
       }
       leaf prefix-list-in {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME in'.";
       }
       leaf prefix-list-out {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-filter's prefix-list-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        // frr-filter keys prefix-lists by "type name", so this leafref
+        // matches the name in any address family; family precision is not
+        // enforced (legacy-equivalent).
+        type leafref {
+          path "/frr-filter:lib/frr-filter:prefix-list/frr-filter:name";
+        }
         description
           "'neighbor X prefix-list NAME out'.";
       }
@@ -1600,7 +1831,12 @@ module proteus-bgp {
     }
 
     leaf table-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "'table-map NAME': route-map filtering/modifying what BGP
          downloads to the RIB (bgp_config_write_table_map in
@@ -1710,7 +1946,15 @@ module proteus-bgp {
           mandatory true;
         }
         leaf access-list {
-          type string;
+          // Inline + strict on purpose: BGP wants require-instance true (default).
+          // Not reusing frr-filter's access-list-ref - that typedef is
+          // require-instance false and shared with other daemons.
+          // frr-filter keys access-lists by "type name", so this leafref
+          // matches the name in any address family; family precision is not
+          // enforced (legacy-equivalent).
+          type leafref {
+            path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+          }
         }
       }
     }
@@ -1744,7 +1988,15 @@ module proteus-bgp {
           mandatory true;
         }
         leaf access-list {
-          type string;
+          // Inline + strict on purpose: BGP wants require-instance true (default).
+          // Not reusing frr-filter's access-list-ref - that typedef is
+          // require-instance false and shared with other daemons.
+          // frr-filter keys access-lists by "type name", so this leafref
+          // matches the name in any address family; family precision is not
+          // enforced (legacy-equivalent).
+          type leafref {
+            path "/frr-filter:lib/frr-filter:access-list/frr-filter:name";
+          }
         }
       }
     }
@@ -1818,7 +2070,12 @@ module proteus-bgp {
           "'metric (0-4294967295)'.";
       }
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
       }
     }
   }
@@ -1865,7 +2122,12 @@ module proteus-bgp {
         "Suppress the more-specific contributors.";
     }
     leaf route-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "Apply to the aggregate route's attributes.";
     }
@@ -1884,7 +2146,12 @@ module proteus-bgp {
          MED.";
     }
     leaf suppress-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "Suppress only the contributors the route-map matches.";
     }
@@ -2104,13 +2371,23 @@ module proteus-bgp {
         "'label (0-1048575)': MPLS label carried in the VPN NLRI.";
     }
     leaf route-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
     }
   }
 
   grouping network-options {
     leaf route-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
     }
     leaf label-index {
       type uint32 {
@@ -2186,10 +2463,15 @@ module proteus-bgp {
       }
 
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'route-map RMAP': filter which unicast routes get the
-           SID. Plain string (policy-name house rule).";
+           SID.";
       }
     }
   }
@@ -2221,7 +2503,12 @@ module proteus-bgp {
          // auto-creates the target instance if it doesn't exist.";
     }
     leaf import-vrf-route-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "'import vrf route-map NAME'
          (af_import_vrf_route_map_cmd): filter applied to
@@ -2246,7 +2533,12 @@ module proteus-bgp {
          // see the module description.";
 
       leaf route-map-import {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         must "not(../../import-vrf-route-map)" {
           error-message
             "route-map vpn import and import vrf route-map occupy
@@ -2259,7 +2551,12 @@ module proteus-bgp {
            routes leaked from the VPN table into this AF.";
       }
       leaf route-map-export {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "'route-map vpn export NAME': filter applied to routes
            leaked from this AF to the VPN table.";
@@ -3658,17 +3955,21 @@ module proteus-bgp {
       leaf address {
         type union {
           type inet:ip-address-no-zone;
-          type string;
+          // Interface-name branch: lax leafref (require-instance false) per
+          // the C.4 test (libyang, 2026-07-19) - kernel interfaces without
+          // an 'interface' config stanza must remain accepted.
+          type leafref {
+            path "/frr-interface:lib/frr-interface:interface/frr-interface:name";
+            require-instance false;
+          }
         }
         description
           "Peer IPv4/IPv6 address, or an interface name for
            unnumbered interface peers (set interface-peer below).
-           // The interface-name branch stays a plain string even
-           // though interfaces are modeled now (proteus-interface):
-           // the pybind-dataclass backend does not support leafref
-           // as a union member (no i_leafref/i_leafref_ptr on the
-           // leaf, so no referential check would run) -- see the
-           // update-source comment.";
+           The interface-name branch is a lax leafref
+           (require-instance false): unnumbered peers name kernel
+           interfaces that need no 'interface' config stanza, and
+           those must remain acceptable.";
       }
 
       leaf interface-peer {
@@ -3895,7 +4196,13 @@ module proteus-bgp {
           }
 
           leaf-list interfaces {
-            type string;
+            // Interface-name branch: lax leafref (require-instance false) per
+            // the C.4 test (libyang, 2026-07-19) - kernel interfaces without
+            // an 'interface' config stanza must remain accepted.
+            type leafref {
+              path "/frr-interface:lib/frr-interface:interface/frr-interface:name";
+              require-instance false;
+            }
             description
               "Interfaces to install flowspec rules on.";
           }
@@ -3986,7 +4293,13 @@ module proteus-bgp {
           }
 
           leaf-list interfaces {
-            type string;
+            // Interface-name branch: lax leafref (require-instance false) per
+            // the C.4 test (libyang, 2026-07-19) - kernel interfaces without
+            // an 'interface' config stanza must remain accepted.
+            type leafref {
+              path "/frr-interface:lib/frr-interface:interface/frr-interface:name";
+              require-instance false;
+            }
           }
         }
       }

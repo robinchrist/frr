@@ -12,6 +12,9 @@ module proteus-bgp-evpn {
   import proteus-types {
     prefix pt;
   }
+  import frr-route-map {
+    prefix frr-route-map;
+  }
 
   organization
     "frr-proteus";
@@ -33,10 +36,11 @@ module proteus-bgp-evpn {
      the whole persistable 'address-family l2vpn evpn' surface.
      Per-neighbor EVPN settings need nothing here: proteus-bgp.yang's
      neighbor-af grouping covers every family. Policy-attachment
-     names (route-map) are plain strings, not leafrefs, matching
-     proteus-bgp.yang: free-form, forward-reference-tolerant
-     references to entities that may be defined after the attachment
-     or owned by another daemon. Zebra-side Ethernet
+     names (route-map) are strict inline leafrefs into
+     /frr-route-map:lib, matching proteus-bgp.yang: mgmtd validates
+     the whole datastore in one commit, so a route-map defined in
+     the same commit as its attachment still validates, while
+     genuinely dangling names are rejected. Zebra-side Ethernet
      Segment (multihoming) config -- 'evpn mh es-id' on interfaces --
      is out of scope entirely: it is zebra's surface, not bgpd's (the
      bgpd-side MH knobs like ead-es-frag ARE modeled below).";
@@ -198,7 +202,12 @@ module proteus-bgp-evpn {
         "Advertise the gateway IP overlay index.";
     }
     leaf route-map {
-      type string;
+      // Inline + strict on purpose: BGP wants require-instance true (default).
+      // Not reusing frr-route-map:route-map-ref - that typedef is
+      // require-instance false and shared with other daemons.
+      type leafref {
+        path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+      }
       description
         "Filter/transform the advertised routes.";
     }
@@ -588,7 +597,12 @@ module proteus-bgp-evpn {
           "'routermac WORD'.";
       }
       leaf route-map {
-        type string;
+        // Inline + strict on purpose: BGP wants require-instance true (default).
+        // Not reusing frr-route-map:route-map-ref - that typedef is
+        // require-instance false and shared with other daemons.
+        type leafref {
+          path "/frr-route-map:lib/frr-route-map:route-map/frr-route-map:name";
+        }
         description
           "Optional trailing 'route-map NAME'.";
       }
