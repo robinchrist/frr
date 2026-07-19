@@ -4095,15 +4095,14 @@ void neighbor_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show
  * 'neighbor X local-role <role> [strict-mode]' / 'no neighbor X local-role
  * <role> [strict-mode]' (RFC 9234, M4 batch B12): shared between neighbor/
  * peer-group via bgp_cli_peer_or_group_xpath() like every leaf in this
- * file. The bare and strict-mode variants enqueue an explicit MODIFY on
- * the sibling 'strict-mode' leaf alongside 'role' -- strict-mode has a YANG
- * default and so is modify-only (no .destroy), the same convention as
- * aigp/oad's bare '[no]' grammar above -- rather than leaving it untouched,
- * reproducing peer_role_set()'s own unconditional strict_mode overwrite on
- * any role change (bgpd.c, see bgp_nb_neighbor_role_apply()'s doc comment,
- * bgp_nb_util.c). The 'no' form's role DESTROY and strict-mode MODIFY
- * "false" together reproduce peer_role_unset()'s full reset, the same
- * composite-destroy-across-siblings idiom already used for
+ * file. Every variant touches the sibling 'strict-mode' leaf alongside
+ * 'role', reproducing peer_role_set()'s own unconditional strict_mode
+ * overwrite on any role change (bgpd.c, see bgp_nb_neighbor_role_apply()'s
+ * doc comment, bgp_nb_util.c): the strict-mode variant sets it explicitly,
+ * the bare and 'no' variants enqueue a NULL modify, which returns the leaf
+ * to its implicit YANG default (false) since the token was not typed. The
+ * 'no' form's role DESTROY plus that reset reproduce peer_role_unset(),
+ * the composite-destroy-across-siblings idiom already used for
  * 'shutdown [message]' (M4 batch B4).
  */
 DEFPY_YANG(
@@ -4126,7 +4125,7 @@ DEFPY_YANG(
 	XFREE(MTYPE_TMP, xpath_child);
 
 	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/strict-mode", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
 
@@ -4187,7 +4186,7 @@ DEFPY_YANG(
 	XFREE(MTYPE_TMP, xpath_child);
 
 	xpath_child = asprintfrr(MTYPE_TMP, "%s/local-role/strict-mode", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, "false");
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
 
