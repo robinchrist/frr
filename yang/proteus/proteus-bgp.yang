@@ -1844,6 +1844,65 @@ module proteus-bgp {
     }
   }
 
+  grouping af-srv6-sid-export {
+    description
+      "'[no] sid export <(1-1048575)|auto|explicit X:X::X:X>
+       [behavior dt46] [route-map RMAP]' (sid_export_cmd, M8.5
+       B-srv6-unicast): SRv6 SID attached to unicast routes of the
+       default VRF. Default-instance-only and mutually exclusive
+       with both 'sid vpn export' forms (VALIDATE-checked). SID
+       allocation is asynchronous; convergence in the container
+       apply_finish.";
+
+    container srv6-sid-export {
+      presence
+        "'sid export ...' is configured for this AF.";
+
+      choice sid {
+        case index {
+          leaf index {
+            type uint32 {
+              range "1..1048575";
+            }
+            description
+              "SID allocation index-mode.";
+          }
+        }
+        case auto {
+          leaf auto {
+            type boolean;
+            default "false";
+            description
+              "SID allocation auto-mode.";
+          }
+        }
+        case explicit {
+          leaf explicit {
+            type inet:ipv6-address-no-zone;
+            description
+              "Explicitly assigned SID value.";
+          }
+        }
+      }
+
+      leaf behavior-dt46 {
+        type boolean;
+        default "false";
+        description
+          "'behavior dt46': allocate a DT46 SID shared by both
+           unicast AFs; requires both AFs' sid mode/index/value to
+           agree (candidate-side VALIDATE).";
+      }
+
+      leaf route-map {
+        type string;
+        description
+          "'route-map RMAP': filter which unicast routes get the
+           SID. Plain string (policy-name house rule).";
+      }
+    }
+  }
+
   grouping af-vpn-leaking {
     description
       "Route leaking between this unicast AF and the VPN table /
@@ -3424,6 +3483,7 @@ module proteus-bgp {
         uses af-route-selection;
         uses af-distance-ipv4;
         uses af-vpn-leaking;
+        uses af-srv6-sid-export;
       }
 
       container ipv4-multicast {
@@ -3462,6 +3522,7 @@ module proteus-bgp {
         uses af-route-selection;
         uses af-distance-ipv6;
         uses af-vpn-leaking;
+        uses af-srv6-sid-export;
         leaf nexthop-prefer-global {
           type boolean;
           description

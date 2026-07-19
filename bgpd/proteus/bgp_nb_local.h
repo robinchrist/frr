@@ -410,6 +410,11 @@ int bgp_nb_af_vpn_route_map_import_destroy(struct nb_cb_destroy_args *args, afi_
 int bgp_nb_af_vpn_route_map_export_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_af_vpn_label_export_value_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_srv6_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_srv6_sid_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
+int bgp_nb_af_srv6_sid_export_dt46_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
+void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
+					    safi_t safi);
 int bgp_nb_af_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi);
 void bgp_nb_af_vpn_label_export_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
 					     safi_t safi);

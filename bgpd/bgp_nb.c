@@ -9340,6 +9340,48 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export",
+			.cbs = {
+				.create = instance_afi_safis_ipv4_unicast_srv6_sid_export_create,
+				.destroy = instance_afi_safis_ipv4_unicast_srv6_sid_export_destroy,
+				.apply_finish = instance_afi_safis_ipv4_unicast_srv6_sid_export_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export/behavior-dt46",
+			.cbs = {
+				.modify = instance_afi_safis_ipv4_unicast_srv6_sid_export_dt46_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export/index",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export/auto",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export/explicit",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/srv6-sid-export/route-map",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/sid-export",
 			.cbs = {
 				.create = instance_afi_safis_ipv4_unicast_vpn_sid_export_create,
@@ -10287,6 +10329,48 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn",
 			.cbs = {
 				.apply_finish = instance_afi_safis_ipv6_unicast_vpn_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export",
+			.cbs = {
+				.create = instance_afi_safis_ipv6_unicast_srv6_sid_export_create,
+				.destroy = instance_afi_safis_ipv6_unicast_srv6_sid_export_destroy,
+				.apply_finish = instance_afi_safis_ipv6_unicast_srv6_sid_export_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export/behavior-dt46",
+			.cbs = {
+				.modify = instance_afi_safis_ipv6_unicast_srv6_sid_export_dt46_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export/index",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export/auto",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export/explicit",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/srv6-sid-export/route-map",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
 			}
 		},
 		{

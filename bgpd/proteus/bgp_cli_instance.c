@@ -524,6 +524,85 @@ void afi_safis_vpn_sid_export_cli_write(struct vty *vty, const struct lyd_node *
 		vty_out(vty, "  sid vpn export %s\n", yang_dnode_get_string(dnode, "index"));
 }
 
+/* Unicast 'sid export' (M8.5 B-srv6-unicast), default-VRF ipv4/ipv6
+ * unicast AF nodes. Full-line declarative semantics with one legacy
+ * asymmetry preserved: re-issuing without 'route-map' keeps an existing
+ * route-map (legacy's "no rmap change" path), while 'behavior dt46' is
+ * always rewritten from the line. */
+DEFPY_YANG(
+	sid_export, sid_export_cli_cmd,
+	"[no] sid export <(1-1048575)$sid_idx|auto$sid_auto|explicit$sid_explicit X:X::X:X$sid_value> [behavior dt46$behavior_dt46] [route-map RMAP$rmap_str]",
+	NO_STR
+	"Sid value for VRF\n"
+	"Encapsulation SRv6 over default vrf\n"
+	"Sid allocation index\n"
+	"Automatically assign a label\n"
+	"Explicitly assign a sid value\n"
+	"Sid value\n"
+	"Specify SRv6 SID behavior\n"
+	"Allocate a DT46 SID\n"
+	"Specify route-map name\n"
+	"Name of route-map\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char base[XPATH_MAXLEN], xpath[XPATH_MAXLEN + 64];
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(base, sizeof(base), "%s/afi-safis/%s/srv6-sid-export", VTY_CURR_XPATH, container);
+
+	if (no) {
+		nb_cli_enqueue_change(vty, base, NB_OP_DESTROY, NULL);
+		return nb_cli_apply_changes(vty, NULL);
+	}
+
+	if (sid_auto) {
+		snprintf(xpath, sizeof(xpath), "%s/auto", base);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	} else if (sid_explicit) {
+		snprintf(xpath, sizeof(xpath), "%s/explicit", base);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_value_str);
+	} else {
+		snprintf(xpath, sizeof(xpath), "%s/index", base);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_idx_str);
+	}
+
+	snprintf(xpath, sizeof(xpath), "%s/behavior-dt46", base);
+	nb_cli_enqueue_change(vty, xpath, behavior_dt46 ? NB_OP_MODIFY : NB_OP_DESTROY,
+			      behavior_dt46 ? "true" : NULL);
+
+	if (rmap_str) {
+		snprintf(xpath, sizeof(xpath), "%s/route-map", base);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, rmap_str);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* One '  sid export ...' line, matching bgp_config_write_family()'s
+ * retired arm. */
+void afi_safis_srv6_sid_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "auto") && yang_dnode_get_bool(dnode, "auto"))
+		vty_out(vty, "  sid export auto");
+	else if (yang_dnode_exists(dnode, "explicit"))
+		vty_out(vty, "  sid export explicit %s", yang_dnode_get_string(dnode, "explicit"));
+	else if (yang_dnode_exists(dnode, "index"))
+		vty_out(vty, "  sid export %s", yang_dnode_get_string(dnode, "index"));
+	else
+		return;
+
+	if (yang_dnode_get_bool(dnode, "behavior-dt46"))
+		vty_out(vty, " behavior dt46");
+	if (yang_dnode_exists(dnode, "route-map"))
+		vty_out(vty, " route-map %s", yang_dnode_get_string(dnode, "route-map"));
+	vty_out(vty, "\n");
+}
+
 /* No proteus container for link-state; the node exists here only so mgmtd
  * tracks the block and accepts its exit-address-family (LS subcommands stay
  * native to bgpd). */
@@ -8060,6 +8139,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_sid_vpn_export_cli_cmd);
 	install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cli_cmd);
 	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &sid_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &sid_export_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);

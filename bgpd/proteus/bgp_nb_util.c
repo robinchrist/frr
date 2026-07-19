@@ -6551,9 +6551,8 @@ static void bgp_nb_af_sid_export_converge(const struct lyd_node *vpn_dnode, afi_
 	if (!bgp)
 		return;
 
-	se = yang_dnode_exists(vpn_dnode, "sid-export")
-		     ? yang_dnode_get(vpn_dnode, "sid-export")
-		     : NULL;
+	se = yang_dnode_exists(vpn_dnode, "sid-export") ? yang_dnode_get(vpn_dnode, "sid-export")
+							: NULL;
 	if (se) {
 		want_auto = yang_dnode_exists(se, "auto") && yang_dnode_get_bool(se, "auto");
 		if (yang_dnode_exists(se, "index"))
@@ -6584,8 +6583,8 @@ static void bgp_nb_af_sid_export_converge(const struct lyd_node *vpn_dnode, afi_
 	} else if (want_idx != 0) {
 		bgp->vpn_policy[afi].tovpn_sid_index = want_idx;
 	} else if (want_explicit) {
-		bgp->vpn_policy[afi].tovpn_sid_explicit =
-			XCALLOC(MTYPE_BGP_SRV6_SID, sizeof(struct in6_addr));
+		bgp->vpn_policy[afi].tovpn_sid_explicit = XCALLOC(MTYPE_BGP_SRV6_SID,
+								  sizeof(struct in6_addr));
 		inet_pton(AF_INET6, want_explicit, bgp->vpn_policy[afi].tovpn_sid_explicit);
 		SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_EXPLICIT);
 	}
@@ -6620,6 +6619,178 @@ int bgp_nb_af_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_
 	}
 
 	return NB_OK;
+}
+
+/* Unicast 'sid export' (M8.5 B-srv6-unicast): its own presence container
+ * with apply_finish convergence + destroy unset, the sid-vpn-export
+ * pattern one level down. DT46 pairing constraints are candidate-side
+ * (the sibling AF's container is in the same tree), order-independent. */
+static void bgp_nb_af_srv6_sid_export_unset(struct bgp *bgp, afi_t afi)
+{
+	if (!is_srv6_unicast_enabled(bgp, afi))
+		return;
+
+	if (bgp->srv6_unicast[afi].rmap_name) {
+		route_map_counter_decrement(
+			route_map_lookup_by_name(bgp->srv6_unicast[afi].rmap_name));
+		XFREE(MTYPE_ROUTE_MAP_NAME, bgp->srv6_unicast[afi].rmap_name);
+	}
+	XFREE(MTYPE_BGP_SRV6_SID, bgp->srv6_unicast[afi].sid_explicit);
+	bgp->srv6_unicast[afi].sid_index = 0;
+	UNSET_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_SID_AUTO);
+
+	bgp_srv6_unicast_sid_withdraw(bgp, afi);
+	UNSET_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_BEHAVIOR_DT46);
+}
+
+int bgp_nb_af_srv6_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "SRv6 unicast is only supported on default vrf");
+			return NB_ERR_VALIDATION;
+		}
+		if (is_srv6_vpn_afi_enabled(bgp, afi)) {
+			snprintf(args->errmsg, args->errmsg_len, "sid vpn per afi is configured");
+			return NB_ERR_VALIDATION;
+		}
+		if (is_srv6_vpn_vrf_enabled(bgp)) {
+			snprintf(args->errmsg, args->errmsg_len, "sid vpn per-vrf is configured");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+	case NB_EV_APPLY:
+		break;
+	}
+
+	return NB_OK;
+}
+
+/* candidate-side DT46 pairing check, registered on the behavior-dt46 leaf */
+int bgp_nb_af_srv6_sid_export_dt46_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	const struct lyd_node *mine, *other;
+	const char *other_af;
+
+	if (args->event != NB_EV_VALIDATE)
+		return NB_OK;
+	if (!yang_dnode_get_bool(args->dnode, NULL))
+		return NB_OK;
+
+	mine = yang_dnode_get_parent(args->dnode, "srv6-sid-export");
+	other_af = (afi == AFI_IP) ? "ipv6-unicast" : "ipv4-unicast";
+	if (!yang_dnode_existsf(mine, "../../%s/srv6-sid-export/behavior-dt46", other_af))
+		return NB_OK;
+	other = yang_dnode_getf(mine, "../../%s/srv6-sid-export", other_af);
+	if (!other || !yang_dnode_get_bool(other, "behavior-dt46"))
+		return NB_OK;
+
+	if (yang_dnode_exists(mine, "auto") != yang_dnode_exists(other, "auto") ||
+	    yang_dnode_exists(mine, "index") != yang_dnode_exists(other, "index") ||
+	    yang_dnode_exists(mine, "explicit") != yang_dnode_exists(other, "explicit")) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "DT46 sid export mode mismatch: both address families must use the same mode (auto/index/explicit)");
+		return NB_ERR_VALIDATION;
+	}
+	if (yang_dnode_exists(mine, "index") &&
+	    yang_dnode_get_uint32(mine, "index") != yang_dnode_get_uint32(other, "index")) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "DT46 sid index mismatch: both address families must use the same index");
+		return NB_ERR_VALIDATION;
+	}
+	if (yang_dnode_exists(mine, "explicit") &&
+	    !strmatch(yang_dnode_get_string(mine, "explicit"),
+		      yang_dnode_get_string(other, "explicit"))) {
+		snprintf(args->errmsg, args->errmsg_len,
+			 "DT46 explicit SID value mismatch: both address families must use the same SID value");
+		return NB_ERR_VALIDATION;
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_af_srv6_sid_export_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+
+	bgp_nb_af_srv6_sid_export_unset(bgp, afi);
+
+	return NB_OK;
+}
+
+void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
+					    safi_t safi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(args->dnode);
+	bool want_auto, want_dt46, have_auto, have_dt46;
+	uint32_t want_idx = 0;
+	const char *want_explicit = NULL, *want_rmap = NULL;
+	struct in6_addr sid;
+	bool rmap_same, sid_same;
+
+	if (!bgp)
+		return;
+
+	want_auto = yang_dnode_exists(args->dnode, "auto") &&
+		    yang_dnode_get_bool(args->dnode, "auto");
+	want_dt46 = yang_dnode_get_bool(args->dnode, "behavior-dt46");
+	if (yang_dnode_exists(args->dnode, "index"))
+		want_idx = yang_dnode_get_uint32(args->dnode, "index");
+	if (yang_dnode_exists(args->dnode, "explicit"))
+		want_explicit = yang_dnode_get_string(args->dnode, "explicit");
+	if (yang_dnode_exists(args->dnode, "route-map"))
+		want_rmap = yang_dnode_get_string(args->dnode, "route-map");
+
+	have_auto = CHECK_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_SID_AUTO);
+	have_dt46 = CHECK_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_BEHAVIOR_DT46);
+
+	rmap_same = (!want_rmap == !bgp->srv6_unicast[afi].rmap_name) &&
+		    (!want_rmap || strmatch(want_rmap, bgp->srv6_unicast[afi].rmap_name));
+	sid_same = want_auto == have_auto && want_idx == bgp->srv6_unicast[afi].sid_index &&
+		   !want_explicit == !bgp->srv6_unicast[afi].sid_explicit &&
+		   (!want_explicit ||
+		    (inet_pton(AF_INET6, want_explicit, &sid) == 1 &&
+		     IPV6_ADDR_SAME(&sid, bgp->srv6_unicast[afi].sid_explicit)));
+
+	if (sid_same && want_dt46 == have_dt46 && rmap_same)
+		return;
+
+	bgp_nb_af_srv6_sid_export_unset(bgp, afi);
+
+	if (want_rmap) {
+		bgp->srv6_unicast[afi].rmap_name = XSTRDUP(MTYPE_ROUTE_MAP_NAME, want_rmap);
+		route_map_counter_increment(route_map_lookup_by_name(want_rmap));
+	}
+	if (want_auto) {
+		SET_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_SID_AUTO);
+	} else if (want_idx != 0) {
+		bgp->srv6_unicast[afi].sid_index = want_idx;
+	} else if (want_explicit) {
+		bgp->srv6_unicast[afi].sid_explicit =
+			XCALLOC(MTYPE_BGP_SRV6_SID, sizeof(struct in6_addr));
+		inet_pton(AF_INET6, want_explicit, bgp->srv6_unicast[afi].sid_explicit);
+	}
+	if (want_dt46)
+		SET_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_BEHAVIOR_DT46);
+
+	if (want_auto || want_idx || want_explicit)
+		bgp_srv6_unicast_ensure_afi_sid(bgp, afi);
 }
 
 /* apply_finish on the enclosing 'vpn' container (which always survives),

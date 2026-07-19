@@ -16191,20 +16191,8 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 			}
 		}
 
-		if (is_srv6_unicast_enabled(bgp, afi)) {
-			if (CHECK_FLAG(bgp->srv6_unicast[afi].flags, SRV6_POLICY_FLAG_SID_AUTO))
-				vty_out(vty, "  sid export auto");
-			else if (bgp->srv6_unicast[afi].sid_explicit)
-				vty_out(vty, "  sid export explicit %pI6",
-					bgp->srv6_unicast[afi].sid_explicit);
-			else if (bgp->srv6_unicast[afi].sid_index)
-				vty_out(vty, "  sid export %u", bgp->srv6_unicast[afi].sid_index);
-			if (is_srv6_unicast_dt46_enabled(bgp, afi))
-				vty_out(vty, " behavior dt46");
-			if (bgp->srv6_unicast[afi].rmap_name)
-				vty_out(vty, " route-map %s", bgp->srv6_unicast[afi].rmap_name);
-			vty_out(vty, "\n");
-		}
+		/* 'sid export': emitted by mgmtd (M8.5 B-srv6-unicast,
+		 * afi_safis_srv6_sid_export_cli_write). */
 	}
 
 	vty_endframe(vty, " exit-address-family\n");
@@ -17577,8 +17565,8 @@ void bgp_vty_init(void)
 	_install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cmd);
 	_install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cmd);
 	_install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);
-	install_element(BGP_IPV4_NODE, &sid_export_cmd);
-	install_element(BGP_IPV6_NODE, &sid_export_cmd);
+	_install_element(BGP_IPV4_NODE, &sid_export_cmd);
+	_install_element(BGP_IPV6_NODE, &sid_export_cmd);
 	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cmd);
 	_install_element(BGP_NODE, &no_bgp_sid_vpn_export_cmd);
