@@ -288,8 +288,37 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 		{
 			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo",
 			.cbs = {
-				.modify = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_modify,
+				.create = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_create,
 				.destroy = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_destroy,
+				.apply_finish = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/as2",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/as4",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/ipv4",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/raw",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_destroy,
 			}
 		},
 		{

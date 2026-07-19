@@ -131,8 +131,27 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_modify(
 	struct nb_cb_modify_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_destroy(
 	struct nb_cb_destroy_args *args);
-int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_modify(struct nb_cb_modify_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_create(
+	struct nb_cb_create_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_destroy(struct nb_cb_destroy_args *args);
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_finish(
+	struct nb_cb_apply_finish_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_destroy(
+	struct nb_cb_destroy_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_destroy(
+	struct nb_cb_destroy_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_create(
+	struct nb_cb_create_args *args);
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_destroy(
+	struct nb_cb_destroy_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_ipv4_address_modify(struct nb_cb_modify_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_ipv4_address_destroy(struct nb_cb_destroy_args *args);
 int lib_route_map_entry_set_action_rmap_set_action_ipv4_nexthop_modify(struct nb_cb_modify_args *args);

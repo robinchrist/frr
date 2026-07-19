@@ -2034,38 +2034,9 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_nt_destroy(
  * XPath:
  * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo
  */
-int
-lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_modify(
-	struct nb_cb_modify_args *args)
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_create(
+	struct nb_cb_create_args *args)
 {
-	struct routemap_hook_context *rhc;
-	const char *type;
-	int rv;
-
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		type = yang_dnode_get_string(args->dnode, NULL);
-
-		/* Set destroy information. */
-		rhc->rhc_shook = generic_set_delete;
-		rhc->rhc_rule = "extcommunity soo";
-		rhc->rhc_event = RMAP_EVENT_SET_DELETED;
-
-		rv = generic_set_add(rhc->rhc_rmi, "extcommunity soo",
-				     type,
-				     args->errmsg, args->errmsg_len);
-		if (rv != CMD_SUCCESS) {
-			rhc->rhc_shook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
-
 	return NB_OK;
 }
 
@@ -2082,6 +2053,76 @@ lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_destroy(
 		return lib_route_map_entry_set_destroy(args);
 	}
 
+	return NB_OK;
+}
+
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	route_map_ecommunity_target_set_finish(args, "extcommunity soo");
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/as2
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as2_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/as4
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_as4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/ipv4
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_ipv4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-soo/raw
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_soo_raw_destroy(
+	struct nb_cb_destroy_args *args)
+{
 	return NB_OK;
 }
 

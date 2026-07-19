@@ -1523,10 +1523,13 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 				dnode,
 				"./rmap-set-action/frr-bgp-route-map:extcommunity-nt"));
 	} else if (IS_SET_EXTCOMMUNITY_SOO(action)) {
-		vty_out(vty, " set extcommunity soo %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-set-action/frr-bgp-route-map:extcommunity-soo"));
+		ln = yang_dnode_get(
+			dnode,
+			"rmap-set-action/frr-bgp-route-map:extcommunity-soo");
+		if (ln) {
+			vty_out(vty, " set extcommunity soo");
+			route_map_ecommunity_target_set_show(vty, ln);
+		}
 	} else if (IS_SET_EXTCOMMUNITY_LB(action)) {
 		enum ecommunity_lb_type lb_type;
 		char str[VTY_BUFSIZ];

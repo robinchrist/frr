@@ -2391,22 +2391,16 @@ DEFUN_YANG (set_ecommunity_soo,
 	   "VPN extended community\n")
 {
 	int idx_asn_nn = 3;
-	char *str;
-	int ret;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-soo']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_soo[XPATH_MAXLEN];
 
-	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-
-	snprintf(xpath_value, sizeof(xpath_value),
+	snprintf(xpath_soo, sizeof(xpath_soo),
 		 "%s/rmap-set-action/frr-bgp-route-map:extcommunity-soo",
 		 xpath);
-	str = argv_concat(argv, argc, idx_asn_nn);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+
+	return set_ecommunity_structured(vty, xpath, xpath_soo, argv, argc,
+					 idx_asn_nn);
 }
 
 DEFUN_YANG (no_set_ecommunity_soo,
