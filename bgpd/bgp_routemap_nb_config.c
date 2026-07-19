@@ -1821,41 +1821,74 @@ int lib_route_map_entry_match_condition_rmap_match_condition_extcommunity_limit_
 	return NB_OK;
 }
 
+static void routemap_communities_token_append(char *buf, size_t size,
+					      const char *token);
+
+/* Rebuild the legacy token string of a structured route-target or
+ * route-origin container (2-byte-AS entries, 4-byte-AS entries, IPv4
+ * entries, then raw tokens) and hand it to the generic set-add path
+ * under 'rule' ('extcommunity rt' or 'extcommunity soo'). */
+static void route_map_ecommunity_target_set_finish(
+	struct nb_cb_apply_finish_args *args, const char *rule)
+{
+	struct routemap_hook_context *rhc;
+	const struct lyd_node *child;
+	char str[VTY_BUFSIZ] = "";
+	char token[64];
+	int rv;
+
+	/* Add configuration. */
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "as2"))
+			continue;
+		snprintf(token, sizeof(token), "%u:%u",
+			 yang_dnode_get_uint16(child, "global-admin"),
+			 yang_dnode_get_uint32(child, "local-admin"));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "as4"))
+			continue;
+		snprintf(token, sizeof(token), "%u:%u",
+			 yang_dnode_get_uint32(child, "global-admin"),
+			 yang_dnode_get_uint16(child, "local-admin"));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "ipv4"))
+			continue;
+		snprintf(token, sizeof(token), "%s:%u",
+			 yang_dnode_get_string(child, "global-admin"),
+			 yang_dnode_get_uint16(child, "local-admin"));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (strmatch(child->schema->name, "raw"))
+			routemap_communities_token_append(
+				str, sizeof(str),
+				yang_dnode_get_string(child, NULL));
+	}
+
+	/* Set destroy information. */
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = rule;
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, rule, str, args->errmsg,
+			     args->errmsg_len);
+	if (rv != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
 /*
  * XPath:
  * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-rt
  */
-int
-lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_modify(
-	struct nb_cb_modify_args *args)
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_create(
+	struct nb_cb_create_args *args)
 {
-	struct routemap_hook_context *rhc;
-	const char *type;
-	int rv;
-
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		type = yang_dnode_get_string(args->dnode, NULL);
-
-		/* Set destroy information. */
-		rhc->rhc_shook = generic_set_delete;
-		rhc->rhc_rule = "extcommunity rt";
-		rhc->rhc_event = RMAP_EVENT_SET_DELETED;
-
-		rv = generic_set_add(rhc->rhc_rmi, "extcommunity rt", type,
-				     args->errmsg, args->errmsg_len);
-		if (rv != CMD_SUCCESS) {
-			rhc->rhc_shook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
-
 	return NB_OK;
 }
 
@@ -1872,6 +1905,76 @@ lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_destroy(
 		return lib_route_map_entry_set_destroy(args);
 	}
 
+	return NB_OK;
+}
+
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	route_map_ecommunity_target_set_finish(args, "extcommunity rt");
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-rt/as2
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_as2_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_as2_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-rt/as4
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_as4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_as4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-rt/ipv4
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_ipv4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_ipv4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-rt/raw
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_raw_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_rt_raw_destroy(
+	struct nb_cb_destroy_args *args)
+{
 	return NB_OK;
 }
 

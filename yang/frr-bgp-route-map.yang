@@ -1061,10 +1061,21 @@ identity set-extcommunity-color {
       when "derived-from-or-self(../frr-route-map:action, 'frr-bgp-route-map:set-extcommunity-rt')";
       description
         "Value of the ext-community";
-      leaf extcommunity-rt {
-        type string;
+      container extcommunity-rt {
         description
-          "Set BGP ext-community route-target attribute";
+          "Route targets the action installs on the route, written as
+           the space-separated tokens of
+           'set extcommunity rt ASN:NN_OR_IP-ADDRESS:NN...' in the
+           canonical order 2-byte-AS entries, 4-byte-AS entries, IPv4
+           entries, then raw fallback tokens.";
+        uses pt:route-target-set;
+
+        leaf-list raw {
+          type string;
+          description
+            "A route target kept verbatim as typed when it does not
+             fit any of the structured lists.";
+        }
       }
     }
 

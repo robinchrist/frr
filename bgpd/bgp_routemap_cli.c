@@ -2177,6 +2177,168 @@ DEFUN_YANG (no_set_lcommunity_delete_method2,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* How one 'ASN:NN' or 'A.B.C.D:NN' token of the rt/soo commands maps
+ * onto the structured route-target/route-origin set. */
+enum set_ecomm_token_kind {
+	SET_ECOMM_TOKEN_RAW,
+	SET_ECOMM_TOKEN_AS2,
+	SET_ECOMM_TOKEN_AS4,
+	SET_ECOMM_TOKEN_IPV4,
+};
+
+/* Parse an all-digit decimal number bounded by 'max'. */
+static bool set_ecommunity_token_number(const char *str, const char *end,
+					unsigned long max, unsigned long *num)
+{
+	char *endptr;
+
+	if (!isdigit((unsigned char)*str))
+		return false;
+	errno = 0;
+	*num = strtoul(str, &endptr, 10);
+	if (errno || endptr != end || *num > max)
+		return false;
+
+	return true;
+}
+
+/* Classify one token the way the daemon's tokenizer encodes it:
+ * 'A.B.C.D:NN' (NN <= 65535) is IPv4-encoded, 'AS:NN' with
+ * AS <= 65535 is 2-byte-AS-encoded (4-byte value), a bigger plain AS
+ * or an asdot 'A.B' AS is 4-byte-AS-encoded (2-byte value). Anything
+ * else stays a raw token. */
+static enum set_ecomm_token_kind
+set_ecommunity_token_classify(const char *token, char *addr, size_t addr_size,
+			      unsigned long *global_admin,
+			      unsigned long *local_admin)
+{
+	const char *colon = strchr(token, ':');
+	const char *p;
+	unsigned long high, low;
+	int ndot = 0;
+
+	if (!colon || colon == token || strchr(colon + 1, ':'))
+		return SET_ECOMM_TOKEN_RAW;
+	for (p = token; p < colon; p++)
+		if (*p == '.')
+			ndot++;
+
+	if (ndot == 0) {
+		/* Plain AS number. */
+		if (!set_ecommunity_token_number(token, colon, UINT32_MAX,
+						 global_admin))
+			return SET_ECOMM_TOKEN_RAW;
+		if (*global_admin <= UINT16_MAX) {
+			if (!set_ecommunity_token_number(colon + 1, colon + 1 +
+							 strlen(colon + 1),
+							 UINT32_MAX,
+							 local_admin))
+				return SET_ECOMM_TOKEN_RAW;
+			return SET_ECOMM_TOKEN_AS2;
+		}
+		if (!set_ecommunity_token_number(colon + 1,
+						 colon + 1 + strlen(colon + 1),
+						 UINT16_MAX, local_admin))
+			return SET_ECOMM_TOKEN_RAW;
+		return SET_ECOMM_TOKEN_AS4;
+	}
+
+	if (ndot == 1) {
+		/* Asdot 'A.B' AS number; always a 4-byte AS. */
+		const char *dot = strchr(token, '.');
+
+		if (!set_ecommunity_token_number(token, dot, UINT16_MAX, &high) ||
+		    !set_ecommunity_token_number(dot + 1, colon, UINT16_MAX,
+						 &low) ||
+		    !set_ecommunity_token_number(colon + 1,
+						 colon + 1 + strlen(colon + 1),
+						 UINT16_MAX, local_admin))
+			return SET_ECOMM_TOKEN_RAW;
+		*global_admin = (high << 16) + low;
+		return SET_ECOMM_TOKEN_AS4;
+	}
+
+	if (ndot == 3) {
+		/* IPv4 global administrator. */
+		struct in_addr ip;
+
+		if ((size_t)(colon - token) >= addr_size)
+			return SET_ECOMM_TOKEN_RAW;
+		memcpy(addr, token, colon - token);
+		addr[colon - token] = '\0';
+		if (inet_pton(AF_INET, addr, &ip) != 1 ||
+		    !set_ecommunity_token_number(colon + 1,
+						 colon + 1 + strlen(colon + 1),
+						 UINT16_MAX, local_admin))
+			return SET_ECOMM_TOKEN_RAW;
+		return SET_ECOMM_TOKEN_IPV4;
+	}
+
+	return SET_ECOMM_TOKEN_RAW;
+}
+
+/* Turn the rt/soo token list into edits against a structured
+ * route-target/route-origin container rooted at 'xpath_set'. */
+static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
+				     const char *xpath_set,
+				     struct cmd_token *argv[], int argc,
+				     int idx_start)
+{
+	char xpath_value[XPATH_MAXLEN * 2];
+	int i, nqueued, ret;
+
+	nb_cli_enqueue_change(vty, xpath_action, NB_OP_CREATE, NULL);
+	/* Replace, not merge, whatever an earlier line left. */
+	nb_cli_enqueue_change(vty, xpath_set, NB_OP_DESTROY, NULL);
+	nqueued = 2;
+
+	/* One config line's tokens can exceed one transaction's change
+	 * budget (VTY_MAXCFGCHANGES); apply in batches. Only the first
+	 * batch carries the replace-destroy above, later ones merge
+	 * more tokens into the already-created container. */
+	for (i = idx_start; i < argc; i++) {
+		const char *tok = argv[i]->arg;
+		char addr[INET_ADDRSTRLEN];
+		unsigned long ga = 0, la = 0;
+
+		if (nqueued == VTY_MAXCFGCHANGES) {
+			ret = nb_cli_apply_changes(vty, NULL);
+			if (ret != CMD_SUCCESS)
+				return ret;
+			nqueued = 0;
+		}
+		nqueued++;
+
+		switch (set_ecommunity_token_classify(tok, addr, sizeof(addr),
+						      &ga, &la)) {
+		case SET_ECOMM_TOKEN_AS2:
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/as2[global-admin='%lu'][local-admin='%lu']",
+				 xpath_set, ga, la);
+			break;
+		case SET_ECOMM_TOKEN_AS4:
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/as4[global-admin='%lu'][local-admin='%lu']",
+				 xpath_set, ga, la);
+			break;
+		case SET_ECOMM_TOKEN_IPV4:
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/ipv4[global-admin='%s'][local-admin='%lu']",
+				 xpath_set, addr, la);
+			break;
+		case SET_ECOMM_TOKEN_RAW:
+			/* Kept verbatim; the apply-time compile rejects
+			 * it, as it did for the old free-form string. */
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/raw[.='%s']", xpath_set, tok);
+			break;
+		}
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 DEFUN_YANG (set_ecommunity_rt,
 	    set_ecommunity_rt_cmd,
 	    "set extcommunity rt ASN:NN_OR_IP-ADDRESS:NN...",
@@ -2186,21 +2348,15 @@ DEFUN_YANG (set_ecommunity_rt,
 	    "VPN extended community\n")
 {
 	int idx_asn_nn = 3;
-	char *str;
-	int ret;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-rt']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_rt[XPATH_MAXLEN];
 
-	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-
-	snprintf(xpath_value, sizeof(xpath_value),
+	snprintf(xpath_rt, sizeof(xpath_rt),
 		 "%s/rmap-set-action/frr-bgp-route-map:extcommunity-rt", xpath);
-	str = argv_concat(argv, argc, idx_asn_nn);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+
+	return set_ecommunity_structured(vty, xpath, xpath_rt, argv, argc,
+					 idx_asn_nn);
 }
 
 DEFUN_YANG (no_set_ecommunity_rt,
