@@ -1243,6 +1243,30 @@ static void route_map_communities_show(struct vty *vty,
 	vty_out(vty, "\n");
 }
 
+/* Same rendering for a structured large-community set: members as
+ * 'GA:LD1:LD2', then raw tokens verbatim, then 'additive'. */
+static void route_map_large_communities_show(struct vty *vty,
+					     const struct lyd_node *container)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "member"))
+			vty_out(vty, " %u:%u:%u",
+				yang_dnode_get_uint32(child, "global-admin"),
+				yang_dnode_get_uint32(child, "local-data-1"),
+				yang_dnode_get_uint32(child, "local-data-2"));
+	}
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "raw"))
+			vty_out(vty, " %s",
+				yang_dnode_get_string(child, NULL));
+	}
+	if (yang_dnode_get_bool(container, "additive"))
+		vty_out(vty, " additive");
+	vty_out(vty, "\n");
+}
+
 void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 			   bool show_defaults)
 {
@@ -1423,14 +1447,13 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 
 		vty_out(vty, " set extended-comm-list delete %s\n", acl);
 	} else if (IS_SET_LCOMMUNITY(action)) {
-		if (yang_dnode_exists(
-			    dnode,
-			    "./rmap-set-action/frr-bgp-route-map:large-community-string"))
-			vty_out(vty, " set large-community %s\n",
-				yang_dnode_get_string(
-					dnode,
-					"./rmap-set-action/frr-bgp-route-map:large-community-string"));
-		else {
+		ln = yang_dnode_get(
+			dnode,
+			"rmap-set-action/frr-bgp-route-map:large-communities");
+		if (ln) {
+			vty_out(vty, " set large-community");
+			route_map_large_communities_show(vty, ln);
+		} else {
 			if (true
 			    == yang_dnode_get_bool(
 				    dnode,

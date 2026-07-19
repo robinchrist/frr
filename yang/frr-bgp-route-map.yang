@@ -1466,13 +1466,26 @@ identity set-extcommunity-color {
           }
         }
 
-        case large-community-string {
+        case large-communities {
           description
-            "Large-Community string";
-          leaf large-community-string {
-            type string;
+            "Explicit set of large communities";
+          container large-communities {
             description
-              "Specifies the value of the large-community attribute as a string";
+              "Large communities the action installs on the route,
+               written as the space-separated tokens of
+               'set large-community AA:BB:CC...': structured members,
+               then raw fallback tokens. By default the set replaces
+               the attribute; with additive it is appended to the
+               large communities already present.";
+            uses pt:large-community-set;
+
+            leaf additive {
+              type boolean;
+              default "false";
+              description
+                "Append the large communities to the existing
+                 attribute instead of replacing it ('additive').";
+            }
           }
         }
       }

@@ -448,10 +448,31 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 			}
 		},
 		{
-			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-community-string",
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities",
 			.cbs = {
-				.modify = lib_route_map_entry_set_action_rmap_set_action_large_community_string_modify,
-				.destroy = lib_route_map_entry_set_action_rmap_set_action_large_community_string_destroy,
+				.create = lib_route_map_entry_set_action_rmap_set_action_large_communities_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_large_communities_destroy,
+				.apply_finish = lib_route_map_entry_set_action_rmap_set_action_large_communities_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/member",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_large_communities_member_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_large_communities_member_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/raw",
+			.cbs = {
+				.create = lib_route_map_entry_set_action_rmap_set_action_large_communities_raw_create,
+				.destroy = lib_route_map_entry_set_action_rmap_set_action_large_communities_raw_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/additive",
+			.cbs = {
+				.modify = lib_route_map_entry_set_action_rmap_set_action_large_communities_additive_modify,
 			}
 		},
 		{

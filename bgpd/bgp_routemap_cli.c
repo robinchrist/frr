@@ -1938,6 +1938,34 @@ DEFPY_YANG (no_set_community_change,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Parse a 'GA:LD1:LD2' token: exactly three all-digit decimal parts,
+ * each <= 4294967295 (lcommunity_gettoken()'s numeric acceptance). */
+static bool set_lcommunity_token_member(const char *token, unsigned long *ga,
+					unsigned long *ld1, unsigned long *ld2)
+{
+	unsigned long *part[] = { ga, ld1, ld2 };
+	const char *p = token;
+	char *endptr;
+
+	for (int i = 0; i < 3; i++) {
+		if (!isdigit((unsigned char)*p))
+			return false;
+		errno = 0;
+		*part[i] = strtoul(p, &endptr, 10);
+		if (errno || *part[i] > UINT32_MAX)
+			return false;
+		if (i < 2) {
+			if (*endptr != ':')
+				return false;
+			p = endptr + 1;
+		} else if (*endptr != '\0') {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 DEFUN_YANG (set_lcommunity,
 	    set_lcommunity_cmd,
 	    "set large-community AA:BB:CC...",
@@ -1945,22 +1973,62 @@ DEFUN_YANG (set_lcommunity,
 	    "BGP large community attribute\n"
 	    "Large Community number in aa:bb:cc format or additive\n")
 {
-	char *str;
+	int idx_val = 2;
+	int i;
+	int nqueued;
 	int ret;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-large-community']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_comm[XPATH_MAXLEN];
+	char xpath_value[XPATH_MAXLEN * 2];
+
+	snprintf(xpath_comm, sizeof(xpath_comm),
+		 "%s/rmap-set-action/frr-bgp-route-map:large-communities",
+		 xpath);
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	/* Replace, not merge, whatever an earlier line left. */
+	nb_cli_enqueue_change(vty, xpath_comm, NB_OP_DESTROY, NULL);
+	nqueued = 2;
 
-	snprintf(xpath_value, sizeof(xpath_value),
-		 "%s/rmap-set-action/frr-bgp-route-map:large-community-string",
-		 xpath);
-	str = argv_concat(argv, argc, 2);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+	/* One config line's tokens can exceed one transaction's change
+	 * budget (VTY_MAXCFGCHANGES); apply in batches. Only the first
+	 * batch carries the replace-destroy above, later ones merge
+	 * more tokens into the already-created container. */
+	for (i = idx_val; i < argc; i++) {
+		const char *tok = argv[i]->arg;
+		unsigned long ga, ld1, ld2;
+
+		if (nqueued == VTY_MAXCFGCHANGES) {
+			ret = nb_cli_apply_changes(vty, NULL);
+			if (ret != CMD_SUCCESS)
+				return ret;
+			nqueued = 0;
+		}
+		nqueued++;
+
+		if (strcmp(tok, "additive") == 0) {
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/additive", xpath_comm);
+			nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY,
+					      "true");
+		} else if (set_lcommunity_token_member(tok, &ga, &ld1, &ld2)) {
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/member[global-admin='%lu'][local-data-1='%lu'][local-data-2='%lu']",
+				 xpath_comm, ga, ld1, ld2);
+			nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE,
+					      NULL);
+		} else {
+			/* Kept verbatim; the apply-time compile rejects
+			 * it, as it did for the old free-form string. */
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/raw[.='%s']", xpath_comm, tok);
+			nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE,
+					      NULL);
+		}
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFUN_YANG (set_lcommunity_none,

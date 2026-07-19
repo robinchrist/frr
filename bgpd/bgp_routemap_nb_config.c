@@ -3393,45 +3393,15 @@ lib_route_map_entry_set_action_rmap_set_action_large_community_none_destroy(
 
 /*
  * XPath:
- * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-community-string
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities
  */
-int
-lib_route_map_entry_set_action_rmap_set_action_large_community_string_modify(
-	struct nb_cb_modify_args *args)
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_create(
+	struct nb_cb_create_args *args)
 {
-	struct routemap_hook_context *rhc;
-	const char *type;
-	int rv;
-
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		type = yang_dnode_get_string(args->dnode, NULL);
-
-		/* Set destroy information. */
-		rhc->rhc_shook = generic_set_delete;
-		rhc->rhc_rule = "large-community";
-		rhc->rhc_event = RMAP_EVENT_SET_DELETED;
-
-		rv = generic_set_add(rhc->rhc_rmi, "large-community",
-				     type,
-				     args->errmsg, args->errmsg_len);
-		if (rv != CMD_SUCCESS) {
-			rhc->rhc_shook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
-
 	return NB_OK;
 }
 
-int
-lib_route_map_entry_set_action_rmap_set_action_large_community_string_destroy(
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_destroy(
 	struct nb_cb_destroy_args *args)
 {
 	switch (args->event) {
@@ -3443,6 +3413,89 @@ lib_route_map_entry_set_action_rmap_set_action_large_community_string_destroy(
 		return lib_route_map_entry_set_destroy(args);
 	}
 
+	return NB_OK;
+}
+
+void lib_route_map_entry_set_action_rmap_set_action_large_communities_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const struct lyd_node *child;
+	char str[VTY_BUFSIZ] = "";
+	char token[48];
+	int rv;
+
+	/* Add configuration. */
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "member"))
+			continue;
+		snprintf(token, sizeof(token), "%u:%u:%u",
+			 yang_dnode_get_uint32(child, "global-admin"),
+			 yang_dnode_get_uint32(child, "local-data-1"),
+			 yang_dnode_get_uint32(child, "local-data-2"));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (strmatch(child->schema->name, "raw"))
+			routemap_communities_token_append(
+				str, sizeof(str),
+				yang_dnode_get_string(child, NULL));
+	}
+	if (yang_dnode_get_bool(args->dnode, "additive"))
+		routemap_communities_token_append(str, sizeof(str), "additive");
+
+	/* Set destroy information. */
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "large-community";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, "large-community", str,
+			     args->errmsg, args->errmsg_len);
+	if (rv != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/member
+ */
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_member_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_member_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/raw
+ */
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_raw_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_raw_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:large-communities/additive
+ */
+int lib_route_map_entry_set_action_rmap_set_action_large_communities_additive_modify(
+	struct nb_cb_modify_args *args)
+{
 	return NB_OK;
 }
 
