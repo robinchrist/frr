@@ -1862,6 +1862,12 @@ int bgp_nb_neighbor_remote_as_apply(const struct lyd_node *dnode)
 	if (!bgp_nb_get_remote_as(nbr_dnode, &as, &as_type, &as_str, as_buf, sizeof(as_buf)))
 		return NB_OK;
 
+	/* The retired native peer_remote_as_vty() started the (per-VRF)
+	 * listener before creating the first peer; without this a VRF
+	 * instance never opens its listen socket and all its sessions sit
+	 * in Connect/Active forever. */
+	bgp_need_listening(bgp, NULL);
+
 	ret = peer_remote_as(bgp, su_ptr, conf_if, &as, as_type, as_str);
 	if (ret) {
 		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID,

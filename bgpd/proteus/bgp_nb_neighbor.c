@@ -281,6 +281,11 @@ int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args)
 				 "%s: peer_group_bind() failed for %s: %d", __func__, name, ret);
 			return NB_ERR_RESOURCE;
 		}
+
+		/* Binding may just have created the instance's first peer;
+		 * make sure the (per-VRF) listener exists - the retired
+		 * native bind DEFUN did this via peer_remote_as_vty(). */
+		bgp_need_listening(bgp, NULL);
 		break;
 	}
 
