@@ -2563,20 +2563,15 @@ module proteus-bgp {
         default "false";
         description
           "'bgp default shutdown': new neighbors start
-           administratively down. NOT YET CONVERTED: the legacy
-           bgp_config_write() emits this line deliberately late
-           (after all peer/peer-group configuration, FRR issue
-           #2286) because bgp->autoshutdown only affects peers at
-           creation time and placing it early would shut down every
-           peer on every daemon-restart config replay. mgmtd's
-           cli_show output for a whole 'router bgp' block is always
-           merged ahead of bgpd's legacy output for that same block
-           (vtysh queries mgmtd before bgpd, vtysh/vtysh_config.c
-           appends by arrival order under the shared header), so a
-           converted cli_show here would unconditionally land before
-           the still-legacy peer/peer-group lines and reintroduce
-           that race. Leave unconverted until the peer/peer-group
-           config also moves to mgmtd.";
+           administratively down (bgp->autoshutdown, seeded into
+           each peer at creation). Converted in M8 batch B2, after
+           B1 moved the peer/peer-group creation lines to mgmtd's
+           emission: the historical placement race (the legacy line
+           was written after all neighbor lines so a daemon-restart
+           replay would not shut existing peers, FRR issue #2286)
+           evaporated because the leaf is future-peers-only - it
+           never touches peers that already exist, so its position
+           relative to the neighbor lines no longer matters.";
       }
     }
 

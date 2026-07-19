@@ -5343,6 +5343,30 @@ void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct lyd_nod
 		vty_out(vty, " bgp default l2vpn-evpn\n");
 }
 
+void instance_default_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " bgp default shutdown\n");
+}
+
+/* 'bgp default shutdown' (M8 batch B2): Tier A default-off boolean, the
+ * negative form deletes back to the false default. Future-peers-only, see
+ * instance_default_shutdown_modify (bgp_nb_instance.c) for the FRR #2286
+ * ordering analysis. */
+DEFPY_YANG(
+	bgp_default_shutdown, bgp_default_shutdown_cli_cmd,
+	"[no] bgp default shutdown",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Apply administrative shutdown to newly configured peers\n")
+{
+	nb_cli_enqueue_change(vty, "./default/shutdown", no ? NB_OP_DESTROY : NB_OP_MODIFY,
+			      no ? NULL : "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 /* Static default-on scalars (batch B6): value-checked against the YANG
  * default, matching bgp_config_write()'s "if (bgp->default_local_pref !=
  * BGP_DEFAULT_LOCAL_PREF)" / subgroup-pkt-queue-max arms exactly.
@@ -8029,6 +8053,7 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_bestpath_bw_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_default_afi_safi_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_shutdown_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_default_local_preference_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_default_local_preference_cli_cmd);

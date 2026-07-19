@@ -1279,6 +1279,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/default/shutdown",
+			.cbs = {
+				.cli_show = instance_default_shutdown_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/default/local-preference",
 			.cbs = {
 				.cli_show = instance_default_local_preference_cli_write,

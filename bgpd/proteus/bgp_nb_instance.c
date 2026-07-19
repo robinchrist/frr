@@ -1017,6 +1017,35 @@ int instance_default_l2vpn_evpn_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
+/* 'bgp default shutdown' (M8 batch B2). Deliberately NOT in the reseed
+ * bridge: legacy emits this line AFTER the neighbor lines precisely so a
+ * restart's file replay does not shut peers that already exist (FRR
+ * #2286); the converted leaf keeps those future-peers-only semantics by
+ * only setting bgp->autoshutdown (seeded into each subsequent
+ * peer_create), never touching existing peers. A hand-written file that
+ * placed the line before its neighbors now behaves as if it were written
+ * after them - the machine-emitted order, and the leaf's documented
+ * intent. */
+int instance_default_shutdown_modify(struct nb_cb_modify_args *args)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		bgp->autoshutdown = yang_dnode_get_bool(args->dnode, NULL);
+		break;
+	}
+
+	return NB_OK;
+}
+
 /* 'bgp default local-preference (0-4294967295)' (Tier A: static
  * default-on scalar, no inheritance -- see the YANG leaf's "default"
  * statement). Destroy is not registered: the northbound layer resolves a
@@ -1364,22 +1393,6 @@ int instance_default_subgroup_pkt_queue_max_modify(struct nb_cb_modify_args *arg
 			break;
 		bgp_default_subgroup_pkt_queue_max_set(bgp,
 						       yang_dnode_get_uint8(args->dnode, NULL));
-		break;
-	}
-
-	return NB_OK;
-}
-
-int instance_default_shutdown_modify(struct nb_cb_modify_args *args)
-{
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-		snprintf(args->errmsg, args->errmsg_len, "not yet implemented: %s",
-			 "/proteus-bgp:instance/default/shutdown");
-		return NB_ERR_VALIDATION;
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-	case NB_EV_APPLY:
 		break;
 	}
 

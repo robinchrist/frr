@@ -2319,18 +2319,10 @@ DEFUN (neighbor_remote_as,
 	return peer_remote_as_vty(vty, argv[idx_peer]->arg, argv[idx_remote_as]->arg);
 }
 
-DEFUN (bgp_default_shutdown,
-       bgp_default_shutdown_cmd,
-       "[no] bgp default shutdown",
-       NO_STR
-       BGP_STR
-       "Configure BGP defaults\n"
-       "Apply administrative shutdown to newly configured peers\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	bgp->autoshutdown = !strmatch(argv[0]->text, "no");
-	return CMD_SUCCESS;
-}
+/* '[no] bgp default shutdown': converted to northbound (M8 batch B2), see
+ * bgp_default_shutdown_cli_cmd in bgp_cli_instance.c. Future-peers-only
+ * semantics preserved; no native retention needed (instance-scope leaf,
+ * nothing residue-native attaches to it). */
 
 /* '[no] bgp shutdown [message MSG...]': converted to northbound, see
  * 'bgp_instance_shutdown*_cli_cmd' in bgp_cli_instance.c (M7 batch B5).
@@ -16419,15 +16411,13 @@ int bgp_config_write(struct vty *vty)
 		/* listen range and limit for dynamic BGP neighbors:
 		 * northbound now, see bgp_cli.c (M4 batch B2) */
 
-		/*
-		 * BGP default autoshutdown neighbors
-		 *
-		 * This must be placed after any peer and peer-group
-		 * configuration, to avoid setting all peers to shutdown after
-		 * a daemon restart, which is undesired behavior. (see #2286)
-		 */
-		if (bgp->autoshutdown)
-			vty_out(vty, " bgp default shutdown\n");
+		/* 'bgp default shutdown': emitted by mgmtd (M8 batch B2,
+		 * instance_default_shutdown_cli_write). The legacy
+		 * after-the-neighbors emission position (FRR #2286) is no
+		 * longer load-bearing: the converted leaf only seeds future
+		 * peer_create calls and never touches existing peers, so a
+		 * replay cannot shut restart-loaded neighbors regardless of
+		 * line position. */
 
 		/* BGP instance administrative shutdown, allow-martian-nexthop,
 		 * use-underlays-nexthop-weight and fast-convergence: converted
@@ -17011,7 +17001,6 @@ void bgp_vty_init(void)
 	 * bgp_cli.c (M4 batch B2) */
 
 	/* "bgp default shutdown" command */
-	install_element(BGP_NODE, &bgp_default_shutdown_cmd);
 
 	/* "bgp shutdown" commands: converted to northbound (M7 batch B5),
 	 * see bgp_cli_instance.c.

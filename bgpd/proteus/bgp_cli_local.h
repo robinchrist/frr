@@ -265,6 +265,8 @@ void instance_default_ipv6_unicast_cli_write(struct vty *vty, const struct lyd_n
 						    bool show_defaults);
 void instance_default_ipv6_vpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults);
+void instance_default_shutdown_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults);
 void instance_default_l2vpn_evpn_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						  bool show_defaults);
 void instance_default_link_local_capability_cli_write(struct vty *vty,
