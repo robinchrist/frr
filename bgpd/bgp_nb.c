@@ -9340,6 +9340,34 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/sid-export",
+			.cbs = {
+				.create = instance_afi_safis_ipv4_unicast_vpn_sid_export_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/sid-export/index",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/sid-export/auto",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/sid-export/explicit",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/value",
 			.cbs = {
 				.modify = instance_afi_safis_ipv4_unicast_vpn_label_export_value_modify,
@@ -10259,6 +10287,34 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn",
 			.cbs = {
 				.apply_finish = instance_afi_safis_ipv6_unicast_vpn_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/sid-export",
+			.cbs = {
+				.create = instance_afi_safis_ipv6_unicast_vpn_sid_export_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/sid-export/index",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/sid-export/auto",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/sid-export/explicit",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
 			}
 		},
 		{

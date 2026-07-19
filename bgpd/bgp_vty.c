@@ -15337,16 +15337,8 @@ static void bgp_vpn_policy_config_write_afi(struct vty *vty, struct bgp *bgp,
 				indent, "");
 	}
 
-	tovpn_sid_index = bgp->vpn_policy[afi].tovpn_sid_index;
-	if (CHECK_FLAG(bgp->vpn_policy[afi].flags,
-		       BGP_VPN_POLICY_TOVPN_SID_AUTO)) {
-		vty_out(vty, "%*ssid vpn export %s\n", indent, "", "auto");
-	} else if (CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_EXPLICIT)) {
-		vty_out(vty, "%*ssid vpn export explicit %pI6\n", indent, "",
-			bgp->vpn_policy[afi].tovpn_sid_explicit);
-	} else if (tovpn_sid_index != 0) {
-		vty_out(vty, "%*ssid vpn export %u\n", indent, "", tovpn_sid_index);
-	}
+	/* 'sid vpn export': emitted by mgmtd (M8.5 B-srv6-peraf-vpn,
+	 * afi_safis_vpn_sid_export_cli_write). */
 
 	/* 'rd vpn export': mgmtd-owned (M7 B2). */
 	if (!bgp_af_vpn_leaking_is_proteus(afi, SAFI_UNICAST) &&
@@ -17582,8 +17574,8 @@ void bgp_vty_init(void)
 	_install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cmd);
 	_install_element(BGP_SRV6_NODE, &bgp_srv6_only_cmd);
 	_install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cmd);
-	install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cmd);
-	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cmd);
+	_install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cmd);
+	_install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cmd);
 	_install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);
 	install_element(BGP_IPV4_NODE, &sid_export_cmd);
 	install_element(BGP_IPV6_NODE, &sid_export_cmd);

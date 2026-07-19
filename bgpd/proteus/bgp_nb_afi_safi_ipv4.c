@@ -351,6 +351,11 @@ int instance_afi_safis_ipv4_unicast_vpn_route_map_export_destroy(struct nb_cb_de
 	return bgp_nb_af_vpn_route_map_export_destroy(args, AFI_IP, SAFI_UNICAST);
 }
 
+int instance_afi_safis_ipv4_unicast_vpn_sid_export_create(struct nb_cb_create_args *args)
+{
+	return bgp_nb_af_sid_export_create(args, AFI_IP, SAFI_UNICAST);
+}
+
 void instance_afi_safis_ipv4_unicast_vpn_apply_finish(struct nb_cb_apply_finish_args *args)
 {
 	bgp_nb_af_vpn_label_export_apply_finish(args, AFI_IP, SAFI_UNICAST);

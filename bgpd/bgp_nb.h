@@ -3824,6 +3824,7 @@ int instance_afi_safis_ipv4_unicast_vpn_route_map_import_destroy(struct nb_cb_de
 int instance_afi_safis_ipv4_unicast_vpn_route_map_export_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv4_unicast_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv4_unicast_vpn_label_export_value_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv4_unicast_vpn_sid_export_create(struct nb_cb_create_args *args);
 void instance_afi_safis_ipv4_unicast_vpn_apply_finish(struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_ipv4_unicast_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv4_unicast_vpn_label_export_auto_modify(struct nb_cb_modify_args *args);
@@ -4134,6 +4135,7 @@ int instance_afi_safis_ipv6_unicast_vpn_route_map_import_destroy(struct nb_cb_de
 int instance_afi_safis_ipv6_unicast_vpn_route_map_export_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_ipv6_unicast_vpn_route_map_export_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv6_unicast_vpn_label_export_value_modify(struct nb_cb_modify_args *args);
+int instance_afi_safis_ipv6_unicast_vpn_sid_export_create(struct nb_cb_create_args *args);
 void instance_afi_safis_ipv6_unicast_vpn_apply_finish(struct nb_cb_apply_finish_args *args);
 int instance_afi_safis_ipv6_unicast_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args);
 int instance_afi_safis_ipv6_unicast_vpn_label_export_auto_modify(struct nb_cb_modify_args *args);

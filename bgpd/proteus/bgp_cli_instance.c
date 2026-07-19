@@ -465,6 +465,65 @@ void instance_sid_vpn_export_cli_write(struct vty *vty, const struct lyd_node *d
 		vty_out(vty, " sid vpn per-vrf export %s\n", yang_dnode_get_string(dnode, "index"));
 }
 
+/* Per-AF 'sid vpn export' (M8.5 B-srv6-peraf-vpn), unicast AF nodes. */
+DEFPY_YANG(
+	af_sid_vpn_export, af_sid_vpn_export_cli_cmd,
+	"[no] sid vpn export <(1-4294967295)$sid_idx|auto$sid_auto|explicit$sid_explicit X:X::X:X$sid_value>",
+	NO_STR
+	"sid value for VRF\n"
+	"Between current address-family and vpn\n"
+	"For routes leaked from current address-family to vpn\n"
+	"Sid allocation index\n"
+	"Automatically assign a label\n"
+	"Explicitly assign a sid value\n"
+	"Sid value\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (no) {
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/sid-export", VTY_CURR_XPATH,
+				   container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	} else if (sid_auto) {
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/sid-export/auto",
+				   VTY_CURR_XPATH, container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+	} else if (sid_explicit) {
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/sid-export/explicit",
+				   VTY_CURR_XPATH, container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_value_str);
+	} else {
+		xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/vpn/sid-export/index",
+				   VTY_CURR_XPATH, container);
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, sid_idx_str);
+	}
+
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+/* One '  sid vpn export <auto|N|explicit X>' line inside the af-vpn
+ * interleave, matching bgp_vpn_policy_config_write_afi()'s retired arm. */
+void afi_safis_vpn_sid_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					bool show_defaults)
+{
+	if (yang_dnode_exists(dnode, "auto") && yang_dnode_get_bool(dnode, "auto"))
+		vty_out(vty, "  sid vpn export auto\n");
+	else if (yang_dnode_exists(dnode, "explicit"))
+		vty_out(vty, "  sid vpn export explicit %s\n",
+			yang_dnode_get_string(dnode, "explicit"));
+	else if (yang_dnode_exists(dnode, "index"))
+		vty_out(vty, "  sid vpn export %s\n", yang_dnode_get_string(dnode, "index"));
+}
+
 /* No proteus container for link-state; the node exists here only so mgmtd
  * tracks the block and accepts its exit-address-family (LS subcommands stay
  * native to bgpd). */
@@ -7999,6 +8058,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cli_cmd);
 	install_element(BGP_NODE, &bgp_sid_vpn_export_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_sid_vpn_export_cli_cmd);
+	install_element(BGP_IPV4_NODE, &af_sid_vpn_export_cli_cmd);
+	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);

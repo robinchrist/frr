@@ -1963,6 +1963,46 @@ module proteus-bgp {
              default.";
         }
       }
+      container sid-export {
+        presence
+          "'sid vpn export ...' is configured for this AF (M8.5
+           B-srv6-peraf-vpn). Same shape as the instance-level
+           sid-vpn-export; mutually exclusive with it and with the
+           unicast 'sid export' (VALIDATE-checked). Converged in the
+           enclosing vpn container's apply_finish next to
+           label-export.";
+        description
+          "'[no] sid vpn export <(1-4294967295)|auto|explicit
+           X:X::X:X>' (af_sid_vpn_export_cmd): SRv6 SID for routes
+           leaked from this AF to the VPN table.";
+
+        choice sid {
+          case index {
+            leaf index {
+              type uint32 {
+                range "1..4294967295";
+              }
+              description
+                "SID allocation index-mode.";
+            }
+          }
+          case auto {
+            leaf auto {
+              type boolean;
+              default "false";
+              description
+                "SID allocation auto-mode.";
+            }
+          }
+          case explicit {
+            leaf explicit {
+              type inet:ipv6-address-no-zone;
+              description
+                "Explicitly assigned SID value.";
+            }
+          }
+        }
+      }
       container rd-export {
         description
           "'rd vpn export <ASN:NN|A.B.C.D:NN>'

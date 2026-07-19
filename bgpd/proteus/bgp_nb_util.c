@@ -34,6 +34,7 @@
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
 #include "bgpd/bgp_mplsvpn.h"
+#include "bgpd/bgp_srv6.h"
 #include "lib/routemap.h"
 #include "bgpd/proteus/bgp_nb_local.h"
 
@@ -6519,6 +6520,108 @@ int bgp_nb_af_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args, afi
 	return NB_OK;
 }
 
+/* Per-AF 'sid vpn export' (M8.5 B-srv6-peraf-vpn): converged from the
+ * final tree in the same vpn-container apply_finish as label-export.
+ * Mirrors the instance-level sid-vpn-export convergence, on
+ * vpn_policy[afi] state with single-AFI leak cycles. */
+static void bgp_nb_af_sid_export_unset(struct bgp *bgp, afi_t afi)
+{
+	if (!is_srv6_vpn_afi_enabled(bgp, afi))
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	bgp->vpn_policy[afi].tovpn_sid_index = 0;
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_AUTO);
+	UNSET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_EXPLICIT);
+	XFREE(MTYPE_BGP_SRV6_SID, bgp->vpn_policy[afi].tovpn_sid_explicit);
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+}
+
+static void bgp_nb_af_sid_export_converge(const struct lyd_node *vpn_dnode, afi_t afi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(vpn_dnode);
+	const struct lyd_node *se;
+	bool want_auto = false, have_auto, have_explicit;
+	uint32_t want_idx = 0;
+	const char *want_explicit = NULL;
+	struct in6_addr sid;
+
+	if (!bgp)
+		return;
+
+	se = yang_dnode_exists(vpn_dnode, "sid-export")
+		     ? yang_dnode_get(vpn_dnode, "sid-export")
+		     : NULL;
+	if (se) {
+		want_auto = yang_dnode_exists(se, "auto") && yang_dnode_get_bool(se, "auto");
+		if (yang_dnode_exists(se, "index"))
+			want_idx = yang_dnode_get_uint32(se, "index");
+		if (yang_dnode_exists(se, "explicit"))
+			want_explicit = yang_dnode_get_string(se, "explicit");
+	}
+
+	have_auto = CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_AUTO);
+	have_explicit = CHECK_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_EXPLICIT);
+
+	if (want_auto == have_auto && want_idx == bgp->vpn_policy[afi].tovpn_sid_index &&
+	    !want_explicit == !have_explicit &&
+	    (!want_explicit || (bgp->vpn_policy[afi].tovpn_sid_explicit &&
+				inet_pton(AF_INET6, want_explicit, &sid) == 1 &&
+				IPV6_ADDR_SAME(&sid, bgp->vpn_policy[afi].tovpn_sid_explicit))))
+		return;
+
+	bgp_nb_af_sid_export_unset(bgp, afi);
+
+	if (!want_auto && !want_idx && !want_explicit)
+		return;
+
+	vpn_leak_prechange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+
+	if (want_auto) {
+		SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_AUTO);
+	} else if (want_idx != 0) {
+		bgp->vpn_policy[afi].tovpn_sid_index = want_idx;
+	} else if (want_explicit) {
+		bgp->vpn_policy[afi].tovpn_sid_explicit =
+			XCALLOC(MTYPE_BGP_SRV6_SID, sizeof(struct in6_addr));
+		inet_pton(AF_INET6, want_explicit, bgp->vpn_policy[afi].tovpn_sid_explicit);
+		SET_FLAG(bgp->vpn_policy[afi].flags, BGP_VPN_POLICY_TOVPN_SID_EXPLICIT);
+	}
+
+	vpn_leak_postchange(BGP_VPN_POLICY_DIR_TOVPN, afi, bgp_get_default(), bgp);
+}
+
+int bgp_nb_af_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		bgp = bgp_nb_instance_lookup(args->dnode);
+		if (!bgp)
+			break;
+		if (is_srv6_vpn_vrf_enabled(bgp)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "per-vrf sid and per-af sid are mutually exclusive");
+			return NB_ERR_VALIDATION;
+		}
+		if (is_srv6_unicast_enabled(bgp, afi)) {
+			snprintf(args->errmsg, args->errmsg_len,
+				 "sid export is configured on unicast");
+			return NB_ERR_VALIDATION;
+		}
+		break;
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+	case NB_EV_APPLY:
+		break;
+	}
+
+	return NB_OK;
+}
+
 /* apply_finish on the enclosing 'vpn' container (which always survives),
  * the bgp_nb_dump.c pattern: northbound skips a destroyed container's own
  * apply_finish, so full 'no label vpn export' is converged here, from the
@@ -6537,6 +6640,9 @@ void bgp_nb_af_vpn_label_export_apply_finish(struct nb_cb_apply_finish_args *arg
 		bgp_nb_af_vpn_label_export_set(le, afi);
 	else
 		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
+
+	/* M8.5: the per-AF 'sid vpn export' choice converges here too. */
+	bgp_nb_af_sid_export_converge(args->dnode, afi);
 }
 
 /* 'label vpn export allocation-mode <per-vrf|per-nexthop>': a no-default
