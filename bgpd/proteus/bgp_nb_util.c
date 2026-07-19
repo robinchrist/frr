@@ -6487,38 +6487,56 @@ static void bgp_nb_af_vpn_label_export_set(const struct lyd_node *label_export_d
 
 int bgp_nb_af_vpn_label_export_value_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
 {
-	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
-					       afi);
-
+	/* No-op: bgp_nb_af_vpn_label_export_apply_finish() converges once
+	 * per commit from the final tree. */
 	return NB_OK;
 }
 
 int bgp_nb_af_vpn_label_export_value_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 					     safi_t safi)
 {
-	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
-
+	/* Deliberate no-op: a leaf delete is either a case switch (the new
+	 * case's own MODIFY runs the one legacy-equivalent
+	 * prechange/postchange pass against the final tree) or part of a
+	 * whole-container delete (the container's DESTROY below runs the
+	 * unset). Running the unset here too doubled the withdraw/re-leak
+	 * churn on a case switch, and the first cycle freed per-nexthop
+	 * label entries whose async labelpool callbacks then fired on freed
+	 * memory (ASAN, bgp_vpnv4_per_nexthop_label). */
 	return NB_OK;
 }
 
 int bgp_nb_af_vpn_label_export_auto_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
 {
-	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_set(yang_dnode_get_parent(args->dnode, "label-export"),
-					       afi);
-
+	/* No-op, see bgp_nb_af_vpn_label_export_value_modify(). */
 	return NB_OK;
 }
 
 int bgp_nb_af_vpn_label_export_auto_destroy(struct nb_cb_destroy_args *args, afi_t afi,
 					    safi_t safi)
 {
-	if (args->event == NB_EV_APPLY)
-		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
-
+	/* Deliberate no-op, see bgp_nb_af_vpn_label_export_value_destroy(). */
 	return NB_OK;
+}
+
+/* apply_finish on the enclosing 'vpn' container (which always survives),
+ * the bgp_nb_dump.c pattern: northbound skips a destroyed container's own
+ * apply_finish, so full 'no label vpn export' is converged here, from the
+ * FINAL tree, exactly once per commit - the per-case-leaf destroys stay
+ * no-ops. Idempotent via bgp_nb_af_vpn_label_export_set()'s no-change
+ * guards, so unrelated vpn-subtree commits (rd/rt/export) are free. */
+void bgp_nb_af_vpn_label_export_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
+					     safi_t safi)
+{
+	const struct lyd_node *le = yang_dnode_exists(args->dnode, "label-export")
+					    ? yang_dnode_get(args->dnode, "label-export")
+					    : NULL;
+
+	if (le && (yang_dnode_exists(le, "value") ||
+		   (yang_dnode_exists(le, "auto") && yang_dnode_get_bool(le, "auto"))))
+		bgp_nb_af_vpn_label_export_set(le, afi);
+	else
+		bgp_nb_af_vpn_label_export_unset(args->dnode, afi);
 }
 
 /* 'label vpn export allocation-mode <per-vrf|per-nexthop>': a no-default

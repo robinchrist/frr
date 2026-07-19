@@ -9261,6 +9261,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn",
+			.cbs = {
+				.apply_finish = instance_afi_safis_ipv4_unicast_vpn_apply_finish,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/label-export/value",
 			.cbs = {
 				.modify = instance_afi_safis_ipv4_unicast_vpn_label_export_value_modify,
@@ -10174,6 +10180,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			.cbs = {
 				.modify = instance_afi_safis_ipv6_unicast_vpn_route_map_export_modify,
 				.destroy = instance_afi_safis_ipv6_unicast_vpn_route_map_export_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn",
+			.cbs = {
+				.apply_finish = instance_afi_safis_ipv6_unicast_vpn_apply_finish,
 			}
 		},
 		{
