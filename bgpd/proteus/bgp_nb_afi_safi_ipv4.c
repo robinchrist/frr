@@ -1439,3 +1439,14 @@ int instance_afi_safis_ipv4_vpn_retain_route_target_all_modify(struct nb_cb_modi
 {
 	return bgp_nb_af_retain_route_target_all_modify(args, AFI_IP);
 }
+
+/* M8.5 B-fs-extras: flowspec local-install. */
+void instance_afi_safis_ipv4_flowspec_local_install_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+	bgp_nb_fs_local_install_apply_finish(args, AFI_IP, SAFI_FLOWSPEC);
+}
+
+int instance_afi_safis_ipv4_flowspec_local_install_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_fs_local_install_destroy(args, AFI_IP, SAFI_FLOWSPEC);
+}

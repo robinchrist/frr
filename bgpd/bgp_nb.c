@@ -857,6 +857,88 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-flowspec/local-install",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_afi_safis_ipv4_flowspec_local_install_destroy,
+				.apply_finish = instance_afi_safis_ipv4_flowspec_local_install_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-flowspec/local-install/interface-any",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-flowspec/local-install/interfaces",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-flowspec/local-install",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_afi_safis_ipv6_flowspec_local_install_destroy,
+				.apply_finish = instance_afi_safis_ipv6_flowspec_local_install_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-flowspec/local-install/interface-any",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-flowspec/local-install/interfaces",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/flowspec-redirect-import",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/flowspec-redirect-import/ipv6-format",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/flowspec-redirect-import/route-targets",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/flowspec-redirect-import",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/flowspec-redirect-import/ipv6-format",
+			.cbs = {
+				.modify = instance_sid_vpn_export_leaf_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/flowspec-redirect-import/route-targets",
+			.cbs = {
+				.create = instance_srv6_create,
+				.destroy = instance_sid_vpn_export_leaf_destroy,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.create = instance_srv6_create,

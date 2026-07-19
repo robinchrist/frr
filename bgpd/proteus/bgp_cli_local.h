@@ -424,6 +424,10 @@ void process_route_map_delay_timer_cli_write(struct vty *vty, const struct lyd_n
 						    bool show_defaults);
 void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults);
+void afi_safis_fs_local_install_iface_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults);
+void afi_safis_fs_redirect_import_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults);
 void afi_safis_srv6_sid_export_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults);
 void afi_safis_vpn_sid_export_cli_write(struct vty *vty, const struct lyd_node *dnode,

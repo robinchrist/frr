@@ -606,6 +606,104 @@ void afi_safis_srv6_sid_export_cli_write(struct vty *vty, const struct lyd_node 
 	vty_out(vty, "\n");
 }
 
+/* flowspec 'local-install' (M8.5 B-fs-extras). */
+DEFPY_YANG(
+	bgp_fs_local_install, bgp_fs_local_install_cli_cmd,
+	"[no] local-install INTERFACE$ifname",
+	NO_STR
+	"Apply local policy routing\n"
+	"Interface name\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char xpath[XPATH_MAXLEN + 128];
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(xpath, sizeof(xpath), "%s/afi-safis/%s/local-install/interfaces[.='%s']",
+		 VTY_CURR_XPATH, container, ifname);
+	nb_cli_enqueue_change(vty, xpath, no ? NB_OP_DESTROY : NB_OP_CREATE, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Per-entry '  local-install %s' line (registered on the interfaces
+ * leaf-list), matching bgp_fs_config_write_pbr()'s retired output. */
+void afi_safis_fs_local_install_iface_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						bool show_defaults)
+{
+	vty_out(vty, "  local-install %s\n", yang_dnode_get_string(dnode, NULL));
+}
+
+/* flowspec 'rt|rt6 redirect import' (M8.5 B-fs-extras), unicast AF
+ * nodes. Full-replace: the container is destroyed and re-created with
+ * the given list in one commit, like legacy's wholesale
+ * import_redirect_rtlist swap. */
+DEFPY_YANG(
+	af_routetarget_import, af_routetarget_import_cli_cmd,
+	"[no] <rt|route-target|route-target6|rt6>$rtkw redirect import RTLIST...",
+	NO_STR
+	"Specify route target list\n"
+	"Specify route target list\n"
+	"Specify route target list\n"
+	"Specify route target list\n"
+	"Flow-spec redirect type route target\n"
+	"Import routes to this address-family\n"
+	"Space separated route target list (A.B.C.D:MN|EF:OPQR|GHJK:MN|IPV6:MN)\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char base[XPATH_MAXLEN], xpath[XPATH_MAXLEN + 192];
+	bool rt6 = strmatch(rtkw, "rt6") || strmatch(rtkw, "route-target6");
+	int i;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	if (rt6 && vty->node != BGP_IPV6_NODE) {
+		vty_out(vty, "%% rt6 is only valid under ipv6 unicast\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	snprintf(base, sizeof(base), "%s/afi-safis/%s/vpn/flowspec-redirect-import",
+		 VTY_CURR_XPATH, container);
+	nb_cli_enqueue_change(vty, base, NB_OP_DESTROY, NULL);
+	if (!no) {
+		for (i = 0; i < argc; i++) {
+			if (!argv[i]->arg || argv[i]->type != VARIABLE_TKN)
+				continue;
+			snprintf(xpath, sizeof(xpath), "%s/route-targets[.='%s']", base,
+				 argv[i]->arg);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+		}
+		if (rt6) {
+			snprintf(xpath, sizeof(xpath), "%s/ipv6-format", base);
+			nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
+		}
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* One '  rt[6] redirect import <list>' line, matching the retired tail
+ * of bgp_vpn_policy_config_write_afi(). */
+void afi_safis_fs_redirect_import_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					    bool show_defaults)
+{
+	const struct lyd_node *entry;
+	bool first = true;
+
+	vty_out(vty, "  rt%s redirect import",
+		yang_dnode_get_bool(dnode, "ipv6-format") ? "6" : "");
+	LY_LIST_FOR (lyd_child(dnode), entry) {
+		if (strcmp(entry->schema->name, "route-targets"))
+			continue;
+		vty_out(vty, " %s", lyd_get_value(entry));
+		(void)first;
+	}
+	vty_out(vty, "\n");
+}
+
 /* No proteus container for link-state; the node exists here only so mgmtd
  * tracks the block and accepts its exit-address-family (LS subcommands stay
  * native to bgpd). */
@@ -8144,6 +8242,10 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_IPV6_NODE, &af_sid_vpn_export_cli_cmd);
 	install_element(BGP_IPV4_NODE, &sid_export_cli_cmd);
 	install_element(BGP_IPV6_NODE, &sid_export_cli_cmd);
+	install_element(BGP_FLOWSPECV4_NODE, &bgp_fs_local_install_cli_cmd);
+	install_element(BGP_FLOWSPECV6_NODE, &bgp_fs_local_install_cli_cmd);
+	install_element(BGP_IPV4_NODE, &af_routetarget_import_cli_cmd);
+	install_element(BGP_IPV6_NODE, &af_routetarget_import_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &exit_address_family_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &exit_address_family_cli_cmd);

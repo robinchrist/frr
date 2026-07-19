@@ -35,6 +35,7 @@
 #include "bgpd/bgp_addpath.h"
 #include "bgpd/bgp_mplsvpn.h"
 #include "bgpd/bgp_srv6.h"
+#include "bgpd/bgp_pbr.h"
 #include "lib/routemap.h"
 #include "bgpd/proteus/bgp_nb_local.h"
 
@@ -6922,6 +6923,138 @@ void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args
 		bgp_srv6_unicast_ensure_afi_sid(bgp, afi);
 }
 
+/* flowspec 'local-install' (M8.5 B-fs-extras): converge the pbr
+ * interface list + any-flag from the final tree. */
+static void bgp_nb_fs_local_install_converge(const struct lyd_node *li_dnode, struct bgp *bgp,
+					     afi_t afi)
+{
+	struct bgp_pbr_config *cfg = bgp->bgp_pbr_cfg;
+	struct bgp_pbr_interface_head *head;
+	bool *any;
+	struct bgp_pbr_interface *pbr_if, *next;
+	const struct lyd_node *entry;
+	bool want_any, changed = false;
+
+	if (!cfg)
+		return;
+	if (afi == AFI_IP) {
+		head = &cfg->ifaces_by_name_ipv4;
+		any = &cfg->pbr_interface_any_ipv4;
+	} else {
+		head = &cfg->ifaces_by_name_ipv6;
+		any = &cfg->pbr_interface_any_ipv6;
+	}
+
+	want_any = true;
+	if (li_dnode) {
+		want_any = yang_dnode_get_bool(li_dnode, "interface-any");
+		if (yang_dnode_exists(li_dnode, "interfaces"))
+			want_any = false;
+	}
+
+	/* drop runtime entries not in the final list */
+	RB_FOREACH_SAFE (pbr_if, bgp_pbr_interface_head, head, next) {
+		if (!li_dnode ||
+		    !yang_dnode_existsf(li_dnode, "interfaces[.='%s']", pbr_if->name)) {
+			RB_REMOVE(bgp_pbr_interface_head, head, pbr_if);
+			XFREE(MTYPE_TMP, pbr_if);
+			changed = true;
+		}
+	}
+	/* add final-list entries missing from runtime */
+	if (li_dnode) {
+		LY_LIST_FOR (lyd_child(li_dnode), entry) {
+			if (strcmp(entry->schema->name, "interfaces"))
+				continue;
+			const char *name = lyd_get_value(entry);
+
+			if (bgp_pbr_interface_lookup(name, head))
+				continue;
+			pbr_if = XCALLOC(MTYPE_TMP, sizeof(struct bgp_pbr_interface));
+			strlcpy(pbr_if->name, name, IFNAMSIZ);
+			RB_INSERT(bgp_pbr_interface_head, head, pbr_if);
+			changed = true;
+		}
+	}
+
+	if (*any != want_any) {
+		if (!want_any || changed)
+			bgp_pbr_reset(bgp, afi);
+		*any = want_any;
+	} else if (changed) {
+		bgp_pbr_reset(bgp, afi);
+	}
+}
+
+void bgp_nb_fs_local_install_apply_finish(struct nb_cb_apply_finish_args *args, afi_t afi,
+					  safi_t safi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(args->dnode);
+
+	if (!bgp)
+		return;
+	bgp_nb_fs_local_install_converge(args->dnode, bgp, afi);
+}
+
+int bgp_nb_fs_local_install_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct bgp *bgp;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+	bgp = bgp_nb_instance_lookup(args->dnode);
+	if (!bgp)
+		return NB_OK;
+	bgp_nb_fs_local_install_converge(NULL, bgp, afi);
+	return NB_OK;
+}
+
+/* flowspec 'rt redirect import' (M8.5 B-fs-extras): converged with the
+ * other vpn leaves in the vpn container apply_finish. */
+static void bgp_nb_fs_redirect_import_converge(const struct lyd_node *vpn_dnode, afi_t afi)
+{
+	struct bgp *bgp = bgp_nb_instance_lookup(vpn_dnode);
+	const struct lyd_node *ri, *entry;
+	struct ecommunity *want = NULL;
+	char buf[4096] = "";
+	bool rt6 = false;
+
+	if (!bgp)
+		return;
+
+	ri = yang_dnode_exists(vpn_dnode, "flowspec-redirect-import")
+		     ? yang_dnode_get(vpn_dnode, "flowspec-redirect-import")
+		     : NULL;
+	if (ri) {
+		rt6 = yang_dnode_get_bool(ri, "ipv6-format");
+		LY_LIST_FOR (lyd_child(ri), entry) {
+			if (strcmp(entry->schema->name, "route-targets"))
+				continue;
+			if (buf[0])
+				strlcat(buf, " ", sizeof(buf));
+			strlcat(buf, lyd_get_value(entry), sizeof(buf));
+		}
+		if (buf[0]) {
+			if (rt6)
+				want = ecommunity_str2com_ipv6(buf, ECOMMUNITY_ROUTE_TARGET, 0);
+			else
+				want = ecommunity_str2com(buf, ECOMMUNITY_ROUTE_TARGET, 0);
+		}
+	}
+
+	if (!want && !bgp->vpn_policy[afi].import_redirect_rtlist)
+		return;
+	if (want && bgp->vpn_policy[afi].import_redirect_rtlist &&
+	    ecommunity_cmp(want, bgp->vpn_policy[afi].import_redirect_rtlist)) {
+		ecommunity_free(&want);
+		return;
+	}
+
+	if (bgp->vpn_policy[afi].import_redirect_rtlist)
+		ecommunity_free(&bgp->vpn_policy[afi].import_redirect_rtlist);
+	bgp->vpn_policy[afi].import_redirect_rtlist = want;
+}
+
 /* apply_finish on the enclosing 'vpn' container (which always survives),
  * the bgp_nb_dump.c pattern: northbound skips a destroyed container's own
  * apply_finish, so full 'no label vpn export' is converged here, from the
@@ -6943,6 +7076,9 @@ void bgp_nb_af_vpn_label_export_apply_finish(struct nb_cb_apply_finish_args *arg
 
 	/* M8.5: the per-AF 'sid vpn export' choice converges here too. */
 	bgp_nb_af_sid_export_converge(args->dnode, afi);
+
+	/* M8.5 B-fs-extras: flowspec 'rt redirect import'. */
+	bgp_nb_fs_redirect_import_converge(args->dnode, afi);
 }
 
 /* 'label vpn export allocation-mode <per-vrf|per-nexthop>': a no-default

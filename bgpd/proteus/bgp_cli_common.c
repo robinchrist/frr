@@ -1323,6 +1323,30 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-flowspec/local-install/interfaces",
+			.cbs = {
+				.cli_show = afi_safis_fs_local_install_iface_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-flowspec/local-install/interfaces",
+			.cbs = {
+				.cli_show = afi_safis_fs_local_install_iface_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv4-unicast/vpn/flowspec-redirect-import",
+			.cbs = {
+				.cli_show = afi_safis_fs_redirect_import_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/afi-safis/ipv6-unicast/vpn/flowspec-redirect-import",
+			.cbs = {
+				.cli_show = afi_safis_fs_redirect_import_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.cli_show = instance_srv6_cli_write,

@@ -15402,22 +15402,9 @@ static void bgp_vpn_policy_config_write_afi(struct vty *vty, struct bgp *bgp,
 			bgp->vpn_policy[afi]
 				.rmap_name[BGP_VPN_POLICY_DIR_TOVPN]);
 
-	if (bgp->vpn_policy[afi].import_redirect_rtlist) {
-		char *b = ecommunity_ecom2str(
-					bgp->vpn_policy[afi]
-					.import_redirect_rtlist,
-					ECOMMUNITY_FORMAT_ROUTE_MAP,
-					ECOMMUNITY_ROUTE_TARGET);
-
-		if (bgp->vpn_policy[afi].import_redirect_rtlist->unit_size
-		    != ECOMMUNITY_SIZE)
-			vty_out(vty, "%*srt6 redirect import %s\n",
-				indent, "", b);
-		else
-			vty_out(vty, "%*srt redirect import %s\n",
-				indent, "", b);
-		XFREE(MTYPE_ECOMMUNITY_STR, b);
-	}
+	/* rt|rt6 redirect import: emitted by mgmtd (M8.5 B-fs-extras,
+	 * afi_safis_fs_redirect_import_cli_write). This closes the last
+	 * native line in this interleave. */
 }
 
 /* M5 batch B1: the nine address families whose per-neighbor 'activate' line
@@ -17032,14 +17019,10 @@ void bgp_vty_init(void)
 	 * flowspec AFs (not proteus-modeled) keep this DEFUN reachable. */
 	install_element(BGP_NODE, &neighbor_soft_reconfiguration_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_soft_reconfiguration_hidden_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE,
-			&neighbor_soft_reconfiguration_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE,
-			&no_neighbor_soft_reconfiguration_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE,
-			&neighbor_soft_reconfiguration_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE,
-			&no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_FLOWSPECV4_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_FLOWSPECV6_NODE, &neighbor_soft_reconfiguration_cmd);
+	_install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_soft_reconfiguration_cmd);
 
 	/* "neighbor attribute-unchanged" commands: converted to mgmtd for the
 	 * nine proteus AFs (M5 batch B4); hidden BGP_NODE alias + flowspec
@@ -17144,14 +17127,10 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_route_reflector_client_hidden_cmd);
 	install_element(BGP_NODE,
 			&no_neighbor_route_reflector_client_hidden_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE,
-			&neighbor_route_reflector_client_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE,
-			&no_neighbor_route_reflector_client_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE,
-			&neighbor_route_reflector_client_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE,
-			&no_neighbor_route_reflector_client_cmd);
+	_install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_route_reflector_client_cmd);
+	_install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_reflector_client_cmd);
+	_install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_route_reflector_client_cmd);
 
 	/* "neighbor route-server" commands: converted to mgmtd for the nine
 	 * proteus AFs (M5 batch B4); the hidden BGP_NODE alias and the
@@ -17159,11 +17138,9 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &neighbor_route_server_client_hidden_cmd);
 	install_element(BGP_NODE, &no_neighbor_route_server_client_hidden_cmd);
 	_install_element(BGP_FLOWSPECV4_NODE, &neighbor_route_server_client_cmd);
-	_install_element(BGP_FLOWSPECV4_NODE,
-			&no_neighbor_route_server_client_cmd);
+	_install_element(BGP_FLOWSPECV4_NODE, &no_neighbor_route_server_client_cmd);
 	_install_element(BGP_FLOWSPECV6_NODE, &neighbor_route_server_client_cmd);
-	_install_element(BGP_FLOWSPECV6_NODE,
-			&no_neighbor_route_server_client_cmd);
+	_install_element(BGP_FLOWSPECV6_NODE, &no_neighbor_route_server_client_cmd);
 
 	/* "neighbor disable-addpath-rx", "neighbor addpath-tx-all-paths",
 	 * "neighbor addpath-tx-best-selected", "neighbor
@@ -17537,8 +17514,8 @@ void bgp_vty_init(void)
 	 * doc/developer/northbound/bgpd-proteus-conversion.rst) and a bare
 	 * native reinstall is not required. */
 
-	install_element(BGP_IPV4_NODE, &af_routetarget_import_cmd);
-	install_element(BGP_IPV6_NODE, &af_routetarget_import_cmd);
+	_install_element(BGP_IPV4_NODE, &af_routetarget_import_cmd);
+	_install_element(BGP_IPV6_NODE, &af_routetarget_import_cmd);
 
 	/* 'import vrf route-map NAME' / 'no import vrf route-map': converted
 	 * to northbound, see bgp_cli_instance_init() (bgp_cli_instance.c, M7

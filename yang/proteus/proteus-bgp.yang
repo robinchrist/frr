@@ -2184,6 +2184,32 @@ module proteus-bgp {
           }
         }
       }
+      container flowspec-redirect-import {
+        presence
+          "'rt|rt6 redirect import ...' is configured (M8.5
+           B-fs-extras): flowspec redirect-to-VRF route-target
+           import list (vpn_policy import_redirect_rtlist).";
+        description
+          "'[no] <rt|route-target|rt6|route-target6> redirect import
+           RTLIST...' (af_routetarget_import_cmd). Full-replace
+           semantics like legacy; converged with the other vpn
+           leaves in the vpn container's apply_finish.";
+
+        leaf ipv6-format {
+          type boolean;
+          default "false";
+          description
+            "The rt6/route-target6 keyword form (IPv6-format route
+             targets; only valid under ipv6-unicast).";
+        }
+
+        leaf-list route-targets {
+          type string;
+          description
+            "Route-target tokens as typed
+             (A.B.C.D:MN|EF:OPQR|GHJK:MN|IPV6:MN).";
+        }
+      }
       container rd-export {
         description
           "'rd vpn export <ASN:NN|A.B.C.D:NN>'
@@ -3661,6 +3687,32 @@ module proteus-bgp {
            Default-instance-only (legacy address_family arms reject
            non-default instances). Instance-level content arrives in
            B-fs-extras (local-install).";
+      
+        container local-install {
+          presence
+            "'local-install INTERFACE' is configured (or the
+             interface-any default was explicitly overridden).";
+          description
+            "'[no] local-install INTERFACE' (bgp_fs_local_install_
+             interface): restrict flowspec rule installation to the
+             listed interfaces. Also models the previously
+             unpersistable any=false-with-empty-list state via
+             interface-any.";
+
+          leaf interface-any {
+            type boolean;
+            default "true";
+            description
+              "Install flowspec rules on any interface. Forced
+               false while the interfaces list is non-empty.";
+          }
+
+          leaf-list interfaces {
+            type string;
+            description
+              "Interfaces to install flowspec rules on.";
+          }
+        }
       }
 
       container ipv6-unicast {
@@ -3712,6 +3764,22 @@ module proteus-bgp {
       container ipv6-flowspec {
         description
           "'address-family ipv6 flowspec' (M8.5 B-fs-af).";
+      
+        container local-install {
+          presence
+            "'local-install INTERFACE' is configured.";
+          description
+            "See ipv4-flowspec/local-install.";
+
+          leaf interface-any {
+            type boolean;
+            default "true";
+          }
+
+          leaf-list interfaces {
+            type string;
+          }
+        }
       }
 
       container l2vpn-evpn {
