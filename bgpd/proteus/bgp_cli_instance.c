@@ -408,8 +408,6 @@ void instance_srv6_locator_cli_write(struct vty *vty, const struct lyd_node *dno
 void instance_srv6_encap_behavior_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					    bool show_defaults)
 {
-	if (strmatch(yang_dnode_get_string(dnode, NULL), "H_Encaps"))
-		return;
 	vty_out(vty, "  encap-behavior %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
@@ -4965,10 +4963,10 @@ void instance_evpn_enable_resolve_overlay_index_cli_write(struct vty *vty,
  * mac-vrf-soo mirrors neighbor_af_soo_cli_write() (bgp_cli_neighbor.c):
  * registered on each case's local-admin leaf (the one point reached
  * regardless of which of the three cases is set), reprinting
- * 'mac-vrf soo <global-admin>:<local-admin>'. flooding reproduces
- * bgp_config_write_evpn_info()'s "only 'flooding disable' is ever written
- * back" behavior -- head-end-replication (the unset default) emits
- * nothing. */
+ * 'mac-vrf soo <global-admin>:<local-admin>'. flooding writes back whichever
+ * mode was explicitly configured -- the leaf has no YANG default, so it only
+ * exists (and this cli_show only runs) when the operator set it; an unset
+ * leaf (FRR's own head-end-replication default) emits nothing. */
 void instance_evpn_mac_vrf_soo_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					 bool show_defaults)
 {
@@ -4993,6 +4991,8 @@ void instance_evpn_flooding_cli_write(struct vty *vty, const struct lyd_node *dn
 {
 	if (strmatch(yang_dnode_get_string(dnode, NULL), "disable"))
 		vty_out(vty, "  flooding disable\n");
+	else
+		vty_out(vty, "  flooding head-end-replication\n");
 }
 
 /* M6 batch B6: per-VNI 'rd'/'flooding'/'advertise-default-gw'/
@@ -5118,19 +5118,17 @@ void instance_evpn_default_originate_ipv6_cli_write(struct vty *vty, const struc
 void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
 {
-	uint16_t max_moves = yang_dnode_exists(dnode, "max-moves")
-				      ? yang_dnode_get_uint16(dnode, "max-moves")
-				      : EVPN_DAD_DEFAULT_MAX_MOVES;
-	uint16_t time = yang_dnode_exists(dnode, "time") ? yang_dnode_get_uint16(dnode, "time")
-							  : EVPN_DAD_DEFAULT_TIME;
-
 	/* M6 B9b: the bare toggle's negative form, printed first exactly as
 	 * the retired native emitter did. */
 	if (!yang_dnode_get_bool(dnode, "enabled"))
 		vty_out(vty, "  no dup-addr-detection\n");
 
-	if (max_moves != EVPN_DAD_DEFAULT_MAX_MOVES || time != EVPN_DAD_DEFAULT_TIME)
-		vty_out(vty, "  dup-addr-detection max-moves %u time %u\n", max_moves, time);
+	/* max-moves/time have no YANG default and are always set as a pair,
+	 * so presence alone means an explicit 'max-moves ... time ...'. */
+	if (yang_dnode_exists(dnode, "max-moves"))
+		vty_out(vty, "  dup-addr-detection max-moves %u time %u\n",
+			yang_dnode_get_uint16(dnode, "max-moves"),
+			yang_dnode_get_uint16(dnode, "time"));
 
 	if (yang_dnode_exists(dnode, "freeze")) {
 		const char *freeze = yang_dnode_get_string(dnode, "freeze");
@@ -5496,12 +5494,12 @@ void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dno
  * it's nested inside the 'router bgp' block.
  */
 void instance_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						    bool show_defaults)
+					     bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, "enabled"))
 		return;
 
-	if (yang_dnode_get_uint16(dnode, "advertisement-delay") != 1000)
+	if (!yang_dnode_is_default(dnode, "advertisement-delay"))
 		vty_out(vty, " bgp suppress-fib-pending %u\n",
 			yang_dnode_get_uint16(dnode, "advertisement-delay"));
 	else
@@ -5807,26 +5805,22 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Static default-on scalars (batch B6): value-checked against the YANG
- * default, matching bgp_config_write()'s "if (bgp->default_local_pref !=
- * BGP_DEFAULT_LOCAL_PREF)" / subgroup-pkt-queue-max arms exactly.
+/* Static default-on scalars (batch B6): emitted unconditionally -- the
+ * central northbound gate only calls these for explicitly configured
+ * values (or with show_defaults), so an explicit value equal to the YANG
+ * default must still render to persist across a config save/load.
  */
-void instance_default_local_preference_cli_write(struct vty *vty,
-							const struct lyd_node *dnode,
-							bool show_defaults)
+void instance_default_local_preference_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						 bool show_defaults)
 {
-	if (yang_dnode_get_uint32(dnode, NULL) != 100)
-		vty_out(vty, " bgp default local-preference %u\n",
-			yang_dnode_get_uint32(dnode, NULL));
+	vty_out(vty, " bgp default local-preference %u\n", yang_dnode_get_uint32(dnode, NULL));
 }
 
 void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
-							      const struct lyd_node *dnode,
-							      bool show_defaults)
+						       const struct lyd_node *dnode,
+						       bool show_defaults)
 {
-	if (yang_dnode_get_uint8(dnode, NULL) != 40)
-		vty_out(vty, " bgp default subgroup-pkt-queue-max %u\n",
-			yang_dnode_get_uint8(dnode, NULL));
+	vty_out(vty, " bgp default subgroup-pkt-queue-max %u\n", yang_dnode_get_uint8(dnode, NULL));
 }
 
 /* Joint emission of 'bgp max-med on-startup <period> [<med>]': registered
@@ -7262,11 +7256,12 @@ DEFPY_YANG(
 }
 
 void afi_safis_vpn_label_export_allocation_mode_cli_write(struct vty *vty,
-							   const struct lyd_node *dnode,
-							   bool show_defaults)
+							  const struct lyd_node *dnode,
+							  bool show_defaults)
 {
-	if (strmatch(yang_dnode_get_string(dnode, NULL), "per-nexthop"))
-		vty_out(vty, "  label vpn export allocation-mode per-nexthop\n");
+	/* No YANG default: the leaf only exists when explicitly configured,
+	 * and per the model description an explicit per-vrf renders too. */
+	vty_out(vty, "  label vpn export allocation-mode %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
 DEFPY_YANG(
@@ -8101,24 +8096,17 @@ DEFPY_YANG(
 }
 
 /* Registered on the 'distance' container xpath: bgp_config_write_distance()'s
- * admin-triple line (retired for these eight AFs in M5 batch B13). Emitted
- * only when the stored triple differs from the compiled-in defaults, exactly
- * as the legacy emitter suppressed the all-default case. */
-void afi_safis_distance_cli_write(struct vty *vty, const struct lyd_node *dnode,
-				  bool show_defaults)
+ * admin-triple line (retired for these eight AFs in M5 batch B13). The three
+ * leaves have no YANG default, so they only exist when explicitly configured
+ * (all together, per the container 'must') -- an explicit triple always
+ * renders, even one that happens to equal the compiled-in defaults. */
+void afi_safis_distance_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
-	uint8_t ebgp, ibgp, local;
-
 	if (!yang_dnode_exists(dnode, "ebgp"))
 		return;
 
-	ebgp = yang_dnode_get_uint8(dnode, "ebgp");
-	ibgp = yang_dnode_get_uint8(dnode, "ibgp");
-	local = yang_dnode_get_uint8(dnode, "local");
-
-	if (ebgp != ZEBRA_EBGP_DISTANCE_DEFAULT || ibgp != ZEBRA_IBGP_DISTANCE_DEFAULT ||
-	    local != ZEBRA_IBGP_DISTANCE_DEFAULT)
-		vty_out(vty, "  distance bgp %u %u %u\n", ebgp, ibgp, local);
+	vty_out(vty, "  distance bgp %u %u %u\n", yang_dnode_get_uint8(dnode, "ebgp"),
+		yang_dnode_get_uint8(dnode, "ibgp"), yang_dnode_get_uint8(dnode, "local"));
 }
 
 /*

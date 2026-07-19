@@ -534,17 +534,17 @@ void process_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnod
  * guarded-container shape as instance_max_med_administrative_cli_write.
  * 'enabled' has a YANG default (false), so it's value-checked, not merely
  * presence-checked; 'advertisement-delay' also carries a YANG default
- * (1000) and is value-checked against it, matching bgp_config_write()'s
- * "if (bm->suppress_fib_adv_delay != BGP_DEFAULT_SUPPRESS_FIB_ADV_DELAY)"
- * arm exactly.
+ * (1000), and whether the value suffix renders follows the leaf's
+ * explicitly-configured-vs-implicit-default state (yang_dnode_is_default),
+ * so an explicit 1000 still round-trips as 'bgp suppress-fib-pending 1000'.
  */
 void process_suppress_fib_pending_cli_write(struct vty *vty, const struct lyd_node *dnode,
-						   bool show_defaults)
+					    bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, "enabled"))
 		return;
 
-	if (yang_dnode_get_uint16(dnode, "advertisement-delay") != 1000)
+	if (!yang_dnode_is_default(dnode, "advertisement-delay"))
 		vty_out(vty, "bgp suppress-fib-pending %u\n",
 			yang_dnode_get_uint16(dnode, "advertisement-delay"));
 	else
