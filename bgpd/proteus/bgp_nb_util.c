@@ -6621,6 +6621,72 @@ int bgp_nb_af_sid_export_create(struct nb_cb_create_args *args, afi_t afi, safi_
 	return NB_OK;
 }
 
+/* 'neighbor X encapsulation-srv6[-relax]' unicast enum (M8.5): one leaf,
+ * two mutually exclusive PEER_FLAGs - apply clears both then sets the
+ * selected one, so a direct enum switch is a single commit. */
+static int bgp_nb_peer_af_encap_apply(struct peer *peer, const char *val, afi_t afi, safi_t safi)
+{
+	int ret;
+
+	if (!peer)
+		return NB_OK;
+
+	if (!val || !strmatch(val, "srv6")) {
+		ret = bgp_nb_peer_af_flag_apply(peer, false, afi, safi,
+						PEER_FLAG_CONFIG_ENCAPSULATION_SRV6);
+		if (ret != NB_OK)
+			return ret;
+	}
+	if (!val || !strmatch(val, "srv6-relax")) {
+		ret = bgp_nb_peer_af_flag_apply(peer, false, afi, safi,
+						PEER_FLAG_CONFIG_ENCAPSULATION_SRV6_RELAX);
+		if (ret != NB_OK)
+			return ret;
+	}
+	if (val)
+		return bgp_nb_peer_af_flag_apply(peer, true, afi, safi,
+						 strmatch(val, "srv6")
+							 ? PEER_FLAG_CONFIG_ENCAPSULATION_SRV6
+							 : PEER_FLAG_CONFIG_ENCAPSULATION_SRV6_RELAX);
+	return NB_OK;
+}
+
+int bgp_nb_neighbor_af_encap_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+	return bgp_nb_peer_af_encap_apply(bgp_nb_neighbor_lookup(args->dnode),
+					  yang_dnode_get_string(args->dnode, NULL), afi, safi);
+}
+
+int bgp_nb_neighbor_af_encap_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+	return bgp_nb_peer_af_encap_apply(bgp_nb_neighbor_lookup(args->dnode), NULL, afi, safi);
+}
+
+int bgp_nb_peer_group_af_encap_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	return bgp_nb_peer_af_encap_apply(group ? group->conf : NULL,
+					  yang_dnode_get_string(args->dnode, NULL), afi, safi);
+}
+
+int bgp_nb_peer_group_af_encap_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi)
+{
+	struct peer_group *group;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+	group = bgp_nb_peer_group_lookup(args->dnode);
+	return bgp_nb_peer_af_encap_apply(group ? group->conf : NULL, NULL, afi, safi);
+}
+
 /* Unicast 'sid export' (M8.5 B-srv6-unicast): its own presence container
  * with apply_finish convergence + destroy unset, the sid-vpn-export
  * pattern one level down. DT46 pairing constraints are candidate-side
@@ -6764,9 +6830,8 @@ void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args
 		    (!want_rmap || strmatch(want_rmap, bgp->srv6_unicast[afi].rmap_name));
 	sid_same = want_auto == have_auto && want_idx == bgp->srv6_unicast[afi].sid_index &&
 		   !want_explicit == !bgp->srv6_unicast[afi].sid_explicit &&
-		   (!want_explicit ||
-		    (inet_pton(AF_INET6, want_explicit, &sid) == 1 &&
-		     IPV6_ADDR_SAME(&sid, bgp->srv6_unicast[afi].sid_explicit)));
+		   (!want_explicit || (inet_pton(AF_INET6, want_explicit, &sid) == 1 &&
+				       IPV6_ADDR_SAME(&sid, bgp->srv6_unicast[afi].sid_explicit)));
 
 	if (sid_same && want_dt46 == have_dt46 && rmap_same)
 		return;
@@ -6782,8 +6847,8 @@ void bgp_nb_af_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args
 	} else if (want_idx != 0) {
 		bgp->srv6_unicast[afi].sid_index = want_idx;
 	} else if (want_explicit) {
-		bgp->srv6_unicast[afi].sid_explicit =
-			XCALLOC(MTYPE_BGP_SRV6_SID, sizeof(struct in6_addr));
+		bgp->srv6_unicast[afi].sid_explicit = XCALLOC(MTYPE_BGP_SRV6_SID,
+							      sizeof(struct in6_addr));
 		inet_pton(AF_INET6, want_explicit, bgp->srv6_unicast[afi].sid_explicit);
 	}
 	if (want_dt46)

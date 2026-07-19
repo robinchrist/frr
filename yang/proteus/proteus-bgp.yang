@@ -696,6 +696,46 @@ module proteus-bgp {
    * meaningless in some family (e.g. ORF under l2vpn evpn) are simply
    * never emitted by FRR there -- we do not restrict per family.
    */
+  grouping neighbor-af-encap-unicast {
+    description
+      "'neighbor X <encapsulation-srv6|encapsulation-srv6-relax>'
+       (unicast AFs, M8.5 B-srv6-unicast): advertise routes with an
+       SRv6 prefix SID to this peer (relax = with and without). One
+       enum leaf - the two legacy flags are mutually exclusive, so a
+       direct switch is a single modify (legacy's unset-first
+       requirement is dropped).";
+
+    leaf encapsulation {
+      type enumeration {
+        enum srv6;
+        enum srv6-relax;
+      }
+      description
+        "SRv6 encapsulation advertisement mode; absent = disabled.";
+    }
+  }
+
+  grouping neighbor-af-encap-vpn {
+    description
+      "'neighbor X <encapsulation-srv6|encapsulation-mpls>'
+       (vpn AFs, M8.5): two independent Tier A booleans, both may be
+       set (bgp_vty.c neighbor_encapsulation_srv6_or_mpls_cmd).";
+
+    leaf encapsulation-srv6 {
+      type boolean;
+      default "false";
+      description
+        "Advertise VPN routes with SRv6 encapsulation.";
+    }
+
+    leaf encapsulation-mpls {
+      type boolean;
+      default "false";
+      description
+        "Advertise VPN routes with MPLS encapsulation.";
+    }
+  }
+
   grouping neighbor-af {
     description
       "Per-neighbor settings inside an 'address-family' block
@@ -3262,6 +3302,7 @@ module proteus-bgp {
         container ipv4-unicast {
           uses neighbor-af;
           uses neighbor-af-filters-ipv4;
+          uses neighbor-af-encap-unicast;
         }
         container ipv4-multicast {
           uses neighbor-af;
@@ -3274,10 +3315,12 @@ module proteus-bgp {
         container ipv4-vpn {
           uses neighbor-af;
           uses neighbor-af-filters-ipv4;
+          uses neighbor-af-encap-vpn;
         }
         container ipv6-unicast {
           uses neighbor-af;
           uses neighbor-af-filters-ipv6;
+          uses neighbor-af-encap-unicast;
         }
         container ipv6-multicast {
           uses neighbor-af;
@@ -3290,6 +3333,7 @@ module proteus-bgp {
         container ipv6-vpn {
           uses neighbor-af;
           uses neighbor-af-filters-ipv6;
+          uses neighbor-af-encap-vpn;
         }
         container l2vpn-evpn {
           uses neighbor-af;
@@ -3371,6 +3415,7 @@ module proteus-bgp {
         container ipv4-unicast {
           uses neighbor-af;
           uses neighbor-af-filters-ipv4;
+          uses neighbor-af-encap-unicast;
         }
         container ipv4-multicast {
           uses neighbor-af;
@@ -3383,10 +3428,12 @@ module proteus-bgp {
         container ipv4-vpn {
           uses neighbor-af;
           uses neighbor-af-filters-ipv4;
+          uses neighbor-af-encap-vpn;
         }
         container ipv6-unicast {
           uses neighbor-af;
           uses neighbor-af-filters-ipv6;
+          uses neighbor-af-encap-unicast;
         }
         container ipv6-multicast {
           uses neighbor-af;
@@ -3399,6 +3446,7 @@ module proteus-bgp {
         container ipv6-vpn {
           uses neighbor-af;
           uses neighbor-af-filters-ipv6;
+          uses neighbor-af-encap-vpn;
         }
         container l2vpn-evpn {
           description

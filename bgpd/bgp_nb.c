@@ -445,6 +445,82 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/encapsulation",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv4_unicast_encapsulation_modify,
+				.destroy = instance_neighbor_afi_safis_ipv4_unicast_encapsulation_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/encapsulation-srv6",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv4_vpn_encapsulation_srv6_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/encapsulation-mpls",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv4_vpn_encapsulation_mpls_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/encapsulation",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv6_unicast_encapsulation_modify,
+				.destroy = instance_neighbor_afi_safis_ipv6_unicast_encapsulation_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/encapsulation-srv6",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv6_vpn_encapsulation_srv6_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/encapsulation-mpls",
+			.cbs = {
+				.modify = instance_neighbor_afi_safis_ipv6_vpn_encapsulation_mpls_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/encapsulation",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv4_unicast_encapsulation_modify,
+				.destroy = instance_peer_group_afi_safis_ipv4_unicast_encapsulation_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/encapsulation-srv6",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv4_vpn_encapsulation_srv6_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/encapsulation-mpls",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv4_vpn_encapsulation_mpls_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/encapsulation",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv6_unicast_encapsulation_modify,
+				.destroy = instance_peer_group_afi_safis_ipv6_unicast_encapsulation_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/encapsulation-srv6",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv6_vpn_encapsulation_srv6_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/encapsulation-mpls",
+			.cbs = {
+				.modify = instance_peer_group_afi_safis_ipv6_vpn_encapsulation_mpls_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/segment-routing-srv6",
 			.cbs = {
 				.create = instance_srv6_create,

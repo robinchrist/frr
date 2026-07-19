@@ -2643,6 +2643,78 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/encapsulation",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/encapsulation-srv6",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_srv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/encapsulation-mpls",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_mpls_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/encapsulation",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/encapsulation-srv6",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_srv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/encapsulation-mpls",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_mpls_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/encapsulation",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/encapsulation-srv6",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_srv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/encapsulation-mpls",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_mpls_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/encapsulation",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/encapsulation-srv6",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_srv6_cli_write,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/encapsulation-mpls",
+			.cbs = {
+				.cli_show = neighbor_af_encapsulation_mpls_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/as-override",
 			.cbs = {
 				.cli_show = neighbor_af_as_override_cli_write,

@@ -2330,3 +2330,27 @@ int instance_neighbor_afi_safis_ipv4_vpn_filters_conditional_advertisement_condi
 {
 	return bgp_nb_neighbor_af_condition_map_destroy(args, AFI_IP, SAFI_MPLS_VPN);
 }
+
+/* M8.5 encapsulation knobs. */
+int instance_neighbor_afi_safis_ipv4_unicast_encapsulation_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_encap_modify(args, AFI_IP, SAFI_UNICAST);
+}
+
+int instance_neighbor_afi_safis_ipv4_unicast_encapsulation_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_neighbor_af_encap_destroy(args, AFI_IP, SAFI_UNICAST);
+}
+
+int instance_neighbor_afi_safis_ipv4_vpn_encapsulation_srv6_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP, SAFI_MPLS_VPN,
+					    PEER_FLAG_CONFIG_ENCAPSULATION_SRV6);
+}
+
+int instance_neighbor_afi_safis_ipv4_vpn_encapsulation_mpls_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP, SAFI_MPLS_VPN,
+					    PEER_FLAG_CONFIG_ENCAPSULATION_MPLS);
+}
+

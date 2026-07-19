@@ -141,6 +141,12 @@ void neighbor_af_route_reflector_client_cli_write(struct vty *vty, const struct 
 						   bool show_defaults);
 void neighbor_af_route_server_client_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					       bool show_defaults);
+void neighbor_af_encapsulation_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults);
+void neighbor_af_encapsulation_srv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
+void neighbor_af_encapsulation_mpls_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults);
 void neighbor_af_as_override_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				       bool show_defaults);
 void neighbor_af_next_hop_self_enabled_cli_write(struct vty *vty, const struct lyd_node *dnode,

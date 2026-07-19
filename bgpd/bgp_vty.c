@@ -15941,14 +15941,8 @@ static void bgp_config_write_peer_af(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, "  neighbor %s weight %lu\n", addr,
 			peer->weight[afi][safi]);
 
-	/* encapsulation-srv6|encapsulation-mpls */
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_CONFIG_ENCAPSULATION_SRV6))
-		vty_out(vty, "  neighbor %s encapsulation-srv6\n", addr);
-	else if (peergroup_af_flag_check(peer, afi, safi,
-					 PEER_FLAG_CONFIG_ENCAPSULATION_SRV6_RELAX))
-		vty_out(vty, "  neighbor %s encapsulation-srv6-relax\n", addr);
-	if (peergroup_af_flag_check(peer, afi, safi, PEER_FLAG_CONFIG_ENCAPSULATION_MPLS))
-		vty_out(vty, "  neighbor %s encapsulation-mpls\n", addr);
+	/* encapsulation-srv6[-relax]/encapsulation-mpls: emitted by mgmtd
+	 * (M8.5, neighbor_af_encapsulation*_cli_write). */
 
 	/* Filter. */
 	bgp_config_write_filter(vty, peer, afi, safi);
@@ -17257,8 +17251,8 @@ void bgp_vty_init(void)
 	install_element(BGP_NODE, &no_neighbor_weight_hidden_cmd);
 
 	/* "neighbor encapsulation-srv6|encapsulation-mpls" commands. */
-	install_element(BGP_VPNV4_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
+	_install_element(BGP_VPNV4_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
+	_install_element(BGP_VPNV6_NODE, &neighbor_encapsulation_srv6_or_mpls_cmd);
 
 	/* "neighbor override-capability"/"neighbor strict-capability-match"
 	 * commands: converted to northbound, see bgp_cli_neighbor_init()
@@ -17567,8 +17561,8 @@ void bgp_vty_init(void)
 	_install_element(BGP_NODE, &bgp_sid_vpn_export_cmd);
 	_install_element(BGP_IPV4_NODE, &sid_export_cmd);
 	_install_element(BGP_IPV6_NODE, &sid_export_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cmd);
-	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cmd);
+	_install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cmd);
+	_install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cmd);
 	_install_element(BGP_NODE, &no_bgp_sid_vpn_export_cmd);
 
 	/* BGP-LS commands */

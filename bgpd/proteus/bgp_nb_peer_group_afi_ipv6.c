@@ -2384,3 +2384,27 @@ int instance_peer_group_afi_safis_ipv6_vpn_filters_conditional_advertisement_con
 {
 	return bgp_nb_peer_group_af_condition_map_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
+
+/* M8.5 encapsulation knobs. */
+int instance_peer_group_afi_safis_ipv6_unicast_encapsulation_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_peer_group_af_encap_modify(args, AFI_IP6, SAFI_UNICAST);
+}
+
+int instance_peer_group_afi_safis_ipv6_unicast_encapsulation_destroy(struct nb_cb_destroy_args *args)
+{
+	return bgp_nb_peer_group_af_encap_destroy(args, AFI_IP6, SAFI_UNICAST);
+}
+
+int instance_peer_group_afi_safis_ipv6_vpn_encapsulation_srv6_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP6, SAFI_MPLS_VPN,
+					    PEER_FLAG_CONFIG_ENCAPSULATION_SRV6);
+}
+
+int instance_peer_group_afi_safis_ipv6_vpn_encapsulation_mpls_modify(struct nb_cb_modify_args *args)
+{
+	return bgp_nb_peer_group_af_flag_modify(args, AFI_IP6, SAFI_MPLS_VPN,
+					    PEER_FLAG_CONFIG_ENCAPSULATION_MPLS);
+}
+

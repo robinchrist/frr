@@ -361,7 +361,8 @@ int instance_afi_safis_ipv6_unicast_srv6_sid_export_dt46_modify(struct nb_cb_mod
 	return bgp_nb_af_srv6_sid_export_dt46_modify(args, AFI_IP6, SAFI_UNICAST);
 }
 
-void instance_afi_safis_ipv6_unicast_srv6_sid_export_apply_finish(struct nb_cb_apply_finish_args *args)
+void instance_afi_safis_ipv6_unicast_srv6_sid_export_apply_finish(
+	struct nb_cb_apply_finish_args *args)
 {
 	bgp_nb_af_srv6_sid_export_apply_finish(args, AFI_IP6, SAFI_UNICAST);
 }

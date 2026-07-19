@@ -4981,6 +4981,85 @@ void neighbor_af_route_server_client_cli_write(struct vty *vty, const struct lyd
 			bgp_cli_neighbor_or_group_name(dnode));
 }
 
+/* 'neighbor X encapsulation-srv6|encapsulation-srv6-relax' (unicast AFs,
+ * M8.5): single enum leaf; a direct mode switch is one modify (legacy's
+ * unset-first requirement dropped). */
+DEFPY_YANG(
+	neighbor_encap_srv6, neighbor_encap_srv6_cli_cmd,
+	"[no] neighbor <X:X::X:X|WORD>$peer <encapsulation-srv6|encapsulation-srv6-relax>$encap",
+	NO_STR
+	NEIGHBOR_STR
+	"Neighbor IPv6 address\n"
+	"Neighbor tag\n"
+	"Advertise routes with SRv6 prefix SID to the neighbor\n"
+	"Advertise routes with and without SRv6 prefix SID the neighbor\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	char *leaf = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/encapsulation", xpath, container);
+
+	if (no)
+		nb_cli_enqueue_change(vty, leaf, NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, leaf, NB_OP_MODIFY,
+				      strmatch(encap, "encapsulation-srv6") ? "srv6"
+									    : "srv6-relax");
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, leaf);
+	XFREE(MTYPE_TMP, xpath);
+	return ret;
+}
+
+void neighbor_af_encapsulation_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					 bool show_defaults)
+{
+	vty_out(vty, "  neighbor %s encapsulation-%s\n", bgp_cli_neighbor_or_group_name(dnode),
+		yang_dnode_get_string(dnode, NULL));
+}
+
+/* 'neighbor X encapsulation-srv6|encapsulation-mpls' (vpn AFs, M8.5):
+ * two independent Tier A booleans, sharing the leaf-name-equals-token
+ * flag machinery. */
+DEFPY_YANG(
+	neighbor_encap_srv6_or_mpls, neighbor_encap_srv6_or_mpls_cli_cmd,
+	"[no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer <encapsulation-srv6|encapsulation-mpls>$encap",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Advertise routes with SRv6 encapsulation to the neighbor\n"
+	"Advertise routes with MPLS encapsulation to the neighbor\n")
+{
+	/* leaf name == CLI token for both booleans */
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, encap, no ? "false" : "true");
+}
+
+void neighbor_af_encapsulation_srv6_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s encapsulation-srv6\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
+void neighbor_af_encapsulation_mpls_cli_write(struct vty *vty, const struct lyd_node *dnode,
+					      bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "  neighbor %s encapsulation-mpls\n",
+			bgp_cli_neighbor_or_group_name(dnode));
+}
+
 DEFPY_YANG(
 	neighbor_as_override, neighbor_as_override_cli_cmd,
 	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer as-override",
@@ -6672,6 +6751,10 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_EVPN_NODE, &neighbor_route_server_client_cli_cmd);
 
 	/* as-override: legacy never reached BGP_EVPN_NODE. */
+	install_element(BGP_IPV4_NODE, &neighbor_encap_srv6_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_encap_srv6_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_encap_srv6_or_mpls_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_encap_srv6_or_mpls_cli_cmd);
 	install_element(BGP_IPV4_NODE, &neighbor_as_override_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_as_override_cli_cmd);
 	install_element(BGP_IPV4L_NODE, &neighbor_as_override_cli_cmd);
