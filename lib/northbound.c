@@ -375,6 +375,50 @@ struct nb_config *nb_config_dup(const struct nb_config *config)
 	return dup;
 }
 
+static void nb_config_strip_implicit_children(struct lyd_node *parent)
+{
+	struct lyd_node *child, *next;
+
+	LY_LIST_FOR_SAFE(lyd_child_no_keys(parent), next, child)
+	{
+		if (CHECK_FLAG(child->flags, LYD_DEFAULT))
+			lyd_free_tree(child);
+		else if (!CHECK_FLAG(child->schema->nodetype, LYS_LEAF | LYS_LEAFLIST))
+			nb_config_strip_implicit_children(child);
+	}
+}
+
+struct nb_config *nb_config_dup_configured(const struct nb_config *config)
+{
+	struct nb_config *dup = nb_config_dup(config);
+	struct lyd_node *root, *next;
+
+	LY_LIST_FOR_SAFE(dup->dnode, next, root)
+	{
+		if (CHECK_FLAG(root->flags, LYD_DEFAULT)) {
+			if (dup->dnode == root)
+				dup->dnode = next;
+			lyd_free_tree(root);
+		} else if (!CHECK_FLAG(root->schema->nodetype, LYS_LEAF | LYS_LEAFLIST)) {
+			nb_config_strip_implicit_children(root);
+		}
+	}
+
+	return dup;
+}
+
+struct nb_config *nb_config_dup_effective(const struct nb_config *config)
+{
+	struct nb_config *dup = nb_config_dup(config);
+	LY_ERR err;
+
+	err = lyd_new_implicit_all(&dup->dnode, ly_native_ctx, LYD_IMPLICIT_NO_STATE, NULL);
+	if (err)
+		flog_warn(EC_LIB_LIBYANG, "%s: lyd_new_implicit_all failed: %d", __func__, err);
+
+	return dup;
+}
+
 int nb_config_merge(struct nb_config *config_dst, struct nb_config *config_src,
 		    bool preserve_source)
 {
@@ -507,7 +551,13 @@ void nb_config_diff_created(const struct lyd_node *dnode, uint32_t *seq,
 	switch (dnode->schema->nodetype) {
 	case LYS_LEAF:
 	case LYS_LEAFLIST:
-		if (lyd_is_default(dnode))
+		/*
+		 * Skip implicit defaults only. A leaf explicitly set to its
+		 * default value is real config and must invoke its callback,
+		 * matching the legacy CLI where entering the command always
+		 * ran the handler regardless of the configured value.
+		 */
+		if (CHECK_FLAG(dnode->flags, LYD_DEFAULT))
 			break;
 
 		if (nb_cb_operation_is_valid(NB_CB_CREATE, dnode->schema))
@@ -584,6 +634,26 @@ static int nb_lyd_diff_get_op(const struct lyd_node *dnode)
 	return 'n';
 }
 
+/*
+ * Check whether an op "none" diff node records a default-flag-only change:
+ * same value on both sides, but implicit default on one side and explicitly
+ * configured on the other. lyd_diff() marks exactly this case (and only this
+ * case, for op "none" term nodes) with an "orig-default" metadata annotation
+ * when invoked with LYD_DIFF_DEFAULTS.
+ */
+static bool nb_lyd_diff_is_dflt_only_change(const struct lyd_node *dnode)
+{
+	const struct lyd_meta *meta;
+
+	LY_LIST_FOR (dnode->meta, meta) {
+		if (strcmp(meta->name, "orig-default") ||
+		    strcmp(meta->annotation->module->name, "yang"))
+			continue;
+		return true;
+	}
+	return false;
+}
+
 #if 0 /* Used below in nb_config_diff inside normally disabled code */
 static inline void nb_config_diff_dnode_log_path(const char *context,
 						 const char *path,
@@ -617,8 +687,7 @@ static inline void nb_config_diff_dnode_log(const char *context,
  * the DB being compared against 'config1'. Typically 'config1'
  * should be the Running DB and 'config2' is the Candidate DB.
  */
-void nb_config_diff(const struct nb_config *config1,
-		    const struct nb_config *config2,
+void nb_config_diff(const struct nb_config *config1, const struct nb_config *config2,
 		    struct nb_config_cbs *changes)
 {
 	struct lyd_node *diff = NULL;
@@ -645,15 +714,13 @@ void nb_config_diff(const struct nb_config *config1,
 	}
 #endif
 
-	err = lyd_diff_siblings(config1->dnode, config2->dnode,
-				LYD_DIFF_DEFAULTS, &diff);
+	err = lyd_diff_siblings(config1->dnode, config2->dnode, LYD_DIFF_DEFAULTS, &diff);
 	assert(!err);
 
 	if (diff && DEBUG_MODE_CHECK(&nb_dbg_cbs_config, DEBUG_MODE_ALL)) {
 		char *s;
 
-		if (!lyd_print_mem(&s, diff, LYD_JSON,
-				   LYD_PRINT_WITHSIBLINGS | LYD_PRINT_WD_ALL)) {
+		if (!lyd_print_mem(&s, diff, LYD_JSON, LYD_PRINT_WITHSIBLINGS | LYD_PRINT_WD_ALL)) {
 			zlog_debug("%s: %s", __func__, s);
 			free(s);
 		}
@@ -705,10 +772,30 @@ void nb_config_diff(const struct nb_config *config1,
 				/* either moving an entry or changing a value */
 				target = yang_dnode_get(config2->dnode, path);
 				assert(target);
-				nb_config_diff_add_change(changes, NB_CB_MODIFY,
-							  &seq, target);
+				nb_config_diff_add_change(changes, NB_CB_MODIFY, &seq, target);
 				break;
 			case 'n': /* none */
+				/*
+				 * A default-flag-only change: the value is
+				 * unchanged but the leaf switched between
+				 * implicitly-default and explicitly
+				 * configured. The datastores differ, so the
+				 * commit must go through (otherwise the
+				 * explicitness would be lost with "no
+				 * changes"), and the modify callback fires
+				 * with the unchanged value, which is what the
+				 * legacy CLI did when a command was re-entered
+				 * or negated back to its default.
+				 */
+				if (CHECK_FLAG(dnode->schema->nodetype, LYS_LEAF) &&
+				    nb_lyd_diff_is_dflt_only_change(dnode) &&
+				    nb_cb_operation_is_valid(NB_CB_MODIFY, dnode->schema)) {
+					target = yang_dnode_get(config2->dnode, path);
+					assert(target);
+					nb_config_diff_add_change(changes, NB_CB_MODIFY, &seq,
+								  target);
+				}
+				break;
 			default:
 				break;
 			}
@@ -1176,10 +1263,22 @@ enum nb_change_result nb_candidate_edit_config_change(struct nb_config *candidat
 		return NB_CHANGE_ERR;
 	}
 
-	/* If the value is not set, get the default if it exists. */
-	/* XXX what about presence containers? */
-	if (value == NULL)
+	/*
+	 * A modify without a value on a leaf carrying a schema default means
+	 * "return to the default" (the common CLI 'no' handler idiom). Under
+	 * RFC 7950 strict default handling that is a destroy: the leaf goes
+	 * back to being an implicit default instead of being explicitly set
+	 * to the default value. Handlers that want the leaf to be explicitly
+	 * configured at its default value must pass the value string.
+	 */
+	if (value == NULL && operation == NB_OP_MODIFY &&
+	    nb_node->snode->nodetype == LYS_LEAF && yang_snode_get_default(nb_node->snode)) {
+		operation = NB_OP_DESTROY;
+	} else if (value == NULL) {
+		/* If the value is not set, get the default if it exists. */
+		/* XXX what about presence containers? */
 		value = yang_snode_get_default(nb_node->snode);
+	}
 
 	/*
 	 * Ignore "not found" errors when editing the candidate configuration.
@@ -1223,8 +1322,8 @@ void nb_candidate_edit_config_changes(struct nb_config *candidate_config,
 		}
 		strlcat(xpath, change_xpath, sizeof(xpath));
 
-		result = nb_candidate_edit_config_change(candidate_config, change->operation, xpath,
-							 change->value, in_backend);
+		result = nb_candidate_edit_config_change(candidate_config, change->operation,
+							 xpath, change->value, in_backend);
 		if (result != NB_CHANGE_OK)
 			*error = true;
 		if (result == NB_CHANGE_ERR)

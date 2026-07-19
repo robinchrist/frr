@@ -981,6 +981,34 @@ extern void nb_config_free(struct nb_config *config);
 extern struct nb_config *nb_config_dup(const struct nb_config *config);
 
 /*
+ * Duplicate a northbound configuration, reduced to what was actually
+ * configured: leaves carrying an implicit default value (never explicitly
+ * set) are stripped from the copy. Leaves explicitly set to their default
+ * value are kept, they are configuration.
+ *
+ * config
+ *    Northbound configuration to duplicate.
+ *
+ * Returns:
+ *    Pointer to the "as configured" copy of the configuration.
+ */
+extern struct nb_config *nb_config_dup_configured(const struct nb_config *config);
+
+/*
+ * Duplicate a northbound configuration, expanded to the effective state:
+ * every leaf with a schema default that is not explicitly configured is
+ * materialized with its default value (RFC 7950 7.6.1), so the copy shows
+ * the configuration the daemons actually operate with.
+ *
+ * config
+ *    Northbound configuration to duplicate.
+ *
+ * Returns:
+ *    Pointer to the "effective" copy of the configuration.
+ */
+extern struct nb_config *nb_config_dup_effective(const struct nb_config *config);
+
+/*
  * Merge one configuration into another.
  *
  * config_dst
