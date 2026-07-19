@@ -444,8 +444,10 @@ static const char *const bgpd_config_xpaths[] = {
 	"/frr-logging:logging",
 	"/proteus-bgp:instance",
 	"/proteus-bgp:process",
-	/* M7 B4: interface-level 'mpls bgp ...' flags (proteus-interface). */
-	"/proteus-interface:interface",
+	/* Workstream C: bgpd's interface-level 'mpls bgp ...' flags now
+	 * live on proteus-bgp's augment of frr-interface's interface list
+	 * (formerly the standalone proteus-interface module). */
+	"/frr-interface:lib",
 	/* M7 B6: proteus-bgp-filter went live (community-alias converted;
 	 * the filter lists follow in B7/B8). */
 	"/proteus-bgp-filter:as-path-access-list",

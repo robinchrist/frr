@@ -171,8 +171,10 @@ const struct frr_yang_module_info proteus_bfd_cli_info = {
 	.nodes = { { .xpath = NULL } },
 };
 
-/* proteus_interface_cli_info went live in M7 batch B4 -- defined with its
- * cli_show callbacks in bgpd/proteus/bgp_cli_interface.c (bgpd/bgp_cli.h). */
+/* proteus-interface is not loaded here anymore: workstream C moved bgpd's
+ * interface-level 'mpls bgp ...' flags onto proteus-bgp's augment of
+ * frr-interface (cli_show callbacks now in proteus_bgp_cli_info); the
+ * module awaits deletion. */
 
 const struct frr_yang_module_info proteus_route_map_cli_info = {
 	.name = "proteus-route-map",
@@ -250,7 +252,6 @@ static const struct frr_yang_module_info *const mgmt_yang_modules[] = {
 	&proteus_bgp_filter_cli_info,
 	&proteus_bgp_dump_cli_info,
 	&proteus_bfd_cli_info,
-	&proteus_interface_cli_info,
 	&proteus_route_map_cli_info,
 	&frr_bgp_route_map_cli_info,
 #endif

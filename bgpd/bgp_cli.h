@@ -16,7 +16,6 @@ extern "C" {
 #endif
 
 extern const struct frr_yang_module_info proteus_bgp_cli_info;
-extern const struct frr_yang_module_info proteus_interface_cli_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_cli_info;
 extern const struct frr_yang_module_info proteus_bgp_dump_cli_info;
 

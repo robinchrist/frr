@@ -12780,6 +12780,24 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 				.destroy = instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy,
 			}
 		},
+		/* Workstream C: interface-level 'mpls bgp ...' flags, on
+		 * proteus-bgp's augment of frr-interface's interface list
+		 * (the frr-zebra pattern; formerly the proteus-interface
+		 * module). The base list itself is lib's (frr_interface_info)
+		 * and the augment's 'bgp' NP container plus defaulted leaves
+		 * need modify callbacks only (see bgp_nb_interface.c). */
+		{
+			.xpath = "/frr-interface:lib/interface/proteus-bgp:bgp/mpls-bgp-forwarding",
+			.cbs = {
+				.modify = lib_interface_bgp_mpls_bgp_forwarding_modify,
+			}
+		},
+		{
+			.xpath = "/frr-interface:lib/interface/proteus-bgp:bgp/mpls-bgp-l3vpn-multi-domain-switching",
+			.cbs = {
+				.modify = lib_interface_bgp_mpls_bgp_l3vpn_multi_domain_switching_modify,
+			}
+		},
 		{
 			.xpath = NULL,
 		},
@@ -12793,8 +12811,9 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
  * do define data nodes but have no converted batch yet; register them with
  * ignore_cfg_cbs so libyang's auto-implement of their standalone trees
  * doesn't hit nb_validate_callbacks() with uncallbacked config nodes.
- * proteus-interface went live in M7 batch B4, proteus-bgp-filter in M7
- * batch B6 (real tables further down).
+ * proteus-bgp-filter went live in M7 batch B6 (real table further down);
+ * proteus-interface went live in M7 batch B4 and is dormant again since
+ * workstream C moved its flags onto the frr-interface augment.
  */
 const struct frr_yang_module_info proteus_filter_info = { .name = "proteus-filter",
 							  .ignore_cfg_cbs = true,
@@ -13075,59 +13094,19 @@ const struct frr_yang_module_info proteus_bfd_info = { .name = "proteus-bfd",
 							       },
 						       } };
 
-/* M7 batch B4: proteus-interface is live (callbacks in
- * bgpd/proteus/bgp_nb_interface.c). bgpd owns only the two 'mpls bgp ...'
- * flags; description and the ipv6-nd subtree are zebra's surface and stay
- * reject-stubbed permanently.
+/* Workstream C: proteus-interface is dormant again. bgpd's two
+ * 'mpls bgp ...' flags moved onto proteus-bgp's augment of frr-interface
+ * (callbacks registered in proteus_bgp_nb_info above); nothing references
+ * this module's tree anymore. The stub keeps it loadable until the module
+ * is deleted outright in a follow-up.
  */
-const struct frr_yang_module_info proteus_interface_info = {
-	.name = "proteus-interface",
-	.nodes = {
-		{
-			.xpath = "/proteus-interface:interface",
-			.cbs = {
-				.create = proteus_interface_create,
-				.destroy = proteus_interface_destroy,
-			}
-		},
-		{
-			.xpath = "/proteus-interface:interface/description",
-			.cbs = {
-				.modify = proteus_interface_description_modify,
-				.destroy = proteus_interface_description_destroy,
-			}
-		},
-		{
-			.xpath = "/proteus-interface:interface/mpls-bgp-forwarding",
-			.cbs = {
-				.modify = proteus_interface_mpls_bgp_forwarding_modify,
-			}
-		},
-		{
-			.xpath = "/proteus-interface:interface/mpls-bgp-l3vpn-multi-domain-switching",
-			.cbs = {
-				.modify = proteus_interface_mpls_bgp_l3vpn_multi_domain_switching_modify,
-			}
-		},
-		{
-			.xpath = "/proteus-interface:interface/ipv6-nd/ra-interval",
-			.cbs = {
-				.modify = proteus_interface_ipv6_nd_ra_interval_modify,
-				.destroy = proteus_interface_ipv6_nd_ra_interval_destroy,
-			}
-		},
-		{
-			.xpath = "/proteus-interface:interface/ipv6-nd/ra-interval-msec",
-			.cbs = {
-				.modify = proteus_interface_ipv6_nd_ra_interval_msec_modify,
-				.destroy = proteus_interface_ipv6_nd_ra_interval_msec_destroy,
-			}
-		},
-		{
-			.xpath = NULL,
-		},
-	}
-};
+const struct frr_yang_module_info proteus_interface_info = { .name = "proteus-interface",
+							     .ignore_cfg_cbs = true,
+							     .nodes = {
+								     {
+									     .xpath = NULL,
+								     },
+							     } };
 
 const struct frr_yang_module_info proteus_route_map_info = { .name = "proteus-route-map",
 							     .ignore_cfg_cbs = true,

@@ -11801,7 +11801,9 @@ static void bgp_config_end(struct vty *vty)
 
 /* M7 batch B4: the interface-level '[no] mpls bgp forwarding' and
  * '[no] mpls bgp l3vpn-multi-domain-switching' flags are mgmtd-owned
- * (proteus-interface module) -- DEFPY twins + cli_show in
+ * (since workstream C on proteus-bgp's augment of frr-interface's
+ * interface list, formerly the proteus-interface module) -- DEFPY twins +
+ * cli_show in
  * bgpd/proteus/bgp_cli_interface.c, apply callbacks in
  * bgpd/proteus/bgp_nb_interface.c. The native config_write_interface()
  * emitter (these two lines were its only content) is retired with them.

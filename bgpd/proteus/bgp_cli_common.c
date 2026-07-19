@@ -6242,6 +6242,23 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = instance_ls_distribute_cli_write,
 			}
 		},
+		/* Workstream C: interface-level 'mpls bgp ...' flags, on
+		 * proteus-bgp's augment of frr-interface's interface list.
+		 * The 'interface NAME' block frame is emitted by lib's
+		 * frr-interface cli_show (frr_interface_cli_info); these
+		 * only render the flag lines inside it. */
+		{
+			.xpath = "/frr-interface:lib/interface/proteus-bgp:bgp/mpls-bgp-forwarding",
+			.cbs = {
+				.cli_show = lib_interface_bgp_mpls_bgp_forwarding_cli_write,
+			}
+		},
+		{
+			.xpath = "/frr-interface:lib/interface/proteus-bgp:bgp/mpls-bgp-l3vpn-multi-domain-switching",
+			.cbs = {
+				.cli_show = lib_interface_bgp_mpls_bgp_l3vpn_multi_domain_switching_cli_write,
+			}
+		},
 		{
 			.xpath = NULL,
 		},

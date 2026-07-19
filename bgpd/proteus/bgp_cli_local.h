@@ -548,6 +548,15 @@ void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node
 void afi_safis_retain_route_target_all_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults);
 
+/* Workstream C: interface-level 'mpls bgp ...' flag emitters, on
+ * proteus-bgp's augment of frr-interface's interface list (defined in
+ * bgp_cli_interface.c; the 'interface NAME' block frame is lib's). */
+void lib_interface_bgp_mpls_bgp_forwarding_cli_write(struct vty *vty, const struct lyd_node *dnode,
+						     bool show_defaults);
+void lib_interface_bgp_mpls_bgp_l3vpn_multi_domain_switching_cli_write(struct vty *vty,
+								       const struct lyd_node *dnode,
+								       bool show_defaults);
+
 /* Per-file install_node()/install_element() entry points, called from
  * bgp_cli_init() in bgp_cli_common.c. */
 void bgp_cli_instance_init(void);

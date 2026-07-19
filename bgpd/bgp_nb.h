@@ -225,18 +225,12 @@ extern const struct frr_yang_module_info proteus_bfd_info;
 extern const struct frr_yang_module_info proteus_interface_info;
 extern const struct frr_yang_module_info proteus_route_map_info;
 
-/* proteus-interface (M7 batch B4): bodies in
- * bgpd/proteus/bgp_nb_interface.c. */
-int proteus_interface_create(struct nb_cb_create_args *args);
-int proteus_interface_destroy(struct nb_cb_destroy_args *args);
-int proteus_interface_description_modify(struct nb_cb_modify_args *args);
-int proteus_interface_description_destroy(struct nb_cb_destroy_args *args);
-int proteus_interface_mpls_bgp_forwarding_modify(struct nb_cb_modify_args *args);
-int proteus_interface_mpls_bgp_l3vpn_multi_domain_switching_modify(struct nb_cb_modify_args *args);
-int proteus_interface_ipv6_nd_ra_interval_modify(struct nb_cb_modify_args *args);
-int proteus_interface_ipv6_nd_ra_interval_destroy(struct nb_cb_destroy_args *args);
-int proteus_interface_ipv6_nd_ra_interval_msec_modify(struct nb_cb_modify_args *args);
-int proteus_interface_ipv6_nd_ra_interval_msec_destroy(struct nb_cb_destroy_args *args);
+/* Interface-level 'mpls bgp ...' flags, on proteus-bgp's augment of
+ * frr-interface's interface list (workstream C; formerly modeled in the
+ * now-dormant proteus-interface module). Bodies in
+ * bgpd/proteus/bgp_nb_interface.c, registered in proteus_bgp_nb_info. */
+int lib_interface_bgp_mpls_bgp_forwarding_modify(struct nb_cb_modify_args *args);
+int lib_interface_bgp_mpls_bgp_l3vpn_multi_domain_switching_modify(struct nb_cb_modify_args *args);
 
 /* proteus-bgp-filter (M7 batch B6): bodies in
  * bgpd/proteus/bgp_nb_filter.c. Only community-alias is converted;
