@@ -2632,6 +2632,45 @@ DEFPY_YANG (no_set_ecommunity_nt,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Classify one 'set extcommunity color' token the way the daemon's
+ * tokenizer parses it: '<CO>:<value>' with the CO steering bits as a
+ * binary number up to 3, or a bare '<value>'. A bare nonzero value
+ * implies CO 01; a bare zero keeps CO 00, matching the daemon's
+ * encoding of that token. */
+static bool set_ecommunity_color_token(const char *token, const char **co,
+				       unsigned long *value)
+{
+	static const char *const co_names[] = { "00", "01", "10", "11" };
+	const char *colon = strchr(token, ':');
+	const char *p;
+	char *endptr;
+	unsigned long bits;
+
+	if (colon) {
+		if (colon == token || strchr(colon + 1, ':'))
+			return false;
+		for (p = token; p < colon; p++)
+			if (*p != '0' && *p != '1')
+				return false;
+		errno = 0;
+		bits = strtoul(token, &endptr, 2);
+		if (errno || endptr != colon || bits > 3)
+			return false;
+		if (!set_ecommunity_token_number(colon + 1,
+						 colon + 1 + strlen(colon + 1),
+						 UINT32_MAX, value))
+			return false;
+		*co = co_names[bits];
+		return true;
+	}
+
+	if (!set_ecommunity_token_number(token, token + strlen(token),
+					 UINT32_MAX, value))
+		return false;
+	*co = *value ? co_names[1] : co_names[0];
+	return true;
+}
+
 DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 	   "set extcommunity color RTLIST...",
 	   SET_STR
@@ -2640,22 +2679,51 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 	   "Color ID\n")
 {
 	int idx_color = 3;
-	char *str;
-	int ret;
+	int i, nqueued, ret;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-color']";
-	char xpath_value[XPATH_MAXLEN];
+	char xpath_color[XPATH_MAXLEN];
+	char xpath_value[XPATH_MAXLEN * 2];
 
-	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-
-	snprintf(xpath_value, sizeof(xpath_value),
+	snprintf(xpath_color, sizeof(xpath_color),
 		 "%s/rmap-set-action/frr-bgp-route-map:extcommunity-color",
 		 xpath);
-	str = argv_concat(argv, argc, idx_color);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, str);
-	ret = nb_cli_apply_changes(vty, NULL);
-	XFREE(MTYPE_TMP, str);
-	return ret;
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	/* Replace, not merge, whatever an earlier line left. */
+	nb_cli_enqueue_change(vty, xpath_color, NB_OP_DESTROY, NULL);
+	nqueued = 2;
+
+	/* One config line's tokens can exceed one transaction's change
+	 * budget (VTY_MAXCFGCHANGES); apply in batches. Only the first
+	 * batch carries the replace-destroy above, later ones merge
+	 * more tokens into the already-created container. */
+	for (i = idx_color; i < argc; i++) {
+		const char *tok = argv[i]->arg;
+		const char *co = NULL;
+		unsigned long value = 0;
+
+		if (nqueued == VTY_MAXCFGCHANGES) {
+			ret = nb_cli_apply_changes(vty, NULL);
+			if (ret != CMD_SUCCESS)
+				return ret;
+			nqueued = 0;
+		}
+		nqueued++;
+
+		if (set_ecommunity_color_token(tok, &co, &value))
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/color[value='%lu'][co-flag='%s']",
+				 xpath_color, value, co);
+		else
+			/* Kept verbatim; the apply-time compile rejects
+			 * it, as it did for the old free-form string. */
+			snprintf(xpath_value, sizeof(xpath_value),
+				 "%s/raw[.='%s']", xpath_color, tok);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(no_set_ecommunity_color_all, no_set_ecommunity_color_all_cmd,

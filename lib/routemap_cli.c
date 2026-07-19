@@ -1325,6 +1325,29 @@ static void route_map_ecommunity_nt_show(struct vty *vty,
 	vty_out(vty, "\n");
 }
 
+/* Render a structured color set (frr-bgp-route-map's
+ * extcommunity-color container) as the legacy space-separated token
+ * line: colors as '<CO>:<value>' with the CO bits in binary, then
+ * raw tokens verbatim. */
+static void route_map_ecommunity_color_show(struct vty *vty,
+					    const struct lyd_node *container)
+{
+	const struct lyd_node *child;
+
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "color"))
+			vty_out(vty, " %s:%u",
+				yang_dnode_get_string(child, "co-flag"),
+				yang_dnode_get_uint32(child, "value"));
+	}
+	LY_LIST_FOR (lyd_child(container), child) {
+		if (!strcmp(child->schema->name, "raw"))
+			vty_out(vty, " %s",
+				yang_dnode_get_string(child, NULL));
+	}
+	vty_out(vty, "\n");
+}
+
 void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 			   bool show_defaults)
 {
@@ -1584,10 +1607,13 @@ void route_map_action_show(struct vty *vty, const struct lyd_node *dnode,
 
 		vty_out(vty, " set extcommunity bandwidth %s\n", str);
 	} else if (IS_SET_EXTCOMMUNITY_COLOR(action)) {
-		vty_out(vty, " set extcommunity color %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-set-action/frr-bgp-route-map:extcommunity-color"));
+		ln = yang_dnode_get(
+			dnode,
+			"rmap-set-action/frr-bgp-route-map:extcommunity-color");
+		if (ln) {
+			vty_out(vty, " set extcommunity color");
+			route_map_ecommunity_color_show(vty, ln);
+		}
 	} else if (IS_SET_EXTCOMMUNITY_NONE(action)) {
 		if (yang_dnode_get_bool(
 			    dnode,

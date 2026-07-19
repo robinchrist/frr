@@ -4030,36 +4030,9 @@ lib_route_map_entry_set_action_rmap_set_action_extcommunity_lb_bandwidth_destroy
  * XPath:
  * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-color
  */
-int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_modify(
-	struct nb_cb_modify_args *args)
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_create(
+	struct nb_cb_create_args *args)
 {
-	struct routemap_hook_context *rhc;
-	const char *str;
-	int rv;
-
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		str = yang_dnode_get_string(args->dnode, NULL);
-
-		/* Set destroy information. */
-		rhc->rhc_shook = generic_set_delete;
-		rhc->rhc_rule = "extcommunity color";
-		rhc->rhc_event = RMAP_EVENT_SET_DELETED;
-
-		rv = generic_set_add(rhc->rhc_rmi, "extcommunity color", str,
-				     args->errmsg, args->errmsg_len);
-		if (rv != CMD_SUCCESS) {
-			rhc->rhc_shook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
-
 	return NB_OK;
 }
 
@@ -4075,6 +4048,76 @@ int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_destroy(
 		return lib_route_map_entry_set_destroy(args);
 	}
 
+	return NB_OK;
+}
+
+void lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_finish(
+	struct nb_cb_apply_finish_args *args)
+{
+	struct routemap_hook_context *rhc;
+	const struct lyd_node *child;
+	char str[VTY_BUFSIZ] = "";
+	char token[32];
+	int rv;
+
+	/* Add configuration. */
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
+
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (!strmatch(child->schema->name, "color"))
+			continue;
+		snprintf(token, sizeof(token), "%s:%u",
+			 yang_dnode_get_string(child, "co-flag"),
+			 yang_dnode_get_uint32(child, "value"));
+		routemap_communities_token_append(str, sizeof(str), token);
+	}
+	LY_LIST_FOR (lyd_child(args->dnode), child) {
+		if (strmatch(child->schema->name, "raw"))
+			routemap_communities_token_append(
+				str, sizeof(str),
+				yang_dnode_get_string(child, NULL));
+	}
+
+	/* Set destroy information. */
+	rhc->rhc_shook = generic_set_delete;
+	rhc->rhc_rule = "extcommunity color";
+	rhc->rhc_event = RMAP_EVENT_SET_DELETED;
+
+	rv = generic_set_add(rhc->rhc_rmi, "extcommunity color", str,
+			     args->errmsg, args->errmsg_len);
+	if (rv != CMD_SUCCESS)
+		rhc->rhc_shook = NULL;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-color/color
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_color_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_color_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-route-map:lib/route-map/entry/set-action/rmap-set-action/frr-bgp-route-map:extcommunity-color/raw
+ */
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_raw_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int lib_route_map_entry_set_action_rmap_set_action_extcommunity_color_raw_destroy(
+	struct nb_cb_destroy_args *args)
+{
 	return NB_OK;
 }
 
