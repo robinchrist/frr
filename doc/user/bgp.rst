@@ -2286,12 +2286,17 @@ Configuring Peers
 
    Setting to 0 turns off the scanning at all.
 
-.. clicmd:: bgp default ipv4-unicast
+.. clicmd:: bgp default ipv4-unicast <enabled|disabled>
 
    This command allows the user to specify that the IPv4 Unicast address
-   family is turned on by default or not.  This command defaults to on
-   and is not displayed.
-   The `no bgp default ipv4-unicast` form of the command is displayed.
+   family is turned on by default or not.  `bgp default ipv4-unicast
+   enabled` is the default and will not be displayed as part of a `show
+   run`.  The disabled form of the command turns off this default
+   activation.
+
+   The bare ``bgp default ipv4-unicast`` / ``no bgp default ipv4-unicast``
+   spelling (without the explicit ``enabled``/``disabled`` token) is still
+   accepted but deprecated.
 
 .. clicmd:: bgp default ipv4-multicast
 

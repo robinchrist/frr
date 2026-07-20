@@ -3698,23 +3698,20 @@ DEFPY_YANG(
 
 /*
  * Milestone 2 batch B5: instance 'default' container, AFI-activation group
- * ('bgp default <afi-safi>'). All eleven tokens share one legacy grammar
- * and one legacy DEFPY (bgp_default_afi_safi_cmd, bgp_vty.c). ipv4-unicast
- * is the sole static default-on/no-inheritance leaf in this family (the
- * only default/<afi-safi> leaf that is on by default): its negative form is
- * a real "false" modify rather than a delete, and its positive form
- * destroys back to the true default, matching the shape kept by the
- * deprecated bare aliases of fast-external-failover/reject-as-sets/
- * client-to-client-reflection.
- * Every other token here defaults false in YANG and is positive-only, so
- * its negative form deletes back to that default. Every token string is
- * identical to its YANG leaf name, so the xpath is built directly from the
- * matched token, no translation table needed (unlike the legacy DEFPY's
- * strtok_r() afi/safi decomposition).
+ * ('bgp default <afi-safi>'). These ten tokens share one legacy grammar and
+ * one legacy DEFPY (bgp_default_afi_safi_cmd, bgp_vty.c). ipv4-unicast was
+ * the sole static default-on/no-inheritance leaf in this family and has
+ * been split out into its own tri-state command pair (bgp_default_ipv4_
+ * unicast_cli_cmd and its deprecated bare aliases, below); it no longer
+ * appears in this shared grammar. Every remaining token here defaults false
+ * in YANG and is positive-only, so its negative form deletes back to that
+ * default. Every token string is identical to its YANG leaf name, so the
+ * xpath is built directly from the matched token, no translation table
+ * needed (unlike the legacy DEFPY's strtok_r() afi/safi decomposition).
  */
 DEFPY_YANG(
 	bgp_default_afi_safi, bgp_default_afi_safi_cli_cmd,
-	"[no] bgp default <ipv4-unicast|"
+	"[no] bgp default <"
 	"ipv4-multicast|"
 	"ipv4-vpn|"
 	"ipv4-labeled-unicast|"
@@ -3728,7 +3725,6 @@ DEFPY_YANG(
 	NO_STR
 	BGP_STR
 	"Configure BGP defaults\n"
-	"Activate ipv4-unicast for a peer by default\n"
 	"Activate ipv4-multicast for a peer by default\n"
 	"Activate ipv4-vpn for a peer by default\n"
 	"Activate ipv4-labeled-unicast for a peer by default\n"
@@ -3744,16 +3740,79 @@ DEFPY_YANG(
 
 	snprintf(xpath, sizeof(xpath), "./default/%s", afi_safi);
 
-	if (strmatch(afi_safi, "ipv4-unicast")) {
-		if (no)
-			nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "false");
-		else
-			nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
-	} else if (no)
+	if (no)
 		nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
 	else
 		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, "true");
 
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/*
+ * 'bgp default ipv4-unicast' tri-state conversion (this batch): ipv4-unicast
+ * is the only default/<afi-safi> leaf that is on by default, so it gets its
+ * own canonical 'X <enabled|disabled>' / 'no X <enabled|disabled>' pair
+ * (NB_OP_MODIFY true/false, NB_OP_DESTROY to restore the YANG default), plus
+ * deprecated bare aliases that keep the legacy destroy/modify-false
+ * semantics for configs saved before this leaf grew the new grammar.
+ */
+DEFPY_YANG(
+	bgp_default_ipv4_unicast, bgp_default_ipv4_unicast_cli_cmd,
+	"bgp default ipv4-unicast <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Activate ipv4-unicast for a peer by default\n"
+	"Enable ipv4-unicast activation for a peer by default\n"
+	"Disable ipv4-unicast activation for a peer by default\n")
+{
+	nb_cli_enqueue_change(vty, "./default/ipv4-unicast", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_default_ipv4_unicast, no_bgp_default_ipv4_unicast_cli_cmd,
+	"no bgp default ipv4-unicast <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Activate ipv4-unicast for a peer by default\n"
+	"Enable ipv4-unicast activation for a peer by default\n"
+	"Disable ipv4-unicast activation for a peer by default\n")
+{
+	nb_cli_enqueue_change(vty, "./default/ipv4-unicast", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare aliases: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp default ipv4-unicast' meant "on" via a destroy back to the true
+ * default; bare 'no bgp default ipv4-unicast' persisted an explicit "false",
+ * so the alias handler bodies are unchanged from the legacy DEFPY's
+ * ipv4-unicast special case.
+ */
+DEFPY_ATTR(
+	bgp_default_ipv4_unicast_deprecated, bgp_default_ipv4_unicast_deprecated_cli_cmd,
+	"bgp default ipv4-unicast",
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Activate ipv4-unicast for a peer by default\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/ipv4-unicast", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_default_ipv4_unicast_deprecated, no_bgp_default_ipv4_unicast_deprecated_cli_cmd,
+	"no bgp default ipv4-unicast",
+	NO_STR
+	BGP_STR
+	"Configure BGP defaults\n"
+	"Activate ipv4-unicast for a peer by default\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./default/ipv4-unicast", NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -5798,18 +5857,17 @@ void instance_bestpath_bandwidth_cli_write(struct vty *vty, const struct lyd_nod
 	vty_out(vty, " bgp bestpath bandwidth %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
-/* 'bgp default <afi-safi>' (batch B5): ipv4-unicast is the sole static
- * default-on/no-inheritance leaf (bgp_vty.c's FOREACH_AFI_SAFI
- * special-cases AFI_IP/SAFI_UNICAST), so it renders the legacy negative
- * line iff explicitly false. Every other leaf here is positive-only,
- * matching bgp_config_write()'s "if (bgp->default_af[...])" arm for all
- * other AFI/SAFI pairs.
+/* 'bgp default ipv4-unicast' tri-state conversion: ipv4-unicast is the sole
+ * static default-on/no-inheritance leaf in the default/<afi-safi> family, so
+ * it renders unconditionally as enabled|disabled, matching the flag-based
+ * cli_show gating introduced in bb987956e9 (the callback only runs for
+ * explicitly configured leaves or under show_defaults).
  */
 void instance_default_ipv4_unicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " no bgp default ipv4-unicast\n");
+	vty_out(vty, " bgp default ipv4-unicast %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_default_ipv4_multicast_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -8620,6 +8678,10 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_bestpath_bw_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_default_afi_safi_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_ipv4_unicast_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_ipv4_unicast_cli_cmd);
+	install_element(BGP_NODE, &bgp_default_ipv4_unicast_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_default_ipv4_unicast_deprecated_cli_cmd);
 	install_element(BGP_NODE, &bgp_default_shutdown_cli_cmd);
 
 	install_element(BGP_NODE, &bgp_default_local_preference_cli_cmd);
