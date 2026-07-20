@@ -168,8 +168,8 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		/* M6 B4: instance-level l2vpn-evpn dup-addr-detection max-moves/
-		 * time/freeze; 'enabled' is printed by the still-native legacy
-		 * emitter (bgp_config_write_evpn_info), not through mgmtd. */
+		 * time/freeze, plus (B5) the 'enabled' bare toggle rendered by
+		 * the same cli_show. */
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection",
 			.cbs = {

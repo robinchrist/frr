@@ -4152,9 +4152,21 @@ disable the feature via configuration CLI. Once the feature is disabled under
 bgp vrf instance or MAC-VLAN interface is not configured, all the routes follow
 the same behavior of using same next-hop and RMAC values.
 
-.. clicmd:: advertise-pip [ip <addr> [mac <addr>]]
+.. clicmd:: advertise-pip <enabled|disabled>
 
-   Enables or disables advertise-pip feature, specify system-IP and/or system-MAC
+   Enables or disables the advertise-pip feature. `advertise-pip enabled`
+   is the default and will not be displayed as part of a `show run`. The
+   `disabled` form clears any configured system-IP/system-MAC along with
+   turning the feature off, since a disabled PIP cannot keep static
+   values.
+
+   The bare ``advertise-pip`` / ``no advertise-pip`` spelling (without the
+   explicit ``enabled``/``disabled`` token) is still accepted but
+   deprecated.
+
+.. clicmd:: advertise-pip ip <addr> [mac <addr>]
+
+   Enables advertise-pip and configures the system-IP and/or system-MAC
    parameters.
 
 EVPN advertise-svi-ip
@@ -4432,7 +4444,15 @@ been introduced for the express purpose of efficient ES failovers.
   On dataplanes that support layer3 nexthop groups the feature can be turned
   on via the following BGP config -
 
-.. clicmd:: use-es-l3nhg
+.. clicmd:: use-es-l3nhg <enabled|disabled>
+
+   `use-es-l3nhg enabled` turns the feature on and is the default; it will
+   not be displayed as part of a `show run`. `use-es-l3nhg disabled` turns
+   it off and is displayed.
+
+   The bare ``use-es-l3nhg`` / ``no use-es-l3nhg`` spelling (without the
+   explicit ``enabled``/``disabled`` token) is still accepted but
+   deprecated.
 
 - Local ES (MAC/Neigh) failover via ES-redirect.
   On dataplanes that do not have support for ES-redirect the feature can be

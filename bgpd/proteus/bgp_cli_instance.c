@@ -2034,49 +2034,102 @@ DEFPY_YANG(
 }
 
 /*
- * '[no] advertise-pip [ip A.B.C.D [mac ...]]': one atomic legacy
- * command over the advertise-pip container's enabled/ip/mac bundle
- * (B9a's must constraints bind ip to enabled and mac to ip).
- * - positive without ip: (re)enable only -- destroy enabled back to its
- *   true default, leave any static ip/mac alone (legacy's argc==1 early
- *   return kept them too);
- * - positive with ip [mac]: enable plus set the statics, an absent mac
- *   clearing a previously configured one (the reread container is the
- *   whole desired state);
- * - 'no advertise-pip': disable and clear the statics (enabled
- *   explicit false, ip/mac destroyed);
- * - 'no advertise-pip ip ... [mac ...]': legacy's remove-statics-only
- *   form -- destroy ip/mac, keep the enabled state, dropping the
- *   legacy value-match rejections per the established precedent.
+ * Tri-state 'advertise-pip <enabled|disabled>' over the advertise-pip
+ * container's enabled/ip/mac bundle (B9a's must constraints bind ip to
+ * enabled and mac to ip): enabled sets the leaf true and leaves any
+ * configured statics alone; disabled sets it false and destroys ip/mac,
+ * since the YANG must-constraint forbids a static ip on a disabled PIP.
+ * The no-form fully unsets the container back to its enabled-by-default
+ * state (enabled/ip/mac all destroyed).
  */
 DEFPY_YANG(
-	bgp_evpn_advertise_pip_ip_mac, bgp_evpn_advertise_pip_ip_mac_cli_cmd,
-	"[no$no] advertise-pip [ip A.B.C.D$ip [mac <X:X:X:X:X:X|X:X:X:X:X:X/M>$mac]]",
+	bgp_evpn_advertise_pip_mode, bgp_evpn_advertise_pip_mode_cli_cmd,
+	"advertise-pip <enabled|disabled>$mode",
+	"evpn system primary IP\n"
+	"Enable evpn system primary IP\n"
+	"Disable evpn system primary IP\n")
+{
+	if (strmatch(mode, "enabled")) {
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
+				      NB_OP_MODIFY, "true");
+	} else {
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
+				      NB_OP_MODIFY, "false");
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip",
+				      NB_OP_DESTROY, NULL);
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+				      NB_OP_DESTROY, NULL);
+	}
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_advertise_pip_mode, no_bgp_evpn_advertise_pip_mode_cli_cmd,
+	"no advertise-pip <enabled|disabled>$mode",
 	NO_STR
+	"evpn system primary IP\n"
+	"Enable evpn system primary IP\n"
+	"Disable evpn system primary IP\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled", NB_OP_DESTROY,
+			      NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Canonical positive args form: enable PIP and set its statics in one
+ * shot, an absent mac clearing a previously configured one (the reread
+ * container is the whole desired state). This carries forward the
+ * legacy atomic command's positive-with-ip branch, except enabled is
+ * now set explicitly true rather than destroyed back to its default. */
+DEFPY_YANG(
+	bgp_evpn_advertise_pip_ip, bgp_evpn_advertise_pip_ip_cli_cmd,
+	"advertise-pip ip A.B.C.D$ip [mac <X:X:X:X:X:X|X:X:X:X:X:X/M>$mac]",
 	"evpn system primary IP\n"
 	IP_STR
 	"ip address\n"
 	MAC_STR MAC_STR MAC_STR)
 {
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled", NB_OP_MODIFY,
+			      "true");
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip", NB_OP_MODIFY, ip_str);
+	if (mac_str)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+				      NB_OP_MODIFY, mac_str);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac",
+				      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare toggle: kept so configs persisted before advertise-pip
+ * grew the enabled|disabled grammar keep loading with their original
+ * meaning. Bare 'advertise-pip' destroyed enabled back to its true
+ * default without touching any configured statics (legacy's argc==1
+ * early return kept them too); bare 'no advertise-pip' persisted an
+ * explicit false and cleared the statics.
+ *
+ * The legacy grammar's ip/mac branches are split out below into their
+ * own deprecated command: merging them here would make this command's
+ * positive-with-ip spelling reach the exact same end state as the new
+ * canonical bgp_evpn_advertise_pip_ip_cli_cmd above, which the command
+ * graph merge cannot disambiguate (two DEFUNs terminating on the same
+ * token path).
+ */
+DEFPY_ATTR(
+	bgp_evpn_advertise_pip_ip_mac, bgp_evpn_advertise_pip_ip_mac_cli_cmd,
+	"[no$no] advertise-pip",
+	NO_STR
+	"evpn system primary IP\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
 	if (!no) {
 		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
 				      NB_OP_DESTROY, NULL);
-		if (ip_str) {
-			nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip",
-					      NB_OP_MODIFY, ip_str);
-			if (mac_str)
-				nb_cli_enqueue_change(vty,
-						      "./afi-safis/l2vpn-evpn/advertise-pip/mac",
-						      NB_OP_MODIFY, mac_str);
-			else
-				nb_cli_enqueue_change(vty,
-						      "./afi-safis/l2vpn-evpn/advertise-pip/mac",
-						      NB_OP_DESTROY, NULL);
-		}
 	} else {
-		if (!ip_str)
-			nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
-					      NB_OP_MODIFY, "false");
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/enabled",
+				      NB_OP_MODIFY, "false");
 		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac",
 				      NB_OP_DESTROY, NULL);
 		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip",
@@ -2086,26 +2139,80 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Bare 'dup-addr-detection' / 'no dup-addr-detection' enable toggle
- * (Tier-A-inverted 'enabled' leaf, default true): positive deletes back
- * to the default, negative writes an explicit false AND resets
- * max-moves/time/freeze to their defaults, exactly legacy's
- * no_dup_addr_detection_cmd ("Reset all parameters to default"). */
+/* Deprecated remove-statics-only alias: legacy's 'no advertise-pip ip
+ * ... [mac ...]' cleared only the configured statics, leaving the
+ * enabled state untouched. Split out from the atomic legacy command
+ * above for the same graph-merge reason. */
+DEFPY_ATTR(
+	no_bgp_evpn_advertise_pip_ip, no_bgp_evpn_advertise_pip_ip_cli_cmd,
+	"no advertise-pip ip A.B.C.D$ip [mac <X:X:X:X:X:X|X:X:X:X:X:X/M>$mac]",
+	NO_STR
+	"evpn system primary IP\n"
+	IP_STR
+	"ip address\n"
+	MAC_STR MAC_STR MAC_STR,
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/mac", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/advertise-pip/ip", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Tri-state 'dup-addr-detection <enabled|disabled>' bare toggle over the
+ * Tier-A 'enabled' leaf (default true). This is a pure toggle: unlike
+ * the deprecated bare 'no dup-addr-detection' below, disabling it does
+ * NOT reset max-moves/time/freeze, since those are independent
+ * sub-commands with their own DEFPYs. The no-form unsets the leaf back
+ * to its default. */
 DEFPY_YANG(
-	bgp_evpn_dup_addr_detection_enable, bgp_evpn_dup_addr_detection_enable_cli_cmd,
-	"dup-addr-detection",
-	"Duplicate address detection\n")
+	bgp_evpn_dup_addr_detection_mode, bgp_evpn_dup_addr_detection_mode_cli_cmd,
+	"dup-addr-detection <enabled|disabled>$mode",
+	"Duplicate address detection\n"
+	"Enable duplicate address detection\n"
+	"Disable duplicate address detection\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_MODIFY, strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_dup_addr_detection_mode, no_bgp_evpn_dup_addr_detection_mode_cli_cmd,
+	"no dup-addr-detection <enabled|disabled>$mode",
+	NO_STR
+	"Duplicate address detection\n"
+	"Enable duplicate address detection\n"
+	"Disable duplicate address detection\n")
 {
 	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
 			      NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-DEFPY_YANG(
+/* Deprecated bare 'dup-addr-detection' / 'no dup-addr-detection' enable
+ * toggle (Tier-A-inverted 'enabled' leaf, default true): positive
+ * deletes back to the default, negative writes an explicit false AND
+ * resets max-moves/time/freeze to their defaults, exactly legacy's
+ * no_dup_addr_detection_cmd ("Reset all parameters to default"). Kept
+ * unchanged so configs persisted before the enabled|disabled grammar
+ * keep loading with their original reset-all meaning. */
+DEFPY_ATTR(
+	bgp_evpn_dup_addr_detection_enable, bgp_evpn_dup_addr_detection_enable_cli_cmd,
+	"dup-addr-detection",
+	"Duplicate address detection\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
 	no_bgp_evpn_dup_addr_detection_enable, no_bgp_evpn_dup_addr_detection_enable_cli_cmd,
 	"no dup-addr-detection",
 	NO_STR
-	"Duplicate address detection\n")
+	"Duplicate address detection\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/dup-addr-detection/enabled",
 			      NB_OP_MODIFY, "false");
@@ -2118,13 +2225,43 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Tier A multihoming toggles (defaults added by B9a: use-es-l3nhg true,
- * the two disable-* leaves false). Legacy grammar kept verbatim. */
+/* Tri-state 'use-es-l3nhg <enabled|disabled>' (Tier A multihoming
+ * toggle, default added by B9a: use-es-l3nhg true). */
 DEFPY_YANG(
+	bgp_evpn_use_es_l3nhg_mode, bgp_evpn_use_es_l3nhg_mode_cli_cmd,
+	"use-es-l3nhg <enabled|disabled>$mode",
+	"use L3 nexthop group for host routes with ES destination\n"
+	"Enable L3 nexthop group for host routes with ES destination\n"
+	"Disable L3 nexthop group for host routes with ES destination\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_use_es_l3nhg_mode, no_bgp_evpn_use_es_l3nhg_mode_cli_cmd,
+	"no use-es-l3nhg <enabled|disabled>$mode",
+	NO_STR
+	"use L3 nexthop group for host routes with ES destination\n"
+	"Enable L3 nexthop group for host routes with ES destination\n"
+	"Disable L3 nexthop group for host routes with ES destination\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg", NB_OP_DESTROY,
+			      NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare '[no] use-es-l3nhg' alias: legacy grammar kept
+ * verbatim so persisted configs keep loading with identical meaning
+ * (positive destroys back to the true default, negative writes an
+ * explicit false). */
+DEFPY_ATTR(
 	bgp_evpn_use_es_l3nhg, bgp_evpn_use_es_l3nhg_cli_cmd,
 	"[no$no] use-es-l3nhg",
 	NO_STR
-	"use L3 nexthop group for host routes with ES destination\n")
+	"use L3 nexthop group for host routes with ES destination\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	if (no)
 		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/use-es-l3nhg",
@@ -5288,18 +5425,20 @@ void instance_evpn_default_originate_ipv6_cli_write(struct vty *vty, const struc
 		vty_out(vty, "  default-originate ipv6\n");
 }
 
-/* M6 batch B4 (max-moves/time/freeze) + B9b ('enabled'): reproduces
+/* M6 batch B4 (max-moves/time/freeze) + B9b/B5 ('enabled'): reproduces
  * bgp_config_write_evpn_info()'s retired dup-addr-detection lines
- * (bgp_evpn_vty.c) -- the negative bare toggle first, then the
- * value-bearing sub-forms.
+ * (bgp_evpn_vty.c) -- the bare toggle first, then the value-bearing
+ * sub-forms. Since the cli_show gate is flag-based, this callback only
+ * fires when something under the container is explicitly configured, so
+ * the bare toggle line is only rendered when 'enabled' itself is
+ * explicitly present.
  */
 void instance_evpn_dup_addr_detection_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						bool show_defaults)
 {
-	/* M6 B9b: the bare toggle's negative form, printed first exactly as
-	 * the retired native emitter did. */
-	if (!yang_dnode_get_bool(dnode, "enabled"))
-		vty_out(vty, "  no dup-addr-detection\n");
+	if (yang_dnode_exists(dnode, "enabled"))
+		vty_out(vty, "  dup-addr-detection %s\n",
+			yang_dnode_get_bool(dnode, "enabled") ? "enabled" : "disabled");
 
 	/* max-moves/time have no YANG default and are always set as a pair,
 	 * so presence alone means an explicit 'max-moves ... time ...'. */
@@ -5471,20 +5610,21 @@ void instance_evpn_advertise_unicast_cli_write(struct vty *vty, const struct lyd
 	vty_out(vty, "\n");
 }
 
-/* M6 batch B9b: '[no] advertise-pip [ip ... [mac ...]]' emitter.
- * Deliberate emission cleanup vs legacy: bgp_config_write_evpn_info()
- * printed a redundant bare '  advertise-pip' line for every VRF
- * instance sitting at the compiled default (enabled, no statics); under
- * the Tier A default "true" model the all-default state emits nothing
- * (this cli_show is not even reached then), and only an explicit 'no
- * advertise-pip' or a static ip/mac renders. The mac is printed from
- * its own configured leaf; legacy printed pip_rmac (the effective MAC,
- * equal to the static whenever one was configured -- same bytes). */
+/* M6 batch B9b/B5: 'advertise-pip <enabled|disabled>' / 'advertise-pip
+ * ip ... [mac ...]' emitter. Deliberate emission cleanup vs legacy:
+ * bgp_config_write_evpn_info() printed a redundant bare '  advertise-pip'
+ * line for every VRF instance sitting at the compiled default (enabled,
+ * no statics); under the Tier A default "true" model the all-default
+ * state emits nothing (this cli_show is not even reached then), and only
+ * an explicit disabled state or a static ip/mac renders. The mac is
+ * printed from its own configured leaf; legacy printed pip_rmac (the
+ * effective MAC, equal to the static whenever one was configured -- same
+ * bytes). */
 void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults)
 {
 	if (!yang_dnode_get_bool(dnode, "enabled")) {
-		vty_out(vty, "  no advertise-pip\n");
+		vty_out(vty, "  advertise-pip disabled\n");
 		return;
 	}
 
@@ -5493,27 +5633,27 @@ void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_nod
 		if (yang_dnode_exists(dnode, "mac"))
 			vty_out(vty, " mac %s", yang_dnode_get_string(dnode, "mac"));
 		vty_out(vty, "\n");
+	} else {
+		vty_out(vty, "  advertise-pip enabled\n");
 	}
 }
 
-/* M6 batch B9b: Tier A multihoming toggles -- value-checked shape,
+/* M6 batch B9b/B5: Tier A multihoming toggles -- value-checked shape,
  * printing whichever form differs from the (YANG, == compiled) default;
  * the at-default value is skipped by the DFS before this is called.
- * use-es-l3nhg (default on) renders either the bare or the 'no' form,
- * both single-negation. The two disable-* leaves (default off) only ever
- * render their bare disable form when set: the not-disabled state is the
- * default and emits nothing, so no 'no disable-...' double negation is
- * produced. Legacy did the same in practice -- its enabled default was
- * guarded off by the != DEF check -- and the 'no disable-...' spelling
- * stays parseable via the '[no] disable-ead-evi-*' grammar for unset. */
+ * use-es-l3nhg (default on) renders the tri-state enabled|disabled form.
+ * The two disable-* leaves (default off) only ever render their bare
+ * disable form when set: the not-disabled state is the default and
+ * emits nothing, so no 'no disable-...' double negation is produced.
+ * Legacy did the same in practice -- its enabled default was guarded off
+ * by the != DEF check -- and the 'no disable-...' spelling stays
+ * parseable via the '[no] disable-ead-evi-*' grammar for unset. */
 void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
 						      const struct lyd_node *dnode,
 						      bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  use-es-l3nhg\n");
-	else
-		vty_out(vty, "  no use-es-l3nhg\n");
+	vty_out(vty, "  use-es-l3nhg %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
@@ -8660,9 +8800,17 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_VNI_NODE, &no_bgp_evpn_vni_auto_rt_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_type5_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_type5_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_pip_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_advertise_pip_ip_mac_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_advertise_pip_ip_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_dup_addr_detection_enable_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_dup_addr_detection_enable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_use_es_l3nhg_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_disable_cli_cmd);
