@@ -281,6 +281,28 @@ DEFUN_YANG (no_match_evpn_default_route,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Parse one canonical decimal number (no sign, no leading zero) not
+ * bigger than 'max'; '*str' is the field, 'end' one past its last
+ * character. */
+static bool match_evpn_rd_decimal(const char *str, const char *end,
+				  uint64_t max, uint64_t *val)
+{
+	const char *p;
+
+	if (str == end || (*str == '0' && end - str > 1))
+		return false;
+	*val = 0;
+	for (p = str; p < end; p++) {
+		if (!isdigit((unsigned char)*p))
+			return false;
+		*val = *val * 10 + (uint64_t)(*p - '0');
+		if (*val > max)
+			return false;
+	}
+
+	return true;
+}
+
 DEFUN_YANG (match_evpn_rd,
 	    match_evpn_rd_cmd,
 	    "match evpn rd ASN:NN_OR_IP-ADDRESS:NN",
@@ -291,14 +313,87 @@ DEFUN_YANG (match_evpn_rd,
 {
 	const char *xpath =
 		"./match-condition[condition='frr-bgp-route-map:evpn-rd']";
-	char xpath_value[XPATH_MAXLEN];
+	const char *arg = argv[3]->arg;
+	const char *body = arg, *colon, *colon2;
+	char xpath_rd[XPATH_MAXLEN];
+	char xpath_value[XPATH_MAXLEN * 2];
+	char admin[INET_ADDRSTRLEN];
+	char number[32];
+	const char *fmt = NULL;
+	struct in_addr ip;
+	uint64_t aval, nval;
+	int etype = -1;
 
 	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
-	snprintf(
-		xpath_value, sizeof(xpath_value),
-		"%s/rmap-match-condition/frr-bgp-route-map:route-distinguisher",
-		xpath);
-	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, argv[3]->arg);
+	snprintf(xpath_rd, sizeof(xpath_rd),
+		 "%s/rmap-match-condition/frr-bgp-route-map:route-distinguisher",
+		 xpath);
+	/* Replace, not merge, whatever an earlier line left. */
+	nb_cli_enqueue_change(vty, xpath_rd, NB_OP_DESTROY, NULL);
+
+	/* Classify the value the way the daemon parses it: an
+	 * 'ADMIN:NN' pair whose type follows from the administrator's
+	 * syntax, optionally preceded by an explicit numeric type that
+	 * must agree with it. The explicit type is stripped here; any
+	 * other spelling travels through the raw fallback and keeps
+	 * its apply-time fate. */
+	colon = strchr(body, ':');
+	colon2 = colon ? strchr(colon + 1, ':') : NULL;
+	if (colon2) {
+		if ((arg[0] == '0' || arg[0] == '1' || arg[0] == '2') &&
+		    arg[1] == ':') {
+			etype = arg[0] - '0';
+			body = arg + 2;
+			colon = colon2;
+		} else {
+			colon = NULL;
+		}
+	}
+
+	if (colon && (size_t)(colon - body) < sizeof(admin)) {
+		memcpy(admin, body, colon - body);
+		admin[colon - body] = '\0';
+
+		/* A plain-decimal administrator is an AS number; zero
+		 * is not one to the daemon (it reads a lone '0' as the
+		 * IPv4 address 0.0.0.0), so it stays raw. */
+		if (match_evpn_rd_decimal(body, colon, UINT32_MAX, &aval) &&
+		    aval >= 1) {
+			if (aval <= UINT16_MAX &&
+			    match_evpn_rd_decimal(colon + 1,
+						  body + strlen(body),
+						  UINT32_MAX, &nval) &&
+			    (etype == -1 || etype == 0))
+				fmt = "as2";
+			else if (aval > UINT16_MAX &&
+				 match_evpn_rd_decimal(colon + 1,
+						       body + strlen(body),
+						       UINT16_MAX, &nval) &&
+				 (etype == -1 || etype == 2))
+				fmt = "as4";
+		} else if (inet_pton(AF_INET, admin, &ip) == 1 &&
+			   match_evpn_rd_decimal(colon + 1,
+						 body + strlen(body),
+						 UINT16_MAX, &nval) &&
+			   (etype == -1 || etype == 1)) {
+			fmt = "ipv4";
+		}
+	}
+
+	if (fmt) {
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/%s/administrator", xpath_rd, fmt);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, admin);
+		snprintf(number, sizeof(number), "%" PRIu64, nval);
+		snprintf(xpath_value, sizeof(xpath_value),
+			 "%s/%s/assigned-number", xpath_rd, fmt);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, number);
+	} else {
+		/* Kept verbatim; the apply-time compile keeps the old
+		 * accept-or-reject behavior for it. */
+		snprintf(xpath_value, sizeof(xpath_value), "%s/raw", xpath_rd);
+		nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, arg);
+	}
 
 	return nb_cli_apply_changes(vty, NULL);
 }

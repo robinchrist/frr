@@ -595,6 +595,33 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Render a structured route distinguisher (frr-bgp-route-map's
+ * match-condition route-distinguisher container) as the legacy
+ * 'match evpn rd' line: the three typed encodings all print as
+ * '<administrator>:<assigned-number>', the raw fallback verbatim. */
+static void route_map_evpn_rd_show(struct vty *vty,
+				   const struct lyd_node *container)
+{
+	static const char *const pairs[] = {"as2", "ipv4", "as4"};
+	char xp[64];
+	unsigned int i;
+
+	for (i = 0; i < array_size(pairs); i++) {
+		snprintf(xp, sizeof(xp), "%s/administrator", pairs[i]);
+		if (!yang_dnode_exists(container, xp))
+			continue;
+		vty_out(vty, " match evpn rd %s",
+			yang_dnode_get_string(container, "%s", xp));
+		snprintf(xp, sizeof(xp), "%s/assigned-number", pairs[i]);
+		vty_out(vty, ":%s\n",
+			yang_dnode_get_string(container, "%s", xp));
+		return;
+	}
+	if (yang_dnode_exists(container, "raw"))
+		vty_out(vty, " match evpn rd %s\n",
+			yang_dnode_get_string(container, "raw"));
+}
+
 void route_map_condition_show(struct vty *vty, const struct lyd_node *dnode,
 			      bool show_defaults)
 {
@@ -797,10 +824,11 @@ void route_map_condition_show(struct vty *vty, const struct lyd_node *dnode,
 				dnode,
 				"./rmap-match-condition/frr-bgp-route-map:evpn-vni"));
 	} else if (IS_MATCH_EVPN_RD(condition)) {
-		vty_out(vty, " match evpn rd %s\n",
-			yang_dnode_get_string(
-				dnode,
-				"./rmap-match-condition/frr-bgp-route-map:route-distinguisher"));
+		ln = yang_dnode_get(
+			dnode,
+			"rmap-match-condition/frr-bgp-route-map:route-distinguisher");
+		if (ln)
+			route_map_evpn_rd_show(vty, ln);
 	} else if (IS_MATCH_MAC_LIST(condition)) {
 		vty_out(vty, " match mac address %s\n",
 			yang_dnode_get_string(

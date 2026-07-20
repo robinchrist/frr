@@ -168,8 +168,80 @@ const struct frr_yang_module_info frr_bgp_route_map_info = {
 		{
 			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher",
 			.cbs = {
-				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_modify,
+				.create = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_create,
 				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_destroy,
+				.apply_finish = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_finish,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as2",
+			.cbs = {
+				.create = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as2_create,
+				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as2_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as2/administrator",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as2/assigned-number",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/ipv4",
+			.cbs = {
+				.create = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_ipv4_create,
+				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_ipv4_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/ipv4/administrator",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/ipv4/assigned-number",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as4",
+			.cbs = {
+				.create = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as4_create,
+				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as4_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as4/administrator",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/as4/assigned-number",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/mac",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher/raw",
+			.cbs = {
+				.modify = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify,
+				.destroy = lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_destroy,
 			}
 		},
 		{

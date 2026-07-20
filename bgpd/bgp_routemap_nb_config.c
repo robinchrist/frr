@@ -1275,38 +1275,117 @@ lib_route_map_entry_match_condition_rmap_match_condition_evpn_route_type_destroy
  * XPath: /frr-route-map:lib/route-map/entry/match-condition/rmap-match-condition/frr-bgp-route-map:route-distinguisher
  */
 int
-lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_modify(
-	struct nb_cb_modify_args *args)
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+void
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_finish(
+	struct nb_cb_apply_finish_args *args)
 {
 	struct routemap_hook_context *rhc;
-	const char *rd;
+	char rd[BUFSIZ];
 	enum rmap_compile_rets ret;
 
-	switch (args->event) {
-	case NB_EV_VALIDATE:
-	case NB_EV_PREPARE:
-	case NB_EV_ABORT:
-		break;
-	case NB_EV_APPLY:
-		/* Add configuration. */
-		rhc = nb_running_get_entry(args->dnode, NULL, true);
-		rd = yang_dnode_get_string(args->dnode, NULL);
+	/* Rebuild the exact two-field string the daemon parses; the
+	 * type is implicit in the administrator's syntax. */
+	if (yang_dnode_exists(args->dnode, "as2"))
+		snprintf(rd, sizeof(rd), "%s:%s",
+			 yang_dnode_get_string(args->dnode,
+					       "as2/administrator"),
+			 yang_dnode_get_string(args->dnode,
+					       "as2/assigned-number"));
+	else if (yang_dnode_exists(args->dnode, "ipv4"))
+		snprintf(rd, sizeof(rd), "%s:%s",
+			 yang_dnode_get_string(args->dnode,
+					       "ipv4/administrator"),
+			 yang_dnode_get_string(args->dnode,
+					       "ipv4/assigned-number"));
+	else if (yang_dnode_exists(args->dnode, "as4"))
+		snprintf(rd, sizeof(rd), "%s:%s",
+			 yang_dnode_get_string(args->dnode,
+					       "as4/administrator"),
+			 yang_dnode_get_string(args->dnode,
+					       "as4/assigned-number"));
+	else if (yang_dnode_exists(args->dnode, "raw"))
+		snprintf(rd, sizeof(rd), "%s",
+			 yang_dnode_get_string(args->dnode, "raw"));
+	else
+		/* The mac case is blocked by the model and an empty
+		 * container carries nothing to match on. */
+		return;
 
-		/* Set destroy information. */
-		rhc->rhc_mhook = bgp_route_match_delete;
-		rhc->rhc_rule = "evpn rd";
-		rhc->rhc_event = RMAP_EVENT_MATCH_DELETED;
+	/* Add configuration. */
+	rhc = nb_running_get_entry(args->dnode, NULL, true);
 
-		ret = bgp_route_match_add(rhc->rhc_rmi, "evpn rd", rd,
-				RMAP_EVENT_MATCH_ADDED,
-				args->errmsg, args->errmsg_len);
+	/* Set destroy information. */
+	rhc->rhc_mhook = bgp_route_match_delete;
+	rhc->rhc_rule = "evpn rd";
+	rhc->rhc_event = RMAP_EVENT_MATCH_DELETED;
 
-		if (ret != RMAP_COMPILE_SUCCESS) {
-			rhc->rhc_mhook = NULL;
-			return NB_ERR_INCONSISTENCY;
-		}
-	}
+	ret = bgp_route_match_add(rhc->rhc_rmi, "evpn rd", rd,
+				  RMAP_EVENT_MATCH_ADDED, args->errmsg,
+				  args->errmsg_len);
 
+	if (ret != RMAP_COMPILE_SUCCESS)
+		rhc->rhc_mhook = NULL;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as2_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as2_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_ipv4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_ipv4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as4_create(
+	struct nb_cb_create_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_as4_destroy(
+	struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_modify(
+	struct nb_cb_modify_args *args)
+{
+	return NB_OK;
+}
+
+int
+lib_route_map_entry_match_condition_rmap_match_condition_route_distinguisher_field_destroy(
+	struct nb_cb_destroy_args *args)
+{
 	return NB_OK;
 }
 
