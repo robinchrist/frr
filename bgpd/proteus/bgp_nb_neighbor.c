@@ -29,6 +29,7 @@
 #include "bgpd/bgp_packet.h"
 #include "bgpd/bgp_addpath.h"
 #include "bgpd/bgp_bfd.h"
+#include "bgpd/bgp_network.h"
 #include "bgpd/proteus/bgp_nb_local.h"
 
 #include "lib/bfd.h"
@@ -885,10 +886,24 @@ int instance_neighbor_passive_modify(struct nb_cb_modify_args *args)
 	if (!peer)
 		return NB_OK;
 
-	if (yang_dnode_get_bool(args->dnode, NULL))
+	if (yang_dnode_get_bool(args->dnode, NULL)) {
 		peer_flag_set(peer, PEER_FLAG_PASSIVE);
-	else
+
+		/* A configured tcp-mss is applied to the shared listener
+		 * socket only for passive peers, and only when the peer
+		 * already carries PEER_FLAG_PASSIVE at the time
+		 * bgp_tcp_mss_set() runs (bgp_network.c). Legacy config
+		 * order puts 'neighbor X passive' before 'neighbor X
+		 * tcp-mss N', but the northbound applies leaves in schema
+		 * order, where tcp-mss precedes passive, so the tcp-mss
+		 * APPLY ran before this flag was set and left the listener
+		 * MSS at its default. Re-apply here now that passive is set
+		 * (bgp_tcp_mss_passive). */
+		if (CHECK_FLAG(peer->flags, PEER_FLAG_TCP_MSS) && peer->tcp_mss)
+			bgp_tcp_mss_set(peer);
+	} else {
 		peer_flag_unset(peer, PEER_FLAG_PASSIVE);
+	}
 
 	return NB_OK;
 }
