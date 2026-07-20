@@ -171,6 +171,31 @@ EXPECTED_R2_IPV4_BASELINE = {
 
 
 def _ensure_baseline(tgen: Topogen):
+    # Fully reset any outbound policy that earlier tests attach to R1's EVPN
+    # type-5 advertisement before checking convergence. In particular
+    # test_bgp_evpn_rt5_addpath_route_map attaches 'route-map set-pref' (which
+    # applies 'set local-pref 50' to the 10.0.0.0/gateway-ip path) via
+    # 'advertise ipv4 unicast gateway-ip route-map set-pref' and, in full-suite
+    # order, leaves that local-pref skew in place. It makes the 10.0.0.2 path
+    # win on Local Pref, so test_bgp_evpn_rt5_addpath_disable_addpath_rx (which
+    # expects the lower-IP 10.0.0.0 path to win once addpath-rx is disabled)
+    # fails. Toggle the advertisement off/on to drop any attached route-map and
+    # delete the leftover route-map definitions, restoring the topology
+    # baseline regardless of which earlier test ran.
+    tgen.gears["r1"].vtysh_cmd(
+        """
+        configure terminal
+        router bgp 64001 vrf vrf100
+         address-family l2vpn evpn
+          no advertise ipv4 unicast gateway-ip
+          advertise ipv4 unicast gateway-ip
+         exit-address-family
+        exit
+        no route-map set-pref
+        no route-map drop-c2
+        """
+    )
+
     logger.info("Check IPv4 routes on R2")
     expected = EXPECTED_R2_IPV4_BASELINE
     f = _converge_fn(
