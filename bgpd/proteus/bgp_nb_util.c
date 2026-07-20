@@ -7506,7 +7506,16 @@ static void bgp_nb_af_vpn_rt_apply(const struct lyd_node *dnode, afi_t afi,
 			ecom = ecommunity_new();
 			bgp->vpn_policy[afi].rtlist[dir] = ecom;
 		}
-		ecommunity_add_val(ecom, eval, true, false);
+		/* unique=false, exactly as ecommunity_str2com() builds an RT
+		 * set for the legacy 'rt vpn ...' path. unique=true is wrong
+		 * here: its dedup only compares the 2-byte type/subtype header,
+		 * so a second route-target of the same encoding (e.g. two
+		 * A.B.C.D:NN or two AS:NN RTs) collides with the first on the
+		 * header alone and is silently dropped -- leaving the rtlist
+		 * with a single RT and breaking multi-RT import/export
+		 * intersection. ecommunity_add_val() still skips genuine
+		 * whole-value duplicates. */
+		ecommunity_add_val(ecom, eval, false, false);
 	}
 
 	vpn_leak_postchange(dir, afi, bgp_get_default(), bgp);
