@@ -4322,11 +4322,24 @@ DEFPY_ATTR(
  * keep the legacy neighbor_activate DEFUN (bgp_vty.c) -- proteus models no
  * per-AF surface for them.
  *
- * 'neighbor X activate' -> activate=true, 'no neighbor X activate' ->
- * activate=false (both MODIFY: legacy 'no activate' calls peer_deactivate(),
- * an explicit deactivation, not a revert to the default). An unset leaf means
- * "follow the per-AF default activation" (bgp_nb_af_activate_default(),
- * bgp_nb_util.c).
+ * The activate leaf is tri-state: true (activated), false (explicitly
+ * deactivated), or absent (follow the per-AF default activation,
+ * bgp_nb_af_activate_default(), bgp_nb_util.c). 'activate' and 'disable'
+ * are a verb pair on that leaf: 'neighbor X activate' -> MODIFY "true",
+ * 'neighbor X disable' -> MODIFY "false" (explicit deactivation, matching
+ * legacy peer_deactivate(), not a revert to the default). 'no neighbor X
+ * disable' -> DESTROY, clearing the explicit off back to inherit/default.
+ *
+ * The legacy spelling 'no neighbor X activate' also meant explicit
+ * deactivation (MODIFY "false"), so it is retained as a deprecated alias
+ * with that exact meaning; saved configs keep loading identically. Note the
+ * asymmetry: 'no neighbor X activate' does NOT destroy. The only destroy
+ * path is 'no neighbor X disable'. The two 'no ... activate' / 'no ...
+ * disable' spellings carry different meanings on purpose, and 'no neighbor
+ * X activate' cannot also be installed as a canonical destroy because its
+ * token path is already claimed by the deprecated alias (two DEFPYs sharing
+ * an identical token path merge silently in the command graph and match
+ * nondeterministically).
  */
 static int bgp_cli_neighbor_activate(struct vty *vty, const char *peer, const char *value)
 {
@@ -4344,7 +4357,10 @@ static int bgp_cli_neighbor_activate(struct vty *vty, const char *peer, const ch
 		return CMD_WARNING_CONFIG_FAILED;
 
 	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/activate", xpath, container);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, value);
+	if (value)
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, value);
+	else
+		nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
 
@@ -4364,24 +4380,57 @@ DEFPY_YANG(
 }
 
 DEFPY_YANG(
+	neighbor_disable, neighbor_disable_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Deactivate the Address Family for this Neighbor\n")
+{
+	return bgp_cli_neighbor_activate(vty, peer, "false");
+}
+
+DEFPY_YANG(
+	no_neighbor_disable, no_neighbor_disable_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Deactivate the Address Family for this Neighbor\n")
+{
+	return bgp_cli_neighbor_activate(vty, peer, NULL);
+}
+
+/* Deprecated alias: 'no neighbor X activate' meant explicit deactivation
+ * (MODIFY "false"), the same as the canonical 'neighbor X disable'. It is
+ * kept with that unchanged meaning so pre-existing saved configs load
+ * identically. It deliberately does NOT destroy; the canonical destroy path
+ * is 'no neighbor X disable'. This alias owns the 'no neighbor X activate'
+ * token path, which is why no canonical destroy is installed on that string
+ * (a duplicate token path would merge silently in the command graph). */
+DEFPY_ATTR(
 	no_neighbor_activate, no_neighbor_activate_cli_cmd,
 	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer activate",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
-	"Enable the Address Family for this Neighbor\n")
+	"Enable the Address Family for this Neighbor\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	return bgp_cli_neighbor_activate(vty, peer, "false");
 }
 
 /* Shared activate emitter for both neighbor and peer-group afi-safis/<af>/
- * activate. Reproduces bgp_config_write_peer_af()'s (bgp_vty.c) two-space
- * '  neighbor <addr> activate' / '  no neighbor <addr> activate' inside the
- * address-family block opened by afi_safi_cli_write() (M5 B0). The stored
- * value is authoritative: true -> activate, false -> no activate; a peer or
+ * activate. Emits the two-space '  neighbor <addr> activate' / '  neighbor
+ * <addr> disable' inside the address-family block opened by
+ * afi_safi_cli_write() (M5 B0). The stored value is authoritative and the
+ * two forms are a verb pair: true -> activate, false -> disable; a peer or
  * group that follows its default activation has no leaf and emits nothing.
- * The display token is the neighbor address key (an IP or an interface name,
- * matching legacy's conf_if/host) or the peer-group name. */
+ * The false form emits the canonical 'disable', not the deprecated 'no
+ * neighbor X activate' alias that also parses to false. The display token is
+ * the neighbor address key (an IP or an interface name, matching legacy's
+ * conf_if/host) or the peer-group name. Shared by every modeled AF including
+ * flowspec/unreachability/link-state, whose activate leaf defaults to false:
+ * an explicitly-set false round-trips and emits '  neighbor X disable'. */
 void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				    bool show_defaults)
 {
@@ -4396,7 +4445,7 @@ void neighbor_af_activate_cli_write(struct vty *vty, const struct lyd_node *dnod
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "  neighbor %s activate\n", addr);
 	else
-		vty_out(vty, "  no neighbor %s activate\n", addr);
+		vty_out(vty, "  neighbor %s disable\n", addr);
 }
 
 /*
@@ -6707,6 +6756,29 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV6_NODE, &neighbor_activate_cli_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_activate_cli_cmd);
 
+	install_element(BGP_IPV4_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_disable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_disable_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_disable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_neighbor_disable_cli_cmd);
+
+	/* 'no neighbor X activate' remains installed as a deprecated alias for
+	 * 'neighbor X disable' (explicit deactivation, MODIFY false), NOT as a
+	 * destroy: the canonical destroy path is 'no neighbor X disable'. */
 	install_element(BGP_IPV4_NODE, &no_neighbor_activate_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &no_neighbor_activate_cli_cmd);
 	install_element(BGP_IPV4L_NODE, &no_neighbor_activate_cli_cmd);

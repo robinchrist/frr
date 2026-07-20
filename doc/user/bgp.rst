@@ -1301,6 +1301,24 @@ IPv6 Support
    Using the ``bgp default ipv6-unicast`` configuration, IPv6 unicast
    address family is enabled by default for all new neighbors.
 
+.. clicmd:: neighbor PEER disable
+
+   This is the verb-form counterpart of ``neighbor PEER activate``: it
+   explicitly deactivates the address family for the neighbor, overriding
+   any inherited activation (for example the default IPv4 unicast activation,
+   or a peer-group's activation). It is the equivalent of the legacy
+   ``no neighbor PEER activate`` spelling.
+
+   Use ``no neighbor PEER disable`` to remove the explicit deactivation and
+   return the address family to its inherited or default activation state.
+
+   The legacy ``no neighbor PEER activate`` spelling remains accepted as a
+   deprecated alias for ``neighbor PEER disable`` (that is, an explicit
+   deactivation, not a return to the default). It deliberately does not
+   behave like ``no neighbor PEER disable``: the two ``no`` forms are not
+   interchangeable, and the only spelling that returns the family to its
+   inherited or default state is ``no neighbor PEER disable``.
+
 .. clicmd:: nexthop prefer-global
 
    This command is used within an IPv6 address family configuration (IPv6
