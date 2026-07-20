@@ -283,6 +283,17 @@ int instance_neighbor_peer_group_modify(struct nb_cb_modify_args *args)
 			return NB_ERR_RESOURCE;
 		}
 
+		/* peer_group_bind() just inherited the group's per-AF
+		 * activation, deactivating any family the group is inactive
+		 * in. If this same neighbor also carries an explicit
+		 * 'activate' leaf (a separate CLI line, hence a separate
+		 * commit that may land before this bind), that explicit
+		 * tri-state override must win regardless of commit order:
+		 * re-assert every activate leaf present in the datastore.
+		 * peer was re-looked-up above, or was created by the bind. */
+		bgp_nb_neighbor_reassert_activations(bgp_nb_neighbor_lookup(args->dnode),
+						     yang_dnode_get_parent(args->dnode, "neighbor"));
+
 		/* Binding may just have created the instance's first peer;
 		 * make sure the (per-VRF) listener exists - the retired
 		 * native bind DEFUN did this via peer_remote_as_vty(). */

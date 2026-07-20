@@ -580,6 +580,64 @@ static int bgp_nb_af_activate_default(struct peer *conf, afi_t afi, safi_t safi)
 	return bgp_nb_af_activate_set(conf, baseline, afi, safi);
 }
 
+/*
+ * Re-assert a neighbor's explicit per-AF 'activate' leaves after a
+ * peer-group bind. A bound member inherits the group's activation
+ * (peer_group_bind(), bgpd.c), and its FOREACH_AFI_SAFI loop DEACTIVATES
+ * any family the group is not active in -- even one the member itself just
+ * activated with an explicit 'neighbor X activate' leaf. Because northbound
+ * commits each CLI line separately (nb_cli_apply_changes()), the bind and
+ * the per-AF activate reach the datastore in whichever order the emitter
+ * wrote them; when the bind lands last it silently clobbers the earlier
+ * explicit activation (bgp_ipv4_over_ipv6 test_bgp_peer_group_p1).
+ *
+ * The modeled 'activate' leaf is a tri-state: its presence means "explicit
+ * override", so it must win over group inheritance regardless of apply
+ * order. After the bind we therefore walk the member's afi-safis subtree
+ * and re-apply every activate leaf actually present in the datastore. A
+ * leaf that is absent leaves the just-inherited group state untouched.
+ */
+static const struct {
+	const char *container;
+	afi_t afi;
+	safi_t safi;
+} bgp_nb_neighbor_af_containers[] = {
+	{ "ipv4-unicast", AFI_IP, SAFI_UNICAST },
+	{ "ipv4-multicast", AFI_IP, SAFI_MULTICAST },
+	{ "ipv4-labeled-unicast", AFI_IP, SAFI_LABELED_UNICAST },
+	{ "ipv4-vpn", AFI_IP, SAFI_MPLS_VPN },
+	{ "ipv4-flowspec", AFI_IP, SAFI_FLOWSPEC },
+	{ "ipv4-unreachability", AFI_IP, SAFI_UNREACH },
+	{ "ipv6-unicast", AFI_IP6, SAFI_UNICAST },
+	{ "ipv6-multicast", AFI_IP6, SAFI_MULTICAST },
+	{ "ipv6-labeled-unicast", AFI_IP6, SAFI_LABELED_UNICAST },
+	{ "ipv6-vpn", AFI_IP6, SAFI_MPLS_VPN },
+	{ "ipv6-flowspec", AFI_IP6, SAFI_FLOWSPEC },
+	{ "ipv6-unreachability", AFI_IP6, SAFI_UNREACH },
+	{ "l2vpn-evpn", AFI_L2VPN, SAFI_EVPN },
+};
+
+void bgp_nb_neighbor_reassert_activations(struct peer *peer, const struct lyd_node *nbr_dnode)
+{
+	size_t i;
+
+	if (!peer)
+		return;
+
+	for (i = 0; i < array_size(bgp_nb_neighbor_af_containers); i++) {
+		const char *container = bgp_nb_neighbor_af_containers[i].container;
+
+		if (!yang_dnode_existsf(nbr_dnode, "./afi-safis/%s/activate", container))
+			continue;
+
+		bgp_nb_af_activate_set(peer,
+				       yang_dnode_get_bool(nbr_dnode, "./afi-safis/%s/activate",
+							   container),
+				       bgp_nb_neighbor_af_containers[i].afi,
+				       bgp_nb_neighbor_af_containers[i].safi);
+	}
+}
+
 int bgp_nb_neighbor_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi)
 {
 	switch (args->event) {

@@ -43,6 +43,7 @@ void bgp_nb_instance_update_delay_apply(struct bgp *bgp, uint16_t delay,
 					       uint16_t establish_wait);
 int bgp_nb_local_as_validate(const struct lyd_node *dnode, char *errmsg, size_t errmsg_len);
 struct peer *bgp_nb_neighbor_lookup(const struct lyd_node *dnode);
+void bgp_nb_neighbor_reassert_activations(struct peer *peer, const struct lyd_node *nbr_dnode);
 int bgp_nb_neighbor_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_neighbor_af_activate_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_activate_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
