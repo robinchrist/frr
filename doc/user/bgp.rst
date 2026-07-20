@@ -3662,13 +3662,17 @@ address-family:
    Specifies an optional route-map to be applied to routes imported using the
    ``import vrf VRFNAME`` shortcut syntax.
 
-.. clicmd:: bgp retain route-target all
+.. clicmd:: bgp retain route-target all <enabled|disabled>
 
 It is possible to retain or not VPN prefixes that are not imported by local
 VRF configuration. This can be done via the following command in the context
-of the global VPNv4/VPNv6 family. This command defaults to on and is not
-displayed.
-The `no bgp retain route-target all` form of the command is displayed.
+of the global VPNv4/VPNv6 family. `bgp retain route-target all enabled` is
+the default and is not displayed as part of a `show run`. The `disabled`
+form of the command turns off this retention and is displayed.
+
+The bare ``bgp retain route-target all`` / ``no bgp retain route-target
+all`` spelling (without the explicit ``enabled``/``disabled`` token) is
+still accepted but deprecated.
 
 .. clicmd:: neighbor <A.B.C.D|X:X::X:X|WORD> soo EXTCOMMUNITY
 
@@ -3725,14 +3729,17 @@ Note: A VRF can have at most one L3 service enabled simultaneously.
    there are no other specific options, then the segment-routing-header is removed,
    and only the IPv6 header is appended to the original packet.
 
-.. clicmd:: srv6-only
+.. clicmd:: srv6-only <enabled|disabled>
 
    By default, if any SRv6 locator is configured, BGP assumes exported L3VPN updates
    rely on an SRv6 dataplane. Consequently, any BGP update without an SRv6 prefix SID
-   attribute will not be considered as valid. Use the ``no srv6-only`` command under
+   attribute will not be considered as valid. Use the ``srv6-only disabled`` command under
    the ``segment-routing srv6`` node of the instance where the BGP updates originate:
    this command will also consider BGP updates with no srv6 options, thus making possible
    to have both MPLS and SRv6 updates.
+
+   The bare ``srv6-only`` / ``no srv6-only`` spelling (without the explicit
+   ``enabled``/``disabled`` token) is still accepted but deprecated.
 
 SRv6 SID reachability for L3 service
 ------------------------------------

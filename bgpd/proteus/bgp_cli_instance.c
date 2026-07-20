@@ -357,12 +357,41 @@ DEFPY_YANG(
 
 DEFPY_YANG(
 	bgp_srv6_only, bgp_srv6_only_cli_cmd,
+	"srv6-only <enabled|disabled>$mode",
+	"Only allow SRv6 and disallow MPLS routes\n"
+	"Enable SRv6-only, disallowing MPLS routes\n"
+	"Disable SRv6-only, allowing MPLS routes\n")
+{
+	nb_cli_enqueue_change(vty, "./srv6-only", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_srv6_only, no_bgp_srv6_only_cli_cmd,
+	"no srv6-only <enabled|disabled>$mode",
+	NO_STR
+	"Only allow SRv6 and disallow MPLS routes\n"
+	"Enable SRv6-only, disallowing MPLS routes\n"
+	"Disable SRv6-only, allowing MPLS routes\n")
+{
+	nb_cli_enqueue_change(vty, "./srv6-only", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare alias: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'srv6-only' meant "on" via a destroy back to the true default;
+ * bare 'no srv6-only' persisted an explicit "false", so the alias handler
+ * body is unchanged from the legacy DEFPY.
+ */
+DEFPY_ATTR(
+	bgp_srv6_only_deprecated, bgp_srv6_only_deprecated_cli_cmd,
 	"[no] srv6-only",
 	NO_STR
-	"Only allow SRv6 and disallow MPLS routes\n")
+	"Only allow SRv6 and disallow MPLS routes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
-	/* Tier A default-on: 'no' writes an explicit false, the positive
-	 * form destroys back to the true default. */
 	if (no)
 		nb_cli_enqueue_change(vty, "./srv6-only", NB_OP_MODIFY, "false");
 	else
@@ -413,8 +442,7 @@ void instance_srv6_encap_behavior_cli_write(struct vty *vty, const struct lyd_no
 
 void instance_srv6_only_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  no srv6-only\n");
+	vty_out(vty, "  srv6-only %s\n", yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /* 'sid vpn per-vrf export' (M8.5 B-srv6-pervrf): presence container +
@@ -8004,21 +8032,89 @@ void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node
 	vty_out(vty, "\n");
 }
 
-/* M7: '[no] bgp retain route-target all' (af-retain-route-target in
- * proteus-bgp.yang), ipv4-vpn/ipv6-vpn only. Static default-on boolean,
- * same shape as the deprecated bare fast-external-failover alias at the AF
- * level: the positive form destroys back to the true default, 'no'
- * modifies an explicit false, and only the 'no' form is ever rendered
+/* M7: 'bgp retain route-target all <enabled|disabled>' (af-retain-route-target
+ * in proteus-bgp.yang), ipv4-vpn/ipv6-vpn only. Static default-on boolean:
+ * the canonical positive form modifies "true"/"false" per $mode, the
+ * canonical negative form destroys back to the true default (mode tokens
+ * accepted, ignored), and only the disabled state is ever rendered
  * (retired bgp_retain_route_target / bgp_vpn_config_write, bgp_vty.c). */
 DEFPY_YANG(
 	instance_afi_safis_retain_route_target,
 	instance_afi_safis_retain_route_target_cli_cmd,
+	"bgp retain route-target all <enabled|disabled>$mode",
+	BGP_STR
+	"Retain BGP updates\n"
+	"Retain BGP updates based on route-target values\n"
+	"Retain all BGP updates\n"
+	"Enable retaining all BGP updates\n"
+	"Disable retaining all BGP updates\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/retain-route-target-all", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_instance_afi_safis_retain_route_target,
+	no_instance_afi_safis_retain_route_target_cli_cmd,
+	"no bgp retain route-target all <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Retain BGP updates\n"
+	"Retain BGP updates based on route-target values\n"
+	"Retain all BGP updates\n"
+	"Enable retaining all BGP updates\n"
+	"Disable retaining all BGP updates\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/retain-route-target-all", VTY_CURR_XPATH,
+			   container);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	XFREE(MTYPE_TMP, xpath);
+
+	return ret;
+}
+
+/* Deprecated bare alias: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp retain route-target all' meant "on" via a destroy back to the
+ * true default; bare 'no bgp retain route-target all' persisted an
+ * explicit "false", so the alias handler body is unchanged from the
+ * legacy DEFPY.
+ */
+DEFPY_ATTR(
+	instance_afi_safis_retain_route_target_deprecated,
+	instance_afi_safis_retain_route_target_deprecated_cli_cmd,
 	"[no] bgp retain route-target all",
 	NO_STR
 	BGP_STR
 	"Retain BGP updates\n"
 	"Retain BGP updates based on route-target values\n"
-	"Retain all BGP updates\n")
+	"Retain all BGP updates\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	const char *container = bgp_afi_safi_container_name(vty->node);
 	char *xpath;
@@ -8041,8 +8137,8 @@ DEFPY_YANG(
 void afi_safis_retain_route_target_all_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  no bgp retain route-target all\n");
+	vty_out(vty, "  bgp retain route-target all %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /*
@@ -8454,6 +8550,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_SRV6_NODE, &bgp_srv6_locator_cli_cmd);
 	install_element(BGP_SRV6_NODE, &no_bgp_srv6_locator_cli_cmd);
 	install_element(BGP_SRV6_NODE, &bgp_srv6_only_cli_cmd);
+	install_element(BGP_SRV6_NODE, &no_bgp_srv6_only_cli_cmd);
+	install_element(BGP_SRV6_NODE, &bgp_srv6_only_deprecated_cli_cmd);
 	install_element(BGP_SRV6_NODE, &bgp_srv6_encap_behavior_cli_cmd);
 	install_element(BGP_NODE, &bgp_sid_vpn_export_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_sid_vpn_export_cli_cmd);
@@ -8853,6 +8951,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_dampening_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_vpn_network_cli_cmd);
 	install_element(BGP_VPNV4_NODE, &instance_afi_safis_retain_route_target_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_instance_afi_safis_retain_route_target_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &instance_afi_safis_retain_route_target_deprecated_cli_cmd);
 
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_maximum_paths_cli_cmd);
 	install_element(BGP_IPV6_NODE, &instance_afi_safis_no_maximum_paths_cli_cmd);
@@ -8883,6 +8983,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_dampening_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_vpn_network_ipv6_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &instance_afi_safis_retain_route_target_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_instance_afi_safis_retain_route_target_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &instance_afi_safis_retain_route_target_deprecated_cli_cmd);
 
 	/* M5 B13: instance-AF 'distance bgp ...' (all eight AFs) + per-prefix
 	 * 'distance (1-255) PREFIX [ACCESSLIST]' (IPv4 grammar on the four IPv4
