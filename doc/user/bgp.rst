@@ -2023,11 +2023,21 @@ Configuring Peers
 
    Default: disabled.
 
-.. clicmd:: neighbor PEER send-community <both|all|extended|standard|large>
+.. clicmd:: neighbor PEER send-community <standard|extended|large|all> <enabled|disabled>
 
-   Send the communities to the peer.
+   Control whether the selected community flavor is advertised to the peer.
+   ``all`` sets the standard, extended and large flavors together. The setting
+   is tri-state: when a flavor is left unconfigured it inherits from the peer's
+   peer-group, or otherwise falls back to FRR's default of sending all
+   flavors. The ``no`` form (``no neighbor PEER send-community <flavor>
+   <enabled|disabled>``) clears the flavor back to that inherited default.
 
-   Default: enabled.
+   The legacy spellings ``neighbor PEER send-community`` (bare, standard only)
+   and ``neighbor PEER send-community <both|all|extended|standard|large>``,
+   together with their ``no`` forms, remain available as deprecated aliases
+   with their original meaning.
+
+   Default: all flavors enabled.
 
 .. clicmd:: neighbor PEER send-community extended rpki
 

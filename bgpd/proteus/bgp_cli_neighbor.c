@@ -5442,18 +5442,20 @@ void neighbor_af_attribute_unchanged_cli_write(struct vty *vty, const struct lyd
  * (enum), neighbor + peer-group, all nine proteus AFs where the retired
  * legacy DEFUNs reached them.
  *
- * send-community: legacy's bare 'neighbor X send-community'/'no ...' DEFUN
- * pair only ever touches the 'standard' leaf; the typed
- * 'send-community <both|all|extended|standard|large>' pair touches a
- * subset -- both -> standard+extended (NOT large, matching legacy's own
- * asymmetric "both" naming), all/default -> all three. Every touched leaf
- * gets its own batched MODIFY, matching B4's attribute-unchanged precedent
- * for a legacy grammar that sets several leaves per invocation. extended
- * rpki keeps its own separate legacy grammar ('send-community extended
- * rpki', neighbor_ecommunity_rpki_cmd, bgp_vty.c) and is a plain Tier-A
+ * send-community: the canonical grammar is per-flavor tri-state,
+ * 'send-community <standard|extended|large|all> <enabled|disabled>',
+ * modifying the selected flavor's leaf ('all' touches the three). The 'no'
+ * form destroys the leaf(s), unsetting back to inherit from the peer-group
+ * or FRR's compiled-in send-all default. The bare
+ * 'neighbor X send-community' and typed
+ * 'send-community <both|all|extended|standard|large>' spellings survive as
+ * deprecated aliases with their legacy MODIFY semantics: bare touches
+ * 'standard' only, typed maps both -> standard+extended (NOT large,
+ * matching legacy's asymmetric "both") and all -> all three. extended rpki
+ * keeps its own separate legacy grammar ('send-community extended rpki',
+ * neighbor_ecommunity_rpki_cmd, bgp_vty.c) and is a plain Tier-A
  * default-false flag, so it reuses bgp_cli_neighbor_af_flag_modify()
- * directly (B4's helper) rather than the send-community-specific enqueue
- * below.
+ * directly rather than the send-community-specific helpers below.
  */
 static void bgp_cli_send_community_enqueue(struct vty *vty, const char *xpath,
 					    const char *container, const char *leaf, bool val)
@@ -5465,13 +5467,110 @@ static void bgp_cli_send_community_enqueue(struct vty *vty, const char *xpath,
 	XFREE(MTYPE_TMP, xpath_child);
 }
 
+static void bgp_cli_send_community_destroy(struct vty *vty, const char *xpath,
+					   const char *container, const char *leaf)
+{
+	char *xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/send-community/%s", xpath,
+				       container, leaf);
+
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+}
+
 DEFPY_YANG(
 	neighbor_send_community, neighbor_send_community_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community"
+	" <standard|extended|large|all>$flavor <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Community attribute to this neighbor\n"
+	"Send Standard Community attributes\n"
+	"Send Extended Community attributes\n"
+	"Send Large Community attributes\n"
+	"Send Standard, Large and Extended Community attributes\n"
+	"Enable sending the selected community attributes\n"
+	"Disable sending the selected community attributes\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	bool val = strmatch(mode, "enabled");
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (strmatch(flavor, "all")) {
+		bgp_cli_send_community_enqueue(vty, xpath, container, "standard", val);
+		bgp_cli_send_community_enqueue(vty, xpath, container, "extended", val);
+		bgp_cli_send_community_enqueue(vty, xpath, container, "large", val);
+	} else {
+		bgp_cli_send_community_enqueue(vty, xpath, container, flavor, val);
+	}
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_send_community, no_neighbor_send_community_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community"
+	" <standard|extended|large|all>$flavor <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Send Community attribute to this neighbor\n"
+	"Send Standard Community attributes\n"
+	"Send Extended Community attributes\n"
+	"Send Large Community attributes\n"
+	"Send Standard, Large and Extended Community attributes\n"
+	"Enable sending the selected community attributes\n"
+	"Disable sending the selected community attributes\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	if (strmatch(flavor, "all")) {
+		bgp_cli_send_community_destroy(vty, xpath, container, "standard");
+		bgp_cli_send_community_destroy(vty, xpath, container, "extended");
+		bgp_cli_send_community_destroy(vty, xpath, container, "large");
+	} else {
+		bgp_cli_send_community_destroy(vty, xpath, container, flavor);
+	}
+
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_ATTR(
+	neighbor_send_community_bare_deprecated, neighbor_send_community_bare_deprecated_cli_cmd,
 	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
-	"Send Community attribute to this neighbor\n")
+	"Send Community attribute to this neighbor\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	const char *container = bgp_afi_safi_container_name(vty->node);
 	char *xpath;
@@ -5495,8 +5594,8 @@ DEFPY_YANG(
 	return ret;
 }
 
-DEFPY_YANG(
-	neighbor_send_community_type, neighbor_send_community_type_cli_cmd,
+DEFPY_ATTR(
+	neighbor_send_community_type_deprecated, neighbor_send_community_type_deprecated_cli_cmd,
 	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer send-community"
 	" <both|all|extended|standard|large>$type",
 	NO_STR
@@ -5507,7 +5606,8 @@ DEFPY_YANG(
 	"Send Standard, Large and Extended Community attributes\n"
 	"Send Extended Community attributes\n"
 	"Send Standard Community attributes\n"
-	"Send Large Community attributes\n")
+	"Send Large Community attributes\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	const char *container = bgp_afi_safi_container_name(vty->node);
 	bool val = no ? false : true;
@@ -5561,38 +5661,47 @@ DEFPY_YANG(
 }
 
 /* Shared per-AF send-community emitter (neighbor + peer-group), registered
- * on the CONTAINER xpath, not the leaves individually: legacy's negative
- * forms (bgp_config_write_peer_af(), bgp_vty.c) are only meaningful
- * evaluated jointly (the combined "no ... send-community all" line when
- * standard/extended/large are all explicitly off), and the extended-rpki
- * line is legacy-nested inside the "not all three off" branch -- reproduced
- * byte-for-byte, quirk included, the same "reread the whole container"
- * discipline as B4's attribute-unchanged. standard/extended/large have no
- * YANG default (tri-state: absent means "send", matching the compiled-in
- * default), so each is only inspected when explicitly present; extended-rpki
- * carries a YANG default of false and so is always safe to read directly.
+ * on the CONTAINER xpath, not the leaves individually: the canonical
+ * per-flavor tri-state is emitted jointly so that a fully explicit and
+ * uniform standard/extended/large trio collapses to a single 'all' line,
+ * and the legacy-nested extended-rpki line keeps its own emission.
+ * standard/extended/large have no YANG default (tri-state: absent means
+ * inherit from the peer-group or FRR's compiled-in send-all default), so
+ * each is emitted only when explicitly present; extended-rpki carries a
+ * YANG default of false and so is always safe to read directly.
  */
 void neighbor_af_send_community_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults)
 {
 	const char *name = bgp_cli_neighbor_or_group_name(dnode);
-	bool std_off = yang_dnode_exists(dnode, "standard") &&
-		       !yang_dnode_get_bool(dnode, "standard");
-	bool ext_off = yang_dnode_exists(dnode, "extended") &&
-		       !yang_dnode_get_bool(dnode, "extended");
-	bool lrg_off = yang_dnode_exists(dnode, "large") && !yang_dnode_get_bool(dnode, "large");
+	bool std_set = yang_dnode_exists(dnode, "standard");
+	bool ext_set = yang_dnode_exists(dnode, "extended");
+	bool lrg_set = yang_dnode_exists(dnode, "large");
+	bool collapsed = false;
 
-	if (std_off && ext_off && lrg_off) {
-		vty_out(vty, "  no neighbor %s send-community all\n", name);
-		return;
+	if (std_set && ext_set && lrg_set) {
+		bool std = yang_dnode_get_bool(dnode, "standard");
+		bool ext = yang_dnode_get_bool(dnode, "extended");
+		bool lrg = yang_dnode_get_bool(dnode, "large");
+
+		if (std == ext && ext == lrg) {
+			vty_out(vty, "  neighbor %s send-community all %s\n", name,
+				std ? "enabled" : "disabled");
+			collapsed = true;
+		}
 	}
 
-	if (std_off)
-		vty_out(vty, "  no neighbor %s send-community\n", name);
-	if (ext_off)
-		vty_out(vty, "  no neighbor %s send-community extended\n", name);
-	if (lrg_off)
-		vty_out(vty, "  no neighbor %s send-community large\n", name);
+	if (!collapsed) {
+		if (std_set)
+			vty_out(vty, "  neighbor %s send-community standard %s\n", name,
+				yang_dnode_get_bool(dnode, "standard") ? "enabled" : "disabled");
+		if (ext_set)
+			vty_out(vty, "  neighbor %s send-community extended %s\n", name,
+				yang_dnode_get_bool(dnode, "extended") ? "enabled" : "disabled");
+		if (lrg_set)
+			vty_out(vty, "  neighbor %s send-community large %s\n", name,
+				yang_dnode_get_bool(dnode, "large") ? "enabled" : "disabled");
+	}
 
 	if (yang_dnode_get_bool(dnode, "extended-rpki"))
 		vty_out(vty, "  neighbor %s send-community extended rpki\n", name);
@@ -7018,7 +7127,9 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &neighbor_route_reflector_client_cli_cmd);
 	install_element(BGP_NODE, &neighbor_route_server_client_cli_cmd);
 	install_element(BGP_NODE, &neighbor_send_community_cli_cmd);
-	install_element(BGP_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
 	install_element(BGP_NODE, &neighbor_soft_reconfiguration_cli_cmd);
 	install_element(BGP_NODE, &neighbor_unsuppress_map_cli_cmd);
 	install_element(BGP_NODE, &no_neighbor_unsuppress_map_cli_cmd);
@@ -7107,14 +7218,32 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_send_community_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_send_community_cli_cmd);
 
-	install_element(BGP_IPV4_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_IPV4M_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_IPV4L_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_IPV6_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_IPV6M_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_IPV6L_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_VPNV4_NODE, &neighbor_send_community_type_cli_cmd);
-	install_element(BGP_VPNV6_NODE, &neighbor_send_community_type_cli_cmd);
+	install_element(BGP_IPV4_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_send_community_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_send_community_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_send_community_bare_deprecated_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_send_community_type_deprecated_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &neighbor_ecommunity_rpki_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_ecommunity_rpki_cli_cmd);
