@@ -335,12 +335,13 @@ M9 dispositions (ruled 2026-07-19)
 - **VNC/rfapi: documented support-drop.** Its ~133-command CLI surface
   is not converted; file-config support ends at the flip and the
   feature is deprecated-for-removal upstream-side. As a direct
-  consequence, ``bgp_rfapi_basic_sanity`` and
-  ``bgp_rfapi_basic_sanity_config2`` topotests are expected red under
-  split config: mgmtd rejects their ``vnc``/``rfp``/``redistribute
-  vnc-direct`` lines from ``bgpd.conf`` with "No such command", so the
-  nve-group config never reaches bgpd. Both suites are skipped at
-  module level citing this disposition.
+  consequence, ``bgp_rfapi_basic_sanity``,
+  ``bgp_rfapi_basic_sanity_config2`` and ``bgp_l3vpn_to_bgp_direct``
+  topotests are expected red under split config: mgmtd rejects their
+  ``vnc``/``rfp``/``vrf-policy``/``redistribute vnc-direct`` lines from
+  ``bgpd.conf`` with "No such command", so the nve-group and
+  vrf-policy config never reaches bgpd. All three suites are skipped
+  at module level citing this disposition.
 - **SRv6, flowspec (full grammar) and ``bgp snmp traps`` are converted
   in M8.5** ahead of the flip; the M8 mgmtd parse shims for the
   ``segment-routing srv6`` and link-state blocks are replaced by real
