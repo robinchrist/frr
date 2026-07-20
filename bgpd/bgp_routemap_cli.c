@@ -2061,6 +2061,42 @@ static bool set_lcommunity_token_member(const char *token, unsigned long *ga,
 	return true;
 }
 
+/*
+ * The structured 'set community', 'set large-community' and 'set extcommunity
+ * <rt|soo|nt|color>' CLIs can enqueue more per-token northbound edits than one
+ * transaction's change budget (VTY_MAXCFGCHANGES), so they apply the edits in
+ * batches. Under mgmtd each nb_cli_apply_changes() would otherwise trigger its
+ * own implicit commit; the first one locks the shared candidate datastore and
+ * queues an asynchronous commit, so a second implicit commit from the next
+ * batch would assert on the still-locked candidate and abort mgmtd
+ * (mgmt_vty_frontend.c: vty_mgmt_lock_candidate_inline()).
+ *
+ * Group every batch after the first into that single queued commit: mark the
+ * vty pending so the later applies only edit the still-locked candidate in
+ * place. Because the queued commit is processed after the command returns, it
+ * sees the whole edited candidate and applies all the members at once -- the
+ * same "many edits, one commit" path a config file uses. Outside mgmtd (no
+ * frontend callback installed) this is a no-op and the classic per-daemon
+ * commit path is untouched.
+ */
+static void set_comm_batch_group_begin(struct vty *vty, bool *grouped)
+{
+	if (*grouped || !nb_cli_apply_changes_mgmt_cb)
+		return;
+	*grouped = true;
+	vty->pending_allowed = true;
+}
+
+static void set_comm_batch_group_end(struct vty *vty, bool grouped)
+{
+	if (!grouped)
+		return;
+	vty->pending_allowed = false;
+	/* The queued commit covers the deferred edits; clear the pending
+	 * set-config accounting so a later config-end issues no extra commit. */
+	vty->mgmt_num_pending_setcfg = 0;
+}
+
 DEFUN_YANG (set_lcommunity,
 	    set_lcommunity_cmd,
 	    "set large-community AA:BB:CC...",
@@ -2072,6 +2108,7 @@ DEFUN_YANG (set_lcommunity,
 	int i;
 	int nqueued;
 	int ret;
+	bool grouped = false;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-large-community']";
 	char xpath_comm[XPATH_MAXLEN];
@@ -2096,8 +2133,10 @@ DEFUN_YANG (set_lcommunity,
 
 		if (nqueued == VTY_MAXCFGCHANGES) {
 			ret = nb_cli_apply_changes(vty, NULL);
-			if (ret != CMD_SUCCESS)
+			if (ret != CMD_SUCCESS) {
+				set_comm_batch_group_end(vty, grouped);
 				return ret;
+			}
 			nqueued = 0;
 			/* nb_cli_apply_changes() consumes the pending
 			 * changes into the candidate but does not clear
@@ -2106,6 +2145,10 @@ DEFUN_YANG (set_lcommunity,
 			 * overflows VTY_MAXCFGCHANGES and silently drops
 			 * tokens. */
 			vty->num_cfg_changes = 0;
+			/* This first apply already locked the candidate and
+			 * queued the implicit commit; fold every later batch
+			 * into it so we do not re-lock and abort mgmtd. */
+			set_comm_batch_group_begin(vty, &grouped);
 		}
 		nqueued++;
 
@@ -2130,7 +2173,9 @@ DEFUN_YANG (set_lcommunity,
 		}
 	}
 
-	return nb_cli_apply_changes(vty, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	set_comm_batch_group_end(vty, grouped);
+	return ret;
 }
 
 DEFUN_YANG (set_lcommunity_none,
@@ -2388,6 +2433,7 @@ static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
 {
 	char xpath_value[XPATH_MAXLEN * 2];
 	int i, nqueued, ret;
+	bool grouped = false;
 
 	nb_cli_enqueue_change(vty, xpath_action, NB_OP_CREATE, NULL);
 	/* Replace, not merge, whatever an earlier line left. */
@@ -2405,8 +2451,10 @@ static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
 
 		if (nqueued == VTY_MAXCFGCHANGES) {
 			ret = nb_cli_apply_changes(vty, NULL);
-			if (ret != CMD_SUCCESS)
+			if (ret != CMD_SUCCESS) {
+				set_comm_batch_group_end(vty, grouped);
 				return ret;
+			}
 			nqueued = 0;
 			/* nb_cli_apply_changes() consumes the pending
 			 * changes into the candidate but does not clear
@@ -2415,6 +2463,10 @@ static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
 			 * overflows VTY_MAXCFGCHANGES and silently drops
 			 * tokens. */
 			vty->num_cfg_changes = 0;
+			/* This first apply already locked the candidate and
+			 * queued the implicit commit; fold every later batch
+			 * into it so we do not re-lock and abort mgmtd. */
+			set_comm_batch_group_begin(vty, &grouped);
 		}
 		nqueued++;
 
@@ -2445,7 +2497,9 @@ static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
 		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
 	}
 
-	return nb_cli_apply_changes(vty, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	set_comm_batch_group_end(vty, grouped);
+	return ret;
 }
 
 DEFUN_YANG (set_ecommunity_rt,
@@ -2683,6 +2737,7 @@ DEFPY_YANG (set_ecommunity_nt,
 {
 	int idx_nt = 3;
 	int i, nqueued, ret;
+	bool grouped = false;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-nt']";
 	char xpath_nt[XPATH_MAXLEN];
@@ -2706,8 +2761,10 @@ DEFPY_YANG (set_ecommunity_nt,
 
 		if (nqueued == VTY_MAXCFGCHANGES) {
 			ret = nb_cli_apply_changes(vty, NULL);
-			if (ret != CMD_SUCCESS)
+			if (ret != CMD_SUCCESS) {
+				set_comm_batch_group_end(vty, grouped);
 				return ret;
+			}
 			nqueued = 0;
 			/* nb_cli_apply_changes() consumes the pending
 			 * changes into the candidate but does not clear
@@ -2716,6 +2773,10 @@ DEFPY_YANG (set_ecommunity_nt,
 			 * overflows VTY_MAXCFGCHANGES and silently drops
 			 * tokens. */
 			vty->num_cfg_changes = 0;
+			/* This first apply already locked the candidate and
+			 * queued the implicit commit; fold every later batch
+			 * into it so we do not re-lock and abort mgmtd. */
+			set_comm_batch_group_begin(vty, &grouped);
 		}
 		nqueued++;
 
@@ -2730,7 +2791,9 @@ DEFPY_YANG (set_ecommunity_nt,
 		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
 	}
 
-	return nb_cli_apply_changes(vty, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	set_comm_batch_group_end(vty, grouped);
+	return ret;
 }
 
 DEFPY_YANG (no_set_ecommunity_nt,
@@ -2796,6 +2859,7 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 {
 	int idx_color = 3;
 	int i, nqueued, ret;
+	bool grouped = false;
 	const char *xpath =
 		"./set-action[action='frr-bgp-route-map:set-extcommunity-color']";
 	char xpath_color[XPATH_MAXLEN];
@@ -2821,8 +2885,10 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 
 		if (nqueued == VTY_MAXCFGCHANGES) {
 			ret = nb_cli_apply_changes(vty, NULL);
-			if (ret != CMD_SUCCESS)
+			if (ret != CMD_SUCCESS) {
+				set_comm_batch_group_end(vty, grouped);
 				return ret;
+			}
 			nqueued = 0;
 			/* nb_cli_apply_changes() consumes the pending
 			 * changes into the candidate but does not clear
@@ -2831,6 +2897,10 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 			 * overflows VTY_MAXCFGCHANGES and silently drops
 			 * tokens. */
 			vty->num_cfg_changes = 0;
+			/* This first apply already locked the candidate and
+			 * queued the implicit commit; fold every later batch
+			 * into it so we do not re-lock and abort mgmtd. */
+			set_comm_batch_group_begin(vty, &grouped);
 		}
 		nqueued++;
 
@@ -2846,7 +2916,9 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
 	}
 
-	return nb_cli_apply_changes(vty, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	set_comm_batch_group_end(vty, grouped);
+	return ret;
 }
 
 DEFPY_YANG(no_set_ecommunity_color_all, no_set_ecommunity_color_all_cmd,
@@ -3537,6 +3609,7 @@ DEFUN_YANG (set_community,
 	int i;
 	int nqueued;
 	int ret;
+	bool grouped = false;
 
 	const char *xpath = "./set-action[action='frr-bgp-route-map:set-community']";
 	char xpath_comm[XPATH_MAXLEN];
@@ -3560,8 +3633,10 @@ DEFUN_YANG (set_community,
 
 		if (nqueued == VTY_MAXCFGCHANGES) {
 			ret = nb_cli_apply_changes(vty, NULL);
-			if (ret != CMD_SUCCESS)
+			if (ret != CMD_SUCCESS) {
+				set_comm_batch_group_end(vty, grouped);
 				return ret;
+			}
 			nqueued = 0;
 			/* nb_cli_apply_changes() consumes the pending
 			 * changes into the candidate but does not clear
@@ -3570,6 +3645,10 @@ DEFUN_YANG (set_community,
 			 * overflows VTY_MAXCFGCHANGES and silently drops
 			 * tokens. */
 			vty->num_cfg_changes = 0;
+			/* This first apply already locked the candidate and
+			 * queued the implicit commit; fold every later batch
+			 * into it so we do not re-lock and abort mgmtd. */
+			set_comm_batch_group_begin(vty, &grouped);
 		}
 		nqueued++;
 
@@ -3611,7 +3690,9 @@ DEFUN_YANG (set_community,
 		nb_cli_enqueue_change(vty, xpath_value, NB_OP_CREATE, NULL);
 	}
 
-	return nb_cli_apply_changes(vty, NULL);
+	ret = nb_cli_apply_changes(vty, NULL);
+	set_comm_batch_group_end(vty, grouped);
+	return ret;
 }
 
 #ifdef KEEP_OLD_VPN_COMMANDS
