@@ -549,18 +549,22 @@ Require policy on EBGP
 Reject routes with AS_SET or AS_CONFED_SET types
 ------------------------------------------------
 
-.. clicmd:: bgp reject-as-sets
+.. clicmd:: bgp reject-as-sets <enabled|disabled>
 
-   This command enables rejection of incoming and outgoing routes having AS_SET or AS_CONFED_SET type.
+   This command controls rejection of incoming and outgoing routes having AS_SET or AS_CONFED_SET type.
 
    The aggregated routes are not sent to the contributing neighbors.
 
    It's defined under RFC 9774 and it's enabled by default.
 
+   The bare ``bgp reject-as-sets`` / ``no bgp reject-as-sets`` spelling
+   (without the explicit ``enabled``/``disabled`` token) is still accepted
+   but deprecated.
+
 .. seealso::
    https://datatracker.ietf.org/doc/html/draft-ietf-idr-deprecate-as-set-confed-set
 
-   Default: disabled.
+   Default: enabled.
 
 Enforce first AS
 ----------------
@@ -2263,12 +2267,16 @@ Configuring Peers
    Mark all routes from this neighbor as less preferred by setting ``graceful-shutdown``
    community, and local-preference to 0.
 
-.. clicmd:: bgp fast-external-failover
+.. clicmd:: bgp fast-external-failover <enabled|disabled>
 
    This command causes bgp to take down ebgp peers immediately
-   when a link flaps.  `bgp fast-external-failover` is the default
-   and will not be displayed as part of a `show run`.  The no form
-   of the command turns off this ability.
+   when a link flaps.  `bgp fast-external-failover enabled` is the default
+   and will not be displayed as part of a `show run`.  The disabled
+   form of the command turns off this ability.
+
+   The bare ``bgp fast-external-failover`` / ``no bgp
+   fast-external-failover`` spelling (without the explicit
+   ``enabled``/``disabled`` token) is still accepted but deprecated.
 
 .. clicmd:: bgp default-originate timer (0-65535)
 
@@ -5781,6 +5789,15 @@ A cluster is a collection of route reflectors and their clients, and is used
 by route reflectors to avoid looping.
 
 .. clicmd:: bgp cluster-id A.B.C.D
+
+.. clicmd:: bgp client-to-client reflection <enabled|disabled>
+
+   Controls whether the route reflector reflects routes between its own
+   clients. Enabled by default.
+
+   The bare ``bgp client-to-client reflection`` / ``no bgp
+   client-to-client reflection`` spelling (without the explicit
+   ``enabled``/``disabled`` token) is still accepted but deprecated.
 
 .. clicmd:: bgp no-rib
 

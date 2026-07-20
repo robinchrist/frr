@@ -3238,25 +3238,57 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Static default-on boolean, no inheritance: legacy grammar, positive form
- * destroys back to the true default, "no" form modifies an explicit false.
- */
 DEFPY_YANG(
 	bgp_fast_external_failover, bgp_fast_external_failover_cli_cmd,
-	"bgp fast-external-failover",
+	"bgp fast-external-failover <enabled|disabled>$mode",
 	BGP_STR
-	"Immediately reset session if a link to a directly connected external peer goes down\n")
+	"Immediately reset session if a link to a directly connected external peer goes down\n"
+	"Enable immediate reset on directly connected external peer link failure\n"
+	"Disable immediate reset on directly connected external peer link failure\n")
 {
-	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
 	no_bgp_fast_external_failover, no_bgp_fast_external_failover_cli_cmd,
+	"no bgp fast-external-failover <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Immediately reset session if a link to a directly connected external peer goes down\n"
+	"Enable immediate reset on directly connected external peer link failure\n"
+	"Disable immediate reset on directly connected external peer link failure\n")
+{
+	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare aliases: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp fast-external-failover' meant "on" via a destroy back to the
+ * true default; bare 'no bgp fast-external-failover' persisted an explicit
+ * "false", so the alias handler bodies are unchanged from the legacy
+ * DEFPYs.
+ */
+DEFPY_ATTR(
+	bgp_fast_external_failover_deprecated, bgp_fast_external_failover_deprecated_cli_cmd,
+	"bgp fast-external-failover",
+	BGP_STR
+	"Immediately reset session if a link to a directly connected external peer goes down\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_fast_external_failover_deprecated, no_bgp_fast_external_failover_deprecated_cli_cmd,
 	"no bgp fast-external-failover",
 	NO_STR
 	BGP_STR
-	"Immediately reset session if a link to a directly connected external peer goes down\n")
+	"Immediately reset session if a link to a directly connected external peer goes down\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	nb_cli_enqueue_change(vty, "./fast-external-failover", NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
@@ -3310,51 +3342,118 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Static default-on boolean, no inheritance: legacy grammar, positive form
- * destroys back to the true default, "no" form modifies an explicit false.
- */
 DEFPY_YANG(
 	bgp_reject_as_sets, bgp_reject_as_sets_cli_cmd,
-	"bgp reject-as-sets",
+	"bgp reject-as-sets <enabled|disabled>$mode",
 	BGP_STR
-	"Reject routes with AS_SET or AS_CONFED_SET flag\n")
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n"
+	"Enable rejecting routes with AS_SET or AS_CONFED_SET flag\n"
+	"Disable rejecting routes with AS_SET or AS_CONFED_SET flag\n")
 {
-	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
 	no_bgp_reject_as_sets, no_bgp_reject_as_sets_cli_cmd,
+	"no bgp reject-as-sets <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n"
+	"Enable rejecting routes with AS_SET or AS_CONFED_SET flag\n"
+	"Disable rejecting routes with AS_SET or AS_CONFED_SET flag\n")
+{
+	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare aliases: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp reject-as-sets' meant "on" via a destroy back to the true
+ * default; bare 'no bgp reject-as-sets' persisted an explicit "false", so
+ * the alias handler bodies are unchanged from the legacy DEFPYs.
+ */
+DEFPY_ATTR(
+	bgp_reject_as_sets_deprecated, bgp_reject_as_sets_deprecated_cli_cmd,
+	"bgp reject-as-sets",
+	BGP_STR
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_reject_as_sets_deprecated, no_bgp_reject_as_sets_deprecated_cli_cmd,
 	"no bgp reject-as-sets",
 	NO_STR
 	BGP_STR
-	"Reject routes with AS_SET or AS_CONFED_SET flag\n")
+	"Reject routes with AS_SET or AS_CONFED_SET flag\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	nb_cli_enqueue_change(vty, "./reject-as-sets", NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* Static default-on boolean, no inheritance: legacy grammar, positive form
- * destroys back to the true default, "no" form modifies an explicit false.
- */
 DEFPY_YANG(
 	bgp_client_to_client_reflection, bgp_client_to_client_reflection_cli_cmd,
-	"bgp client-to-client reflection",
+	"bgp client-to-client reflection <enabled|disabled>$mode",
 	BGP_STR
 	"Configure client to client route reflection\n"
-	"reflection of routes allowed\n")
+	"reflection of routes allowed\n"
+	"Enable reflection of routes\n"
+	"Disable reflection of routes\n")
 {
-	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
 	no_bgp_client_to_client_reflection, no_bgp_client_to_client_reflection_cli_cmd,
+	"no bgp client-to-client reflection <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Configure client to client route reflection\n"
+	"reflection of routes allowed\n"
+	"Enable reflection of routes\n"
+	"Disable reflection of routes\n")
+{
+	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare aliases: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp client-to-client reflection' meant "on" via a destroy back to
+ * the true default; bare 'no bgp client-to-client reflection' persisted an
+ * explicit "false", so the alias handler bodies are unchanged from the
+ * legacy DEFPYs.
+ */
+DEFPY_ATTR(
+	bgp_client_to_client_reflection_deprecated,
+	bgp_client_to_client_reflection_deprecated_cli_cmd,
+	"bgp client-to-client reflection",
+	BGP_STR
+	"Configure client to client route reflection\n"
+	"reflection of routes allowed\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_client_to_client_reflection_deprecated,
+	no_bgp_client_to_client_reflection_deprecated_cli_cmd,
 	"no bgp client-to-client reflection",
 	NO_STR
 	BGP_STR
 	"Configure client to client route reflection\n"
-	"reflection of routes allowed\n")
+	"reflection of routes allowed\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	nb_cli_enqueue_change(vty, "./client-to-client-reflection", NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
@@ -3604,8 +3703,9 @@ DEFPY_YANG(
  * is the sole static default-on/no-inheritance leaf in this family (the
  * only default/<afi-safi> leaf that is on by default): its negative form is
  * a real "false" modify rather than a delete, and its positive form
- * destroys back to the true default, matching the
- * fast-external-failover/reject-as-sets/client-to-client-reflection shape.
+ * destroys back to the true default, matching the shape kept by the
+ * deprecated bare aliases of fast-external-failover/reject-as-sets/
+ * client-to-client-reflection.
  * Every other token here defaults false in YANG and is positive-only, so
  * its negative form deletes back to that default. Every token string is
  * identical to its YANG leaf name, so the xpath is built directly from the
@@ -5480,8 +5580,8 @@ void instance_cluster_id_cli_write(struct vty *vty, const struct lyd_node *dnode
 void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " no bgp fast-external-failover\n");
+	vty_out(vty, " bgp fast-external-failover %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -5593,16 +5693,16 @@ void instance_labeled_unicast_explicit_null_cli_write(struct vty *vty,
 void instance_reject_as_sets_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					      bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " no bgp reject-as-sets\n");
+	vty_out(vty, " bgp reject-as-sets %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_client_to_client_reflection_cli_write(struct vty *vty,
 							   const struct lyd_node *dnode,
 							   bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " no bgp client-to-client reflection\n");
+	vty_out(vty, " bgp client-to-client reflection %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
@@ -7848,10 +7948,10 @@ void afi_safis_vpn_network_ipv4_cli_write(struct vty *vty, const struct lyd_node
 
 /* M7: '[no] bgp retain route-target all' (af-retain-route-target in
  * proteus-bgp.yang), ipv4-vpn/ipv6-vpn only. Static default-on boolean,
- * fast-external-failover shape at the AF level: the positive form destroys
- * back to the true default, 'no' modifies an explicit false, and only the
- * 'no' form is ever rendered (retired bgp_retain_route_target /
- * bgp_vpn_config_write, bgp_vty.c). */
+ * same shape as the deprecated bare fast-external-failover alias at the AF
+ * level: the positive form destroys back to the true default, 'no'
+ * modifies an explicit false, and only the 'no' form is ever rendered
+ * (retired bgp_retain_route_target / bgp_vpn_config_write, bgp_vty.c). */
 DEFPY_YANG(
 	instance_afi_safis_retain_route_target,
 	instance_afi_safis_retain_route_target_cli_cmd,
@@ -8487,13 +8587,19 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_cluster_id_cli_cmd);
 	install_element(BGP_NODE, &bgp_fast_external_failover_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_fast_external_failover_cli_cmd);
+	install_element(BGP_NODE, &bgp_fast_external_failover_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_fast_external_failover_deprecated_cli_cmd);
 	install_element(BGP_NODE, &bgp_always_compare_med_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_always_compare_med_cli_cmd);
 	install_element(BGP_NODE, &bgp_lu_uses_explicit_null_cli_cmd);
 	install_element(BGP_NODE, &bgp_reject_as_sets_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_reject_as_sets_cli_cmd);
+	install_element(BGP_NODE, &bgp_reject_as_sets_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_reject_as_sets_deprecated_cli_cmd);
 	install_element(BGP_NODE, &bgp_client_to_client_reflection_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cli_cmd);
+	install_element(BGP_NODE, &bgp_client_to_client_reflection_deprecated_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_deprecated_cli_cmd);
 	install_element(BGP_NODE, &bgp_disable_connected_route_check_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_disable_connected_route_check_cli_cmd);
 
