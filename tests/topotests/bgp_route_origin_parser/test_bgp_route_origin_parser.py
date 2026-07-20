@@ -101,7 +101,16 @@ def test_bgp_route_origin_parser():
             """
         )
         run_cfg = pe1.vtysh_cmd("show run")
-        return "rt vpn both 4294967295:65" in run_cfg
+        # The proteus-bgp model stores rt vpn import and export as two
+        # independent route-target sets and always re-emits them as the
+        # two per-direction lines, rather than collapsing an equal
+        # import+export pair back into a single 'rt vpn both' line. Both
+        # forms parse to the same state; check the emitted per-direction
+        # lines here.
+        return (
+            "rt vpn import 4294967295:65" in run_cfg
+            and "rt vpn export 4294967295:65" in run_cfg
+        )
 
     step(
         "Configure invalid 4-byte value SoO (4294967296:65), this should not be accepted"
