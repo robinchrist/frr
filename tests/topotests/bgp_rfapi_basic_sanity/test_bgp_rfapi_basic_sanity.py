@@ -16,7 +16,20 @@ sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), ".."))
 
 from lib.ltemplate import *
 
-pytestmark = [pytest.mark.bgpd, pytest.mark.ospfd]
+pytestmark = [
+    pytest.mark.bgpd,
+    pytest.mark.ospfd,
+    pytest.mark.skip(
+        reason=(
+            "VNC/rfapi is a documented M9 support-drop (commit 3443557db8): "
+            "under FRR_NO_SPLIT_CONFIG mgmtd rejects the 'vnc'/'rfp'/"
+            "'redistribute vnc-direct' lines from bgpd.conf with 'No such "
+            "command', so the nve-group config never reaches bgpd and "
+            "rfapi_open() cannot find a matching group. Native VNC CLI is "
+            "not converted and file-config support for it ends at the flip."
+        )
+    ),
+]
 
 
 def test_add_routes():
