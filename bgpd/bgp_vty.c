@@ -11408,8 +11408,8 @@ int bgp_config_write(struct vty *vty)
 		 */
 
 		/* bgp graceful-restart disable-eor: converted to northbound,
-		 * see '/proteus-bgp:instance/graceful-restart/disable-eor'
-		 * cli_show in bgp_cli_instance.c (M7 batch B5).
+		 * see '/proteus-bgp:instance/graceful-restart/eor' cli_show in
+		 * bgp_cli_instance.c (M7 batch B5).
 		 */
 
 		/* BGP TCP keepalive: converted to northbound, see

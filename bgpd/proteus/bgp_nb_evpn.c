@@ -664,19 +664,19 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_de
 	return NB_OK;
 }
 
-/* 'use-es-l3nhg' / 'disable-ead-evi-rx' / 'disable-ead-evi-tx' (M6 batch
- * B9b; B5 had reject-stubbed all three because their YANG leaves carried
- * no 'default' statement, and M6 batch B9a added the defaults matching
- * the compiled BGP_EVPN_MH_USE_ES_L3NHG_DEF / _EAD_EVI_RX_DEF /
- * _EAD_EVI_TX_DEF constants). Plain Tier A leaves now: modify-only, a
- * delete resolves to the YANG default. Like every other multihoming leaf
- * here, bgp_mh_info is process-wide state, so there is no bgp instance
- * to look up. use-es-l3nhg is a bare field write with no side-effect
- * call, exactly like the legacy bgp_evpn_use_es_l3nhg_cmd; the two
- * disable-* leaves reproduce their legacy DEFPYs' fire-only-on-change
- * guard around bgp_evpn_switch_ead_evi_rx()/_tx() (which walk/update ES
- * state). Note the YANG leaves are the CLI's disable-* spelling while
- * the fields are enable_* -- inverted on read.
+/* 'use-es-l3nhg' / 'ead-evi-rx' / 'ead-evi-tx' (M6 batch B9b; B5 had
+ * reject-stubbed all three because their YANG leaves carried no 'default'
+ * statement, and M6 batch B9a added the defaults matching the compiled
+ * BGP_EVPN_MH_USE_ES_L3NHG_DEF / _EAD_EVI_RX_DEF / _EAD_EVI_TX_DEF
+ * constants). Plain Tier A leaves now: modify-only, a delete resolves to
+ * the YANG default. Like every other multihoming leaf here, bgp_mh_info
+ * is process-wide state, so there is no bgp instance to look up.
+ * use-es-l3nhg is a bare field write with no side-effect call, exactly
+ * like the legacy bgp_evpn_use_es_l3nhg_cmd; the two ead-evi-* leaves
+ * reproduce their legacy DEFPYs' fire-only-on-change guard around
+ * bgp_evpn_switch_ead_evi_rx()/_tx() (which walk/update ES state). The
+ * positive ead-evi-* leaves map directly onto the enable_ead_evi_*
+ * fields.
  */
 int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args)
 {
@@ -688,7 +688,7 @@ int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_m
 	return NB_OK;
 }
 
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_rx_modify(
 	struct nb_cb_modify_args *args)
 {
 	bool enable_rx;
@@ -696,7 +696,7 @@ int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
 
-	enable_rx = !yang_dnode_get_bool(args->dnode, NULL);
+	enable_rx = yang_dnode_get_bool(args->dnode, NULL);
 	if (enable_rx != bgp_mh_info->enable_ead_evi_rx) {
 		bgp_mh_info->enable_ead_evi_rx = enable_rx;
 		bgp_evpn_switch_ead_evi_rx();
@@ -705,7 +705,7 @@ int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
 	return NB_OK;
 }
 
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_tx_modify(
 	struct nb_cb_modify_args *args)
 {
 	bool enable_tx;
@@ -713,7 +713,7 @@ int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
 
-	enable_tx = !yang_dnode_get_bool(args->dnode, NULL);
+	enable_tx = yang_dnode_get_bool(args->dnode, NULL);
 	if (enable_tx != bgp_mh_info->enable_ead_evi_tx) {
 		bgp_mh_info->enable_ead_evi_tx = enable_tx;
 		bgp_evpn_switch_ead_evi_tx();

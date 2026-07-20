@@ -81,12 +81,12 @@ void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_nod
 void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
 						      const struct lyd_node *dnode,
 						      bool show_defaults);
-void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults);
-void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults);
+void instance_evpn_multihoming_ead_evi_rx_cli_write(struct vty *vty,
+						    const struct lyd_node *dnode,
+						    bool show_defaults);
+void instance_evpn_multihoming_ead_evi_tx_cli_write(struct vty *vty,
+						    const struct lyd_node *dnode,
+						    bool show_defaults);
 void instance_evpn_network_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				     bool show_defaults);
 
@@ -298,9 +298,9 @@ void instance_default_subgroup_pkt_queue_max_cli_write(struct vty *vty,
 							      bool show_defaults);
 void instance_deterministic_med_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						 bool show_defaults);
-void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
-								  const struct lyd_node *dnode,
-								  bool show_defaults);
+void instance_ebgp_connected_route_check_cli_write(struct vty *vty,
+						   const struct lyd_node *dnode,
+						   bool show_defaults);
 void instance_ebgp_requires_policy_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						    bool show_defaults);
 void instance_enforce_first_as_cli_write(struct vty *vty, const struct lyd_node *dnode,
@@ -309,9 +309,9 @@ void instance_fast_convergence_cli_write(struct vty *vty, const struct lyd_node 
 						bool show_defaults);
 void instance_fast_external_failover_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						      bool show_defaults);
-void instance_graceful_restart_disable_eor_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults);
+void instance_graceful_restart_eor_cli_write(struct vty *vty,
+					     const struct lyd_node *dnode,
+					     bool show_defaults);
 void instance_graceful_restart_mode_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						     bool show_defaults);
 void instance_graceful_restart_notification_cli_write(struct vty *vty,

@@ -296,19 +296,22 @@ module proteus-bgp-evpn {
            host routes (default on; FRR writes whichever form differs
            from it).";
       }
-      leaf disable-ead-evi-rx {
+      leaf ead-evi-rx {
         type boolean;
-        default "false";
+        default "true";
         description
-          "'[no] disable-ead-evi-rx': don't require EAD-per-EVI
-           routes for remote ES-PE activation (default off).";
+          "'ead-evi-rx <enabled|disabled>': when enabled, a remote
+           ES-PE is activated only after its EAD-per-EVI routes are
+           received; when disabled, the EAD-per-ES route alone
+           activates it (default enabled).";
       }
-      leaf disable-ead-evi-tx {
+      leaf ead-evi-tx {
         type boolean;
-        default "false";
+        default "true";
         description
-          "'[no] disable-ead-evi-tx': don't advertise EAD-per-EVI
-           routes (default off).";
+          "'ead-evi-tx <enabled|disabled>': when enabled, EAD-per-EVI
+           routes are advertised for local ESs; when disabled, they
+           are not advertised (default enabled).";
       }
     }
 

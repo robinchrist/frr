@@ -1036,9 +1036,9 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/disable-ebgp-connected-route-check",
+			.xpath = "/proteus-bgp:instance/ebgp-connected-route-check",
 			.cbs = {
-				.modify = instance_disable_ebgp_connected_route_check_modify,
+				.modify = instance_ebgp_connected_route_check_modify,
 			}
 		},
 		{
@@ -1219,9 +1219,9 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/disable-eor",
+			.xpath = "/proteus-bgp:instance/graceful-restart/eor",
 			.cbs = {
-				.modify = instance_graceful_restart_disable_eor_modify,
+				.modify = instance_graceful_restart_eor_modify,
 			}
 		},
 		{
@@ -11758,15 +11758,15 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
 			.cbs = {
-				.modify = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify,
+				.modify = instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_rx_modify,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
 			.cbs = {
-				.modify = instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify,
+				.modify = instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_tx_modify,
 			}
 		},
 		{

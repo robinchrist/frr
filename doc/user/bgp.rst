@@ -613,11 +613,16 @@ Send Hard Reset CEASE Notification for Administrative Reset
 Disable checking if nexthop is connected on EBGP sessions
 ---------------------------------------------------------
 
-.. clicmd:: bgp disable-ebgp-connected-route-check
+.. clicmd:: bgp ebgp-connected-route-check <enabled|disabled>
 
-   This command is used to disable the connection verification process for EBGP peering sessions
+   This command controls the connection verification process for EBGP peering sessions
    that are reachable by a single hop but are configured on a loopback interface or otherwise
-   configured with a non-directly connected IP address.
+   configured with a non-directly connected IP address. ``bgp
+   ebgp-connected-route-check enabled`` is the default and will not be displayed as
+   part of a ``show run``. The disabled form turns off the verification.
+
+   The legacy ``bgp disable-ebgp-connected-route-check`` spelling (turning the
+   verification off) remains accepted as a deprecated alias.
 
 .. _bgp-route-flap-dampening:
 
@@ -4456,9 +4461,20 @@ ES-PE based on just the EAD-per-ES route.
 
 Note that by default we advertise and expect EAD-per-EVI routes.
 
-.. clicmd:: disable-ead-evi-rx
+.. clicmd:: ead-evi-rx <enabled|disabled>
 
-.. clicmd:: disable-ead-evi-tx
+   Controls whether a remote ES-PE is activated only after its EAD-per-EVI
+   routes are received. ``ead-evi-rx enabled`` is the default; the disabled
+   form relaxes the dependency so the EAD-per-ES route alone activates the
+   remote ES-PE. The legacy ``disable-ead-evi-rx`` spelling remains accepted
+   as a deprecated alias.
+
+.. clicmd:: ead-evi-tx <enabled|disabled>
+
+   Controls whether EAD-per-EVI routes are advertised for local ESs.
+   ``ead-evi-tx enabled`` is the default; the disabled form stops the
+   advertisement. The legacy ``disable-ead-evi-tx`` spelling remains accepted
+   as a deprecated alias.
 
 Fast failover
 """""""""""""

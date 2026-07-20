@@ -1284,10 +1284,12 @@ int instance_administrative_shutdown_message_destroy(struct nb_cb_destroy_args *
 	return NB_OK;
 }
 
-/* '[no] bgp graceful-restart disable-eor' (DEFUN_HIDDEN pair, bgp_vty.c,
- * retired): pure flag assignment, gates BGP_SEND_EOR() (bgpd.h).
+/* 'bgp graceful-restart eor <enabled|disabled>' (hidden): pure flag
+ * assignment, gates BGP_SEND_EOR() (bgpd.h). The positive 'eor' leaf
+ * (true means send the marker) drives the negatively named
+ * BGP_FLAG_GR_DISABLE_EOR flag, so the sense is inverted here.
  */
-int instance_graceful_restart_disable_eor_modify(struct nb_cb_modify_args *args)
+int instance_graceful_restart_eor_modify(struct nb_cb_modify_args *args)
 {
 	struct bgp *bgp;
 
@@ -1299,9 +1301,9 @@ int instance_graceful_restart_disable_eor_modify(struct nb_cb_modify_args *args)
 		return NB_OK;
 
 	if (yang_dnode_get_bool(args->dnode, NULL))
-		SET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
-	else
 		UNSET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
+	else
+		SET_FLAG(bgp->flags, BGP_FLAG_GR_DISABLE_EOR);
 
 	return NB_OK;
 }

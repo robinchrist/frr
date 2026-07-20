@@ -180,7 +180,7 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 		 * ead-es-frag-evi-limit + ead-es-route-target-export; the
 		 * latter's three case lists each fire once per configured
 		 * RT, same shape as the 'network' lists below.
-		 * use-es-l3nhg/disable-ead-evi-rx/-tx follow (M6 B9b, Tier A
+		 * use-es-l3nhg/ead-evi-rx/-tx follow (M6 B9b, Tier A
 		 * toggles). */
 		{
 			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-es-frag-evi-limit",
@@ -214,15 +214,15 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
 			.cbs = {
-				.cli_show = instance_evpn_multihoming_disable_ead_evi_rx_cli_write,
+				.cli_show = instance_evpn_multihoming_ead_evi_rx_cli_write,
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+			.xpath = "/proteus-bgp:instance/afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
 			.cbs = {
-				.cli_show = instance_evpn_multihoming_disable_ead_evi_tx_cli_write,
+				.cli_show = instance_evpn_multihoming_ead_evi_tx_cli_write,
 			}
 		},
 		/* M6 B9b: VRF-level and per-VNI route-target trees. One
@@ -1195,9 +1195,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/disable-ebgp-connected-route-check",
+			.xpath = "/proteus-bgp:instance/ebgp-connected-route-check",
 			.cbs = {
-				.cli_show = instance_disable_ebgp_connected_route_check_cli_write,
+				.cli_show = instance_ebgp_connected_route_check_cli_write,
 			}
 		},
 		{
@@ -1480,9 +1480,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/graceful-restart/disable-eor",
+			.xpath = "/proteus-bgp:instance/graceful-restart/eor",
 			.cbs = {
-				.cli_show = instance_graceful_restart_disable_eor_cli_write,
+				.cli_show = instance_graceful_restart_eor_cli_write,
 			}
 		},
 		/* M7 B5: instance administrative shutdown; 'enabled' renders the

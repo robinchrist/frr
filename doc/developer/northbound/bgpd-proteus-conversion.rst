@@ -226,12 +226,12 @@ inheritance-chain root for the instance override below),
 ``/proteus-bgp:instance/default/ipv4-unicast``, and, since the M6 EVPN
 batches, ``/proteus-bgp:instance/afi-safis/l2vpn-evpn/dup-addr-detection/enabled``,
 ``.../l2vpn-evpn/advertise-pip/enabled`` and
-``.../l2vpn-evpn/multihoming/use-es-l3nhg`` (all three default-on with
-legacy ``no``-form emission; their static defaults mirror compiled
-constants, not build profiles). The default-off
-``.../l2vpn-evpn/multihoming/disable-ead-evi-rx`` and
-``disable-ead-evi-tx`` are the positive-only-emission Tier A shape
-described at the end of this section.
+``.../l2vpn-evpn/multihoming/use-es-l3nhg`` (all default-on and rendered as
+the tri-state ``enabled|disabled`` form; their static defaults mirror
+compiled constants, not build profiles). The positive default-on
+``.../l2vpn-evpn/multihoming/ead-evi-rx`` and ``ead-evi-tx`` share that
+tri-state Tier A shape; their C backend inverts the sense onto the
+``enable_ead_evi_*`` fields.
 
 **Tier B -- tri-state: inheriting leaves and profile-dependent
 defaults.** Two situations force a leaf out of Tier A and into an

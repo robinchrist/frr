@@ -1591,7 +1591,11 @@ int instance_client_to_client_reflection_modify(struct nb_cb_modify_args *args)
 	return NB_OK;
 }
 
-int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args)
+/* The positive 'ebgp-connected-route-check' leaf (true means perform the
+ * check) drives the negatively named BGP_FLAG_DISABLE_NH_CONNECTED_CHK
+ * flag, so the sense is inverted here.
+ */
+int instance_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args)
 {
 	struct bgp *bgp;
 
@@ -1605,9 +1609,9 @@ int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args 
 		if (!bgp)
 			break;
 		if (yang_dnode_get_bool(args->dnode, NULL))
-			SET_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK);
-		else
 			UNSET_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK);
+		else
+			SET_FLAG(bgp->flags, BGP_FLAG_DISABLE_NH_CONNECTED_CHK);
 		bgp_nb_clear_star_soft(bgp, BGP_CLEAR_SOFT_IN);
 		break;
 	}

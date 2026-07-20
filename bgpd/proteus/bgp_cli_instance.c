@@ -2272,33 +2272,95 @@ DEFPY_ATTR(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Tri-state 'ead-evi-rx <enabled|disabled>' over the positive Tier A
+ * leaf (default true, EAD-per-EVI receive processing on). The no-form
+ * unsets the leaf back to its default. */
 DEFPY_YANG(
-	bgp_evpn_ead_evi_rx_disable, bgp_evpn_ead_evi_rx_disable_cli_cmd,
-	"[no$no] disable-ead-evi-rx",
-	NO_STR
-	"Activate PE on EAD-ES even if EAD-EVI is not received\n")
+	bgp_evpn_ead_evi_rx_mode, bgp_evpn_ead_evi_rx_mode_cli_cmd,
+	"ead-evi-rx <enabled|disabled>$mode",
+	"EAD-per-EVI receive processing for remote ES-PE activation\n"
+	"Enable EAD-per-EVI receive processing\n"
+	"Disable EAD-per-EVI receive processing\n")
 {
-	if (no)
-		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
-				      NB_OP_DESTROY, NULL);
-	else
-		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-rx",
-				      NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
+			      NB_OP_MODIFY, strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
+	no_bgp_evpn_ead_evi_rx_mode, no_bgp_evpn_ead_evi_rx_mode_cli_cmd,
+	"no ead-evi-rx <enabled|disabled>$mode",
+	NO_STR
+	"EAD-per-EVI receive processing for remote ES-PE activation\n"
+	"Enable EAD-per-EVI receive processing\n"
+	"Disable EAD-per-EVI receive processing\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated legacy spelling. The positive leaf inverts the polarity, so
+ * legacy 'disable-ead-evi-rx' (rx off) becomes an explicit false and the
+ * legacy 'no' form (back to default) becomes a destroy. */
+DEFPY_ATTR(
+	bgp_evpn_ead_evi_rx_disable, bgp_evpn_ead_evi_rx_disable_cli_cmd,
+	"[no$no] disable-ead-evi-rx",
+	NO_STR
+	"Activate PE on EAD-ES even if EAD-EVI is not received\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
+				      NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-rx",
+				      NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Tri-state 'ead-evi-tx <enabled|disabled>' over the positive Tier A
+ * leaf (default true, EAD-per-EVI advertisement on). The no-form unsets
+ * the leaf back to its default. */
+DEFPY_YANG(
+	bgp_evpn_ead_evi_tx_mode, bgp_evpn_ead_evi_tx_mode_cli_cmd,
+	"ead-evi-tx <enabled|disabled>$mode",
+	"EAD-per-EVI advertisement for local ESs\n"
+	"Enable EAD-per-EVI advertisement\n"
+	"Disable EAD-per-EVI advertisement\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
+			      NB_OP_MODIFY, strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_evpn_ead_evi_tx_mode, no_bgp_evpn_ead_evi_tx_mode_cli_cmd,
+	"no ead-evi-tx <enabled|disabled>$mode",
+	NO_STR
+	"EAD-per-EVI advertisement for local ESs\n"
+	"Enable EAD-per-EVI advertisement\n"
+	"Disable EAD-per-EVI advertisement\n")
+{
+	nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
+			      NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated legacy spelling; polarity-inverted like ead-evi-rx above. */
+DEFPY_ATTR(
 	bgp_evpn_ead_evi_tx_disable, bgp_evpn_ead_evi_tx_disable_cli_cmd,
 	"[no$no] disable-ead-evi-tx",
 	NO_STR
-	"Don't advertise EAD-EVI for local ESs\n")
+	"Don't advertise EAD-EVI for local ESs\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	if (no)
-		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
 				      NB_OP_DESTROY, NULL);
 	else
-		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/disable-ead-evi-tx",
-				      NB_OP_MODIFY, "true");
+		nb_cli_enqueue_change(vty, "./afi-safis/l2vpn-evpn/multihoming/ead-evi-tx",
+				      NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -3044,30 +3106,65 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-/* M7 batch B5: 'bgp graceful-restart disable-eor'. Hidden in legacy
+/* M7 batch B5: 'bgp graceful-restart eor <enabled|disabled>'. The whole
+ * graceful-restart command family is hidden by legacy convention
  * (bgp_graceful_restart_disable_eor's DEFUN_HIDDEN pair, bgp_vty.c,
- * retired) and stays hidden here.
+ * retired), so the canonical tri-state stays hidden and the deprecated
+ * legacy 'disable-eor' spelling is hidden and deprecated. The positive
+ * 'eor' leaf (true means send the marker) inverts the legacy polarity:
+ * legacy 'disable-eor' becomes an explicit false, legacy 'no' becomes a
+ * destroy.
  */
 DEFPY_YANG_HIDDEN(
-	bgp_graceful_restart_disable_eor, bgp_graceful_restart_disable_eor_cli_cmd,
-	"bgp graceful-restart disable-eor",
+	bgp_graceful_restart_eor, bgp_graceful_restart_eor_cli_cmd,
+	"bgp graceful-restart eor <enabled|disabled>$mode",
 	BGP_STR
 	"Graceful restart configuration parameters\n"
-	"Disable EOR Check\n")
+	"Send the End-of-RIB marker to peers\n"
+	"Enable sending the End-of-RIB marker\n"
+	"Disable sending the End-of-RIB marker\n")
 {
-	nb_cli_enqueue_change(vty, "./graceful-restart/disable-eor", NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty, "./graceful-restart/eor", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG_HIDDEN(
+	no_bgp_graceful_restart_eor, no_bgp_graceful_restart_eor_cli_cmd,
+	"no bgp graceful-restart eor <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Send the End-of-RIB marker to peers\n"
+	"Enable sending the End-of-RIB marker\n"
+	"Disable sending the End-of-RIB marker\n")
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/eor", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	bgp_graceful_restart_disable_eor, bgp_graceful_restart_disable_eor_cli_cmd,
+	"bgp graceful-restart disable-eor",
+	BGP_STR
+	"Graceful restart configuration parameters\n"
+	"Disable EOR Check\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
+{
+	nb_cli_enqueue_change(vty, "./graceful-restart/eor", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
 	no_bgp_graceful_restart_disable_eor, no_bgp_graceful_restart_disable_eor_cli_cmd,
 	"no bgp graceful-restart disable-eor",
 	NO_STR
 	BGP_STR
 	"Graceful restart configuration parameters\n"
-	"Disable EOR Check\n")
+	"Disable EOR Check\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED | CMD_ATTR_HIDDEN)
 {
-	nb_cli_enqueue_change(vty, "./graceful-restart/disable-eor", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./graceful-restart/eor", NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -3615,24 +3712,59 @@ DEFPY_ATTR(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* Tri-state 'bgp ebgp-connected-route-check <enabled|disabled>' over the
+ * positive leaf (default true, nexthop connectivity verified on
+ * single-hop EBGP sessions). The no-form unsets the leaf back to its
+ * default. */
 DEFPY_YANG(
-	bgp_disable_connected_route_check, bgp_disable_connected_route_check_cli_cmd,
-	"bgp disable-ebgp-connected-route-check",
+	bgp_ebgp_connected_route_check, bgp_ebgp_connected_route_check_cli_cmd,
+	"bgp ebgp-connected-route-check <enabled|disabled>$mode",
 	BGP_STR
-	"Disable checking if nexthop is connected on ebgp sessions\n")
+	"Check if nexthop is connected on ebgp sessions\n"
+	"Enable the nexthop connectivity check\n"
+	"Disable the nexthop connectivity check\n")
 {
-	nb_cli_enqueue_change(vty, "./disable-ebgp-connected-route-check", NB_OP_MODIFY, "true");
+	nb_cli_enqueue_change(vty, "./ebgp-connected-route-check", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
 DEFPY_YANG(
+	no_bgp_ebgp_connected_route_check, no_bgp_ebgp_connected_route_check_cli_cmd,
+	"no bgp ebgp-connected-route-check <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Check if nexthop is connected on ebgp sessions\n"
+	"Enable the nexthop connectivity check\n"
+	"Disable the nexthop connectivity check\n")
+{
+	nb_cli_enqueue_change(vty, "./ebgp-connected-route-check", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated legacy spelling. The positive leaf inverts the polarity, so
+ * legacy 'bgp disable-ebgp-connected-route-check' (check off) becomes an
+ * explicit false and its 'no' form (back to default) becomes a destroy. */
+DEFPY_ATTR(
+	bgp_disable_connected_route_check, bgp_disable_connected_route_check_cli_cmd,
+	"bgp disable-ebgp-connected-route-check",
+	BGP_STR
+	"Disable checking if nexthop is connected on ebgp sessions\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "./ebgp-connected-route-check", NB_OP_MODIFY, "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
 	no_bgp_disable_connected_route_check, no_bgp_disable_connected_route_check_cli_cmd,
 	"no bgp disable-ebgp-connected-route-check",
 	NO_STR
 	BGP_STR
-	"Disable checking if nexthop is connected on ebgp sessions\n")
+	"Disable checking if nexthop is connected on ebgp sessions\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
-	nb_cli_enqueue_change(vty, "./disable-ebgp-connected-route-check", NB_OP_DESTROY, NULL);
+	nb_cli_enqueue_change(vty, "./ebgp-connected-route-check", NB_OP_DESTROY, NULL);
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -5638,16 +5770,10 @@ void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_nod
 	}
 }
 
-/* M6 batch B9b/B5: Tier A multihoming toggles -- value-checked shape,
- * printing whichever form differs from the (YANG, == compiled) default;
- * the at-default value is skipped by the DFS before this is called.
- * use-es-l3nhg (default on) renders the tri-state enabled|disabled form.
- * The two disable-* leaves (default off) only ever render their bare
- * disable form when set: the not-disabled state is the default and
- * emits nothing, so no 'no disable-...' double negation is produced.
- * Legacy did the same in practice -- its enabled default was guarded off
- * by the != DEF check -- and the 'no disable-...' spelling stays
- * parseable via the '[no] disable-ead-evi-*' grammar for unset. */
+/* M6 batch B9b/B5: Tier A multihoming toggles, all three default on and
+ * rendering the tri-state enabled|disabled form. The cli_show gate only
+ * fires for an explicitly configured leaf (or show_defaults), so these
+ * render unconditionally. */
 void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
 						      const struct lyd_node *dnode,
 						      bool show_defaults)
@@ -5656,20 +5782,20 @@ void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults)
+void instance_evpn_multihoming_ead_evi_rx_cli_write(struct vty *vty,
+						    const struct lyd_node *dnode,
+						    bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  disable-ead-evi-rx\n");
+	vty_out(vty, "  ead-evi-rx %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults)
+void instance_evpn_multihoming_ead_evi_tx_cli_write(struct vty *vty,
+						    const struct lyd_node *dnode,
+						    bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  disable-ead-evi-tx\n");
+	vty_out(vty, "  ead-evi-tx %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /* M6 batch B9b: EVPN type-5 'network' list emitter, one line per entry,
@@ -5923,12 +6049,12 @@ void instance_client_to_client_reflection_cli_write(struct vty *vty,
 		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
-void instance_disable_ebgp_connected_route_check_cli_write(struct vty *vty,
-								  const struct lyd_node *dnode,
-								  bool show_defaults)
+void instance_ebgp_connected_route_check_cli_write(struct vty *vty,
+						   const struct lyd_node *dnode,
+						   bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " bgp disable-ebgp-connected-route-check\n");
+	vty_out(vty, " bgp ebgp-connected-route-check %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void instance_bestpath_as_path_ignore_cli_write(struct vty *vty,
@@ -6347,12 +6473,12 @@ void instance_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 		yang_dnode_get_uint16(dnode, NULL));
 }
 
-void instance_graceful_restart_disable_eor_cli_write(struct vty *vty,
-							    const struct lyd_node *dnode,
-							    bool show_defaults)
+void instance_graceful_restart_eor_cli_write(struct vty *vty,
+					     const struct lyd_node *dnode,
+					     bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, " bgp graceful-restart disable-eor\n");
+	vty_out(vty, " bgp graceful-restart eor %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /* M7 batch B5: 'enabled' renders the whole 'bgp shutdown [message
@@ -8812,7 +8938,11 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_bgp_evpn_use_es_l3nhg_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_use_es_l3nhg_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_evi_rx_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_rx_disable_cli_cmd);
+	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_mode_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_bgp_evpn_ead_evi_tx_mode_cli_cmd);
 	install_element(BGP_EVPN_NODE, &bgp_evpn_ead_evi_tx_disable_cli_cmd);
 	install_element(BGP_EVPN_NODE, &evpnrt5_network_cli_cmd);
 	install_element(BGP_EVPN_NODE, &no_evpnrt5_network_cli_cmd);
@@ -8854,6 +8984,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_graceful_restart_select_defer_time_cli_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_rib_stale_time_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_rib_stale_time_cli_cmd);
+	install_element(BGP_NODE, &bgp_graceful_restart_eor_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_graceful_restart_eor_cli_cmd);
 	install_element(BGP_NODE, &bgp_graceful_restart_disable_eor_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_graceful_restart_disable_eor_cli_cmd);
 
@@ -8895,6 +9027,8 @@ void bgp_cli_instance_init(void)
 	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_cli_cmd);
 	install_element(BGP_NODE, &bgp_client_to_client_reflection_deprecated_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_client_to_client_reflection_deprecated_cli_cmd);
+	install_element(BGP_NODE, &bgp_ebgp_connected_route_check_cli_cmd);
+	install_element(BGP_NODE, &no_bgp_ebgp_connected_route_check_cli_cmd);
 	install_element(BGP_NODE, &bgp_disable_connected_route_check_cli_cmd);
 	install_element(BGP_NODE, &no_bgp_disable_connected_route_check_cli_cmd);
 

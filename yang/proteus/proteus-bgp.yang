@@ -3435,11 +3435,15 @@ module proteus-bgp {
          value is false.";
     }
 
-    leaf disable-ebgp-connected-route-check {
+    leaf ebgp-connected-route-check {
       type boolean;
-      default "false";
+      default "true";
       description
-        "'bgp disable-ebgp-connected-route-check'.";
+        "'bgp ebgp-connected-route-check <enabled|disabled>': when
+         enabled, nexthop connectivity is verified on single-hop EBGP
+         sessions; when disabled, that verification is skipped so
+         sessions reachable via a non-directly-connected address stay
+         up (default enabled).";
     }
 
     container confederation {
@@ -3657,12 +3661,13 @@ module proteus-bgp {
         }
         units "seconds";
       }
-      leaf disable-eor {
+      leaf eor {
         type boolean;
-        default "false";
+        default "true";
         description
-          "'bgp graceful-restart disable-eor' (hidden command):
-           never send the End-of-RIB marker to peers.";
+          "'bgp graceful-restart eor <enabled|disabled>' (hidden
+           command): when enabled, the End-of-RIB marker is sent to
+           peers; when disabled, it is never sent (default enabled).";
       }
     }
 

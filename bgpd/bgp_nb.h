@@ -407,7 +407,7 @@ int instance_srv6_locator_destroy(struct nb_cb_destroy_args *args);
 int instance_srv6_only_modify(struct nb_cb_modify_args *args);
 int instance_srv6_encap_behavior_modify(struct nb_cb_modify_args *args);
 int instance_client_to_client_reflection_modify(struct nb_cb_modify_args *args);
-int instance_disable_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args);
+int instance_ebgp_connected_route_check_modify(struct nb_cb_modify_args *args);
 int instance_confederation_identifier_plain_modify(struct nb_cb_modify_args *args);
 int instance_confederation_identifier_plain_destroy(struct nb_cb_destroy_args *args);
 int instance_confederation_identifier_asdot_create(struct nb_cb_create_args *args);
@@ -455,7 +455,7 @@ int instance_graceful_restart_select_defer_time_modify(struct nb_cb_modify_args 
 int instance_graceful_restart_select_defer_time_destroy(struct nb_cb_destroy_args *args);
 int instance_graceful_restart_rib_stale_time_modify(struct nb_cb_modify_args *args);
 int instance_graceful_restart_rib_stale_time_destroy(struct nb_cb_destroy_args *args);
-int instance_graceful_restart_disable_eor_modify(struct nb_cb_modify_args *args);
+int instance_graceful_restart_eor_modify(struct nb_cb_modify_args *args);
 int instance_tcp_keepalive_idle_modify(struct nb_cb_modify_args *args);
 int instance_tcp_keepalive_idle_destroy(struct nb_cb_destroy_args *args);
 int instance_tcp_keepalive_interval_modify(struct nb_cb_modify_args *args);
@@ -4618,9 +4618,9 @@ int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_cr
 int instance_afi_safis_l2vpn_evpn_multihoming_ead_es_route_target_export_ipv4_destroy(
 	struct nb_cb_destroy_args *args);
 int instance_afi_safis_l2vpn_evpn_multihoming_use_es_l3nhg_modify(struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_rx_modify(
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_rx_modify(
 	struct nb_cb_modify_args *args);
-int instance_afi_safis_l2vpn_evpn_multihoming_disable_ead_evi_tx_modify(
+int instance_afi_safis_l2vpn_evpn_multihoming_ead_evi_tx_modify(
 	struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_enabled_modify(struct nb_cb_modify_args *args);
 int instance_afi_safis_l2vpn_evpn_dup_addr_detection_max_moves_modify(
