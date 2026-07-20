@@ -33,6 +33,11 @@ def setup_module(mod):
     tgen = Topogen(build_topo, mod.__name__)
     tgen.start_topology()
     pe1 = tgen.gears["pe1"]
+    # bgpd is a mgmtd backend for its own configuration (the proteus-bgp
+    # model), so applying 'neighbor ... soo' / 'rt vpn' needs mgmtd
+    # running. The harness only auto-starts mgmtd alongside zebra, so
+    # load an (empty) zebra config to bring zebra and mgmtd up.
+    pe1.load_config(TopoRouter.RD_ZEBRA)
     pe1.load_config(TopoRouter.RD_BGP, os.path.join(CWD, "pe1/bgpd.conf"))
     tgen.start_router()
 
