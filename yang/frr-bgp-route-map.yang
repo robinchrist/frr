@@ -1165,10 +1165,18 @@ identity set-extcommunity-color {
         "Set the local preference";
       leaf local-pref {
         type union {
-          type uint32;
+          /* The relative/keyword string type must precede uint32:
+           * libyang accepts a leading '+' when validating uint32, so
+           * a union that tried uint32 first would store '+10' as the
+           * plain integer 10, silently dropping the add/subtract
+           * semantics ('set local-preference +10' then behaving as an
+           * absolute set). Matching the string form first keeps '+N'
+           * and '-N' verbatim for the backend, and a bare integer
+           * falls through to uint32 and keeps its range check. */
           type string {
-            pattern '[+-]?([0-9]+|rtt|igp|aigp)';
+            pattern '[+-][0-9]+|[+-]?(rtt|igp|aigp)';
           }
+          type uint32;
         }
         description
           "Local preference to apply: an absolute value
