@@ -1336,12 +1336,30 @@ IPv6 Support
 
    Default: disabled (link-local addresses are installed to Zebra).
 
-.. clicmd:: bgp ipv6-auto-ra
+.. clicmd:: bgp ipv6-auto-ra <enabled|disabled>
 
    By default, bgpd can ask Zebra to enable sending IPv6 router advertisement
    messages on interfaces. For example, this happens for unnumbered peers
-   support or when extended-nexthop capability is used. The ``no`` form of this
-   command disables such behaviour.
+   support or when extended-nexthop capability is used. `bgp ipv6-auto-ra
+   enabled` is the default and will not be displayed as part of a `show run`.
+   The `disabled` form of this command disables such behaviour.
+
+   The bare ``bgp ipv6-auto-ra`` / ``no bgp ipv6-auto-ra`` spelling (without
+   the explicit ``enabled``/``disabled`` token) is still accepted but
+   deprecated.
+
+.. clicmd:: bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2> <enabled|disabled>
+
+   Configure use of the rfc4273, rfc4382 or BGP4-MIBv2 SNMP traps for BGP.
+   `bgp snmp traps rfc4273 enabled` and `bgp snmp traps rfc4382 enabled` are
+   the default and will not be displayed as part of a `show run`; `bgp snmp
+   traps bgp4-mibv2 disabled` is the default for that trap. The `disabled`
+   form turns off the rfc4273/rfc4382 traps, and the `enabled` form turns on
+   the bgp4-mibv2 trap.
+
+   The bare ``[no] bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>`` spelling
+   (without the explicit ``enabled``/``disabled`` token) is still accepted
+   but deprecated.
 
 .. _bgp-route-aggregation:
 

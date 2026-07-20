@@ -2582,20 +2582,11 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
-DEFPY_YANG(
-	no_bgp_process_ipv6_auto_ra, no_bgp_process_ipv6_auto_ra_cli_cmd,
-	"no bgp ipv6-auto-ra",
-	NO_STR
-	BGP_STR
-	"Allow enabling IPv6 ND RA sending\n")
-{
-	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_MODIFY, "false");
-	return nb_cli_apply_changes(vty, NULL);
-}
-
 /* Instance (BGP_NODE) scope: per-VRF override of the process-wide leaf
- * above. Retires the legacy bgp_ipv6_auto_ra_cmd DEFPY entirely (it used
- * to serve this scope only; see bgp_vty.c history).
+ * (bgp_cli_process.c). Retires the legacy bgp_ipv6_auto_ra_cmd DEFPY
+ * entirely (it used to serve this scope only; see bgp_vty.c history). The
+ * process leaf's own deprecated negative alias used to be misfiled here;
+ * it now lives in bgp_cli_process.c next to its positive twin.
  */
 DEFPY_YANG(
 	bgp_instance_ipv6_auto_ra, bgp_instance_ipv6_auto_ra_cli_cmd,
@@ -8891,7 +8882,6 @@ void bgp_cli_instance_init(void)
 	install_element(CONFIG_NODE, &no_bgp_norib_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_send_extra_data_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_send_extra_data_cli_cmd);
-	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
 
 	/* M5 B9: instance-AF 'network' (ipv4/ipv6 x
 	 * unicast/multicast/labeled-unicast). */

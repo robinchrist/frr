@@ -22,22 +22,75 @@
 
 /*
  * 'bgp ipv6-auto-ra' has both a PROCESS scope (CONFIG_NODE, this block)
- * and an INSTANCE scope (BGP_NODE per-VRF override, further below in the
- * B3 section): both are northbound now, the legacy per-VRF DEFPY
+ * and an INSTANCE scope (BGP_NODE per-VRF override, further below in
+ * bgp_cli_instance.c): both are northbound now, the legacy per-VRF DEFPY
  * (bgp_ipv6_auto_ra_cmd in bgp_vty.c) is fully retired. The process leaf is
- * the chain root: a static default-on boolean, no inheritance, legacy
- * grammar (positive form destroys back to the true default, "no" form
- * modifies an explicit false). The instance leaf overrides it per VRF and
- * stays tri-state (no YANG default, absence = inherit the process leaf),
- * keeping the enabled|disabled scheme with deprecated bare aliases.
+ * the chain root: a static default-on boolean, no inheritance. It now takes
+ * the same canonical tri-state grammar as the instance leaf (enabled|disabled
+ * mapping to MODIFY "true"/"false", no-form to DESTROY back to the true
+ * default); the legacy bare grammar (positive destroys back to the true
+ * default, "no" modifies an explicit false) survives as a deprecated alias
+ * pair, both now living here next to the canonical pair (the negative half
+ * used to be misfiled in bgp_cli_instance.c). The instance leaf stays
+ * tri-state (no YANG default, absence = inherit the process leaf), keeping
+ * the enabled|disabled scheme with its own deprecated bare aliases.
  */
-/* 'bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>' (M8.5 B-snmp). rfc4273 and
- * rfc4382 are Tier A default-on (negative form writes an explicit false,
- * positive form destroys back to the true default); bgp4-mibv2 is Tier A
- * default-off (positive modifies true, negative destroys). The token
+/* 'bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2> <enabled|disabled>' (tri-state
+ * conversion). rfc4273 and rfc4382 are Tier A default-on, bgp4-mibv2 is Tier
+ * A default-off, but the canonical grammar is uniform across all three
+ * tokens: the enabled|disabled suffix always maps directly to
+ * MODIFY "true"/"false", and the no-form always maps to DESTROY (back to
+ * each leaf's own default) regardless of which token was given. The token
  * string equals the leaf name, so the xpath is built from it directly. */
 DEFPY_YANG(
 	bgp_snmp_traps, bgp_snmp_traps_cli_cmd,
+	"bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>$trap <enabled|disabled>$mode",
+	BGP_STR
+	"Configure BGP SNMP\n"
+	"Configure SNMP traps for BGP\n"
+	"Configure use of rfc4273 SNMP traps for BGP\n"
+	"Configure use of rfc4382 SNMP traps for BGP\n"
+	"Configure use of BGP4-MIBv2 SNMP traps for BGP\n"
+	"Enable the trap\n"
+	"Disable the trap\n")
+{
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "/proteus-bgp:process/snmp-traps/%s", trap);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_snmp_traps, no_bgp_snmp_traps_cli_cmd,
+	"no bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>$trap <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Configure BGP SNMP\n"
+	"Configure SNMP traps for BGP\n"
+	"Configure use of rfc4273 SNMP traps for BGP\n"
+	"Configure use of rfc4382 SNMP traps for BGP\n"
+	"Configure use of BGP4-MIBv2 SNMP traps for BGP\n"
+	"Enable the trap\n"
+	"Disable the trap\n")
+{
+	char xpath[XPATH_MAXLEN];
+
+	snprintf(xpath, sizeof(xpath), "/proteus-bgp:process/snmp-traps/%s", trap);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare alias: kept so configs persisted before this leaf grew the
+ * enabled|disabled grammar keep loading with their original meaning. rfc4273
+ * and rfc4382 are Tier A default-on (negative form writes an explicit false,
+ * positive form destroys back to the true default); bgp4-mibv2 is Tier A
+ * default-off (positive modifies true, negative destroys). Handler body is
+ * unchanged from the legacy shared DEFPY.
+ */
+DEFPY_ATTR(
+	bgp_snmp_traps_deprecated, bgp_snmp_traps_deprecated_cli_cmd,
 	"[no] bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2>$trap",
 	NO_STR
 	BGP_STR
@@ -45,7 +98,8 @@ DEFPY_YANG(
 	"Configure SNMP traps for BGP\n"
 	"Configure use of rfc4273 SNMP traps for BGP\n"
 	"Configure use of rfc4382 SNMP traps for BGP\n"
-	"Configure use of BGP4-MIBv2 SNMP traps for BGP\n")
+	"Configure use of BGP4-MIBv2 SNMP traps for BGP\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
 	char xpath[XPATH_MAXLEN];
 	bool negate = (no != NULL);
@@ -64,31 +118,78 @@ DEFPY_YANG(
 void process_snmp_traps_rfc4273_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "no bgp snmp traps rfc4273\n");
+	vty_out(vty, "bgp snmp traps rfc4273 %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void process_snmp_traps_rfc4382_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					  bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "no bgp snmp traps rfc4382\n");
+	vty_out(vty, "bgp snmp traps rfc4382 %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 void process_snmp_traps_bgp4_mibv2_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					     bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "bgp snmp traps bgp4-mibv2\n");
+	vty_out(vty, "bgp snmp traps bgp4-mibv2 %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 DEFPY_YANG(
 	bgp_process_ipv6_auto_ra, bgp_process_ipv6_auto_ra_cli_cmd,
-	"bgp ipv6-auto-ra",
+	"bgp ipv6-auto-ra <enabled|disabled>$mode",
 	BGP_STR
-	"Allow enabling IPv6 ND RA sending\n")
+	"Allow enabling IPv6 ND RA sending\n"
+	"Enable automatic IPv6 ND RA sending\n"
+	"Disable automatic IPv6 ND RA sending\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_process_ipv6_auto_ra, no_bgp_process_ipv6_auto_ra_cli_cmd,
+	"no bgp ipv6-auto-ra <enabled|disabled>$mode",
+	NO_STR
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n"
+	"Enable automatic IPv6 ND RA sending\n"
+	"Disable automatic IPv6 ND RA sending\n")
 {
 	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+/* Deprecated bare aliases: kept so configs persisted before this leaf grew
+ * the enabled|disabled grammar keep loading with their original meaning.
+ * Bare 'bgp ipv6-auto-ra' meant "on" via a destroy back to the true
+ * default; bare 'no bgp ipv6-auto-ra' persisted an explicit "false", so the
+ * alias handler bodies are unchanged from the legacy DEFPYs. The negative
+ * half moves here from bgp_cli_instance.c, where it had been misfiled next
+ * to the instance-scope leaf despite targeting the process xpath.
+ */
+DEFPY_ATTR(
+	bgp_process_ipv6_auto_ra_deprecated, bgp_process_ipv6_auto_ra_deprecated_cli_cmd,
+	"bgp ipv6-auto-ra",
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_ATTR(
+	no_bgp_process_ipv6_auto_ra_deprecated, no_bgp_process_ipv6_auto_ra_deprecated_cli_cmd,
+	"no bgp ipv6-auto-ra",
+	NO_STR
+	BGP_STR
+	"Allow enabling IPv6 ND RA sending\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/ipv6-auto-ra", NB_OP_MODIFY, "false");
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -524,8 +625,8 @@ void process_send_extra_data_zebra_cli_write(struct vty *vty, const struct lyd_n
 void process_ipv6_auto_ra_cli_write(struct vty *vty, const struct lyd_node *dnode,
 					   bool show_defaults)
 {
-	if (!yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "no bgp ipv6-auto-ra\n");
+	vty_out(vty, "bgp ipv6-auto-ra %s\n",
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /* Joint emission of 'bgp suppress-fib-pending [(0-10000)]', process-wide
@@ -658,7 +759,14 @@ void process_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 void bgp_cli_process_init(void)
 {
 	install_element(CONFIG_NODE, &bgp_snmp_traps_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_snmp_traps_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_snmp_traps_deprecated_cli_cmd);
+
 	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_cli_cmd);
+	install_element(CONFIG_NODE, &bgp_process_ipv6_auto_ra_deprecated_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_process_ipv6_auto_ra_deprecated_cli_cmd);
+
 	install_element(CONFIG_NODE, &bgp_global_suppress_fib_pending_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_global_suppress_fib_pending_cli_cmd);
 
