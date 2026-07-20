@@ -4983,7 +4983,18 @@ bool bgp_cli_soo_parse(const char *token, enum bgp_cli_soo_case *soo_case,
 		const char *rest;
 		bool found;
 
+		/* The AS-magnitude prefix of an RD/RT/SoO extended community is
+		 * a bare global-administrator field, not a routing AS: 0 is a
+		 * legal value (e.g. 'rt vpn both 0:10', RD '0:5'), and the
+		 * legacy parsers -- str2prefix_rd() and ecommunity_str2com()'s
+		 * strtoul() tokenizer -- accept it. asn_str2asn_parse() rejects
+		 * AS 0 by default, which silently dropped every such token at
+		 * config load. Relax the AS-zero check for exactly this parse,
+		 * the case the flag was introduced for ("AS 0.0 is authorised
+		 * for some case only"), and restore it immediately. */
+		asn_relax_as_zero(true);
 		rest = asn_str2asn_parse(prefix, &as, &found);
+		asn_relax_as_zero(false);
 		if (!found || !rest || *rest != '\0')
 			return false;
 	}
