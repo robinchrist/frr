@@ -859,9 +859,19 @@ identity set-extcommunity-color {
           "Specifies the community list for BGP routes";
 
         leaf comm-list-name {
-          // Inline + strict on purpose: BGP wants require-instance true (default).
-          // Not reusing a *-ref typedef - those are require-instance false and
-          // shared with other daemons.
+          // Inline leafref union, kept lax (require-instance false) for the
+          // same reason as the proteus-bgp policy-attachment leafrefs: bgpd
+          // treats a dangling community-list reference as a legitimate,
+          // load-bearing state. An operator routinely names a community-list
+          // on a route-map match before defining it (the match stays inert
+          // until the list appears) and deletes a community-list a route-map
+          // still matches (the match goes empty and reactivates when the list
+          // is recreated). bgpd's own CLI accepts both sequences; a strict
+          // (require-instance true) leafref instead makes mgmtd abort the
+          // whole commit -- "Invalid leafref value ... no target instance
+          // /bgpfilter:community-list/name" -- breaking every topotest that
+          // deletes or forward-references a matched community-list.
+          // Not reusing a *-ref typedef - those are shared with other daemons.
           // Union: this one leaf serves 'match community', 'match
           // large-community' and 'match extcommunity' (see the case's when
           // expression), so the referenced name may live in any of the three
@@ -869,12 +879,15 @@ identity set-extcommunity-color {
           type union {
             type leafref {
               path "/bgpfilter:community-list/bgpfilter:name";
+              require-instance false;
             }
             type leafref {
               path "/bgpfilter:large-community-list/bgpfilter:name";
+              require-instance false;
             }
             type leafref {
               path "/bgpfilter:extcommunity-list/bgpfilter:name";
+              require-instance false;
             }
           }
           mandatory true;
