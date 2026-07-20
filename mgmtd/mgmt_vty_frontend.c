@@ -103,6 +103,39 @@ void vty_mgmt_resume_response(struct vty *vty, int ret)
 /* Startup Read Config Files for all mgmt-enabled daemons. */
 /* ======================================================= */
 
+/*
+ * The per-daemon config files are read one after another onto a single shared
+ * vty. Any of them may legitimately end with a bare 'end' or 'exit' -- that is
+ * exactly what "write file" emits, and many hand-written configs terminate that
+ * way -- and config_end()/config_exit() then drop this vty out of CONFIG_NODE
+ * back to ENABLE_NODE and release the candidate/running datastore locks. If the
+ * config context is not restored before the next file is read, every one of its
+ * lines fails to match ("No such command on config line N") and that daemon's
+ * entire configuration is silently discarded. Re-enter config mode and re-take
+ * the locks (only where a previous file dropped them) before reading each file.
+ */
+static void mgmt_vty_reenter_config(struct vty *vty)
+{
+	/*
+	 * A trailing 'end'/'exit' runs vty_config_node_exit(), which fully
+	 * tears the config session down: it drops to ENABLE_NODE, releases the
+	 * datastore locks, clears vty->candidate_config, and -- because this is
+	 * a VTY_FILE -- marks the vty VTY_CLOSE. Rebuild the exact state the
+	 * initial config entry established so the next file reads normally
+	 * instead of editing a NULL candidate (crash) or being seen as closed.
+	 */
+	vty->node = CONFIG_NODE;
+	vty->config = true;
+	vty->status = VTY_NORMAL;
+	vty->xpath_index = 0;
+	vty->candidate_config = vty_shared_candidate_config;
+	vty->pending_allowed = true;
+	if (!vty->mgmt_locked_candidate_ds)
+		vty_mgmt_lock_candidate_inline(vty);
+	if (!vty->mgmt_locked_running_ds)
+		vty_mgmt_lock_running_inline(vty);
+}
+
 static bool mgmt_vty_read_configs(void)
 {
 	char path[PATH_MAX];
@@ -131,6 +164,9 @@ static bool mgmt_vty_read_configs(void)
 		if (!confp)
 			continue;
 
+		/* Isolate this file from a prior file's 'end'/'exit'. */
+		mgmt_vty_reenter_config(vty);
+
 		zlog_info("mgmtd: reading config file: %s", path);
 
 		/* Execute configuration file */
@@ -144,6 +180,9 @@ static bool mgmt_vty_read_configs(void)
 	snprintf(path, sizeof(path), "%s/mgmtd.conf", frr_sysconfdir);
 	confp = vty_open_config(path, config_default);
 	if (confp) {
+		/* Isolate this file from a prior file's 'end'/'exit'. */
+		mgmt_vty_reenter_config(vty);
+
 		zlog_info("mgmtd: reading config file: %s", path);
 
 		line_num = 0;
