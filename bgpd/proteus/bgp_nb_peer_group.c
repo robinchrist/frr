@@ -876,7 +876,12 @@ int instance_peer_group_ttl_security_hops_destroy(struct nb_cb_destroy_args *arg
 	return NB_OK;
 }
 
-int instance_peer_group_disable_connected_check_modify(struct nb_cb_modify_args *args)
+/* The positive 'connected-check' leaf (true means enforce the check)
+ * drives the negatively named PEER_FLAG_DISABLE_CONNECTED_CHECK, so the
+ * sense is inverted here. group->conf carries PEER_STATUS_GROUP, so
+ * peer_flag_set()/_unset() fan out to members exactly as before.
+ */
+int instance_peer_group_connected_check_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -888,9 +893,9 @@ int instance_peer_group_disable_connected_check_modify(struct nb_cb_modify_args 
 		return NB_OK;
 
 	if (yang_dnode_get_bool(args->dnode, NULL))
-		peer_flag_set(group->conf, PEER_FLAG_DISABLE_CONNECTED_CHECK);
-	else
 		peer_flag_unset(group->conf, PEER_FLAG_DISABLE_CONNECTED_CHECK);
+	else
+		peer_flag_set(group->conf, PEER_FLAG_DISABLE_CONNECTED_CHECK);
 
 	return NB_OK;
 }
@@ -1767,7 +1772,13 @@ int instance_peer_group_send_nexthop_characteristics_modify(struct nb_cb_modify_
 	return NB_OK;
 }
 
-int instance_peer_group_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args)
+/* The positive 'link-bw-encoding-ieee' leaf (true means use IEEE
+ * encoding) drives the negatively named
+ * PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE, so the sense is inverted here.
+ * group->conf carries PEER_STATUS_GROUP, so peer_flag_set()/_unset() fan
+ * out to members exactly as before.
+ */
+int instance_peer_group_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args)
 {
 	struct peer_group *group;
 
@@ -1779,9 +1790,9 @@ int instance_peer_group_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify
 		return NB_OK;
 
 	if (yang_dnode_get_bool(args->dnode, NULL))
-		peer_flag_set(group->conf, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
-	else
 		peer_flag_unset(group->conf, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
+	else
+		peer_flag_set(group->conf, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
 
 	return NB_OK;
 }

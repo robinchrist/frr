@@ -52,6 +52,11 @@ int bgp_nb_neighbor_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, sa
 				   uint64_t flag);
 int bgp_nb_peer_group_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
 				     uint64_t flag);
+/* Inverting variants: positive leaf driving a negatively named flag. */
+int bgp_nb_neighbor_af_flag_modify_invert(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					  uint64_t flag);
+int bgp_nb_peer_group_af_flag_modify_invert(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					    uint64_t flag);
 /* M5 batch B5: send-community tri-state destroy, remove-private-as enum,
  * capability orf prefix-list enum (neighbor + peer-group). */
 int bgp_nb_neighbor_af_flag_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi,
@@ -230,7 +235,7 @@ int bgp_nb_neighbor_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, 
 int bgp_nb_neighbor_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_weight_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);
-/* M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/rx-paths-limit
+/* M5 batch B7: per-AF addpath tx/tx-best-selected/rx/rx-paths-limit
  * (neighbor + peer-group). */
 int bgp_nb_neighbor_af_addpath_tx_modify(struct nb_cb_modify_args *args, afi_t afi, safi_t safi);
 int bgp_nb_neighbor_af_addpath_tx_destroy(struct nb_cb_destroy_args *args, afi_t afi, safi_t safi);

@@ -1182,7 +1182,11 @@ int instance_neighbor_ttl_security_hops_destroy(struct nb_cb_destroy_args *args)
 	return NB_OK;
 }
 
-int instance_neighbor_disable_connected_check_modify(struct nb_cb_modify_args *args)
+/* The positive 'connected-check' leaf (true means enforce the check)
+ * drives the negatively named PEER_FLAG_DISABLE_CONNECTED_CHECK, so the
+ * sense is inverted here.
+ */
+int instance_neighbor_connected_check_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -1194,9 +1198,9 @@ int instance_neighbor_disable_connected_check_modify(struct nb_cb_modify_args *a
 		return NB_OK;
 
 	if (yang_dnode_get_bool(args->dnode, NULL))
-		peer_flag_set(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK);
-	else
 		peer_flag_unset(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK);
+	else
+		peer_flag_set(peer, PEER_FLAG_DISABLE_CONNECTED_CHECK);
 
 	return NB_OK;
 }
@@ -2049,9 +2053,11 @@ int instance_neighbor_capabilities_strict_capability_match_modify(struct nb_cb_m
 }
 
 /* rpki-strict, sender-as-path-loop-detection, send-nexthop-characteristics,
- * disable-link-bw-encoding-ieee, extended-link-bandwidth, extended-optional-
- * parameters (M4 batch B13): the last plain Tier A (YANG default "false")
- * session-level flags in the shared neighbor-session-parameters grouping.
+ * link-bw-encoding-ieee, extended-link-bandwidth, extended-optional-
+ * parameters (M4 batch B13): the last plain Tier A session-level flags in
+ * the shared neighbor-session-parameters grouping (all YANG default
+ * "false" except link-bw-encoding-ieee, modeled positively at default
+ * "true" and inverted onto its flag).
  * All six are bare PEER_FLAG_* booleans in legacy -- neighbor_rpki_strict
  * (bare peer_flag_set/unset, bgp_vty.c, retired), neighbor_aspath_loop_detection/
  * no_... (peer_flag_set_vty/unset_vty wrapping PEER_FLAG_AS_LOOP_DETECTION),
@@ -2059,7 +2065,7 @@ int instance_neighbor_capabilities_strict_capability_match_modify(struct nb_cb_m
  * neighbor_disable_link_bw_encoding_ieee/no_... (PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE),
  * neighbor_extended_link_bw (PEER_FLAG_EXTENDED_LINK_BANDWIDTH),
  * neighbor_extended_optional_parameters/no_... (PEER_FLAG_EXTENDED_OPT_PARAMS)
- * -- same shape as B3's passive/B6's disable-connected-check: a bare
+ * -- same shape as B3's passive/B6's connected-check: a bare
  * peer_flag_set()/unset() call, no special-casing (peer_flag_set_vty()'s
  * only extra behavior beyond peer_flag_set()/unset() is for
  * PEER_FLAG_DISABLE_CONNECTED_CHECK/PEER_FLAG_SHUTDOWN, neither of which
@@ -2243,7 +2249,11 @@ int instance_neighbor_send_nexthop_characteristics_modify(struct nb_cb_modify_ar
 	return NB_OK;
 }
 
-int instance_neighbor_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args)
+/* The positive 'link-bw-encoding-ieee' leaf (true means use IEEE
+ * encoding) drives the negatively named
+ * PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE, so the sense is inverted here.
+ */
+int instance_neighbor_link_bw_encoding_ieee_modify(struct nb_cb_modify_args *args)
 {
 	struct peer *peer;
 
@@ -2255,9 +2265,9 @@ int instance_neighbor_disable_link_bw_encoding_ieee_modify(struct nb_cb_modify_a
 		return NB_OK;
 
 	if (yang_dnode_get_bool(args->dnode, NULL))
-		peer_flag_set(peer, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
-	else
 		peer_flag_unset(peer, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
+	else
+		peer_flag_set(peer, PEER_FLAG_DISABLE_LINK_BW_ENCODING_IEEE);
 
 	return NB_OK;
 }

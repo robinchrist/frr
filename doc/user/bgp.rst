@@ -1867,19 +1867,27 @@ Configuring Peers
    Additional ``count`` parameter is the number of keepalive messages to count
    before shutdown the peer if round-trip-time becomes higher than defined.
 
-.. clicmd:: neighbor PEER disable-connected-check
+.. clicmd:: neighbor PEER connected-check <enabled|disabled>
 
-   Allow peerings between directly connected eBGP peers using loopback
-   addresses.
+   Controls the directly-connected check for single-hop eBGP peers. ``neighbor
+   PEER connected-check enabled`` is the default and will not be displayed as
+   part of a ``show run``; the disabled form allows peerings between eBGP peers
+   reachable in a single hop but configured with loopback addresses.
 
-.. clicmd:: neighbor PEER disable-link-bw-encoding-ieee
+   The legacy ``neighbor PEER disable-connected-check`` spelling, and its
+   ``enforce-multihop`` synonym, remain accepted as deprecated aliases.
 
-   By default bandwidth in extended communities is carried encoded as IEEE
-   floating-point format, which is according to the draft.
+.. clicmd:: neighbor PEER link-bw-encoding-ieee <enabled|disabled>
 
-   Older versions have the implementation where extended community bandwidth
-   value is carried encoded as uint32. To enable backward compatibility we
-   need to disable IEEE floating-point encoding option per-peer.
+   Controls how link bandwidth in extended communities is encoded. ``neighbor
+   PEER link-bw-encoding-ieee enabled`` is the default (IEEE floating-point
+   format, per the draft) and will not be displayed as part of a ``show run``.
+
+   Older versions carry the extended community bandwidth value encoded as
+   uint32. Use the disabled form for backward compatibility with those peers.
+
+   The legacy ``neighbor PEER disable-link-bw-encoding-ieee`` spelling remains
+   accepted as a deprecated alias.
 
 .. clicmd:: neighbor PEER extended-link-bandwidth
 
@@ -2215,9 +2223,12 @@ Configuring Peers
 
    Configure BGP to calculate and send N best known paths to the neighbor.
 
-.. clicmd:: neighbor <A.B.C.D|X:X::X:X|WORD> disable-addpath-rx
+.. clicmd:: neighbor <A.B.C.D|X:X::X:X|WORD> addpath-rx <enabled|disabled>
 
-   Do not accept additional paths from this neighbor.
+   Controls whether additional paths are accepted from this neighbor.
+   ``neighbor <A.B.C.D|X:X::X:X|WORD> addpath-rx enabled`` is the default; the
+   disabled form stops accepting additional paths. The legacy
+   ``disable-addpath-rx`` spelling remains accepted as a deprecated alias.
 
 .. clicmd:: neighbor <A.B.C.D|X:X::X:X|WORD> addpath-rx-paths-limit (1-65535)
 

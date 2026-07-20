@@ -5558,7 +5558,7 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 				.cli_show = neighbor_af_weight_cli_write,
 			}
 		},
-		/* M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/
+		/* M5 batch B7: per-AF addpath tx/tx-best-selected/rx/
 		 * rx-paths-limit emitters (neighbor scope). */
 		{
 			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/addpath",
@@ -5567,9 +5567,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5585,9 +5585,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-multicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5603,9 +5603,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-labeled-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5621,9 +5621,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv4-vpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5639,9 +5639,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5657,9 +5657,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-multicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5675,9 +5675,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-labeled-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5693,9 +5693,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/ipv6-vpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5711,9 +5711,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/neighbor/afi-safis/l2vpn-evpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5730,9 +5730,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5748,9 +5748,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-multicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5766,9 +5766,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-labeled-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5784,9 +5784,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv4-vpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5802,9 +5802,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5820,9 +5820,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-multicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5838,9 +5838,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-labeled-unicast/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5856,9 +5856,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/ipv6-vpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{
@@ -5874,9 +5874,9 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
-			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/addpath/disable-rx",
+			.xpath = "/proteus-bgp:instance/peer-group/afi-safis/l2vpn-evpn/addpath/rx",
 			.cbs = {
-				.cli_show = neighbor_af_addpath_disable_rx_cli_write,
+				.cli_show = neighbor_af_addpath_rx_cli_write,
 			}
 		},
 		{

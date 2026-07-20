@@ -725,6 +725,50 @@ int bgp_nb_peer_group_af_flag_modify(struct nb_cb_modify_args *args, afi_t afi, 
 }
 
 /*
+ * Inverting variants of the two helpers above, for a positively modeled
+ * leaf that drives a negatively named PEER_FLAG_* (e.g. the addpath 'rx'
+ * leaf and PEER_FLAG_DISABLE_ADDPATH_RX): the flag is set to the
+ * complement of the leaf value, so an enabled leaf clears the disable
+ * flag and a disabled leaf sets it.
+ */
+int bgp_nb_neighbor_af_flag_modify_invert(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					  uint64_t flag)
+{
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		return bgp_nb_peer_af_flag_apply(bgp_nb_neighbor_lookup(args->dnode),
+						 !yang_dnode_get_bool(args->dnode, NULL), afi,
+						 safi, flag);
+	}
+
+	return NB_OK;
+}
+
+int bgp_nb_peer_group_af_flag_modify_invert(struct nb_cb_modify_args *args, afi_t afi, safi_t safi,
+					    uint64_t flag)
+{
+	struct peer_group *group;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		break;
+	case NB_EV_APPLY:
+		group = bgp_nb_peer_group_lookup(args->dnode);
+		return bgp_nb_peer_af_flag_apply(group ? group->conf : NULL,
+						 !yang_dnode_get_bool(args->dnode, NULL), afi,
+						 safi, flag);
+	}
+
+	return NB_OK;
+}
+
+/*
  * M5 batch B2: shared per-AF policy-attachment apply, parameterized by
  * afi/safi (and, for the four directional families, the FILTER_IN/
  * FILTER_OUT or RMAP_IN/RMAP_OUT direction) -- the B1 delegator template
@@ -4064,7 +4108,8 @@ int bgp_nb_peer_group_af_weight_destroy(struct nb_cb_destroy_args *args, afi_t a
  * container, 712-761: 'tx' three-way enumeration all-paths/best-per-as/
  * best-selected (no default) + its companion 'tx-best-selected' path count
  * (uint8 1..6, no default, YANG 'must ../tx = best-selected' pairs the
- * two), 'disable-rx' boolean (default false, Tier A plain flag), and
+ * two), 'rx' boolean (default true, Tier A plain flag modeled positively
+ * and inverted onto PEER_FLAG_DISABLE_ADDPATH_RX), and
  * 'rx-paths-limit' uint16 1..65535 (no default)).
  *
  * tx (+tx-best-selected): legacy's three independent DEFUN/DEFPY pairs

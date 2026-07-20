@@ -188,12 +188,12 @@ void neighbor_af_allowas_in_cli_write(struct vty *vty, const struct lyd_node *dn
 void neighbor_af_weight_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				  bool show_defaults);
 
-/* M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/rx-paths-limit
+/* M5 batch B7: per-AF addpath tx/tx-best-selected/rx/rx-paths-limit
  * emitters, shared neighbor/peer-group. */
 void neighbor_af_addpath_tx_cli_write(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults);
-void neighbor_af_addpath_disable_rx_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					      bool show_defaults);
+void neighbor_af_addpath_rx_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
 void neighbor_af_addpath_rx_paths_limit_cli_write(struct vty *vty, const struct lyd_node *dnode,
 						   bool show_defaults);
 

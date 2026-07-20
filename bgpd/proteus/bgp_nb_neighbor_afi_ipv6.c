@@ -62,10 +62,10 @@ int instance_neighbor_afi_safis_ipv6_unicast_addpath_tx_best_selected_destroy(
 	return bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(args, AFI_IP6, SAFI_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv6_unicast_addpath_disable_rx_modify(
+int instance_neighbor_afi_safis_ipv6_unicast_addpath_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_UNICAST, PEER_FLAG_DISABLE_ADDPATH_RX);
+	return bgp_nb_neighbor_af_flag_modify_invert(args, AFI_IP6, SAFI_UNICAST, PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_neighbor_afi_safis_ipv6_unicast_addpath_rx_paths_limit_modify(
@@ -636,11 +636,10 @@ int instance_neighbor_afi_safis_ipv6_multicast_addpath_tx_best_selected_destroy(
 	return bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(args, AFI_IP6, SAFI_MULTICAST);
 }
 
-int instance_neighbor_afi_safis_ipv6_multicast_addpath_disable_rx_modify(
+int instance_neighbor_afi_safis_ipv6_multicast_addpath_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_MULTICAST,
-					      PEER_FLAG_DISABLE_ADDPATH_RX);
+	return bgp_nb_neighbor_af_flag_modify_invert(args, AFI_IP6, SAFI_MULTICAST, PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_neighbor_afi_safis_ipv6_multicast_addpath_rx_paths_limit_modify(
@@ -1220,11 +1219,10 @@ int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_tx_best_selected_de
 	return bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(args, AFI_IP6, SAFI_LABELED_UNICAST);
 }
 
-int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_disable_rx_modify(
+int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_rx_modify(
 	struct nb_cb_modify_args *args)
 {
-	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_LABELED_UNICAST,
-					      PEER_FLAG_DISABLE_ADDPATH_RX);
+	return bgp_nb_neighbor_af_flag_modify_invert(args, AFI_IP6, SAFI_LABELED_UNICAST, PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_neighbor_afi_safis_ipv6_labeled_unicast_addpath_rx_paths_limit_modify(
@@ -1818,9 +1816,9 @@ int instance_neighbor_afi_safis_ipv6_vpn_addpath_tx_best_selected_destroy(
 	return bgp_nb_neighbor_af_addpath_tx_best_selected_destroy(args, AFI_IP6, SAFI_MPLS_VPN);
 }
 
-int instance_neighbor_afi_safis_ipv6_vpn_addpath_disable_rx_modify(struct nb_cb_modify_args *args)
+int instance_neighbor_afi_safis_ipv6_vpn_addpath_rx_modify(struct nb_cb_modify_args *args)
 {
-	return bgp_nb_neighbor_af_flag_modify(args, AFI_IP6, SAFI_MPLS_VPN, PEER_FLAG_DISABLE_ADDPATH_RX);
+	return bgp_nb_neighbor_af_flag_modify_invert(args, AFI_IP6, SAFI_MPLS_VPN, PEER_FLAG_DISABLE_ADDPATH_RX);
 }
 
 int instance_neighbor_afi_safis_ipv6_vpn_addpath_rx_paths_limit_modify(

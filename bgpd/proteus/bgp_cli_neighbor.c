@@ -1032,7 +1032,7 @@ DEFPY_YANG(
  * modify "true"; bare 'no' -> modify "false", NOT a destroy -- that's what
  * legacy actually persisted). dont-capability-negotiate, override-capability,
  * strict-capability-match -- Tier A, single combined '[no]' command like
- * B6's disable-connected-check. All nine shared between neighbor/peer-group
+ * B6's connected-check. All nine shared between neighbor/peer-group
  * via bgp_cli_peer_or_group_xpath(), same as every leaf in this section.
  */
 DEFPY_YANG(
@@ -2075,9 +2075,11 @@ DEFPY_YANG(
  * (neighbor_ebgp_multihop_cmd/_ttl_cmd/no_neighbor_ebgp_multihop_cmd,
  * neighbor_ttl_security_cmd/no_neighbor_ttl_security_cmd, bgp_vty.c,
  * retired) into one '[no]'-prefixed grammar, same shape as B4/B5's
- * combined commands; disable-connected-check keeps legacy's
- * '<disable-connected-check|enforce-multihop>' keyword alternation
- * (neighbor_disable_connected_check_cmd/no_..., retired) unchanged.
+ * combined commands; connected-check carries the house tri-state
+ * 'connected-check <enabled|disabled>' grammar plus a deprecated
+ * '<disable-connected-check|enforce-multihop>' alternation alias
+ * reproducing legacy's only grammar (neighbor_disable_connected_check_cmd/
+ * no_..., retired).
  */
 
 DEFPY_YANG(
@@ -2143,14 +2145,17 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* Tri-state 'connected-check <enabled|disabled>' over the positive leaf
+ * (default true, directly-connected check enforced for single-hop EBGP).
+ * The no-form destroys the leaf back to its default. */
 DEFPY_YANG(
-	neighbor_disable_connected_check, neighbor_disable_connected_check_cli_cmd,
-	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer <disable-connected-check|enforce-multihop>",
-	NO_STR
+	neighbor_connected_check, neighbor_connected_check_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer connected-check <enabled|disabled>$mode",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
-	"one-hop away EBGP peer using loopback address\n"
-	"Enforce EBGP neighbors perform multihop\n")
+	"Enforce the directly-connected check for single-hop EBGP peers\n"
+	"Enable the connected check\n"
+	"Disable the connected check\n")
 {
 	char *xpath, *xpath_child;
 	int ret;
@@ -2159,8 +2164,69 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/disable-connected-check", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/connected-check", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_connected_check, no_neighbor_connected_check_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer connected-check <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Enforce the directly-connected check for single-hop EBGP peers\n"
+	"Enable the connected check\n"
+	"Disable the connected check\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/connected-check", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Deprecated legacy spelling, keeping the two-keyword alternation
+ * '<disable-connected-check|enforce-multihop>' unchanged. The positive
+ * leaf inverts the polarity, so the legacy positive keyword (check off)
+ * becomes an explicit false and the legacy 'no' form (check on) an
+ * explicit true. The legacy 'no' form was a MODIFY, not a destroy, so it
+ * is preserved as a MODIFY to the inverted value. */
+DEFPY_ATTR(
+	neighbor_disable_connected_check, neighbor_disable_connected_check_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer <disable-connected-check|enforce-multihop>",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"one-hop away EBGP peer using loopback address\n"
+	"Enforce EBGP neighbors perform multihop\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/connected-check", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "true" : "false");
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
 
@@ -3165,15 +3231,15 @@ void peer_group_listen_range_cli_write(struct vty *vty, const struct lyd_node *d
 }
 
 /* rpki-strict, sender-as-path-loop-detection, send-nexthop-characteristics,
- * disable-link-bw-encoding-ieee, extended-link-bandwidth, extended-optional-
+ * link-bw-encoding-ieee, extended-link-bandwidth, extended-optional-
  * parameters (M4 batch B13): the remaining plain Tier A session-level flags
  * shared between neighbor/peer-group. Pure subcommands like B3/B4/B5/B6/
  * B7/B9/B10's (no legacy DEFUN retention, same rationale as
- * bgp_cli_peer_or_group_xpath()'s doc comment above); each collapses its
- * legacy DEFUN(s) (which/whether a 'no' twin exists in legacy varies leaf
- * by leaf, but all six are the same "no$no" Tier A modify-only shape here,
- * matching passive/disable-connected-check) into one MODIFY-to-"true"/
- * "false" DEFPY_YANG.
+ * bgp_cli_peer_or_group_xpath()'s doc comment above). Five keep the plain
+ * "no$no" Tier A modify-to-"true"/"false" shape (like passive); the
+ * positively modeled link-bw-encoding-ieee instead carries the house
+ * tri-state 'link-bw-encoding-ieee <enabled|disabled>' grammar with a
+ * deprecated 'disable-link-bw-encoding-ieee' alias.
  */
 DEFPY_YANG(
 	neighbor_rpki_strict, neighbor_rpki_strict_cli_cmd,
@@ -3405,13 +3471,17 @@ DEFPY_YANG(
 	return ret;
 }
 
+/* Tri-state 'link-bw-encoding-ieee <enabled|disabled>' over the positive
+ * leaf (default true, IEEE floating-point encoding for extended community
+ * bandwidth). The no-form destroys the leaf back to its default. */
 DEFPY_YANG(
-	neighbor_disable_link_bw_encoding_ieee, neighbor_disable_link_bw_encoding_ieee_cli_cmd,
-	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable-link-bw-encoding-ieee",
-	NO_STR
+	neighbor_link_bw_encoding_ieee, neighbor_link_bw_encoding_ieee_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer link-bw-encoding-ieee <enabled|disabled>$mode",
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
-	"Disable IEEE floating-point encoding for extended community bandwidth\n")
+	"IEEE floating-point encoding for extended community bandwidth\n"
+	"Enable IEEE floating-point encoding\n"
+	"Disable IEEE floating-point encoding\n")
 {
 	char *xpath, *xpath_child;
 	int ret;
@@ -3420,8 +3490,67 @@ DEFPY_YANG(
 	if (!xpath)
 		return CMD_WARNING_CONFIG_FAILED;
 
-	xpath_child = asprintfrr(MTYPE_TMP, "%s/disable-link-bw-encoding-ieee", xpath);
-	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "false" : "true");
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/link-bw-encoding-ieee", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY,
+			      strmatch(mode, "enabled") ? "true" : "false");
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+DEFPY_YANG(
+	no_neighbor_link_bw_encoding_ieee, no_neighbor_link_bw_encoding_ieee_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer link-bw-encoding-ieee <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"IEEE floating-point encoding for extended community bandwidth\n"
+	"Enable IEEE floating-point encoding\n"
+	"Disable IEEE floating-point encoding\n")
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/link-bw-encoding-ieee", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Deprecated legacy spelling. The positive leaf inverts the polarity, so
+ * legacy 'disable-link-bw-encoding-ieee' (IEEE encoding off) becomes an
+ * explicit false and its 'no' form (IEEE encoding on) an explicit true.
+ * The legacy 'no' form was a MODIFY, not a destroy, so it is preserved as
+ * a MODIFY to the inverted value. */
+DEFPY_ATTR(
+	neighbor_disable_link_bw_encoding_ieee, neighbor_disable_link_bw_encoding_ieee_cli_cmd,
+	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable-link-bw-encoding-ieee",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Disable IEEE floating-point encoding for extended community bandwidth\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
+{
+	char *xpath, *xpath_child;
+	int ret;
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/link-bw-encoding-ieee", xpath);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_MODIFY, no ? "true" : "false");
 	XFREE(MTYPE_TMP, xpath_child);
 	XFREE(MTYPE_TMP, xpath);
 
@@ -3678,8 +3807,8 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	if (yang_dnode_exists(dnode, "oad") && yang_dnode_get_bool(dnode, "oad"))
 		vty_out(vty, " neighbor %s oad\n", addr);
 
-	/* ttl-security hops, disable-connected-check (M4 batch B6):
-	 * reproduces bgp_config_write_peer_global()'s (bgp_vty.c, retired)
+	/* ttl-security hops, connected-check (M4 batch B6): reproduces
+	 * bgp_config_write_peer_global()'s (bgp_vty.c, retired)
 	 * ttl-security-hops-through-disable-connected-check block.
 	 * ttl-security-hops is gated on this entry's own leaf presence rather
 	 * than legacy's '!peer_group_active(peer) || g_peer->gtsm_hops !=
@@ -3696,9 +3825,9 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 		vty_out(vty, " neighbor %s ttl-security hops %u\n", addr,
 			yang_dnode_get_uint8(dnode, "ttl-security-hops"));
 
-	if (yang_dnode_exists(dnode, "disable-connected-check") &&
-	    yang_dnode_get_bool(dnode, "disable-connected-check"))
-		vty_out(vty, " neighbor %s disable-connected-check\n", addr);
+	if (yang_dnode_exists(dnode, "connected-check"))
+		vty_out(vty, " neighbor %s connected-check %s\n", addr,
+			yang_dnode_get_bool(dnode, "connected-check") ? "enabled" : "disabled");
 
 	/* local-as (+ no-prepend, + replace-as, + dual-as) (M4 batch B9):
 	 * reproduces bgp_config_write_peer_global()'s (bgp_vty.c, retired)
@@ -3933,9 +4062,10 @@ static void bgp_cli_write_session_scalars(struct vty *vty, const struct lyd_node
 	 * entry's own leaf presence like every other Tier A boolean in this
 	 * function, replacing legacy's peergroup_flag_check() reads.
 	 */
-	if (yang_dnode_exists(dnode, "disable-link-bw-encoding-ieee") &&
-	    yang_dnode_get_bool(dnode, "disable-link-bw-encoding-ieee"))
-		vty_out(vty, " neighbor %s disable-link-bw-encoding-ieee\n", addr);
+	if (yang_dnode_exists(dnode, "link-bw-encoding-ieee"))
+		vty_out(vty, " neighbor %s link-bw-encoding-ieee %s\n", addr,
+			yang_dnode_get_bool(dnode, "link-bw-encoding-ieee") ? "enabled"
+									     : "disabled");
 
 	if (yang_dnode_exists(dnode, "extended-link-bandwidth") &&
 	    yang_dnode_get_bool(dnode, "extended-link-bandwidth"))
@@ -6276,10 +6406,13 @@ void neighbor_af_weight_cli_write(struct vty *vty, const struct lyd_node *dnode,
 }
 
 /*
- * M5 batch B7: per-AF addpath tx/tx-best-selected/disable-rx/rx-paths-limit,
+ * M5 batch B7: per-AF addpath tx/tx-best-selected/rx/rx-paths-limit,
  * neighbor + peer-group -- reusing B1's xpath-building pattern (container
  * from vty->node via bgp_afi_safi_container_name(), peer/group xpath from
- * bgp_cli_peer_or_group_xpath()).
+ * bgp_cli_peer_or_group_xpath()). The rx leaf was de-negated in batch B9
+ * to the positive 'addpath-rx <enabled|disabled>' house grammar; its
+ * install set below adds that canonical pair plus a retained deprecated
+ * 'disable-addpath-rx' alias.
  *
  * Legacy installed all five DEFUN/DEFPY pairs
  * (neighbor_addpath_tx_all_paths, neighbor_addpath_tx_best_selected_paths,
@@ -6465,25 +6598,78 @@ void neighbor_af_addpath_tx_cli_write(struct vty *vty, const struct lyd_node *dn
 			yang_dnode_get_uint8(dnode, "tx-best-selected"));
 }
 
-/* disable-addpath-rx: Tier A boolean flag, reusing bgp_cli_neighbor_af_flag_modify(). */
+/* Tri-state 'addpath-rx <enabled|disabled>' over the positive Tier A leaf
+ * (default true, receive-side add-path processing on), reusing
+ * bgp_cli_neighbor_af_flag_modify(). The no-form destroys the leaf back to
+ * its default. */
 DEFPY_YANG(
+	neighbor_addpath_rx, neighbor_addpath_rx_cli_cmd,
+	"neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-rx <enabled|disabled>$mode",
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Add-path receive-side processing\n"
+	"Enable accepting additional paths\n"
+	"Disable accepting additional paths\n")
+{
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "addpath/rx",
+					       strmatch(mode, "enabled") ? "true" : "false");
+}
+
+DEFPY_YANG(
+	no_neighbor_addpath_rx, no_neighbor_addpath_rx_cli_cmd,
+	"no neighbor <A.B.C.D|X:X::X:X|WORD>$peer addpath-rx <enabled|disabled>$mode",
+	NO_STR
+	NEIGHBOR_STR
+	NEIGHBOR_ADDR_STR2
+	"Add-path receive-side processing\n"
+	"Enable accepting additional paths\n"
+	"Disable accepting additional paths\n")
+{
+	const char *container = bgp_afi_safi_container_name(vty->node);
+	char *xpath, *xpath_child;
+	int ret;
+
+	if (!container) {
+		vty_out(vty, "%% address-family not modeled in proteus-bgp\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	xpath = bgp_cli_peer_or_group_xpath(vty, peer);
+	if (!xpath)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	xpath_child = asprintfrr(MTYPE_TMP, "%s/afi-safis/%s/addpath/rx", xpath, container);
+	nb_cli_enqueue_change(vty, xpath_child, NB_OP_DESTROY, NULL);
+	XFREE(MTYPE_TMP, xpath_child);
+	XFREE(MTYPE_TMP, xpath);
+
+	ret = nb_cli_apply_changes(vty, NULL);
+
+	return ret;
+}
+
+/* Deprecated legacy spelling. The positive leaf inverts the polarity, so
+ * legacy 'disable-addpath-rx' (rx off) becomes an explicit false and its
+ * 'no' form (rx on) an explicit true. The legacy 'no' form was a MODIFY,
+ * not a destroy, so it is preserved as a MODIFY to the inverted value. */
+DEFPY_ATTR(
 	neighbor_disable_addpath_rx, neighbor_disable_addpath_rx_cli_cmd,
 	"[no$no] neighbor <A.B.C.D|X:X::X:X|WORD>$peer disable-addpath-rx",
 	NO_STR
 	NEIGHBOR_STR
 	NEIGHBOR_ADDR_STR2
-	"Do not accept additional paths\n")
+	"Do not accept additional paths\n",
+	CMD_ATTR_YANG | CMD_ATTR_DEPRECATED)
 {
-	return bgp_cli_neighbor_af_flag_modify(vty, peer, "addpath/disable-rx",
-					       no ? "false" : "true");
+	return bgp_cli_neighbor_af_flag_modify(vty, peer, "addpath/rx",
+					       no ? "true" : "false");
 }
 
-void neighbor_af_addpath_disable_rx_cli_write(struct vty *vty, const struct lyd_node *dnode,
-					      bool show_defaults)
+void neighbor_af_addpath_rx_cli_write(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
 {
-	if (yang_dnode_get_bool(dnode, NULL))
-		vty_out(vty, "  neighbor %s disable-addpath-rx\n",
-			bgp_cli_neighbor_or_group_name(dnode));
+	vty_out(vty, "  neighbor %s addpath-rx %s\n", bgp_cli_neighbor_or_group_name(dnode),
+		yang_dnode_get_bool(dnode, NULL) ? "enabled" : "disabled");
 }
 
 /*
@@ -6751,6 +6937,8 @@ void bgp_cli_neighbor_init(void)
 	 * batch B6). */
 	install_element(BGP_NODE, &neighbor_ebgp_multihop_cli_cmd);
 	install_element(BGP_NODE, &neighbor_ttl_security_cli_cmd);
+	install_element(BGP_NODE, &neighbor_connected_check_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_connected_check_cli_cmd);
 	install_element(BGP_NODE, &neighbor_disable_connected_check_cli_cmd);
 
 	/* update-source, ip-transparent (M4 batch B7). */
@@ -6847,6 +7035,8 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_NODE, &no_neighbor_path_attribute_treat_as_withdraw_cli_cmd);
 
 	install_element(BGP_NODE, &neighbor_nhc_attribute_cli_cmd);
+	install_element(BGP_NODE, &neighbor_link_bw_encoding_ieee_cli_cmd);
+	install_element(BGP_NODE, &no_neighbor_link_bw_encoding_ieee_cli_cmd);
 	install_element(BGP_NODE, &neighbor_disable_link_bw_encoding_ieee_cli_cmd);
 	install_element(BGP_NODE, &neighbor_extended_link_bw_cli_cmd);
 	install_element(BGP_NODE, &neighbor_extended_optional_parameters_cli_cmd);
@@ -7333,9 +7523,11 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_weight_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_weight_cli_cmd);
 
-	/* addpath tx/tx-best-selected/disable-rx/rx-paths-limit, neighbor +
+	/* addpath tx/tx-best-selected/rx/rx-paths-limit, neighbor +
 	 * peer-group (M5 batch B7): legacy reached all nine proteus AFs
-	 * uniformly for every one of the five commands. */
+	 * uniformly for every one of the five commands. The de-negated rx
+	 * leaf (batch B9) installs its canonical 'addpath-rx' pair and the
+	 * deprecated 'disable-addpath-rx' alias across the same nine AFs. */
 	install_element(BGP_IPV4_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
 	install_element(BGP_IPV4L_NODE, &neighbor_addpath_tx_all_paths_cli_cmd);
@@ -7365,6 +7557,26 @@ void bgp_cli_neighbor_init(void)
 	install_element(BGP_VPNV4_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
 	install_element(BGP_VPNV6_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
 	install_element(BGP_EVPN_NODE, &neighbor_addpath_tx_best_selected_paths_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_EVPN_NODE, &neighbor_addpath_rx_cli_cmd);
+
+	install_element(BGP_IPV4_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4M_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV4L_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6M_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_IPV6L_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV4_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_VPNV6_NODE, &no_neighbor_addpath_rx_cli_cmd);
+	install_element(BGP_EVPN_NODE, &no_neighbor_addpath_rx_cli_cmd);
 
 	install_element(BGP_IPV4_NODE, &neighbor_disable_addpath_rx_cli_cmd);
 	install_element(BGP_IPV4M_NODE, &neighbor_disable_addpath_rx_cli_cmd);

@@ -471,12 +471,14 @@ module proteus-bgp {
          Mutually exclusive with ebgp-multihop in FRR (the 'must').";
     }
 
-    leaf disable-connected-check {
+    leaf connected-check {
       type boolean;
-      default "false";
+      default "true";
       description
-        "'neighbor X disable-connected-check': allow single-hop eBGP
-         to a non-connected address without ebgp-multihop.";
+        "'neighbor X connected-check <enabled|disabled>': when enabled,
+         the directly-connected check is enforced for single-hop eBGP;
+         when disabled, single-hop eBGP to a non-connected address is
+         allowed without ebgp-multihop (default enabled).";
     }
 
     leaf enforce-first-as {
@@ -717,11 +719,15 @@ module proteus-bgp {
         "'neighbor X send-nexthop-characteristics' (NHC attribute).";
     }
 
-    leaf disable-link-bw-encoding-ieee {
+    leaf link-bw-encoding-ieee {
       type boolean;
-      default "false";
+      default "true";
       description
-        "'neighbor X disable-link-bw-encoding-ieee'.";
+        "'neighbor X link-bw-encoding-ieee <enabled|disabled>': when
+         enabled, link bandwidth in extended communities is encoded in
+         IEEE floating-point format; when disabled, the legacy uint32
+         encoding is used for backward compatibility (default
+         enabled).";
     }
 
     leaf extended-link-bandwidth {
@@ -1131,11 +1137,13 @@ module proteus-bgp {
           "Path count for tx = best-selected; meaningless (and
            rejected by the 'must') otherwise.";
       }
-      leaf disable-rx {
+      leaf rx {
         type boolean;
-        default "false";
+        default "true";
         description
-          "'neighbor X disable-addpath-rx'.";
+          "'neighbor X addpath-rx <enabled|disabled>': when enabled,
+           additional paths are accepted from the neighbor; when
+           disabled, they are not (default enabled).";
       }
       leaf rx-paths-limit {
         type uint16 {
