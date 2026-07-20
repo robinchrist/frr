@@ -5320,7 +5320,14 @@ void instance_evpn_advertise_pip_cli_write(struct vty *vty, const struct lyd_nod
 
 /* M6 batch B9b: Tier A multihoming toggles -- value-checked shape,
  * printing whichever form differs from the (YANG, == compiled) default;
- * the at-default value is skipped by the DFS before this is called. */
+ * the at-default value is skipped by the DFS before this is called.
+ * use-es-l3nhg (default on) renders either the bare or the 'no' form,
+ * both single-negation. The two disable-* leaves (default off) only ever
+ * render their bare disable form when set: the not-disabled state is the
+ * default and emits nothing, so no 'no disable-...' double negation is
+ * produced. Legacy did the same in practice -- its enabled default was
+ * guarded off by the != DEF check -- and the 'no disable-...' spelling
+ * stays parseable via the '[no] disable-ead-evi-*' grammar for unset. */
 void instance_evpn_multihoming_use_es_l3nhg_cli_write(struct vty *vty,
 						      const struct lyd_node *dnode,
 						      bool show_defaults)
@@ -5337,8 +5344,6 @@ void instance_evpn_multihoming_disable_ead_evi_rx_cli_write(struct vty *vty,
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "  disable-ead-evi-rx\n");
-	else
-		vty_out(vty, "  no disable-ead-evi-rx\n");
 }
 
 void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
@@ -5347,8 +5352,6 @@ void instance_evpn_multihoming_disable_ead_evi_tx_cli_write(struct vty *vty,
 {
 	if (yang_dnode_get_bool(dnode, NULL))
 		vty_out(vty, "  disable-ead-evi-tx\n");
-	else
-		vty_out(vty, "  no disable-ead-evi-tx\n");
 }
 
 /* M6 batch B9b: EVPN type-5 'network' list emitter, one line per entry,
