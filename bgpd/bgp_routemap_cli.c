@@ -2099,6 +2099,13 @@ DEFUN_YANG (set_lcommunity,
 			if (ret != CMD_SUCCESS)
 				return ret;
 			nqueued = 0;
+			/* nb_cli_apply_changes() consumes the pending
+			 * changes into the candidate but does not clear
+			 * vty->num_cfg_changes (only cmd_execute does, once
+			 * per command), so reset it too or the next enqueue
+			 * overflows VTY_MAXCFGCHANGES and silently drops
+			 * tokens. */
+			vty->num_cfg_changes = 0;
 		}
 		nqueued++;
 
@@ -2401,6 +2408,13 @@ static int set_ecommunity_structured(struct vty *vty, const char *xpath_action,
 			if (ret != CMD_SUCCESS)
 				return ret;
 			nqueued = 0;
+			/* nb_cli_apply_changes() consumes the pending
+			 * changes into the candidate but does not clear
+			 * vty->num_cfg_changes (only cmd_execute does, once
+			 * per command), so reset it too or the next enqueue
+			 * overflows VTY_MAXCFGCHANGES and silently drops
+			 * tokens. */
+			vty->num_cfg_changes = 0;
 		}
 		nqueued++;
 
@@ -2695,6 +2709,13 @@ DEFPY_YANG (set_ecommunity_nt,
 			if (ret != CMD_SUCCESS)
 				return ret;
 			nqueued = 0;
+			/* nb_cli_apply_changes() consumes the pending
+			 * changes into the candidate but does not clear
+			 * vty->num_cfg_changes (only cmd_execute does, once
+			 * per command), so reset it too or the next enqueue
+			 * overflows VTY_MAXCFGCHANGES and silently drops
+			 * tokens. */
+			vty->num_cfg_changes = 0;
 		}
 		nqueued++;
 
@@ -2803,6 +2824,13 @@ DEFPY_YANG(set_ecommunity_color, set_ecommunity_color_cmd,
 			if (ret != CMD_SUCCESS)
 				return ret;
 			nqueued = 0;
+			/* nb_cli_apply_changes() consumes the pending
+			 * changes into the candidate but does not clear
+			 * vty->num_cfg_changes (only cmd_execute does, once
+			 * per command), so reset it too or the next enqueue
+			 * overflows VTY_MAXCFGCHANGES and silently drops
+			 * tokens. */
+			vty->num_cfg_changes = 0;
 		}
 		nqueued++;
 
@@ -3535,6 +3563,13 @@ DEFUN_YANG (set_community,
 			if (ret != CMD_SUCCESS)
 				return ret;
 			nqueued = 0;
+			/* nb_cli_apply_changes() consumes the pending
+			 * changes into the candidate but does not clear
+			 * vty->num_cfg_changes (only cmd_execute does, once
+			 * per command), so reset it too or the next enqueue
+			 * overflows VTY_MAXCFGCHANGES and silently drops
+			 * tokens. */
+			vty->num_cfg_changes = 0;
 		}
 		nqueued++;
 
