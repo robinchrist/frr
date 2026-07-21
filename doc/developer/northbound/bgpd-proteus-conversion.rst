@@ -361,19 +361,21 @@ priority-ordered init transaction replaced it), the link-state and
 unreachability address families and the BGP-LS link identifiers are
 converted (the last testable native surfaces), ``FRR_NO_SPLIT_CONFIG``
 is set, and the native config-command surface is deleted. See
-"Post-flip architecture" above. The per-milestone rule still applies to
-every future conversion (RPKI/BMP, #31).
+"Post-flip architecture" above. The per-milestone rule was applied once
+more for the RPKI/BMP plugin conversion (#31, done); it applies to any
+future conversion as well.
 
 M9 dispositions (ruled 2026-07-19)
 ------------------------------------
 
-- **RPKI and BMP plugin config: file-config support is dropped for the
-  M9 flip, conversion is TODO** (roadmap #31). Under
-  ``FRR_NO_SPLIT_CONFIG`` the plugins' CLI config (RPKI cache servers
-  and timers, BMP targets) does not persist across a bgpd restart until
-  the plugin CLI is converted to a mgmtd-linked TU with a
-  backend-in-plugin apply path. This limitation must be called out in
-  the user-facing release notes when the flip ships.
+- **RPKI and BMP plugin config: file-config support was dropped for the
+  M9 flip; the conversion (roadmap #31) has since landed and closed the
+  hole.** The original disposition read: under ``FRR_NO_SPLIT_CONFIG``
+  the plugins' CLI config (RPKI cache servers and timers, BMP targets)
+  does not persist across a bgpd restart until the plugin CLI is
+  converted to a mgmtd-linked TU with a backend-in-plugin apply path.
+  That window existed only between the flip and #31; no release shipped
+  in between, so no user-facing release note is needed.
 
   *Update (TODO #31 batch B1):* the RPKI half of this hole is closed;
   see "Plugin config" in the post-flip architecture section above. The

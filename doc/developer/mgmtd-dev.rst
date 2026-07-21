@@ -39,6 +39,10 @@ Conversion Status
 Fully Converted To MGMTD
 """"""""""""""""""""""""
 
+- bgpd (proteus-bgp model family; all configuration including the RPKI
+  and BMP plugin surfaces is mgmtd-owned and mgmtd-emitted, bgpd parses
+  no config lines at all; VNC configuration was dropped with the
+  conversion; see :doc:`northbound/bgpd-proteus-conversion`)
 - lib/affinitymap
 - lib/distribute
 - lib/filter
@@ -64,15 +68,6 @@ Converted To Northbound With Issues
 """""""""""""""""""""""""""""""""""
 - eigrp
 - isisd
-
-Mostly Converted To MGMTD (coexistence window)
-""""""""""""""""""""""""""""""""""""""""""""""
-- bgpd (proteus-bgp model; creation, session, per-AF, filter and dump
-  config are mgmtd-owned and mgmtd-emitted as of M8 B1/B2; the daemon
-  deliberately remains split-config with demoted native parse fallbacks
-  until the native residue - SRv6, flowspec, VNC, SNMP traps, and the
-  RPKI/BMP plugins - is converted or dropped; see
-  :doc:`northbound/bgpd-proteus-conversion`)
 
 Unconverted
 """""""""""
