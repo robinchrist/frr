@@ -69,6 +69,8 @@ if [ ! -e Makefile ]; then
 		--enable-grpc \
 		--enable-scripting \
 		--enable-sharpd \
+		--enable-rpki \
+		--enable-snmp=agentx \
 		$EXTRA_CONFIGURE \
 		--with-pkg-extra-version=-topotests \
 		|| log_fatal "failed to configure the sources"
