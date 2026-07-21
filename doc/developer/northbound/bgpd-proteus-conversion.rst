@@ -65,8 +65,8 @@ both in ``bgp_nb.c``.
 The native config-command surface was deleted in the same milestone:
 the only config commands left in bgpd's own graph are the node-entry
 NOSHes (``router bgp``, the address-family entries,
-``segment-routing srv6`` - kept for bgpd's own vty and the BMP/VNC
-plugin contexts) plus the plugin surfaces themselves. bgpd does not set
+``segment-routing srv6`` - kept for bgpd's own vty and the VNC
+plugin context) plus the plugin surfaces themselves. bgpd does not set
 a host config file, so vtysh's per-daemon ``write memory`` is answered
 by mgmtd (which holds the full modeled view), never by bgpd.
 
@@ -86,12 +86,17 @@ the desired state per instance through the
 ``bgpd_rpki`` plugin subscribes to at load; with the plugin absent the
 config is accepted, stored and warned about, never rejected. RPKI
 config therefore persists through mgmtd's ``bgpd.conf`` again. BMP is
-still native-only (next batch, B2) and VNC is support-dropped: their
-commands work interactively on bgpd's vty and persist under integrated
-``frr.conf`` (vtysh collects bgpd's native ``config_write``), but they
-do **not** persist in split-config mode: mgmtd cannot parse their lines
-from ``bgpd.conf``, and bgpd no longer reads that file. Deployments
-using BMP/VNC must use integrated ``frr.conf`` until BMP is converted.
+converted the same way (batch B2, module ``proteus-bgp-bmp`` augmenting
+the proteus-bgp instance): the CLI lives in mgmtd
+(``bgpd/proteus/bgp_cli_bmp.c``, including the mgmtd-side ``BMP_NODE``),
+bgpd core registers the northbound callbacks unconditionally
+(``bgpd/proteus/bgp_nb_bmp.c``) and fires one ``bgp_bmp_*`` hook per
+legacy operation (``bgp_bmp.h``); the ``bmp`` plugin subscribes at load.
+Only VNC remains support-dropped: its commands work interactively on
+bgpd's vty and persist under integrated ``frr.conf`` (vtysh collects
+bgpd's native ``config_write``), but they do **not** persist in
+split-config mode: mgmtd cannot parse their lines from ``bgpd.conf``,
+and bgpd no longer reads that file.
 
 Backend daemons must not run mgmtd-owned northbound CLI locally
 ----------------------------------------------------------------
@@ -346,7 +351,11 @@ M9 dispositions (ruled 2026-07-19)
   B1 batch also fixed the plugin startup crash it inherited from the
   M3 route-map conversion (the plugin still installed ``match rpki``
   at bgpd's no-longer-existing ``RMAP_NODE``; those commands now live
-  in the mgmtd-hosted ``bgp_routemap_cli.c``). BMP remains open (B2).
+  in the mgmtd-hosted ``bgp_routemap_cli.c``).
+
+  *Update (TODO #31 batch B2):* the BMP half is closed as well; see
+  "Plugin config" in the post-flip architecture section above. Both
+  plugin persistence holes of this disposition are resolved.
 - **VNC/rfapi: documented support-drop.** Its ~133-command CLI surface
   is not converted; file-config support ends at the flip and the
   feature is deprecated-for-removal upstream-side. As a direct

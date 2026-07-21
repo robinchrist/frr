@@ -12,6 +12,8 @@
 #include "pullwr.h"
 #include "qobj.h"
 #include "resolver.h"
+#include "hook.h"
+#include "sockunion.h"
 
 #define BMP_VERSION_3	3
 
@@ -337,5 +339,53 @@ enum {
 };
 
 DECLARE_MGROUP(BMP);
+
+/* Configuration hooks (TODO #31 B2): bgpd's core northbound callbacks
+ * (bgpd/proteus/bgp_nb_bmp.c) translate proteus-bgp-bmp datastore edits
+ * into these hooks, one hook per legacy configuration operation; the bmp
+ * plugin subscribes to all of them at module load and converges its
+ * runtime, so the plugin never needs datastore access. All string
+ * payloads are only valid for the duration of the hook call. Monitoring
+ * flags use the BMP_MON_* bits above.
+ */
+struct bgp;
+
+DECLARE_HOOK(bgp_bmp_target_add, (struct bgp *bgp, const char *targetname), (bgp, targetname));
+DECLARE_HOOK(bgp_bmp_target_del, (struct bgp *bgp, const char *targetname), (bgp, targetname));
+DECLARE_HOOK(bgp_bmp_listener_add,
+	     (struct bgp *bgp, const char *targetname, const union sockunion *addr, uint16_t port),
+	     (bgp, targetname, addr, port));
+DECLARE_HOOK(bgp_bmp_listener_del,
+	     (struct bgp *bgp, const char *targetname, const union sockunion *addr, uint16_t port),
+	     (bgp, targetname, addr, port));
+/* srcif is NULL when no source-interface is configured. */
+DECLARE_HOOK(bgp_bmp_connect_set,
+	     (struct bgp *bgp, const char *targetname, const char *hostname, uint16_t port,
+	      uint32_t minretry, uint32_t maxretry, const char *srcif),
+	     (bgp, targetname, hostname, port, minretry, maxretry, srcif));
+DECLARE_HOOK(bgp_bmp_connect_del,
+	     (struct bgp *bgp, const char *targetname, const char *hostname, uint16_t port),
+	     (bgp, targetname, hostname, port));
+/* aclname NULL = unset. */
+DECLARE_HOOK(bgp_bmp_acl_set,
+	     (struct bgp *bgp, const char *targetname, bool ipv6, const char *aclname),
+	     (bgp, targetname, ipv6, aclname));
+/* interval_msec 0 = stats off. */
+DECLARE_HOOK(bgp_bmp_stats_set, (struct bgp *bgp, const char *targetname, uint32_t interval_msec),
+	     (bgp, targetname, interval_msec));
+DECLARE_HOOK(bgp_bmp_stats_send_experimental_set,
+	     (struct bgp *bgp, const char *targetname, bool send), (bgp, targetname, send));
+DECLARE_HOOK(bgp_bmp_monitor_set,
+	     (struct bgp *bgp, const char *targetname, afi_t afi, safi_t safi, uint8_t flags),
+	     (bgp, targetname, afi, safi, flags));
+DECLARE_HOOK(bgp_bmp_mirror_set, (struct bgp *bgp, const char *targetname, bool mirror),
+	     (bgp, targetname, mirror));
+/* limited false = no buffer limit (limit is ignored then). */
+DECLARE_HOOK(bgp_bmp_mirror_limit_set, (struct bgp *bgp, bool limited, uint32_t limit),
+	     (bgp, limited, limit));
+DECLARE_HOOK(bgp_bmp_import_vrf_add, (struct bgp *bgp, const char *targetname, const char *vrfname),
+	     (bgp, targetname, vrfname));
+DECLARE_HOOK(bgp_bmp_import_vrf_del, (struct bgp *bgp, const char *targetname, const char *vrfname),
+	     (bgp, targetname, vrfname));
 
 #endif /*_BGP_BMP_H_*/

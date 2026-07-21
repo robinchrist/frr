@@ -415,6 +415,10 @@ static const struct frr_yang_module_info *const bgpd_yang_modules[] = {
 	&proteus_bgp_filter_info,
 	&proteus_bgp_dump_info,
 	&proteus_bgp_rpki_info,
+	/* TODO #31 B2: BMP plugin config; augments the proteus-bgp
+	 * instance, so bgpd_config_xpaths' "/proteus-bgp:instance"
+	 * subscription already covers its data. */
+	&proteus_bgp_bmp_info,
 	&proteus_bfd_info,
 };
 

@@ -106,6 +106,7 @@ bgpd_libbgp_a_SOURCES = \
 	bgpd/proteus/bgp_nb_filter.c \
 	bgpd/proteus/bgp_nb_dump.c \
 	bgpd/proteus/bgp_nb_rpki.c \
+	bgpd/proteus/bgp_nb_bmp.c \
 	bgpd/proteus/bgp_filter_value.c \
 	# end
 
@@ -266,6 +267,7 @@ clippy_scan += \
 	bgpd/proteus/bgp_cli_filter.c \
 	bgpd/proteus/bgp_cli_dump.c \
 	bgpd/proteus/bgp_cli_rpki.c \
+	bgpd/proteus/bgp_cli_bmp.c \
 	# end
 
 nodist_bgpd_bgpd_SOURCES = \
@@ -274,6 +276,7 @@ nodist_bgpd_bgpd_SOURCES = \
 	yang/proteus/proteus-bgp-filter.yang.c \
 	yang/proteus/proteus-bgp-dump.yang.c \
 	yang/proteus/proteus-bgp-rpki.yang.c \
+	yang/proteus/proteus-bgp-bmp.yang.c \
 	yang/proteus/proteus-bfd.yang.c \
 	yang/proteus/proteus-bgp-evpn.yang.c \
 	yang/proteus/proteus-bgp.yang.c \

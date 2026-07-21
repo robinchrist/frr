@@ -221,6 +221,7 @@ extern const struct frr_yang_module_info proteus_bgp_nb_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_info;
 extern const struct frr_yang_module_info proteus_bgp_dump_info;
 extern const struct frr_yang_module_info proteus_bgp_rpki_info;
+extern const struct frr_yang_module_info proteus_bgp_bmp_info;
 extern const struct frr_yang_module_info proteus_bfd_info;
 
 /* Interface-level 'mpls bgp ...' flags, on proteus-bgp's augment of
@@ -4863,6 +4864,39 @@ int rpki_instance_cache_ssh_known_hosts_modify(struct nb_cb_modify_args *args);
 int rpki_instance_cache_ssh_known_hosts_destroy(struct nb_cb_destroy_args *args);
 int rpki_instance_cache_ssh_source_modify(struct nb_cb_modify_args *args);
 int rpki_instance_cache_ssh_source_destroy(struct nb_cb_destroy_args *args);
+
+/* proteus-bgp-bmp (TODO #31 batch B2, BMP plugin config): bodies in
+ * bgpd/proteus/bgp_nb_bmp.c. */
+int bmp_mirror_buffer_limit_modify(struct nb_cb_modify_args *args);
+int bmp_mirror_buffer_limit_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_create(struct nb_cb_create_args *args);
+int bmp_targets_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_ipv6_access_list_modify(struct nb_cb_modify_args *args);
+int bmp_targets_ipv6_access_list_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_ipv4_access_list_modify(struct nb_cb_modify_args *args);
+int bmp_targets_ipv4_access_list_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_stats_send_experimental_modify(struct nb_cb_modify_args *args);
+int bmp_targets_stats_create(struct nb_cb_create_args *args);
+int bmp_targets_stats_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_stats_interval_modify(struct nb_cb_modify_args *args);
+int bmp_targets_mirror_modify(struct nb_cb_modify_args *args);
+int bmp_targets_monitor_create(struct nb_cb_create_args *args);
+int bmp_targets_monitor_destroy(struct nb_cb_destroy_args *args);
+void bmp_targets_monitor_apply_finish(struct nb_cb_apply_finish_args *args);
+int bmp_targets_monitor_rib_in_pre_policy_modify(struct nb_cb_modify_args *args);
+int bmp_targets_monitor_rib_in_post_policy_modify(struct nb_cb_modify_args *args);
+int bmp_targets_monitor_loc_rib_modify(struct nb_cb_modify_args *args);
+int bmp_targets_import_vrf_view_create(struct nb_cb_create_args *args);
+int bmp_targets_import_vrf_view_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_listener_create(struct nb_cb_create_args *args);
+int bmp_targets_listener_destroy(struct nb_cb_destroy_args *args);
+int bmp_targets_connect_create(struct nb_cb_create_args *args);
+int bmp_targets_connect_destroy(struct nb_cb_destroy_args *args);
+void bmp_targets_connect_apply_finish(struct nb_cb_apply_finish_args *args);
+int bmp_targets_connect_min_retry_modify(struct nb_cb_modify_args *args);
+int bmp_targets_connect_max_retry_modify(struct nb_cb_modify_args *args);
+int bmp_targets_connect_source_interface_modify(struct nb_cb_modify_args *args);
+int bmp_targets_connect_source_interface_destroy(struct nb_cb_destroy_args *args);
 
 #ifdef __cplusplus
 }

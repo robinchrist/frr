@@ -1,0 +1,316 @@
+module proteus-bgp-bmp {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/bgp-bmp";
+  prefix proteus-bgp-bmp;
+
+  import ietf-inet-types {
+    prefix inet;
+  }
+  import proteus-bgp {
+    prefix proteus-bgp;
+  }
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "BGP Monitoring Protocol (RFC 7854) configuration: per-BGP-instance
+     groups of BMP monitoring stations (passive listeners and active
+     outbound connections) with their per-group monitoring, mirroring
+     and statistics settings, plus the instance-level mirror buffer
+     limit. The BMP machinery itself lives in the bmp plugin;
+     configuration entered while bgpd runs without '-M bmp' is accepted
+     and stored but stays inactive until bgpd is restarted with the
+     plugin loaded.
+
+     CLI text (inside 'router bgp'):
+
+       bmp mirror buffer-limit (0-4294967294)
+       bmp targets BMPTARGETS       (enters the targets group block)
+
+     and inside a 'bmp targets' block:
+
+       <ip|ipv6> access-list ACCESSLIST_NAME
+       bmp stats [interval (100-86400000)]
+       bmp stats send-experimental
+       bmp monitor <ipv4|ipv6|l2vpn> <unicast|multicast|evpn|vpn>
+           <pre-policy|post-policy|loc-rib>
+       bmp mirror
+       bmp import-vrf-view VRFNAME
+       bmp listener <X:X::X:X|A.B.C.D> port (1-65535)
+       bmp connect HOSTNAME port (1-65535)
+           {min-retry (100-86400000)|max-retry (100-86400000)}
+           [source-interface WORD]";
+
+  revision 2026-07-21 {
+    description
+      "Initial revision.";
+  }
+
+  augment "/proteus-bgp:instance" {
+    description
+      "BMP monitoring configuration of one BGP instance.";
+    container bmp {
+      description
+        "BGP Monitoring Protocol settings of this instance.";
+      leaf mirror-buffer-limit {
+        type uint32 {
+          range "0..4294967294";
+        }
+        units "bytes";
+        description
+          "'bmp mirror buffer-limit (0-4294967294)': maximum memory
+           used for buffered route mirroring messages of this
+           instance. When absent, buffering is not limited.";
+      }
+      list targets {
+        key "name";
+        description
+          "'bmp targets BMPTARGETS': a group of BMP monitoring
+           stations sharing one configuration. As implied by the
+           plural name, a group may contain multiple passive
+           listeners and multiple active outbound connections;
+           sessions with identical configuration are cheaper to
+           serve from a single group.";
+        leaf name {
+          type string {
+            length "1..255";
+          }
+          description
+            "Name of the BMP targets group.";
+        }
+        leaf ipv6-access-list {
+          type string {
+            length "1..255";
+          }
+          description
+            "'ipv6 access-list ACCESSLIST_NAME': IPv6 access list
+             restricting which BMP sessions of this group may be
+             established, checked for inbound connections as well
+             as outbound connections resulting from 'bmp connect'.";
+        }
+        leaf ipv4-access-list {
+          type string {
+            length "1..255";
+          }
+          description
+            "'ip access-list ACCESSLIST_NAME': IPv4 access list
+             restricting which BMP sessions of this group may be
+             established, checked for inbound connections as well
+             as outbound connections resulting from 'bmp connect'.";
+        }
+        leaf stats-send-experimental {
+          type boolean;
+          default "true";
+          description
+            "'bmp stats send-experimental': whether statistics
+             messages include the experimental counters 65531-65534.
+             Disabled with 'no bmp stats send-experimental'.";
+        }
+        container stats {
+          presence
+            "Statistics messages are sent.";
+          description
+            "'bmp stats [interval (100-86400000)]': send periodic
+             BMP statistics reports.";
+          leaf interval {
+            type uint32 {
+              range "100..86400000";
+            }
+            units "milliseconds";
+            default "60000";
+            description
+              "Interval between statistics reports.";
+          }
+        }
+        leaf mirror {
+          type boolean;
+          default "false";
+          description
+            "'bmp mirror': send route mirroring messages, feeding
+             fully raw BGP PDUs of the instance's peers to the
+             monitoring stations of this group.";
+        }
+        list monitor {
+          key "afi-safi";
+          description
+            "'bmp monitor <ipv4|ipv6|l2vpn>
+             <unicast|multicast|evpn|vpn>
+             <pre-policy|post-policy|loc-rib>': send route
+             monitoring messages for an address family. Any of the
+             three view points can be enabled independently per
+             family.";
+          leaf afi-safi {
+            type enumeration {
+              enum "ipv4-unicast" {
+                description
+                  "IPv4 unicast.";
+              }
+              enum "ipv4-multicast" {
+                description
+                  "IPv4 multicast.";
+              }
+              enum "ipv4-evpn" {
+                description
+                  "IPv4 EVPN. Accepted by the command grammar for
+                   completeness; no routes exist at this family.";
+              }
+              enum "ipv4-vpn" {
+                description
+                  "IPv4 MPLS VPN.";
+              }
+              enum "ipv6-unicast" {
+                description
+                  "IPv6 unicast.";
+              }
+              enum "ipv6-multicast" {
+                description
+                  "IPv6 multicast.";
+              }
+              enum "ipv6-evpn" {
+                description
+                  "IPv6 EVPN. Accepted by the command grammar for
+                   completeness; no routes exist at this family.";
+              }
+              enum "ipv6-vpn" {
+                description
+                  "IPv6 MPLS VPN.";
+              }
+              enum "l2vpn-unicast" {
+                description
+                  "L2VPN unicast. Accepted by the command grammar
+                   for completeness; no routes exist at this
+                   family.";
+              }
+              enum "l2vpn-multicast" {
+                description
+                  "L2VPN multicast. Accepted by the command grammar
+                   for completeness; no routes exist at this
+                   family.";
+              }
+              enum "l2vpn-evpn" {
+                description
+                  "L2VPN EVPN.";
+              }
+              enum "l2vpn-vpn" {
+                description
+                  "L2VPN MPLS VPN. Accepted by the command grammar
+                   for completeness; no routes exist at this
+                   family.";
+              }
+            }
+            description
+              "Monitored address family. The value set matches
+               exactly the family combinations the command grammar
+               accepts.";
+          }
+          leaf rib-in-pre-policy {
+            type boolean;
+            default "false";
+            description
+              "'pre-policy': send state before policy and filter
+               processing.";
+          }
+          leaf rib-in-post-policy {
+            type boolean;
+            default "false";
+            description
+              "'post-policy': send state with policy and filters
+               applied.";
+          }
+          leaf loc-rib {
+            type boolean;
+            default "false";
+            description
+              "'loc-rib': send state after the decision process is
+               applied.";
+          }
+        }
+        leaf-list import-vrf-view {
+          type string {
+            length "1..36";
+          }
+          description
+            "'bmp import-vrf-view VRFNAME': additionally monitor the
+             BGP instance of another VRF or view through this
+             group's sessions; 'default' names the default
+             instance. Importing the enclosing instance itself is
+             rejected.";
+        }
+        list listener {
+          key "address port";
+          description
+            "'bmp listener <X:X::X:X|A.B.C.D> port (1-65535)':
+             accept incoming BMP sessions on the specified address
+             and port.";
+          leaf address {
+            type inet:ip-address;
+            description
+              "IPv4 or IPv6 address to listen on.";
+          }
+          leaf port {
+            type uint16 {
+              range "1..65535";
+            }
+            description
+              "TCP port to listen on.";
+          }
+        }
+        list connect {
+          key "hostname port";
+          description
+            "'bmp connect HOSTNAME port (1-65535) {min-retry
+             (100-86400000)|max-retry (100-86400000)}
+             [source-interface WORD]': actively establish an
+             outbound session to a monitoring station. The hostname
+             is resolved via DNS; if multiple addresses are
+             returned they are tried in nondeterministic order and
+             only one connection is established.";
+          leaf hostname {
+            type string {
+              length "1..255";
+            }
+            description
+              "Monitoring station hostname or address.";
+          }
+          leaf port {
+            type uint16 {
+              range "1..65535";
+            }
+            description
+              "TCP port of the monitoring station.";
+          }
+          leaf min-retry {
+            type uint32 {
+              range "100..86400000";
+            }
+            units "milliseconds";
+            default "30000";
+            description
+              "'min-retry (100-86400000)': lower bound of the
+               exponential connection retry backoff.";
+          }
+          leaf max-retry {
+            type uint32 {
+              range "100..86400000";
+            }
+            units "milliseconds";
+            default "720000";
+            description
+              "'max-retry (100-86400000)': upper bound of the
+               exponential connection retry backoff.";
+          }
+          leaf source-interface {
+            type string {
+              length "1..64";
+            }
+            description
+              "'source-interface WORD': local interface to bind the
+               outbound connection to.";
+          }
+        }
+      }
+    }
+  }
+}

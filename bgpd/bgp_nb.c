@@ -13292,3 +13292,138 @@ const struct frr_yang_module_info proteus_bgp_rpki_info = {
 		},
 	}
 };
+
+/* TODO #31 batch B2: proteus-bgp-bmp (BMP plugin config), an augment of
+ * the proteus-bgp instance. The callbacks keep the legacy per-operation
+ * granularity and fire one hook per operation; connect and monitor list
+ * entries converge composite state through their apply_finish (see the
+ * design comment in bgp_nb_bmp.c).
+ */
+const struct frr_yang_module_info proteus_bgp_bmp_info = {
+	.name = "proteus-bgp-bmp",
+	.nodes = {
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/mirror-buffer-limit",
+			.cbs = {
+				.modify = bmp_mirror_buffer_limit_modify,
+				.destroy = bmp_mirror_buffer_limit_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets",
+			.cbs = {
+				.create = bmp_targets_create,
+				.destroy = bmp_targets_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/ipv6-access-list",
+			.cbs = {
+				.modify = bmp_targets_ipv6_access_list_modify,
+				.destroy = bmp_targets_ipv6_access_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/ipv4-access-list",
+			.cbs = {
+				.modify = bmp_targets_ipv4_access_list_modify,
+				.destroy = bmp_targets_ipv4_access_list_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/stats-send-experimental",
+			.cbs = {
+				.modify = bmp_targets_stats_send_experimental_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/stats",
+			.cbs = {
+				.create = bmp_targets_stats_create,
+				.destroy = bmp_targets_stats_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/stats/interval",
+			.cbs = {
+				.modify = bmp_targets_stats_interval_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/mirror",
+			.cbs = {
+				.modify = bmp_targets_mirror_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/monitor",
+			.cbs = {
+				.create = bmp_targets_monitor_create,
+				.destroy = bmp_targets_monitor_destroy,
+				.apply_finish = bmp_targets_monitor_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/monitor/rib-in-pre-policy",
+			.cbs = {
+				.modify = bmp_targets_monitor_rib_in_pre_policy_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/monitor/rib-in-post-policy",
+			.cbs = {
+				.modify = bmp_targets_monitor_rib_in_post_policy_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/monitor/loc-rib",
+			.cbs = {
+				.modify = bmp_targets_monitor_loc_rib_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/import-vrf-view",
+			.cbs = {
+				.create = bmp_targets_import_vrf_view_create,
+				.destroy = bmp_targets_import_vrf_view_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/listener",
+			.cbs = {
+				.create = bmp_targets_listener_create,
+				.destroy = bmp_targets_listener_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/connect",
+			.cbs = {
+				.create = bmp_targets_connect_create,
+				.destroy = bmp_targets_connect_destroy,
+				.apply_finish = bmp_targets_connect_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/connect/min-retry",
+			.cbs = {
+				.modify = bmp_targets_connect_min_retry_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/connect/max-retry",
+			.cbs = {
+				.modify = bmp_targets_connect_max_retry_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp:instance/proteus-bgp-bmp:bmp/targets/connect/source-interface",
+			.cbs = {
+				.modify = bmp_targets_connect_source_interface_modify,
+				.destroy = bmp_targets_connect_source_interface_destroy,
+			}
+		},
+		{
+			.xpath = NULL,
+		},
+	}
+};

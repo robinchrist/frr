@@ -1973,7 +1973,10 @@ DEFUNSH(VTYSH_MGMTD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD,
+/* TODO #31 B2: the bmp targets node entry and all bmp config commands
+ * are mgmtd-hosted (proteus-bgp-bmp); bgpd's plugin no longer parses
+ * them. */
+DEFUNSH(VTYSH_MGMTD,
 	bmp_targets,
 	bmp_targets_cmd,
 	"bmp targets BMPTARGETS",
@@ -2677,14 +2680,14 @@ DEFUNSH(VTYSH_MGMTD, rpki_quit, rpki_quit_cmd, "quit",
 	return rpki_exit(self, vty, argc, argv);
 }
 
-DEFUNSH(VTYSH_BGPD, bmp_exit, bmp_exit_cmd, "exit",
+DEFUNSH(VTYSH_MGMTD, bmp_exit, bmp_exit_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
 {
 	vtysh_exit(vty);
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, bmp_quit, bmp_quit_cmd, "quit",
+DEFUNSH(VTYSH_MGMTD, bmp_quit, bmp_quit_cmd, "quit",
 	"Exit current mode and down to previous mode\n")
 {
 	return bmp_exit(self, vty, argc, argv);

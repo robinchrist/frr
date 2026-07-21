@@ -588,6 +588,12 @@ static struct log_ref ferr_bgp_err[] = {
 		.suggestion = "Start bgpd with '-M bgpd_rpki' (and ensure FRR was built with RPKI support) or remove the rpki configuration",
 	},
 	{
+		.code = EC_BGP_BMP_PLUGIN_ABSENT,
+		.title = "BMP configuration is present but the BMP plugin is not loaded",
+		.description = "The configuration contains bmp targets or a bmp mirror buffer-limit, but bgpd was started without the bmp module, so the configuration is stored but has no effect",
+		.suggestion = "Start bgpd with '-M bmp' or remove the bmp configuration",
+	},
+	{
 		.code = END_FERR,
 	}
 };

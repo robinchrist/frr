@@ -2804,355 +2804,159 @@ static void bmp_active_setup(struct bmp_active *ba)
 	}
 }
 
-static struct cmd_node bmp_node = {
-	.name = "bmp",
-	.node = BMP_NODE,
-	.parent_node = BGP_NODE,
-	.prompt = "%s(config-bgp-bmp)# "
-};
-
-static void bmp_targets_autocomplete(vector comps, struct cmd_token *token)
-{
-	struct bgp *bgp;
-	struct bmp_targets *target;
-	struct listnode *node;
-
-	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
-		struct bmp_bgp *bmpbgp = bmp_bgp_find(bgp);
-
-		if (!bmpbgp)
-			continue;
-
-		frr_each_safe (bmp_targets, &bmpbgp->targets, target)
-			vector_set(comps,
-				   XSTRDUP(MTYPE_COMPLETION, target->name));
-	}
-}
-
-static const struct cmd_variable_handler bmp_targets_var_handlers[] = {
-	{.tokenname = "BMPTARGETS", .completions = bmp_targets_autocomplete},
-	{.completions = NULL}};
-
 #define BMP_STR "BGP Monitoring Protocol\n"
 
 #include "bgpd/bgp_bmp_clippy.c"
 
-DEFPY_NOSH(bmp_targets_main,
-      bmp_targets_cmd,
-      "bmp targets BMPTARGETS",
-      BMP_STR
-      "Create BMP target group\n"
-      "Name of the BMP target group\n")
+/* Configuration hook handlers (TODO #31 batch B2). The config surface
+ * lives in mgmtd (bgpd/proteus/bgp_cli_bmp.c) and bgpd core's northbound
+ * callbacks (bgpd/proteus/bgp_nb_bmp.c) translate the datastore
+ * operations into the hooks below, registered in bgp_bmp_module_init();
+ * the handler bodies are the former config DEFPY bodies.
+ */
+static int bmp_target_add_cb(struct bgp *bgp, const char *targetname)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct bmp_targets *bt;
-
-	bt = bmp_targets_get(bgp, bmptargets);
-
-	VTY_PUSH_CONTEXT_SUB(BMP_NODE, bt);
-	return CMD_SUCCESS;
+	bmp_targets_get(bgp, targetname);
+	return 0;
 }
 
-DEFPY(no_bmp_targets_main,
-      no_bmp_targets_cmd,
-      "no bmp targets BMPTARGETS",
-      NO_STR
-      BMP_STR
-      "Delete BMP target group\n"
-      "Name of the BMP target group\n")
+static int bmp_target_del_cb(struct bgp *bgp, const char *targetname)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct bmp_targets *bt;
+	struct bmp_targets *bt = bmp_targets_find1(bgp, targetname);
 
-	bt = bmp_targets_find1(bgp, bmptargets);
-	if (!bt) {
-		vty_out(vty, "%% BMP target group not found\n");
-		return CMD_WARNING;
-	}
-	bmp_targets_put(bt);
-	return CMD_SUCCESS;
+	if (bt)
+		bmp_targets_put(bt);
+	return 0;
 }
 
-DEFPY(bmp_import_vrf,
-      bmp_import_vrf_cmd,
-      "[no] bmp import-vrf-view VRFNAME$vrfname",
-      NO_STR
-      BMP_STR
-      "Import BMP information from another VRF\n"
-      "Specify the VRF or view instance name\n")
+static int bmp_listener_add_cb(struct bgp *bgp, const char *targetname,
+			       const union sockunion *addr, uint16_t port)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
-	struct bmp_imported_bgp *bib;
-	struct bgp *bgp;
-	struct bmp *bmp;
-	afi_t afi;
-	safi_t safi;
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
+	struct bmp_listener *bl = bmp_listener_get(bt, addr, port);
 
-	if (!bt->bgp) {
-		vty_out(vty, "%% BMP target, BGP instance not found\n");
-		return CMD_WARNING;
-	}
-	if ((bt->bgp->name == NULL && vrfname == NULL) ||
-	    (bt->bgp->name && vrfname && strmatch(vrfname, bt->bgp->name))) {
-		vty_out(vty, "%% BMP target, can not import our own BGP instance\n");
-		return CMD_WARNING;
-	}
-	if (no) {
-		bib = bmp_imported_bgp_find(bt, (char *)vrfname);
-		if (!bib) {
-			vty_out(vty, "%% BMP imported BGP instance not found\n");
-			return CMD_WARNING;
-		}
-		bgp = bgp_lookup_by_name(bib->name);
-		if (!bgp)
-			return CMD_WARNING;
-		bmp_send_peerdown_vrf_per_instance(bt, bgp);
-		bmp_imported_bgp_put(bt, bib);
-		return CMD_SUCCESS;
-	}
-	bib = bmp_imported_bgp_find(bt, (char *)vrfname);
-	if (bib)
-		return CMD_SUCCESS;
-
-	bib = bmp_imported_bgp_get(bt, (char *)vrfname);
-	bgp = bgp_lookup_by_name(bib->name);
-	if (!bgp)
-		return CMD_SUCCESS;
-
-	frr_each (bmp_session, &bt->sessions, bmp) {
-		if (bmp->state != BMP_PeerUp && bmp->state != BMP_Run)
-			continue;
-		bmp_send_peerup_per_instance(bmp, bgp);
-		bmp_send_peerup_vrf_per_instance(bmp, &bib->vrf_state, bgp);
-		FOREACH_AFI_SAFI (afi, safi)
-			bmp_update_syncro(bmp, afi, safi, bgp);
-	}
-	return CMD_SUCCESS;
-}
-
-DEFPY(bmp_listener_main,
-      bmp_listener_cmd,
-      "bmp listener <X:X::X:X|A.B.C.D> port (1-65535)",
-      BMP_STR
-      "Listen for inbound BMP connections\n"
-      "IPv6 address to listen on\n"
-      "IPv4 address to listen on\n"
-      "TCP Port number\n"
-      "TCP Port number\n")
-{
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
-	struct bmp_listener *bl;
-
-	bl = bmp_listener_get(bt, listener, port);
 	if (bl->sock == -1)
 		bmp_listener_start(bl);
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-DEFPY(no_bmp_listener_main,
-      no_bmp_listener_cmd,
-      "no bmp listener <X:X::X:X|A.B.C.D> port (1-65535)",
-      NO_STR
-      BMP_STR
-      "Create BMP listener\n"
-      "IPv6 address to listen on\n"
-      "IPv4 address to listen on\n"
-      "TCP Port number\n"
-      "TCP Port number\n")
+static int bmp_listener_del_cb(struct bgp *bgp, const char *targetname,
+			       const union sockunion *addr, uint16_t port)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	struct bmp_targets *bt = bmp_targets_find1(bgp, targetname);
 	struct bmp_listener *bl;
 
-	bl = bmp_listener_find(bt, listener, port);
-	if (!bl) {
-		vty_out(vty, "%% BMP listener not found\n");
-		return CMD_WARNING;
-	}
+	if (!bt)
+		return 0;
+	bl = bmp_listener_find(bt, addr, port);
+	if (!bl)
+		return 0;
 	bmp_listener_stop(bl);
 	bmp_listener_put(bl);
-	return CMD_SUCCESS;
+
+	return 0;
 }
 
-DEFPY(bmp_connect,
-      bmp_connect_cmd,
-      "[no] bmp connect HOSTNAME port (1-65535) {min-retry (100-86400000)|max-retry (100-86400000)} [source-interface <WORD$srcif>]",
-      NO_STR
-      BMP_STR
-      "Actively establish connection to monitoring station\n"
-      "Monitoring station hostname or address\n"
-      "TCP port\n"
-      "TCP port\n"
-      "Minimum connection retry interval\n"
-      "Minimum connection retry interval (milliseconds)\n"
-      "Maximum connection retry interval\n"
-      "Maximum connection retry interval (milliseconds)\n"
-      "Source interface to use\n"
-      "Define an interface\n")
+/* Rereads the connect entry's whole tuple: an omitted source-interface
+ * arrives as NULL and unsets a previously configured one, and the retry
+ * bounds always carry their effective values. */
+static int bmp_connect_set_cb(struct bgp *bgp, const char *targetname, const char *hostname,
+			      uint16_t port, uint32_t minretry, uint32_t maxretry,
+			      const char *srcif)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
-	struct bmp_active *ba;
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
+	struct bmp_active *ba = bmp_active_get(bt, hostname, port);
 
-	if (no) {
-		ba = bmp_active_find(bt, hostname, port);
-		if (!ba) {
-			vty_out(vty, "%% No such active connection found\n");
-			return CMD_WARNING;
-		}
-		/* connection deletion need same hostname port and interface */
-		if (ba->ifsrc || srcif)
-			if ((!ba->ifsrc) || (!srcif) || !strmatch(ba->ifsrc, srcif)) {
-				vty_out(vty,
-					"%% No such active connection found\n");
-				return CMD_WARNING;
-			}
-		bmp_active_put(ba);
-		return CMD_SUCCESS;
-	}
-
-	ba = bmp_active_get(bt, hostname, port);
-	if (srcif) {
-		if (ba->ifsrc)
-			XFREE(MTYPE_TMP, ba->ifsrc);
+	XFREE(MTYPE_TMP, ba->ifsrc);
+	if (srcif)
 		ba->ifsrc = XSTRDUP(MTYPE_TMP, srcif);
-	}
-	if (min_retry_str)
-		ba->minretry = min_retry;
-	if (max_retry_str)
-		ba->maxretry = max_retry;
+	ba->minretry = minretry;
+	ba->maxretry = maxretry;
 	ba->curretry = ba->minretry;
 	bmp_active_setup(ba);
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-DEFPY(bmp_acl,
-      bmp_acl_cmd,
-      "[no] <ip|ipv6>$af access-list ACCESSLIST_NAME$access_list",
-      NO_STR
-      IP_STR
-      IPV6_STR
-      "Access list to restrict BMP sessions\n"
-      "Access list name\n")
+static int bmp_connect_del_cb(struct bgp *bgp, const char *targetname, const char *hostname,
+			      uint16_t port)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
-	char **what;
+	struct bmp_targets *bt = bmp_targets_find1(bgp, targetname);
+	struct bmp_active *ba;
 
-	if (no)
-		access_list = NULL;
-	if (!strcmp(af, "ipv6"))
-		what = &bt->acl6_name;
-	else
-		what = &bt->acl_name;
+	if (!bt)
+		return 0;
+	ba = bmp_active_find(bt, hostname, port);
+	if (ba)
+		bmp_active_put(ba);
+
+	return 0;
+}
+
+static int bmp_acl_set_cb(struct bgp *bgp, const char *targetname, bool ipv6, const char *aclname)
+{
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
+	char **what = ipv6 ? &bt->acl6_name : &bt->acl_name;
 
 	XFREE(MTYPE_BMP_ACLNAME, *what);
-	if (access_list)
-		*what = XSTRDUP(MTYPE_BMP_ACLNAME, access_list);
+	if (aclname)
+		*what = XSTRDUP(MTYPE_BMP_ACLNAME, aclname);
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-DEFPY(bmp_stats_cfg,
-      bmp_stats_cmd,
-      "[no] bmp stats [interval (100-86400000)]",
-      NO_STR
-      BMP_STR
-      "Send BMP statistics messages\n"
-      "Specify BMP stats interval\n"
-      "Interval (milliseconds) to send BMP Stats in\n")
+static int bmp_stats_set_cb(struct bgp *bgp, const char *targetname, uint32_t interval_msec)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
 
 	event_cancel(&bt->t_stats);
-	if (no)
-		bt->stat_msec = 0;
-	else if (interval_str)
-		bt->stat_msec = interval;
-	else
-		bt->stat_msec = BMP_STAT_DEFAULT_TIMER;
+	bt->stat_msec = interval_msec;
 
 	if (bt->stat_msec)
-		event_add_timer_msec(bm->master, bmp_stats, bt, bt->stat_msec,
-				     &bt->t_stats);
-	return CMD_SUCCESS;
+		event_add_timer_msec(bm->master, bmp_stats, bt, bt->stat_msec, &bt->t_stats);
+
+	return 0;
 }
 
-DEFPY(bmp_stats_send_experimental,
-      bmp_stats_send_experimental_cmd,
-      "[no] bmp stats send-experimental",
-      NO_STR
-      BMP_STR
-      "Send BMP statistics messages\n"
-      "Send experimental BMP stats [65531-65534]\n")
+static int bmp_stats_send_experimental_set_cb(struct bgp *bgp, const char *targetname, bool send)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
 
-	bt->stats_send_experimental = !no;
+	bt->stats_send_experimental = send;
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-#define BMP_POLICY_IS_LOCRIB(str) ((str)[0] == 'l') /* __l__oc-rib */
-#define BMP_POLICY_IS_PRE(str) ((str)[1] == 'r')    /* p__r__e-policy */
-
-DEFPY(bmp_monitor_cfg, bmp_monitor_cmd,
-      "[no] bmp monitor <ipv4|ipv6|l2vpn> <unicast|multicast|evpn|vpn> <pre-policy|post-policy|loc-rib>$policy",
-      NO_STR BMP_STR
-      "Send BMP route monitoring messages\n" BGP_AF_STR BGP_AF_STR BGP_AF_STR
-	      BGP_AF_STR BGP_AF_STR BGP_AF_STR BGP_AF_STR
-      "Send state before policy and filter processing\n"
-      "Send state with policy and filters applied\n"
-      "Send state after decision process is applied\n")
+static int bmp_monitor_set_cb(struct bgp *bgp, const char *targetname, afi_t afi, safi_t safi,
+			      uint8_t flags)
 {
-	int index = 0;
-	uint8_t flag, prev;
-	afi_t afi;
-	safi_t safi;
-
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
 	struct bmp *bmp;
+	uint8_t prev = bt->afimon[afi][safi];
 
-	argv_find_and_parse_afi(argv, argc, &index, &afi);
-	argv_find_and_parse_safi(argv, argc, &index, &safi);
-
-	if (BMP_POLICY_IS_LOCRIB(policy))
-		flag = BMP_MON_LOC_RIB;
-	else if (BMP_POLICY_IS_PRE(policy))
-		flag = BMP_MON_PREPOLICY;
-	else
-		flag = BMP_MON_POSTPOLICY;
-
-	prev = bt->afimon[afi][safi];
-	if (no)
-		UNSET_FLAG(bt->afimon[afi][safi], flag);
-	else
-		SET_FLAG(bt->afimon[afi][safi], flag);
+	bt->afimon[afi][safi] = flags;
 
 	if (prev == bt->afimon[afi][safi])
-		return CMD_SUCCESS;
+		return 0;
 
 	frr_each (bmp_session, &bt->sessions, bmp)
 		bmp_update_syncro(bmp, afi, safi, NULL);
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-DEFPY(bmp_mirror_cfg,
-      bmp_mirror_cmd,
-      "[no] bmp mirror",
-      NO_STR
-      BMP_STR
-      "Send BMP route mirroring messages\n")
+static int bmp_mirror_set_cb(struct bgp *bgp, const char *targetname, bool mirror)
 {
-	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
 	struct bmp *bmp;
 
-	if (bt->mirror == !no)
-		return CMD_SUCCESS;
+	if (bt->mirror == mirror)
+		return 0;
 
-	bt->mirror = !no;
+	bt->mirror = mirror;
 	if (bt->mirror)
-		return CMD_SUCCESS;
+		return 0;
 
 	frr_each (bmp_session, &bt->sessions, bmp) {
 		struct bmp_mirrorq *bmq;
@@ -3161,42 +2965,76 @@ DEFPY(bmp_mirror_cfg,
 			if (!bmq->refcount)
 				XFREE(MTYPE_BMP_MIRRORQ, bmq);
 	}
-	return CMD_SUCCESS;
+
+	return 0;
 }
 
-DEFPY(bmp_mirror_limit_cfg,
-      bmp_mirror_limit_cmd,
-      "bmp mirror buffer-limit (0-4294967294)",
-      BMP_STR
-      "Route Mirroring settings\n"
-      "Configure maximum memory used for buffered mirroring messages\n"
-      "Limit in bytes\n")
+static int bmp_mirror_limit_set_cb(struct bgp *bgp, bool limited, uint32_t limit)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct bmp_bgp *bmpbgp;
+	struct bmp_bgp *bmpbgp = bmp_bgp_get(bgp);
 
-	bmpbgp = bmp_bgp_get(bgp);
-	bmpbgp->mirror_qsizelimit = buffer_limit;
+	bmpbgp->mirror_qsizelimit = limited ? limit : ~0UL;
 
-	return CMD_SUCCESS;
+	return 0;
 }
 
-DEFPY(no_bmp_mirror_limit_cfg,
-      no_bmp_mirror_limit_cmd,
-      "no bmp mirror buffer-limit [(0-4294967294)]",
-      NO_STR
-      BMP_STR
-      "Route Mirroring settings\n"
-      "Configure maximum memory used for buffered mirroring messages\n"
-      "Limit in bytes\n")
+static int bmp_import_vrf_add_cb(struct bgp *bgp, const char *targetname, const char *vrfname)
 {
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct bmp_bgp *bmpbgp;
+	struct bmp_targets *bt = bmp_targets_get(bgp, targetname);
+	struct bmp_imported_bgp *bib;
+	struct bgp *bgp_import;
+	struct bmp *bmp;
+	afi_t afi;
+	safi_t safi;
 
-	bmpbgp = bmp_bgp_get(bgp);
-	bmpbgp->mirror_qsizelimit = ~0UL;
+	/* Self-import guard, kept identical to the legacy check (the
+	 * default instance was never caught by it). The mgmtd CLI rejects
+	 * this interactively too; this guards file-loaded config. */
+	if (bt->bgp->name && strmatch(vrfname, bt->bgp->name))
+		return 0;
 
-	return CMD_SUCCESS;
+	bib = bmp_imported_bgp_find(bt, (char *)vrfname);
+	if (bib)
+		return 0;
+
+	bib = bmp_imported_bgp_get(bt, (char *)vrfname);
+	bgp_import = bgp_lookup_by_name(bib->name);
+	if (!bgp_import)
+		return 0;
+
+	frr_each (bmp_session, &bt->sessions, bmp) {
+		if (bmp->state != BMP_PeerUp && bmp->state != BMP_Run)
+			continue;
+		bmp_send_peerup_per_instance(bmp, bgp_import);
+		bmp_send_peerup_vrf_per_instance(bmp, &bib->vrf_state, bgp_import);
+		FOREACH_AFI_SAFI (afi, safi)
+			bmp_update_syncro(bmp, afi, safi, bgp_import);
+	}
+
+	return 0;
+}
+
+static int bmp_import_vrf_del_cb(struct bgp *bgp, const char *targetname, const char *vrfname)
+{
+	struct bmp_targets *bt = bmp_targets_find1(bgp, targetname);
+	struct bmp_imported_bgp *bib;
+	struct bgp *bgp_import;
+
+	if (!bt)
+		return 0;
+	bib = bmp_imported_bgp_find(bt, (char *)vrfname);
+	if (!bib)
+		return 0;
+
+	/* Unlike the legacy command (which bailed without removing the
+	 * import when the instance did not exist), the import entry is
+	 * always removed so the runtime converges on the datastore. */
+	bgp_import = bgp_lookup_by_name(bib->name);
+	if (bgp_import)
+		bmp_send_peerdown_vrf_per_instance(bt, bgp_import);
+	bmp_imported_bgp_put(bt, bib);
+
+	return 0;
 }
 
 
@@ -3348,102 +3186,8 @@ DEFPY(show_bmp,
 	return CMD_SUCCESS;
 }
 
-static int bmp_config_write(struct bgp *bgp, struct vty *vty)
-{
-	struct bmp_bgp *bmpbgp = bmp_bgp_find(bgp);
-	struct bmp_targets *bt;
-	struct bmp_listener *bl;
-	struct bmp_active *ba;
-	struct bmp_imported_bgp *bib;
-	afi_t afi;
-	safi_t safi;
-
-	if (!bmpbgp)
-		return 0;
-
-	if (bmpbgp->mirror_qsizelimit != ~0UL)
-		vty_out(vty, " !\n bmp mirror buffer-limit %zu\n",
-			bmpbgp->mirror_qsizelimit);
-
-	frr_each(bmp_targets, &bmpbgp->targets, bt) {
-		vty_out(vty, " !\n bmp targets %s\n", bt->name);
-
-		if (bt->acl6_name)
-			vty_out(vty, "  ipv6 access-list %s\n", bt->acl6_name);
-		if (bt->acl_name)
-			vty_out(vty, "  ip access-list %s\n", bt->acl_name);
-
-		if (!bt->stats_send_experimental)
-			vty_out(vty, "  no bmp stats send-experimental\n");
-
-		if (bt->stat_msec)
-			vty_out(vty, "  bmp stats interval %d\n",
-					bt->stat_msec);
-
-		if (bt->mirror)
-			vty_out(vty, "  bmp mirror\n");
-
-		FOREACH_AFI_SAFI (afi, safi) {
-			if (CHECK_FLAG(bt->afimon[afi][safi],
-				       BMP_MON_PREPOLICY))
-				vty_out(vty, "  bmp monitor %s %s pre-policy\n",
-					afi2str_lower(afi), safi2str(safi));
-			if (CHECK_FLAG(bt->afimon[afi][safi],
-				       BMP_MON_POSTPOLICY))
-				vty_out(vty,
-					"  bmp monitor %s %s post-policy\n",
-					afi2str_lower(afi), safi2str(safi));
-			if (CHECK_FLAG(bt->afimon[afi][safi], BMP_MON_LOC_RIB))
-				vty_out(vty, "  bmp monitor %s %s loc-rib\n",
-					afi2str_lower(afi), safi2str(safi));
-		}
-
-		frr_each (bmp_imported_bgps, &bt->imported_bgps, bib)
-			vty_out(vty, "  bmp import-vrf-view %s\n",
-				bib->name ? bib->name : VRF_DEFAULT_NAME);
-
-		frr_each (bmp_listeners, &bt->listeners, bl)
-			vty_out(vty, "   bmp listener %pSU port %d\n", &bl->addr, bl->port);
-
-		frr_each (bmp_actives, &bt->actives, ba) {
-			vty_out(vty, "  bmp connect %s port %u min-retry %u max-retry %u",
-				ba->hostname, ba->port,
-				ba->minretry, ba->maxretry);
-
-			if (ba->ifsrc)
-				vty_out(vty, " source-interface %s\n", ba->ifsrc);
-			else
-				vty_out(vty, "\n");
-		}
-		vty_out(vty, " exit\n");
-	}
-
-	return 0;
-}
-
 static int bgp_bmp_init(struct event_loop *tm)
 {
-	install_node(&bmp_node);
-	install_default(BMP_NODE);
-
-	cmd_variable_handler_register(bmp_targets_var_handlers);
-
-	install_element(BGP_NODE, &bmp_targets_cmd);
-	install_element(BGP_NODE, &no_bmp_targets_cmd);
-
-	install_element(BMP_NODE, &bmp_listener_cmd);
-	install_element(BMP_NODE, &no_bmp_listener_cmd);
-	install_element(BMP_NODE, &bmp_connect_cmd);
-	install_element(BMP_NODE, &bmp_acl_cmd);
-	install_element(BMP_NODE, &bmp_stats_send_experimental_cmd);
-	install_element(BMP_NODE, &bmp_stats_cmd);
-	install_element(BMP_NODE, &bmp_monitor_cmd);
-	install_element(BMP_NODE, &bmp_mirror_cmd);
-	install_element(BMP_NODE, &bmp_import_vrf_cmd);
-
-	install_element(BGP_NODE, &bmp_mirror_limit_cmd);
-	install_element(BGP_NODE, &no_bmp_mirror_limit_cmd);
-
 	install_element(VIEW_NODE, &show_bmp_cmd);
 
 	resolver_init(tm);
@@ -3711,7 +3455,6 @@ static int bgp_bmp_module_init(void)
 	hook_register(peer_backward_transition, bmp_peer_backward);
 	hook_register(bgp_process, bmp_process);
 	hook_register(bgp_nht_path_update, bmp_nht_path_valid);
-	hook_register(bgp_inst_config_write, bmp_config_write);
 	hook_register(bgp_inst_delete, bmp_bgp_del);
 	hook_register(frr_late_init, bgp_bmp_init);
 	hook_register(bgp_route_update, bmp_route_update);
@@ -3720,6 +3463,22 @@ static int bgp_bmp_module_init(void)
 	hook_register(bgp_vrf_status_changed, bmp_vrf_itf_state_changed);
 	hook_register(bgp_routerid_update, bmp_routerid_update);
 	hook_register(bgp_route_distinguisher_update, bmp_route_distinguisher_update);
+	/* Configuration hooks, fired by bgpd core's proteus-bgp-bmp
+	 * northbound callbacks (TODO #31 batch B2). */
+	hook_register(bgp_bmp_target_add, bmp_target_add_cb);
+	hook_register(bgp_bmp_target_del, bmp_target_del_cb);
+	hook_register(bgp_bmp_listener_add, bmp_listener_add_cb);
+	hook_register(bgp_bmp_listener_del, bmp_listener_del_cb);
+	hook_register(bgp_bmp_connect_set, bmp_connect_set_cb);
+	hook_register(bgp_bmp_connect_del, bmp_connect_del_cb);
+	hook_register(bgp_bmp_acl_set, bmp_acl_set_cb);
+	hook_register(bgp_bmp_stats_set, bmp_stats_set_cb);
+	hook_register(bgp_bmp_stats_send_experimental_set, bmp_stats_send_experimental_set_cb);
+	hook_register(bgp_bmp_monitor_set, bmp_monitor_set_cb);
+	hook_register(bgp_bmp_mirror_set, bmp_mirror_set_cb);
+	hook_register(bgp_bmp_mirror_limit_set, bmp_mirror_limit_set_cb);
+	hook_register(bgp_bmp_import_vrf_add, bmp_import_vrf_add_cb);
+	hook_register(bgp_bmp_import_vrf_del, bmp_import_vrf_del_cb);
 	return 0;
 }
 
