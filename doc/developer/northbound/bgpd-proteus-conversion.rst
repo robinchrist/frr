@@ -62,13 +62,30 @@ neighbor CREATEs, and ``bgp default shutdown`` carries
 ``NB_DFLT_PRIORITY + 1`` so it applies after them (FRR #2286 semantics),
 both in ``bgp_nb.c``.
 
-The native config-command surface was deleted in the same milestone:
-the only config commands left in bgpd's own graph are the node-entry
-NOSHes (``router bgp``, the address-family entries,
-``segment-routing srv6`` - kept for bgpd's own vty and the VNC
-plugin context) plus the plugin surfaces themselves. bgpd does not set
-a host config file, so vtysh's per-daemon ``write memory`` is answered
-by mgmtd (which holds the full modeled view), never by bgpd.
+The native config-command surface was deleted in the same milestone,
+and TODO #31 batch B3 removed what M9 still kept: the node-entry
+NOSH family (``router bgp``, the address-family entries, ``vni``,
+``segment-routing srv6``, ``exit-address-family``/``exit-vni``, the
+local ``interface``/``vrf`` entries) and, with it, the M9
+config-replay accommodation in the ``router bgp`` handler (the
+ASN/instance-type-mismatch recreate guarded by
+``bgp_config_inprocess()``). bgpd now parses **no** configuration
+lines at all - its command graph below ``CONFIG_NODE`` carries only
+show/clear/exec commands (plus the inert VNC surface, see below), and
+the only config-node lines still routed to bgpd are ``debug ...``
+statements at ``CONFIG_NODE``. All node tracking for the router-bgp
+node family lives in mgmtd; the vtysh node-entry/exit DEFUNSH masks
+(``vtysh/vtysh.c``) are ``VTYSH_MGMTD``-only. An ASN change reaches
+bgpd exclusively as a modify of the instance ``asn`` leaf, which
+``bgp_nb_instance_asn_apply()`` implements as delete + recreate
+(whether interactive ASN changes should be rejected instead is the
+pending P1 ruling). ``bgp_config_inprocess()`` and the
+``bgp_config_start``/``bgp_config_end`` window survive purely as
+convergence timing (EoR deferral, ``shut_during_cfg``), driven by the
+``XFRR_start/end_configuration`` markers vtysh sends around a config
+load - see P3 in the TODO #31 plan. bgpd does not set a host config
+file, so vtysh's per-daemon ``write memory`` is answered by mgmtd
+(which holds the full modeled view), never by bgpd.
 
 Flat-style compatibility: legacy accepted per-AF lines directly under
 ``router bgp`` (hidden aliases, ipv4-unicast semantics). mgmtd keeps
@@ -92,11 +109,17 @@ the proteus-bgp instance): the CLI lives in mgmtd
 bgpd core registers the northbound callbacks unconditionally
 (``bgpd/proteus/bgp_nb_bmp.c``) and fires one ``bgp_bmp_*`` hook per
 legacy operation (``bgp_bmp.h``); the ``bmp`` plugin subscribes at load.
-Only VNC remains support-dropped: its commands work interactively on
-bgpd's vty and persist under integrated ``frr.conf`` (vtysh collects
-bgpd's native ``config_write``), but they do **not** persist in
-split-config mode: mgmtd cannot parse their lines from ``bgpd.conf``,
-and bgpd no longer reads that file.
+Only VNC remains support-dropped, and since B3 its config surface is
+inert interactively as well: the VNC commands are still installed in
+bgpd's graph under the ``BGP_NODE`` family, but with the native
+``router bgp`` node entry gone no vty session on bgpd can reach those
+nodes anymore, and through vtysh the VNC node entries (still routed
+``VTYSH_BGPD``) are cleanly rejected by bgpd, which sits at
+``CONFIG_NODE``. A ``vnc ...`` line in an old config file produces a
+"No such command" error during load without disturbing the following
+lines (vtysh's walkup restores the enclosing node). The VNC code
+itself is intentionally untouched (ruled support-drop, pending the
+corrected-facts re-ruling in the TODO #31 plan).
 
 Backend daemons must not run mgmtd-owned northbound CLI locally
 ----------------------------------------------------------------
@@ -111,23 +134,29 @@ stop-on-first-error drops the rest of the daemon's config replay.
 This is why the mgmtd-dev.rst checklist has converted backends remove
 ``if_cmd_init()``/``vrf_cmd_init()``.
 
-bgpd can't remove them outright: it still owns legacy subcommands
-under ``INTERFACE_NODE`` (``mpls bgp forwarding``) and, until TODO #31
-B1 moved the rpki node entry to mgmtd, ``VRF_NODE`` (``rpki``). The
-pattern for this mixed state:
+bgpd couldn't remove them outright while it still owned legacy
+subcommands under ``INTERFACE_NODE`` (``mpls bgp forwarding``, until
+M7 B4) and ``VRF_NODE`` (``rpki``, until TODO #31 B1). The pattern
+used for that mixed state (now historical for bgpd, but the template
+for any backend daemon in the same position):
 
 - register the nodes with the node-only lib entry points
   (``if_cmd_init_node()``, ``vrf_cmd_init_node()``), which skip lib's
   northbound create/destroy commands;
 - give the daemon local ``DEFPY_NOSH`` node-entry commands (idempotent
-  get + ``VTY_PUSH_CONTEXT``, no northbound operation), same shape as
-  the surviving legacy ``router_bgp`` DEFUN_NOSH;
+  get + ``VTY_PUSH_CONTEXT``, no northbound operation);
 - route lib's northbound commands away from the daemon in
   ``python/xref2vtysh.py`` (``lib/if.c``/``lib/vrf.c`` →
-  ``VTYSH_INTERFACE_SUBSET``), while leaving vtysh.h's
-  ``VTYSH_INTERFACE``/``VTYSH_VRF`` masks alone -- those drive the
-  node entry/exit DEFUNSHes, which must keep reaching the daemon for
-  its vty node tracking.
+  ``VTYSH_INTERFACE_SUBSET``), while keeping the daemon in vtysh.h's
+  ``VTYSH_INTERFACE``/``VTYSH_VRF`` masks -- those drive the node
+  entry/exit DEFUNSHes, which must keep reaching the daemon for its
+  vty node tracking as long as it owns subcommands there.
+
+TODO #31 B3 finished the story for bgpd: with no bgpd-owned
+subcommands left under either node, the local ``DEFPY_NOSH`` pair was
+retired and ``VTYSH_VRF`` dropped ``VTYSH_BGPD`` (``VTYSH_INTERFACE``
+had already dropped it in M9). The nodes themselves stay installed in
+bgpd (``if_cmd_init_node(NULL)``/``vrf_cmd_init_node()``).
 
 **Resolved: route-map and access-/prefix-list CLI (Milestone 3,
 batches B-RM1/B-RM2).** lib's route-map and filter CLI
@@ -356,8 +385,15 @@ M9 dispositions (ruled 2026-07-19)
   *Update (TODO #31 batch B2):* the BMP half is closed as well; see
   "Plugin config" in the post-flip architecture section above. Both
   plugin persistence holes of this disposition are resolved.
+
+  *Update (TODO #31 batch B3):* with both plugins converted, bgpd's
+  terminal native surface (the node-entry NOSH family and the M9
+  config-replay accommodation) is removed; see "Post-flip
+  architecture" above for the end state.
 - **VNC/rfapi: documented support-drop.** Its ~133-command CLI surface
-  is not converted; file-config support ends at the flip and the
+  is not converted; file-config support ends at the flip (and since
+  TODO #31 B3 the surface is interactively unreachable too, see
+  "Plugin config" above) and the
   feature is deprecated-for-removal upstream-side. As a direct
   consequence, ``bgp_rfapi_basic_sanity``,
   ``bgp_rfapi_basic_sanity_config2`` and ``bgp_l3vpn_to_bgp_direct``

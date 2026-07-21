@@ -394,8 +394,9 @@ static void bgp_vrf_init(void)
 {
 	vrf_init(bgp_vrf_new, bgp_vrf_enable, bgp_vrf_disable, bgp_vrf_delete);
 	/* Node only: lib's vrf create/destroy commands are mgmtd-owned and
-	 * must not run a local northbound commit in a backend daemon; bgpd's
-	 * own node-entry command lives in bgp_vty.c (bgp_vrf_cmd).
+	 * must not run a local northbound commit in a backend daemon. bgpd's
+	 * own local node-entry command was retired in TODO #31 B3 (no
+	 * bgpd-owned VRF_NODE subcommands remain).
 	 */
 	vrf_cmd_init_node(bgp_vrf_config_write);
 }

@@ -1804,7 +1804,11 @@ DEFUNSH(VTYSH_ZEBRA, srv6_sid_format_f4024_uncompressed, srv6_sid_format_f4024_u
 }
 
 #ifdef HAVE_BGPD
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, router_bgp, router_bgp_cmd,
+/* TODO #31 B3: the whole router-bgp node-entry surface (router bgp, the
+ * address-family/vni/srv6 sub-node entries and their exits) is mgmtd-only;
+ * bgpd retired its native node-entry DEFUNs and parses no config lines
+ * below CONFIG_NODE anymore. */
+DEFUNSH(VTYSH_MGMTD, router_bgp, router_bgp_cmd,
 	"router bgp [ASNUM [<view|vrf> VIEWVRFNAME] [as-notation <dot|dot+|plain>]]",
 	ROUTER_STR BGP_STR AS_STR
 	"BGP view\nBGP VRF\n"
@@ -1819,7 +1823,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, router_bgp, router_bgp_cmd,
 }
 
 #ifdef KEEP_OLD_VPN_COMMANDS
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_vpnv4, address_family_vpnv4_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_vpnv4, address_family_vpnv4_cmd,
 	"address-family vpnv4 [unicast]",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1829,7 +1833,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_vpnv4, address_family_vpnv4_cmd
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_vpnv6, address_family_vpnv6_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_vpnv6, address_family_vpnv6_cmd,
 	"address-family vpnv6 [unicast]",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1840,7 +1844,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_vpnv6, address_family_vpnv6_cmd
 }
 #endif /* KEEP_OLD_VPN_COMMANDS */
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4, address_family_ipv4_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv4, address_family_ipv4_cmd,
 	"address-family ipv4 [unicast]",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1850,7 +1854,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4, address_family_ipv4_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv4, address_family_flowspecv4_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_flowspecv4, address_family_flowspecv4_cmd,
 	"address-family ipv4 flowspec",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1860,7 +1864,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv4, address_family_flow
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv6, address_family_flowspecv6_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_flowspecv6, address_family_flowspecv6_cmd,
 	"address-family ipv6 flowspec",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1870,7 +1874,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_flowspecv6, address_family_flow
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_unreachability, address_family_ipv4_unreachability_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv4_unreachability, address_family_ipv4_unreachability_cmd,
 	"address-family ipv4 unreachability",
 	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
 {
@@ -1878,7 +1882,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_unreachability, address_fa
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_unreachability, address_family_ipv6_unreachability_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv6_unreachability, address_family_ipv6_unreachability_cmd,
 	"address-family ipv6 unreachability",
 	"Enter Address Family command mode\n" BGP_AF_STR BGP_AF_MODIFIER_STR)
 {
@@ -1886,7 +1890,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_unreachability, address_fa
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_multicast,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv4_multicast,
 	address_family_ipv4_multicast_cmd, "address-family ipv4 multicast",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1896,7 +1900,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_multicast,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_vpn, address_family_ipv4_vpn_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv4_vpn, address_family_ipv4_vpn_cmd,
 	"address-family ipv4 vpn",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1906,7 +1910,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_vpn, address_family_ipv4_v
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_labeled_unicast,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv4_labeled_unicast,
 	address_family_ipv4_labeled_unicast_cmd,
 	"address-family ipv4 labeled-unicast",
 	"Enter Address Family command mode\n"
@@ -1917,7 +1921,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv4_labeled_unicast,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6, address_family_ipv6_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv6, address_family_ipv6_cmd,
 	"address-family ipv6 [unicast]",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1927,7 +1931,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6, address_family_ipv6_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_multicast,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv6_multicast,
 	address_family_ipv6_multicast_cmd, "address-family ipv6 multicast",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1937,7 +1941,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_multicast,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_vpn, address_family_ipv6_vpn_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv6_vpn, address_family_ipv6_vpn_cmd,
 	"address-family ipv6 vpn",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -1947,7 +1951,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_vpn, address_family_ipv6_v
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_labeled_unicast,
+DEFUNSH(VTYSH_MGMTD, address_family_ipv6_labeled_unicast,
 	address_family_ipv6_labeled_unicast_cmd,
 	"address-family ipv6 labeled-unicast",
 	"Enter Address Family command mode\n"
@@ -1988,7 +1992,7 @@ DEFUNSH(VTYSH_MGMTD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
+DEFUNSH(VTYSH_MGMTD,
         bgp_srv6,
         bgp_srv6_cmd,
         "segment-routing srv6",
@@ -1999,7 +2003,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
+DEFUNSH(VTYSH_MGMTD,
         exit_bgp_srv6,
         exit_bgp_srv6_cmd,
         "exit",
@@ -2010,7 +2014,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
+DEFUNSH(VTYSH_MGMTD,
         quit_bgp_srv6,
         quit_bgp_srv6_cmd,
         "quit",
@@ -2021,7 +2025,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_evpn, address_family_evpn_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_evpn, address_family_evpn_cmd,
 	"address-family <l2vpn evpn>",
 	"Enter Address Family command mode\n"
 	BGP_AF_STR
@@ -2031,7 +2035,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_evpn, address_family_evpn_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI_RANGE,
+DEFUNSH(VTYSH_MGMTD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI_RANGE,
 	"VXLAN Network Identifier\n"
 	"VNI number\n")
 {
@@ -2039,7 +2043,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, bgp_evpn_vni, bgp_evpn_vni_cmd, "vni " CMD_VNI
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_link_state, address_family_link_state_cmd,
+DEFUNSH(VTYSH_MGMTD, address_family_link_state, address_family_link_state_cmd,
 	"address-family link-state [link-state]",
 	"Enter Address Family command mode\n"
 	"Link-State Address Family\n"
@@ -2643,7 +2647,7 @@ DEFUNSH(VTYSH_REALLYALL, vtysh_quit_all, vtysh_quit_all_cmd, "quit",
 }
 
 #ifdef HAVE_BGPD
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_address_family, exit_address_family_cmd,
+DEFUNSH(VTYSH_MGMTD, exit_address_family, exit_address_family_cmd,
 	"exit-address-family", "Exit from Address Family configuration mode\n")
 {
 	if (vty->node == BGP_IPV4_NODE || vty->node == BGP_IPV4M_NODE
@@ -2660,7 +2664,7 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_address_family, exit_address_family_cmd,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_vni, exit_vni_cmd, "exit-vni", "Exit from VNI mode\n")
+DEFUNSH(VTYSH_MGMTD, exit_vni, exit_vni_cmd, "exit-vni", "Exit from VNI mode\n")
 {
 	if (vty->node == BGP_EVPN_VNI_NODE)
 		vty->node = BGP_EVPN_NODE;
@@ -2815,13 +2819,18 @@ DEFUNSH(VTYSH_PBRD, vtysh_quit_pbr_map, vtysh_quit_pbr_map_cmd, "quit",
 #endif /* HAVE_PBRD */
 
 #ifdef HAVE_BGPD
-DEFUNSH(VTYSH_BGPD, vtysh_exit_bgpd, vtysh_exit_bgpd_cmd, "exit",
+/* TODO #31 B3: installed on the bgp node family, which is mgmtd-hosted now
+ * (bgpd no longer tracks these nodes; sending 'exit' there would pop its
+ * CONFIG_NODE session). The VNC-node installs of these commands are
+ * unreachable: the VNC node entries still route to bgpd, which rejects
+ * them (ruled interactive-config support drop). */
+DEFUNSH(VTYSH_MGMTD, vtysh_exit_bgpd, vtysh_exit_bgpd_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
 {
 	return vtysh_exit(vty);
 }
 
-DEFUNSH(VTYSH_BGPD, vtysh_quit_bgpd, vtysh_quit_bgpd_cmd, "quit",
+DEFUNSH(VTYSH_MGMTD, vtysh_quit_bgpd, vtysh_quit_bgpd_cmd, "quit",
 	"Exit current mode and down to previous mode\n")
 {
 	return vtysh_exit_bgpd(self, vty, argc, argv);

@@ -37,18 +37,17 @@ static struct cmd_node bgp_node = {
 /*
  * Milestone 5 batch B0: parallel mgmtd-side address-family node entry/exit.
  *
- * The legacy 'address-family <afi> [<safi>]' / 'exit-address-family'
- * DEFUN_NOSH in bgpd/bgp_vty.c stay native and keep pushing bgpd's
- * BGP_*_NODE, so still-unconverted per-AF lines attach to bgpd during file
- * load. These parallel DEFPY_YANG_NOSH commands give mgmtd the same node
- * tracking: they set the SAME vty->node and re-push the enclosing instance
- * base xpath, performing NO northbound create -- the afi-safis/<af>
- * sub-containers are non-presence and auto-instantiate on the first child
- * leaf (M5 B1+), so entering an AF block commits nothing. vtysh dual-routes
- * both to VTYSH_BGPD|VTYSH_MGMTD via the node-entry DEFUNSH masks in
- * vtysh/vtysh.c (the router_bgp milestone-1 pattern); NOSH commands are
- * skipped by python/xref2vtysh.py, so that routing lives in vtysh.c, not in
- * the generated vtysh_cmd.c table.
+ * These DEFPY_YANG_NOSH commands are the node tracking for the AF blocks:
+ * they set vty->node and re-push the enclosing instance base xpath,
+ * performing NO northbound create -- the afi-safis/<af> sub-containers are
+ * non-presence and auto-instantiate on the first child leaf (M5 B1+), so
+ * entering an AF block commits nothing. During the coexistence window a
+ * legacy DEFUN_NOSH twin in bgpd/bgp_vty.c pushed bgpd's BGP_*_NODE in
+ * parallel and vtysh dual-routed to VTYSH_BGPD|VTYSH_MGMTD; TODO #31 B3
+ * retired the native side, so the vtysh node-entry DEFUNSH masks in
+ * vtysh/vtysh.c are VTYSH_MGMTD-only now. NOSH commands are skipped by
+ * python/xref2vtysh.py, so that routing lives in vtysh.c, not in the
+ * generated vtysh_cmd.c table.
  *
  * bgp_node_type()/bgp_node_afi()/bgp_node_safi() are defined in bgp_vty.c,
  * which is not linked into mgmtd, so the node <-> (container, header)
@@ -831,12 +830,11 @@ DEFPY_YANG_NOSH(
  * containers), 'vni N' performs a REAL keyed-list CREATE on entry -- the M3
  * route-map DEFPY_YANG_NOSH pattern -- because the vni list entry is a
  * genuine object (evpn_create_update_vni). The legacy bgp_evpn_vni
- * DEFUN_NOSH in bgp_evpn_vty.c stays native so unconverted VNI subcommands
- * (rd, route-target, ...) attach to bgpd's bgpevpn mid-load during the
- * coexistence window; evpn_create_update_vni() is idempotent by VNI id, so
- * both paths converge. 'no vni N' is a plain DEFPY_YANG whose backend
- * destroy tolerates an already-gone VNI. vtysh dual-routes 'vni'/'exit-vni'
- * (NOSH) via vtysh/vtysh.c and 'no vni' (non-NOSH) via the generated table.
+ * DEFUN_NOSH twin in bgp_evpn_vty.c was retired in TODO #31 B3 with the
+ * rest of bgpd's config-node entry surface; this is the only 'vni' entry
+ * now. 'no vni N' is a plain DEFPY_YANG whose backend destroy tolerates an
+ * already-gone VNI. vtysh routes 'vni'/'exit-vni' (NOSH) via vtysh/vtysh.c
+ * (VTYSH_MGMTD) and 'no vni' (non-NOSH) via the generated table.
  */
 
 static struct cmd_node bgp_evpn_vni_node = {

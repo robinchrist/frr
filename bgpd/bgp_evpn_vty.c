@@ -5738,72 +5738,14 @@ ALIAS_HIDDEN(show_bgp_l2vpn_evpn_import_rt, show_bgp_evpn_import_rt_cmd,
  * converted to proteus/northbound in M6 batch B6; mgmtd owns the CLI and
  * write_vni_config's emission is gated off for it below. */
 
-DEFUN_NOSH (bgp_evpn_vni,
-            bgp_evpn_vni_cmd,
-            "vni " CMD_VNI_RANGE,
-            "VXLAN Network Identifier\n"
-            "VNI number\n")
-{
-	vni_t vni;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgpevpn *vpn;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	vni = strtoul(argv[1]->arg, NULL, 10);
-
-	/* Create VNI, or mark as configured. */
-	vpn = evpn_create_update_vni(bgp, vni);
-	if (!vpn) {
-		vty_out(vty, "%% Failed to create VNI \n");
-		return CMD_WARNING;
-	}
-
-	VTY_PUSH_CONTEXT_SUB(BGP_EVPN_VNI_NODE, vpn);
-	return CMD_SUCCESS;
-}
-
-DEFUN (no_bgp_evpn_vni,
-       no_bgp_evpn_vni_cmd,
-       "no vni " CMD_VNI_RANGE,
-       NO_STR
-       "VXLAN Network Identifier\n"
-       "VNI number\n")
-{
-	vni_t vni;
-	struct bgp *bgp = VTY_GET_CONTEXT(bgp);
-	struct bgpevpn *vpn;
-
-	if (!bgp)
-		return CMD_WARNING;
-
-	vni = strtoul(argv[2]->arg, NULL, 10);
-
-	/* Check if we should disallow. */
-	vpn = bgp_evpn_lookup_vni(bgp, vni);
-	if (!vpn) {
-		vty_out(vty, "%% Specified VNI does not exist\n");
-		return CMD_WARNING;
-	}
-	if (!is_vni_configured(vpn)) {
-		vty_out(vty, "%% Specified VNI is not configured\n");
-		return CMD_WARNING;
-	}
-
-	evpn_delete_vni(bgp, vpn);
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH (exit_vni,
-            exit_vni_cmd,
-            "exit-vni",
-            "Exit from VNI mode\n")
-{
-	if (vty->node == BGP_EVPN_VNI_NODE)
-		vty->node = BGP_EVPN_NODE;
-	return CMD_SUCCESS;
-}
+/* TODO #31 batch B3: the native 'vni N' node-entry DEFUN_NOSH, 'no vni N'
+ * and 'exit-vni' are retired with the rest of bgpd's config-node entry
+ * surface. mgmtd owns the vni sub-node and its lifecycle
+ * (bgp_evpn_vni_cli_cmd / no_bgp_evpn_vni_cli_cmd / exit_vni_cli_cmd,
+ * bgp_cli_instance.c); bgpd applies it through the northbound callbacks
+ * (bgp_nb_evpn.c), which call the same evpn_create_update_vni() /
+ * evpn_delete_vni() helpers.
+ */
 
 /* Per-VRF-instance 'rd ASN:NN_OR_IP-ADDRESS:NN' / 'no rd [...]'
  * (bgp_evpn_vrf_rd_cmd / no_bgp_evpn_vrf_rd_cmd / no_bgp_evpn_vrf_rd_without_val_cmd):
@@ -6275,9 +6217,6 @@ void bgp_ethernetvpn_init(void)
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_com_cmd);
 	install_element(VIEW_NODE, &show_bgp_l2vpn_evpn_rt_cmd);
 
-	install_element(BGP_EVPN_NODE, &bgp_evpn_vni_cmd);
-	install_element(BGP_EVPN_NODE, &no_bgp_evpn_vni_cmd);
-	install_element(BGP_EVPN_VNI_NODE, &exit_vni_cmd);
 	/* per-VNI 'rd', 'flooding', 'advertise-default-gw', 'advertise-svi-ip'
 	 * and 'advertise-subnet': converted to proteus/northbound (M6 batch
 	 * B6); per-VNI and per-VRF-instance route-target/auto-route-target

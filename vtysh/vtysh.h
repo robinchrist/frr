@@ -92,11 +92,11 @@ extern struct event_loop *master;
 		VTYSH_EIGRPD | VTYSH_BABELD | VTYSH_PBRD | VTYSH_FABRICD |     \
 		VTYSH_VRRPD | VTYSH_MGMTD
 /* M9: bgpd's INTERFACE_NODE leaves are mgmtd-owned (M7 B4), so plain
- * interface config no longer routes to bgpd. VTYSH_VRF keeps VTYSH_BGPD
- * for the RPKI plugin's VRF-node commands (native, file-config support
- * dropped in M9 but still reachable interactively). */
+ * interface config no longer routes to bgpd. TODO #31: the VRF-node rpki
+ * commands moved to mgmtd too (B1) and bgpd retired its vrf/interface
+ * node entries (B3), so VTYSH_VRF drops VTYSH_BGPD as well. */
 #define VTYSH_INTERFACE VTYSH_INTERFACE_SUBSET
-#define VTYSH_VRF	VTYSH_INTERFACE_SUBSET | VTYSH_BGPD
+#define VTYSH_VRF	VTYSH_INTERFACE_SUBSET
 #define VTYSH_KEYS	VTYSH_MGMTD | VTYSH_EIGRPD | VTYSH_OSPF6D | VTYSH_OSPFD | VTYSH_BFDD
 /* Daemons who can process nexthop-group configs */
 #define VTYSH_NH_GROUP    VTYSH_PBRD|VTYSH_SHARPD

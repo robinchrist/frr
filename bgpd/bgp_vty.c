@@ -188,69 +188,6 @@ enum show_type {
 	show_ipv6_peer
 };
 
-static enum node_type bgp_node_type(afi_t afi, safi_t safi)
-{
-	switch (afi) {
-	case AFI_IP:
-		switch (safi) {
-		case SAFI_UNICAST:
-			return BGP_IPV4_NODE;
-		case SAFI_MULTICAST:
-			return BGP_IPV4M_NODE;
-		case SAFI_LABELED_UNICAST:
-			return BGP_IPV4L_NODE;
-		case SAFI_MPLS_VPN:
-			return BGP_VPNV4_NODE;
-		case SAFI_FLOWSPEC:
-			return BGP_FLOWSPECV4_NODE;
-		case SAFI_UNREACH:
-			return BGP_IPV4U_NODE;
-		case SAFI_BGP_LS:
-		case SAFI_UNSPEC:
-		case SAFI_ENCAP:
-		case SAFI_EVPN:
-		case SAFI_MAX:
-			/* not expected */
-			return BGP_IPV4_NODE;
-		}
-		break;
-	case AFI_IP6:
-		switch (safi) {
-		case SAFI_UNICAST:
-			return BGP_IPV6_NODE;
-		case SAFI_MULTICAST:
-			return BGP_IPV6M_NODE;
-		case SAFI_LABELED_UNICAST:
-			return BGP_IPV6L_NODE;
-		case SAFI_MPLS_VPN:
-			return BGP_VPNV6_NODE;
-		case SAFI_FLOWSPEC:
-			return BGP_FLOWSPECV6_NODE;
-		case SAFI_UNREACH:
-			return BGP_IPV6U_NODE;
-		case SAFI_BGP_LS:
-		case SAFI_UNSPEC:
-		case SAFI_ENCAP:
-		case SAFI_EVPN:
-		case SAFI_MAX:
-			/* not expected and the return value seems wrong */
-			return BGP_IPV4_NODE;
-		}
-		break;
-	case AFI_L2VPN:
-		return BGP_EVPN_NODE;
-	case AFI_BGP_LS:
-		return BGP_LS_NODE;
-	case AFI_UNSPEC:
-	case AFI_MAX:
-		// We should never be here but to clarify the switch statement..
-		return BGP_IPV4_NODE;
-	}
-
-	// Impossible to happen
-	return BGP_IPV4_NODE;
-}
-
 static const char *get_afi_safi_vty_str(afi_t afi, safi_t safi)
 {
 	if (afi == AFI_IP) {
@@ -1627,168 +1564,19 @@ DEFUN_HIDDEN (no_bgp_local_mac,
 	return CMD_SUCCESS;
 }
 
-/* "router bgp" commands. */
-DEFUN_NOSH (router_bgp,
-       router_bgp_cmd,
-       "router bgp [ASNUM$instasn [<view|vrf> VIEWVRFNAME] [as-notation <dot|dot+|plain>]]",
-       ROUTER_STR
-       BGP_STR
-       AS_STR
-       BGP_INSTANCE_HELP_STR
-       "Force the AS notation output\n"
-       "use 'AA.BB' format for AS 4 byte values\n"
-       "use 'AA.BB' format for all AS values\n"
-       "use plain format for all AS values\n")
-{
-	int idx_asn = 2;
-	int idx_view_vrf = 3;
-	int idx_vrf = 4;
-	int idx_asnotation = 3;
-	int idx_asnotation_kind = 4;
-	enum asnotation_mode asnotation = ASNOTATION_UNDEFINED;
-	int ret;
-	as_t as = 0;
-	struct bgp *bgp = NULL;
-	const char *name = NULL;
-	enum bgp_instance_type inst_type;
-
-	// "router bgp" without an ASN
-	if (argc == 2) {
-		// Pending: Make VRF option available for ASN less config
-		bgp = bgp_get_default();
-
-		if (bgp == NULL) {
-			vty_out(vty, "%% No BGP process is configured\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (listcount(bm->bgp) > 1) {
-			vty_out(vty, "%% Please specify ASN and VRF\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-	}
-
-	// "router bgp X"
-	else {
-		if (!asn_str2asn(argv[idx_asn]->arg, &as)) {
-			vty_out(vty, "%% BGP: No such AS %s\n",
-				argv[idx_asn]->arg);
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (as == BGP_PRIVATE_AS_MAX || as == BGP_AS4_MAX)
-			vty_out(vty, "Reserved AS used (%u|%u); AS is %u\n",
-				BGP_PRIVATE_AS_MAX, BGP_AS4_MAX, as);
-
-		inst_type = BGP_INSTANCE_TYPE_DEFAULT;
-
-		if (argv_find(argv, argc, "VIEWVRFNAME", &idx_vrf)) {
-			idx_view_vrf = idx_vrf - 1;
-			if (argv[idx_view_vrf]->text) {
-				name = argv[idx_vrf]->arg;
-
-				if (!strcmp(argv[idx_view_vrf]->text, "vrf")) {
-					if (strmatch(name, VRF_DEFAULT_NAME))
-						name = NULL;
-					else
-						inst_type =
-							BGP_INSTANCE_TYPE_VRF;
-				} else if (!strcmp(argv[idx_view_vrf]->text,
-						   "view"))
-					inst_type = BGP_INSTANCE_TYPE_VIEW;
-			}
-		}
-		if (argv_find(argv, argc, "as-notation", &idx_asnotation)) {
-			idx_asnotation_kind = idx_asnotation + 1;
-			if (strmatch(argv[idx_asnotation_kind]->text, "dot+"))
-				asnotation = ASNOTATION_DOTPLUS;
-			else if (strmatch(argv[idx_asnotation_kind]->text,
-					  "dot"))
-				asnotation = ASNOTATION_DOT;
-			else if (strmatch(argv[idx_asnotation_kind]->text,
-					  "plain"))
-				asnotation = ASNOTATION_PLAIN;
-		}
-
-		ret = bgp_lookup_by_as_name_type(&bgp, &as, argv[idx_asn]->arg, asnotation, name,
-						 inst_type, true);
-		if (bgp && bgp_config_inprocess() &&
-		    (ret == BGP_ERR_AS_MISMATCH || ret == BGP_ERR_INSTANCE_MISMATCH)) {
-			/* An ASN change during config replay arrives without
-			 * its preceding 'no router bgp' (retired here, owned
-			 * by mgmtd), so the mismatching header stands in for
-			 * it: recreate, preserving the legacy file-load
-			 * delete + create sequence. The converted path's
-			 * northbound callbacks look the instance up by name
-			 * and converge on the recreated struct. Interactive
-			 * use keeps the mismatch errors below.
-			 */
-			bgp_delete(bgp);
-			bgp = NULL;
-			ret = CMD_SUCCESS;
-		}
-		if (bgp && ret == BGP_INSTANCE_EXISTS)
-			ret = CMD_SUCCESS;
-		else if (bgp == NULL && ret == CMD_SUCCESS)
-			/* SUCCESS and bgp is NULL */
-			ret = bgp_get_vty(&bgp, &as, name, inst_type, argv[idx_asn]->arg,
-					  asnotation);
-		switch (ret) {
-		case BGP_ERR_AS_MISMATCH:
-			vty_out(vty, "BGP is already running; AS is %s\n",
-				bgp ? bgp->as_pretty : "unknown");
-			return CMD_WARNING_CONFIG_FAILED;
-		case BGP_ERR_INSTANCE_MISMATCH:
-			vty_out(vty,
-				"BGP instance name and AS number mismatch\n");
-			vty_out(vty, "BGP instance is already running; AS is %s\n",
-				bgp ? bgp->as_pretty : "unknown");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-
-		if (!bgp) {
-			vty_out(vty, "BGP instance not found\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		/*
-		 * If we just instantiated the default instance, complete
-		 * any pending VRF-VPN leaking that was configured via
-		 * earlier "router bgp X vrf FOO" blocks.
-		 */
-		if (inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
-			bgp_need_listening(bgp, vty);
-			vpn_leak_postchange_all();
-		}
-
-		if (inst_type == BGP_INSTANCE_TYPE_VRF || IS_BGP_INSTANCE_HIDDEN(bgp)) {
-			bgp_vpn_leak_export(bgp);
-			UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_HIDDEN);
-			UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
-		}
-		/* Pending: handle when user tries to change a view to vrf n vv.
-		 */
-		/* for pre-existing bgp instance,
-		 * - update as_pretty
-		 * - update asnotation if explicitly mentioned
-		 */
-		if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO)) {
-			XFREE(MTYPE_BGP_NAME, bgp->as_pretty);
-			bgp->as_pretty = XSTRDUP(MTYPE_BGP_NAME,
-						 argv[idx_asn]->arg);
-			if (!CHECK_FLAG(bgp->config, BGP_CONFIG_ASNOTATION) &&
-			    asnotation != ASNOTATION_UNDEFINED) {
-				SET_FLAG(bgp->config, BGP_CONFIG_ASNOTATION);
-				bgp->asnotation = asnotation;
-			}
-		}
-	}
-
-	/* unset the auto created flag as the user config is now present */
-	UNSET_FLAG(bgp->vrf_flags, BGP_VRF_AUTO);
-	VTY_PUSH_CONTEXT(BGP_NODE, bgp);
-
-	return CMD_SUCCESS;
-}
+/* TODO #31 batch B3: the native 'router bgp ...' node-entry DEFUN_NOSH is
+ * retired; mgmtd owns 'router bgp' / 'no router bgp' entirely
+ * (router_bgp_cli_cmd / no_router_bgp_cli_cmd, bgp_cli_instance.c) and bgpd
+ * receives the instance solely through the northbound callbacks
+ * (bgp_nb_util.c). The M9 config-replay accommodation that lived here (an
+ * AS/instance-type mismatch during a config window stood in for the
+ * retired 'no router bgp' and recreated the instance) dies with it: an ASN
+ * change now reaches bgpd only as a modify of the instance's asn leaf, and
+ * bgp_nb_instance_asn_apply() performs the delete + recreate. Whether
+ * interactive ASN changes should instead be rejected is a pending
+ * northbound-policy ruling (P1 in the TODO #31 plan), no longer a
+ * transport question.
+ */
 
 /* M7 batch B6: 'bgp community alias' is mgmtd-owned (proteus-bgp-filter
  * module) -- DEFPY twin + cli_show in bgpd/proteus/bgp_cli_filter.c, apply
@@ -2317,107 +2105,14 @@ DEFPY (show_ip_bgp_neighbor_damp_param,
  * import/export vpn/vrf commands. */
 
 
-DEFUN_NOSH(address_family_ipv4_safi, address_family_ipv4_safi_cmd,
-	   "address-family ipv4 [<unicast|multicast|vpn|labeled-unicast|flowspec|unreachability>]",
-	   "Enter Address Family command mode\n" BGP_AF_STR BGP_SAFI_WITH_LABEL_HELP_STR)
-{
-
-	if (argc == 3) {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		safi_t safi = bgp_vty_safi_from_str(argv[2]->text);
-		if (bgp->inst_type != BGP_INSTANCE_TYPE_DEFAULT
-		    && safi != SAFI_UNICAST && safi != SAFI_MULTICAST
-		    && safi != SAFI_EVPN) {
-			vty_out(vty,
-				"Only Unicast/Multicast/EVPN SAFIs supported in non-core instances.\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		vty->node = bgp_node_type(AFI_IP, safi);
-	} else
-		vty->node = BGP_IPV4_NODE;
-
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH(address_family_ipv6_safi, address_family_ipv6_safi_cmd,
-	   "address-family ipv6 [<unicast|multicast|vpn|labeled-unicast|flowspec|unreachability>]",
-	   "Enter Address Family command mode\n" BGP_AF_STR BGP_SAFI_WITH_LABEL_HELP_STR)
-{
-	if (argc == 3) {
-		VTY_DECLVAR_CONTEXT(bgp, bgp);
-		safi_t safi = bgp_vty_safi_from_str(argv[2]->text);
-		if (bgp->inst_type != BGP_INSTANCE_TYPE_DEFAULT
-		    && safi != SAFI_UNICAST && safi != SAFI_MULTICAST
-		    && safi != SAFI_EVPN) {
-			vty_out(vty,
-				"Only Unicast/Multicast/EVPN SAFIs supported in non-core instances.\n");
-			return CMD_WARNING_CONFIG_FAILED;
-		}
-		vty->node = bgp_node_type(AFI_IP6, safi);
-	} else
-		vty->node = BGP_IPV6_NODE;
-
-	return CMD_SUCCESS;
-}
-
-#ifdef KEEP_OLD_VPN_COMMANDS
-DEFUN_NOSH (address_family_vpnv4,
-       address_family_vpnv4_cmd,
-       "address-family vpnv4 [unicast]",
-       "Enter Address Family command mode\n"
-       BGP_AF_STR
-       BGP_AF_MODIFIER_STR)
-{
-	vty->node = BGP_VPNV4_NODE;
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH (address_family_vpnv6,
-       address_family_vpnv6_cmd,
-       "address-family vpnv6 [unicast]",
-       "Enter Address Family command mode\n"
-       BGP_AF_STR
-       BGP_AF_MODIFIER_STR)
-{
-	vty->node = BGP_VPNV6_NODE;
-	return CMD_SUCCESS;
-}
-#endif /* KEEP_OLD_VPN_COMMANDS */
-
-DEFUN_NOSH (address_family_evpn,
-       address_family_evpn_cmd,
-       "address-family l2vpn evpn",
-       "Enter Address Family command mode\n"
-       BGP_AF_STR
-       BGP_AF_MODIFIER_STR)
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	vty->node = BGP_EVPN_NODE;
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH(address_family_link_state,
-	address_family_link_state_cmd,
-	"address-family link-state [link-state]",
-	"Enter Address Family command mode\n"
-	"Link-State Address Family\n"
-	"Link-State Subsequent Address Family\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	vty->node = BGP_LS_NODE;
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH (bgp_segment_routing_srv6,
-            bgp_segment_routing_srv6_cmd,
-            "segment-routing srv6",
-            "Segment-Routing configuration\n"
-            "Segment-Routing SRv6 configuration\n")
-{
-	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	vty->node = BGP_SRV6_NODE;
-	return CMD_SUCCESS;
-}
+/* TODO #31 batch B3: the native address-family node-entry DEFUN_NOSH family
+ * (address-family ipv4/ipv6 <safi>, vpnv4/vpnv6, l2vpn evpn, link-state),
+ * the 'segment-routing srv6' node entry and 'exit-address-family' are
+ * retired together with 'router bgp'. mgmtd hosts the sole node-entry
+ * commands (bgp_cli_instance.c) and bgpd receives all per-AF configuration
+ * through the northbound callbacks; no config line reaches bgpd's command
+ * tree below CONFIG_NODE anymore.
+ */
 
 void bgp_segment_routing_srv6_hencaps_refresh(struct bgp *bgp)
 {
@@ -2506,25 +2201,6 @@ DEFPY (show_bgp_srv6,
 		vty_out(vty, "  srv6_unicast[AFI_IP6].sid: %pI6\n", bgp->srv6_unicast[AFI_IP6].sid);
 	}
 
-	return CMD_SUCCESS;
-}
-
-DEFUN_NOSH (exit_address_family,
-       exit_address_family_cmd,
-       "exit-address-family",
-       "Exit from Address Family configuration mode\n")
-{
-	if (vty->node == BGP_IPV4_NODE || vty->node == BGP_IPV4M_NODE
-	    || vty->node == BGP_IPV4L_NODE || vty->node == BGP_VPNV4_NODE
-	    || vty->node == BGP_IPV6_NODE || vty->node == BGP_IPV6M_NODE
-	    || vty->node == BGP_IPV6L_NODE || vty->node == BGP_VPNV6_NODE
-	    || vty->node == BGP_EVPN_NODE
-	    || vty->node == BGP_FLOWSPECV4_NODE
-	    || vty->node == BGP_FLOWSPECV6_NODE
-	    || vty->node == BGP_LS_NODE
-	    || vty->node == BGP_IPV4U_NODE
-	    || vty->node == BGP_IPV6U_NODE)
-		vty->node = BGP_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -11465,9 +11141,9 @@ int bgp_config_write(struct vty *vty)
 		 */
 
 		/* 'segment-routing srv6' block: emitted by mgmtd (M8.5
-		 * B-srv6-block, instance_srv6_cli_write and friends); native
-		 * parse DEFUNs stay via _install_element for bgpd's own
-		 * split-config file read. */
+		 * B-srv6-block, instance_srv6_cli_write and friends); the
+		 * native node entry was retired in TODO #31 B3 with the rest
+		 * of the node-entry surface. */
 
 		/* 'sid vpn per-vrf export': emitted by mgmtd (M8.5
 		 * B-srv6-pervrf, instance_sid_vpn_export_cli_write). */
@@ -11735,6 +11411,18 @@ DEFINE_HOOK(bgp_config_end, (struct bgp *bgp), (bgp));
 
 static struct event *t_bgp_cfg;
 
+/* Config-window predicate. Since TODO #31 B3 removed the last parser-facing
+ * use (the router_bgp DEFUN's ASN-mismatch recreate), this window is purely
+ * a convergence-timing mechanism: it is opened/closed by the
+ * XFRR_start_configuration / XFRR_end_configuration marker commands that
+ * vtysh sends to every daemon over the line channel around a config load
+ * (boot-time 'vtysh -b' and 'vtysh -f', via the lib/lib_vty.c callbacks
+ * registered with cmd_init_config_callbacks() below), with
+ * BGP_PRE_CONFIG_MAX_WAIT_SECONDS as the failsafe. bgpd-side config
+ * parsing plays no role in it anymore. Remaining callers (EoR/convergence
+ * deferral, not parsing): peer_create() in bgpd.c (shut_during_cfg) and
+ * bgp_config_end() below. See P3 in the TODO #31 plan.
+ */
 bool bgp_config_inprocess(void)
 {
 	return event_is_scheduled(t_bgp_cfg);
@@ -11813,72 +11501,25 @@ static void bgp_config_end(struct vty *vty)
  * _install_element() reinstatement is needed.
  */
 
-/*
- * Local node-entry commands for the mgmtd-owned interface/vrf nodes.
- *
- * frr-interface and frr-vrf are fully converted to mgmtd, but bgpd still
- * owns legacy subcommands under both nodes ("mpls bgp forwarding" and
- * friends, "rpki" inside a vrf).  bgpd must therefore be able to enter the
- * nodes on its own vty without running lib's northbound-backed
- * create/destroy commands: a local northbound commit would race mgmtd's
- * concurrent backend config push for bgpd's single northbound transaction
- * during config load.  Same pattern as the surviving legacy router_bgp
- * DEFUN_NOSH: an idempotent get plus node entry, no northbound operation.
+/* TODO #31 batch B3: the local interface/vrf node-entry DEFPY_NOSH pair
+ * (bgp_interface_cmd / bgp_vrf_cmd) is retired. It existed so bgpd's native
+ * config read could enter the mgmtd-owned interface/vrf nodes while bgpd
+ * still owned legacy subcommands under them; the last of those moved to
+ * mgmtd in M7 B4 ('mpls bgp ...') and TODO #31 B1 ('rpki' inside a vrf),
+ * and with the node-entry surface gone bgpd parses no config lines below
+ * CONFIG_NODE at all. The nodes themselves stay installed (bgp_vty_if_init
+ * below, vrf_cmd_init_node in bgp_main.c).
  */
-DEFPY_NOSH(bgp_interface, bgp_interface_cmd,
-	   "interface IFNAME [vrf NAME$vrf_name]",
-	   "Select an interface to configure\n"
-	   "Interface's name\n" VRF_CMD_HELP_STR)
-{
-	struct interface *ifp;
-
-	if (!vrf_name)
-		vrf_name = VRF_DEFAULT_NAME;
-
-	/* get, not lookup: the config may arrive before zebra's interface
-	 * announcements, and bgp_if_new_hook sets up ifp->info on creation
-	 * either way.
-	 */
-	ifp = if_get_by_name(ifname, VRF_UNKNOWN, vrf_name);
-	VTY_PUSH_CONTEXT(INTERFACE_NODE, ifp);
-
-	return CMD_SUCCESS;
-}
-
-DEFPY_NOSH(bgp_vrf, bgp_vrf_cmd,
-	   "vrf NAME$vrf_name",
-	   "Select a VRF to configure\n"
-	   "VRF's name\n")
-{
-	struct vrf *vrf;
-
-	if (strlen(vrf_name) > VRF_NAMSIZ) {
-		vty_out(vty,
-			"%% VRF name %s invalid: length exceeds %d bytes\n",
-			vrf_name, VRF_NAMSIZ);
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
-	vrf = vrf_get(VRF_UNKNOWN, vrf_name);
-	VTY_PUSH_CONTEXT(VRF_NODE, vrf);
-
-	return CMD_SUCCESS;
-}
 
 /* Initialization of BGP interface. */
 static void bgp_vty_if_init(void)
 {
-	/* Install interface node, without lib's mgmtd-owned interface
-	 * create/destroy commands. The node (and the bgp_interface node-entry
-	 * DEFPY_NOSH) must survive even with no bgpd-owned interface leaves
-	 * left, so bgpd's native config read can still enter/exit interface
-	 * blocks; config emission is mgmtd's (M7 B4), hence no config_write.
+	/* Install the interface node only, without lib's mgmtd-owned
+	 * interface create/destroy commands and without a local node entry
+	 * (retired in TODO #31 B3); config emission is mgmtd's (M7 B4),
+	 * hence no config_write.
 	 */
 	if_cmd_init_node(NULL);
-	install_element(CONFIG_NODE, &bgp_interface_cmd);
-
-	/* "mpls bgp forwarding" commands: converted to northbound (M7 B4),
-	 * see bgp_cli_interface.c. */
 }
 
 void bgp_vty_init(void)
@@ -11887,11 +11528,6 @@ void bgp_vty_init(void)
 	cmd_variable_handler_register(bgp_var_peergroup);
 
 	cmd_init_config_callbacks(bgp_config_start, bgp_config_end);
-
-	/* Local VRF_NODE entry (the node itself is installed by
-	 * bgp_vrf_init(), which runs earlier).
-	 */
-	install_element(CONFIG_NODE, &bgp_vrf_cmd);
 
 	/* Install bgp top node. */
 	install_node(&bgp_node);
@@ -11960,8 +11596,9 @@ void bgp_vty_init(void)
 	 * northbound now, see bgp_cli.c
 	 */
 
-	/* "router bgp" commands. */
-	install_element(CONFIG_NODE, &router_bgp_cmd);
+	/* "router bgp" / "no router bgp": mgmtd-owned node entry and instance
+	 * lifecycle (bgp_cli_instance.c); bgpd's native node-entry DEFUN was
+	 * retired in TODO #31 B3. */
 
 	/* "neighbor role" commands: converted to northbound, see
 	 * bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B12). */
@@ -12213,30 +11850,9 @@ void bgp_vty_init(void)
 	 * BGP_NODE to ipv4-unicast since M9). */
 	install_element(VIEW_NODE, &show_ip_bgp_neighbor_damp_param_cmd);
 
-	/* address-family commands. */
-	install_element(BGP_NODE, &address_family_ipv4_safi_cmd);
-	install_element(BGP_NODE, &address_family_ipv6_safi_cmd);
-#ifdef KEEP_OLD_VPN_COMMANDS
-	install_element(BGP_NODE, &address_family_vpnv4_cmd);
-	install_element(BGP_NODE, &address_family_vpnv6_cmd);
-#endif /* KEEP_OLD_VPN_COMMANDS */
-
-	install_element(BGP_NODE, &address_family_evpn_cmd);
-	install_element(BGP_NODE, &address_family_link_state_cmd);
-
-	/* "exit-address-family" command. */
-	install_element(BGP_IPV4_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV4M_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV4L_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV6_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV6M_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV6L_NODE, &exit_address_family_cmd);
-	install_element(BGP_VPNV4_NODE, &exit_address_family_cmd);
-	install_element(BGP_VPNV6_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV4U_NODE, &exit_address_family_cmd);
-	install_element(BGP_IPV6U_NODE, &exit_address_family_cmd);
-	install_element(BGP_EVPN_NODE, &exit_address_family_cmd);
-	install_element(BGP_LS_NODE, &exit_address_family_cmd);
+	/* address-family / exit-address-family node entry and exit: mgmtd-owned
+	 * (bgp_cli_instance.c); the native DEFUN_NOSH family was retired in
+	 * TODO #31 B3. */
 
 	/* BGP retain all route-target: converted to northbound (M7), see
 	 * bgp_cli_instance.c. */
@@ -12343,9 +11959,9 @@ void bgp_vty_init(void)
 	 * see bgp_cli_neighbor_init() (bgp_cli_neighbor.c, M4 batch B7).
 	 */
 
-	/* srv6 commands */
+	/* srv6 commands ('segment-routing srv6' node entry is mgmtd-owned,
+	 * TODO #31 B3) */
 	install_element(VIEW_NODE, &show_bgp_srv6_cmd);
-	install_element(BGP_NODE, &bgp_segment_routing_srv6_cmd);
 
 	/* BGP-LS commands */
 

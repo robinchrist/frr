@@ -946,11 +946,9 @@ static struct bgpevpn *bgp_nb_evpn_vni_lookup(const struct lyd_node *dnode)
 }
 
 /* 'vni N' ... 'exit-vni' sub-block create (M6 batch B1). Real keyed-list
- * create: mirrors the legacy bgp_evpn_vni DEFUN_NOSH, calling the same
- * (now shared) evpn_create_update_vni() core. Idempotent by VNI id -- the
- * legacy DEFUN_NOSH stays native during the coexistence window, so both
- * paths may create the same VNI in one file load; whichever runs second
- * just re-marks the already-created bgpevpn as configured. */
+ * create, calling the shared evpn_create_update_vni() core, idempotent by
+ * VNI id. Since TODO #31 B3 retired the legacy bgp_evpn_vni DEFUN_NOSH,
+ * this callback is the only VNI creation path. */
 int instance_afi_safis_l2vpn_evpn_vni_create(struct nb_cb_create_args *args)
 {
 	struct bgp *bgp;

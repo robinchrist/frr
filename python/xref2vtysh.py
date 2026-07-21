@@ -37,8 +37,8 @@ daemon_flags = {
     "lib/filter.c": "VTYSH_ACL_SHOW",
     "lib/filter_cli.c": "VTYSH_ACL_CONFIG",
     "lib/host_cli.c": "VTYSH_NON_MGMTD",
-    # not VTYSH_INTERFACE: bgpd registers the node but not lib's mgmtd-owned
-    # interface commands (see bgpd's local interface node-entry DEFPY_NOSH)
+    # not VTYSH_INTERFACE: bgpd registers the interface node but no commands
+    # under it (its last local node-entry DEFPY_NOSH retired in TODO #31 B3)
     "lib/if.c": "VTYSH_INTERFACE_SUBSET",
     "lib/keychain_cli.c": "VTYSH_KEYS",
     "lib/mgmt_be_client.c": "VTYSH_MGMT_BACKEND",
@@ -214,10 +214,10 @@ class CommandEntry:
 
         if defun_file == "lib/vrf.c":
             # the "debug vrf" commands are plain DEFUNs every daemon
-            # installs; "no vrf" is a mgmtd-owned northbound command and
-            # must not reach bgpd (which registers VRF_NODE but not lib's
-            # vrf create/destroy commands, see bgpd's local vrf
-            # node-entry DEFPY_NOSH)
+            # that calls vrf_install_commands() installs; "no vrf" is a
+            # mgmtd-owned northbound command and must not reach bgpd
+            # (which registers VRF_NODE but no commands under it since
+            # TODO #31 B3 retired its local node-entry DEFPY_NOSH)
             if "debug" in self.name:
                 return {"VTYSH_VRF"}
             return {"VTYSH_INTERFACE_SUBSET"}
