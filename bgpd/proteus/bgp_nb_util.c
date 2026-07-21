@@ -17,6 +17,7 @@
 #include "lib/prefix.h"
 
 #include "bgpd/bgpd.h"
+#include "bgpd/bgp_memory.h"
 #include "bgpd/bgp_vty.h"
 #include "bgpd/bgp_bfd.h"
 #include "bgpd/bgp_errors.h"
@@ -381,12 +382,69 @@ int bgp_nb_instance_apply(const struct lyd_node *instance_dnode)
 			asnotation = ASNOTATION_PLAIN;
 	}
 
-	ret = bgp_get_vty(&bgp, &as, name, inst_type, as_pretty, asnotation);
-	if (ret < 0) {
+	/* Mirror the retired 'router bgp ...' DEFUN_NOSH (bgp_vty.c, removed
+	 * in TODO #31 B3): a struct bgp may already exist for this vrf even
+	 * though the datastore is creating the instance fresh - as a hidden
+	 * instance kept alive by VPN references after 'no router bgp'
+	 * (bgp_delete()), as the hidden AS_UNSPECIFIED default auto-created
+	 * by 'import vrf' before its 'router bgp' block arrived, or as an
+	 * EVPN BGP_VRF_AUTO instance. The forced lookup finds and claims
+	 * those instead of erroring or duplicating; a leftover that
+	 * genuinely mismatches the created instance (AS and not claimable)
+	 * is deleted and recreated, the legacy config-replay semantics.
+	 */
+	ret = bgp_lookup_by_as_name_type(&bgp, &as, as_pretty, asnotation, name, inst_type, true);
+	if (bgp && (ret == BGP_ERR_AS_MISMATCH || ret == BGP_ERR_INSTANCE_MISMATCH)) {
+		bgp_delete(bgp);
+		bgp = NULL;
+		/* the mismatch lookup rewrote 'as' to the old instance's ASN */
+		as = bgp_nb_instance_get_asn(instance_dnode);
+		ret = BGP_SUCCESS;
+	}
+	if (bgp && ret == BGP_INSTANCE_EXISTS)
+		ret = BGP_SUCCESS;
+	else if (!bgp && ret == BGP_SUCCESS)
+		ret = bgp_get_vty(&bgp, &as, name, inst_type, as_pretty, asnotation);
+	if (ret < 0 || !bgp) {
 		flog_err(EC_BGP_INVALID_BGP_INSTANCE_ID, "%s: bgp_get_vty() failed for vrf %s: %d",
 			 __func__, vrf, ret);
 		return NB_ERR_RESOURCE;
 	}
+
+	/* A (re)created default instance completes any VRF-VPN leaking that
+	 * earlier 'router bgp X vrf FOO' blocks configured against the
+	 * not-yet-existing (or hidden) default.
+	 */
+	if (inst_type == BGP_INSTANCE_TYPE_DEFAULT) {
+		bgp_need_listening(bgp, NULL);
+		vpn_leak_postchange_all();
+	}
+
+	if (inst_type == BGP_INSTANCE_TYPE_VRF || IS_BGP_INSTANCE_HIDDEN(bgp)) {
+		/* complete pending 'import vrf <this>' leaks in other
+		 * instances, and finish claiming a same-ASN hidden instance
+		 * (the forced lookup only clears the flags on an ASN change)
+		 */
+		bgp_vpn_leak_export(bgp);
+		UNSET_FLAG(bgp->flags, BGP_FLAG_INSTANCE_HIDDEN);
+		UNSET_FLAG(bgp->flags, BGP_FLAG_DELETE_IN_PROGRESS);
+	}
+
+	/* for a claimed auto-created instance, adopt the configured ASN
+	 * rendering before dropping the auto flag
+	 */
+	if (CHECK_FLAG(bgp->vrf_flags, BGP_VRF_AUTO)) {
+		XFREE(MTYPE_BGP_NAME, bgp->as_pretty);
+		bgp->as_pretty = XSTRDUP(MTYPE_BGP_NAME, as_pretty);
+		if (!CHECK_FLAG(bgp->config, BGP_CONFIG_ASNOTATION) &&
+		    asnotation != ASNOTATION_UNDEFINED) {
+			SET_FLAG(bgp->config, BGP_CONFIG_ASNOTATION);
+			bgp->asnotation = asnotation;
+		}
+	}
+
+	/* the user config is now present */
+	UNSET_FLAG(bgp->vrf_flags, BGP_VRF_AUTO);
 
 	return NB_OK;
 }
