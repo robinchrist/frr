@@ -414,6 +414,7 @@ static const struct frr_yang_module_info *const bgpd_yang_modules[] = {
 	&proteus_bgp_nb_info,
 	&proteus_bgp_filter_info,
 	&proteus_bgp_dump_info,
+	&proteus_bgp_rpki_info,
 	&proteus_bfd_info,
 };
 
@@ -454,6 +455,8 @@ static const char *const bgpd_config_xpaths[] = {
 	"/proteus-bgp-filter:community-alias",
 	/* M7 B9: MRT dump (proteus-bgp-dump, new module). */
 	"/proteus-bgp-dump:dump",
+	/* TODO #31 B1: RPKI plugin config (proteus-bgp-rpki, new module). */
+	"/proteus-bgp-rpki:rpki",
 	/*
 	 * M3 B-RM1: bgpd no longer runs lib's northbound route-map/
 	 * filter CLI locally (bgp_route_map_init()/bgpd.c's

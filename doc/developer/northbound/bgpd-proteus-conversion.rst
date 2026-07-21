@@ -77,14 +77,21 @@ accepting that style through the ``bgp_afi_safi_map`` entry mapping
 converted per-AF commands (``bgp_cli_neighbor.c``,
 ``bgp_cli_instance.c``).
 
-Unconverted plugin config: RPKI and BMP (dropped from conversion scope
-for now, TODO #31) and VNC (support-dropped) remain native-only. Their
-commands still work interactively on bgpd's vty and persist under
-integrated ``frr.conf`` (vtysh collects bgpd's native
-``config_write``), but they do **not** persist in split-config mode:
-mgmtd cannot parse their lines from ``bgpd.conf``, and bgpd no longer
-reads that file. Deployments using RPKI/BMP/VNC must use integrated
-``frr.conf`` until the plugins are converted.
+Plugin config (TODO #31): RPKI is converted (batch B1, module
+``proteus-bgp-rpki``): the CLI lives in mgmtd
+(``bgpd/proteus/bgp_cli_rpki.c``), bgpd core registers the northbound
+callbacks unconditionally (``bgpd/proteus/bgp_nb_rpki.c``) and delivers
+the desired state per instance through the
+``bgp_rpki_config_apply``/``bgp_rpki_config_destroy`` hooks the
+``bgpd_rpki`` plugin subscribes to at load; with the plugin absent the
+config is accepted, stored and warned about, never rejected. RPKI
+config therefore persists through mgmtd's ``bgpd.conf`` again. BMP is
+still native-only (next batch, B2) and VNC is support-dropped: their
+commands work interactively on bgpd's vty and persist under integrated
+``frr.conf`` (vtysh collects bgpd's native ``config_write``), but they
+do **not** persist in split-config mode: mgmtd cannot parse their lines
+from ``bgpd.conf``, and bgpd no longer reads that file. Deployments
+using BMP/VNC must use integrated ``frr.conf`` until BMP is converted.
 
 Backend daemons must not run mgmtd-owned northbound CLI locally
 ----------------------------------------------------------------
@@ -100,8 +107,9 @@ This is why the mgmtd-dev.rst checklist has converted backends remove
 ``if_cmd_init()``/``vrf_cmd_init()``.
 
 bgpd can't remove them outright: it still owns legacy subcommands
-under ``INTERFACE_NODE`` (``mpls bgp forwarding``) and ``VRF_NODE``
-(``rpki``). The pattern for this mixed state:
+under ``INTERFACE_NODE`` (``mpls bgp forwarding``) and, until TODO #31
+B1 moved the rpki node entry to mgmtd, ``VRF_NODE`` (``rpki``). The
+pattern for this mixed state:
 
 - register the nodes with the node-only lib entry points
   (``if_cmd_init_node()``, ``vrf_cmd_init_node()``), which skip lib's
@@ -332,6 +340,13 @@ M9 dispositions (ruled 2026-07-19)
   the plugin CLI is converted to a mgmtd-linked TU with a
   backend-in-plugin apply path. This limitation must be called out in
   the user-facing release notes when the flip ships.
+
+  *Update (TODO #31 batch B1):* the RPKI half of this hole is closed;
+  see "Plugin config" in the post-flip architecture section above. The
+  B1 batch also fixed the plugin startup crash it inherited from the
+  M3 route-map conversion (the plugin still installed ``match rpki``
+  at bgpd's no-longer-existing ``RMAP_NODE``; those commands now live
+  in the mgmtd-hosted ``bgp_routemap_cli.c``). BMP remains open (B2).
 - **VNC/rfapi: documented support-drop.** Its ~133-command CLI surface
   is not converted; file-config support ends at the flip and the
   feature is deprecated-for-removal upstream-side. As a direct

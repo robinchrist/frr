@@ -13171,3 +13171,124 @@ const struct frr_yang_module_info proteus_bgp_dump_info = {
 		},
 	}
 };
+
+/* TODO #31 batch B1: proteus-bgp-rpki (RPKI plugin config). One instance
+ * (VRF) converges atomically through the list entry's apply_finish into
+ * the bgp_rpki_config_apply hook the bgpd_rpki plugin subscribes to (see
+ * the design comment in bgp_nb_rpki.c).
+ */
+const struct frr_yang_module_info proteus_bgp_rpki_info = {
+	.name = "proteus-bgp-rpki",
+	.nodes = {
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance",
+			.cbs = {
+				.create = rpki_instance_create,
+				.destroy = rpki_instance_destroy,
+				.apply_finish = rpki_instance_apply_finish,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/polling-period",
+			.cbs = {
+				.modify = rpki_instance_polling_period_modify,
+				.destroy = rpki_instance_polling_period_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/retry-interval",
+			.cbs = {
+				.modify = rpki_instance_retry_interval_modify,
+				.destroy = rpki_instance_retry_interval_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/expire-interval",
+			.cbs = {
+				.modify = rpki_instance_expire_interval_modify,
+				.destroy = rpki_instance_expire_interval_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache",
+			.cbs = {
+				.create = rpki_instance_cache_create,
+				.destroy = rpki_instance_cache_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/tcp",
+			.cbs = {
+				.create = rpki_instance_cache_tcp_create,
+				.destroy = rpki_instance_cache_tcp_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/tcp/host",
+			.cbs = {
+				.modify = rpki_instance_cache_tcp_host_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/tcp/port",
+			.cbs = {
+				.modify = rpki_instance_cache_tcp_port_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/tcp/source",
+			.cbs = {
+				.modify = rpki_instance_cache_tcp_source_modify,
+				.destroy = rpki_instance_cache_tcp_source_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh",
+			.cbs = {
+				.create = rpki_instance_cache_ssh_create,
+				.destroy = rpki_instance_cache_ssh_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/host",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_host_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/port",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_port_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/user",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_user_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/private-key",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_private_key_modify,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/known-hosts",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_known_hosts_modify,
+				.destroy = rpki_instance_cache_ssh_known_hosts_destroy,
+			}
+		},
+		{
+			.xpath = "/proteus-bgp-rpki:rpki/instance/cache/ssh/source",
+			.cbs = {
+				.modify = rpki_instance_cache_ssh_source_modify,
+				.destroy = rpki_instance_cache_ssh_source_destroy,
+			}
+		},
+		{
+			.xpath = NULL,
+		},
+	}
+};

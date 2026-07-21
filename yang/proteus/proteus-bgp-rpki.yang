@@ -1,0 +1,212 @@
+module proteus-bgp-rpki {
+  yang-version 1.1;
+  namespace "https://github.com/robinchrist/frr-proteus/yang/custom/bgp-rpki";
+  prefix proteus-bgp-rpki;
+
+  organization
+    "frr-proteus";
+  contact
+    "https://github.com/robinchrist/frr-proteus";
+  description
+    "RPKI origin validation configuration (RFC 6810/8210): per-VRF
+     groups of RPKI cache servers reached over TCP or SSH via the
+     RTR protocol, plus the RTR manager timers. The validation
+     machinery itself lives in the bgpd_rpki plugin; configuration
+     entered while bgpd runs without '-M bgpd_rpki' is accepted and
+     stored but stays inactive until bgpd is restarted with the
+     plugin loaded.
+
+     CLI text:
+
+       rpki                       (config and vrf level)
+       rpki polling_period (1-86400)
+       rpki retry_interval (1-7200)
+       rpki expire_interval (600-172800)
+       rpki cache tcp <A.B.C.D|WORD> TCPPORT [source A.B.C.D]
+            preference (1-255)
+       rpki cache ssh <A.B.C.D|WORD> (1-65535) SSH_UNAME SSH_PRIVKEY
+            [KNOWN_HOSTS_PATH] [source A.B.C.D] preference (1-255)";
+
+  revision 2026-07-21 {
+    description
+      "Initial revision.";
+  }
+
+  container rpki {
+    description
+      "RPKI configuration, one instance per VRF.";
+    list instance {
+      key "vrf";
+      description
+        "One RPKI cache-server group with its timers, scoped to a
+         VRF. Entered with 'rpki' at the top configuration level
+         (the default VRF) or inside a 'vrf NAME' block; removed
+         with 'no rpki'. An instance with no caches and all timers
+         at their defaults emits nothing and therefore does not
+         survive a configuration write, matching the pre-conversion
+         behavior. The RTR manager for an instance starts as soon
+         as it has at least one cache (and the VRF is active) and
+         stops when its last cache is removed.";
+      leaf vrf {
+        type string {
+          length "1..36";
+        }
+        description
+          "Name of the VRF this instance validates routes in;
+           'default' for the default VRF.";
+      }
+      leaf polling-period {
+        type uint32 {
+          range "1..86400";
+        }
+        units "seconds";
+        default "3600";
+        description
+          "'rpki polling_period (1-86400)': interval between serial
+           queries against the caches. Takes effect the next time
+           the RTR manager (re)starts.";
+      }
+      leaf retry-interval {
+        type uint16 {
+          range "1..7200";
+        }
+        units "seconds";
+        default "600";
+        description
+          "'rpki retry_interval (1-7200)': how long to wait before
+           retrying a failed cache connection. Takes effect the
+           next time the RTR manager (re)starts.";
+      }
+      leaf expire-interval {
+        type uint32 {
+          range "600..172800";
+        }
+        units "seconds";
+        default "7200";
+        description
+          "'rpki expire_interval (600-172800)': how long validation
+           records are usable without a successful refresh. An
+           explicitly configured value must not be smaller than the
+           polling period; the defaults are not cross-checked.
+           Takes effect the next time the RTR manager (re)starts.";
+      }
+      list cache {
+        key "preference";
+        description
+          "'rpki cache <tcp|ssh> ...': an RPKI cache server. The
+           preference is the cache's identity: re-entering a
+           'rpki cache' command with an existing preference but a
+           different transport or endpoint replaces that cache
+           (the pre-conversion CLI rejected such re-specification
+           interactively).";
+        leaf preference {
+          type uint8 {
+            range "1..255";
+          }
+          description
+            "'preference (1-255)': preference of the cache server.
+             Lower values are preferred; only one cache group is
+             active at a time.";
+        }
+        choice transport {
+          mandatory true;
+          description
+            "How to reach the cache server: plain TCP or SSH.";
+          case tcp {
+            container tcp {
+              description
+                "'rpki cache tcp <A.B.C.D|WORD> TCPPORT
+                 [source A.B.C.D] preference (1-255)': an RTR
+                 session over plain TCP.";
+              leaf host {
+                type string {
+                  length "1..255";
+                }
+                mandatory true;
+                description
+                  "IP address or hostname of the cache server.";
+              }
+              leaf port {
+                type string {
+                  length "1..255";
+                }
+                mandatory true;
+                description
+                  "TCP port number or service name of the cache
+                   server, stored verbatim in the spelling it was
+                   entered in.";
+              }
+              leaf source {
+                type string {
+                  length "1..255";
+                }
+                description
+                  "'source A.B.C.D': source IP address to bind the
+                   RPKI connection to.";
+              }
+            }
+          }
+          case ssh {
+            container ssh {
+              description
+                "'rpki cache ssh <A.B.C.D|WORD> (1-65535) SSH_UNAME
+                 SSH_PRIVKEY [KNOWN_HOSTS_PATH] [source A.B.C.D]
+                 preference (1-255)': an RTR session tunneled over
+                 SSH. Requires rtrlib built with SSH support;
+                 without it the cache is stored but cannot
+                 connect.";
+              leaf host {
+                type string {
+                  length "1..255";
+                }
+                mandatory true;
+                description
+                  "IP address or hostname of the cache server.";
+              }
+              leaf port {
+                type uint16 {
+                  range "1..65535";
+                }
+                mandatory true;
+                description
+                  "SSH port number of the cache server.";
+              }
+              leaf user {
+                type string {
+                  length "1..255";
+                }
+                mandatory true;
+                description
+                  "SSH user name.";
+              }
+              leaf private-key {
+                type string {
+                  length "1..4096";
+                }
+                mandatory true;
+                description
+                  "Path to the client's own SSH private key.";
+              }
+              leaf known-hosts {
+                type string {
+                  length "1..4096";
+                }
+                description
+                  "Path to the known hosts file used to verify the
+                   cache server's host key.";
+              }
+              leaf source {
+                type string {
+                  length "1..255";
+                }
+                description
+                  "'source A.B.C.D': source IP address to bind the
+                   RPKI connection to.";
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

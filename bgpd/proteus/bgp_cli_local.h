@@ -564,6 +564,7 @@ void bgp_cli_process_init(void);
 void bgp_cli_interface_init(void);
 void bgp_cli_filter_init(void);
 void bgp_cli_dump_init(void);
+void bgp_cli_rpki_init(void);
 void bgp_cli_neighbor_init(void);
 
 #ifdef __cplusplus

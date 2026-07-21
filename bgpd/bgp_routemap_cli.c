@@ -3376,6 +3376,48 @@ DEFUN_YANG (no_set_originator_id,
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/* TODO #31 B1: moved here from the bgpd_rpki plugin (which used to
+ * install these at bgpd's RMAP_NODE - a node bgpd no longer installs
+ * since route-map CLI became mgmtd-hosted, so loading the plugin aborted
+ * bgpd at startup). Like 'match rpki-extcommunity' below, the command is
+ * available unconditionally; the plugin only registers the runtime match
+ * rule. */
+DEFUN_YANG (match_rpki,
+       match_rpki_cmd,
+       "match rpki <valid|invalid|notfound>",
+       MATCH_STR
+       "Control rpki specific settings\n"
+       "Valid prefix\n"
+       "Invalid prefix\n"
+       "Prefix not found\n")
+{
+	const char *xpath = "./match-condition[condition='frr-bgp-route-map:rpki']";
+	char xpath_value[XPATH_MAXLEN];
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_CREATE, NULL);
+	snprintf(xpath_value, sizeof(xpath_value),
+		 "%s/rmap-match-condition/frr-bgp-route-map:rpki", xpath);
+	nb_cli_enqueue_change(vty, xpath_value, NB_OP_MODIFY, argv[2]->arg);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFUN_YANG (no_match_rpki,
+       no_match_rpki_cmd,
+       "no match rpki <valid|invalid|notfound>",
+       NO_STR
+       MATCH_STR
+       "Control rpki specific settings\n"
+       "Valid prefix\n"
+       "Invalid prefix\n"
+       "Prefix not found\n")
+{
+	const char *xpath = "./match-condition[condition='frr-bgp-route-map:rpki']";
+
+	nb_cli_enqueue_change(vty, xpath, NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 DEFPY_YANG (match_rpki_extcommunity,
        match_rpki_extcommunity_cmd,
        "[no$no] match rpki-extcommunity <valid|invalid|notfound>",
@@ -3998,6 +4040,8 @@ void bgp_routemap_cli_init(void)
 	install_element(RMAP_NODE, &no_set_ipv6_nexthop_prefer_global_cmd);
 	install_element(RMAP_NODE, &set_ipv6_nexthop_peer_cmd);
 	install_element(RMAP_NODE, &no_set_ipv6_nexthop_peer_cmd);
+	install_element(RMAP_NODE, &match_rpki_cmd);
+	install_element(RMAP_NODE, &no_match_rpki_cmd);
 	install_element(RMAP_NODE, &match_rpki_extcommunity_cmd);
 #ifdef HAVE_SCRIPTING
 	install_element(RMAP_NODE, &match_script_cmd);

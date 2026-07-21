@@ -79,35 +79,21 @@ instead of the default setting::
 
    bgpd_options="   -A 127.0.0.1"
 
-Otherwise you will encounter an error when trying to enter RPKI
-configuration mode due to the ``rpki`` module not being loaded when the BGP
-daemon is initialized.
-
-Examples of the error::
+RPKI *configuration* commands (the ``rpki`` mode, timers and cache
+servers) are accepted and stored even when the module is not loaded, but
+they have no effect until bgpd is restarted with ``-M rpki``; a warning
+is logged when such configuration is applied without the module. The
+RPKI *runtime* commands (``rpki start``, ``show rpki ...``,
+``debug rpki``) are only available with the module loaded, for
+example::
 
    router(config)# debug rpki
    % [BGP] Unknown command: debug rpki
-
-   router(config)# rpki
-   % [BGP] Unknown command: rpki
-
-   router(config-vrf)# rpki
-   % [BGP] Unknown command: rpki
 
 Note that the RPKI commands will be available in vtysh when running
 ``find rpki`` regardless of whether the module is loaded.
 
 .. _configuring-rpki-rtr-cache-servers:
-
-
-.. warning::
-
-   RPKI configuration currently does **not persist across a bgpd restart**
-   when per-daemon split config files are used: since the bgpd
-   management-daemon conversion, ``bgpd.conf`` is read by ``mgmtd``,
-   which cannot parse the still-unconverted RPKI commands, and ``bgpd``
-   itself no longer reads the file. Use the integrated ``frr.conf``
-   (``service integrated-vtysh-config``) to persist RPKI configuration.
 
 Configuring RPKI/RTR Cache Servers
 ----------------------------------

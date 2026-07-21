@@ -6274,4 +6274,5 @@ void bgp_cli_init(void)
 	bgp_cli_interface_init();
 	bgp_cli_filter_init();
 	bgp_cli_dump_init();
+	bgp_cli_rpki_init();
 }

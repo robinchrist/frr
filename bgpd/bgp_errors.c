@@ -582,6 +582,12 @@ static struct log_ref ferr_bgp_err[] = {
 		.suggestion = "Verify the sending peer implements draft-tantsura-idr-unreachability-safi correctly. Note that error logs for this EC are rate-limited to prevent log flooding from malicious or misbehaving peers.",
 	},
 	{
+		.code = EC_BGP_RPKI_PLUGIN_ABSENT,
+		.title = "RPKI configuration is present but the RPKI plugin is not loaded",
+		.description = "The configuration contains rpki cache servers or timers, but bgpd was started without the bgpd_rpki module, so the configuration is stored but has no effect",
+		.suggestion = "Start bgpd with '-M bgpd_rpki' (and ensure FRR was built with RPKI support) or remove the rpki configuration",
+	},
+	{
 		.code = END_FERR,
 	}
 };

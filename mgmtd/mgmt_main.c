@@ -233,6 +233,7 @@ static const struct frr_yang_module_info *const mgmt_yang_modules[] = {
 	&proteus_bgp_cli_info,
 	&proteus_bgp_filter_cli_info,
 	&proteus_bgp_dump_cli_info,
+	&proteus_bgp_rpki_cli_info,
 	&proteus_bfd_cli_info,
 	&frr_bgp_route_map_cli_info,
 #endif

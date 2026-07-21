@@ -1958,7 +1958,9 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, address_family_ipv6_labeled_unicast,
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD,
+/* TODO #31 B1: the rpki node entry and all rpki config commands are
+ * mgmtd-hosted (proteus-bgp-rpki); bgpd's plugin no longer parses them. */
+DEFUNSH(VTYSH_MGMTD,
 	rpki,
 	rpki_cmd,
 	"rpki",
@@ -2662,14 +2664,14 @@ DEFUNSH(VTYSH_BGPD | VTYSH_MGMTD, exit_vni, exit_vni_cmd, "exit-vni", "Exit from
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, rpki_exit, rpki_exit_cmd, "exit",
+DEFUNSH(VTYSH_MGMTD, rpki_exit, rpki_exit_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
 {
 	vtysh_exit(vty);
 	return CMD_SUCCESS;
 }
 
-DEFUNSH(VTYSH_BGPD, rpki_quit, rpki_quit_cmd, "quit",
+DEFUNSH(VTYSH_MGMTD, rpki_quit, rpki_quit_cmd, "quit",
 	"Exit current mode and down to previous mode\n")
 {
 	return rpki_exit(self, vty, argc, argv);

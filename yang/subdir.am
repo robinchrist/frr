@@ -93,6 +93,7 @@ if BGPD
 dist_yangmodels_DATA += yang/proteus/proteus-types.yang
 dist_yangmodels_DATA += yang/proteus/proteus-bgp-filter.yang
 dist_yangmodels_DATA += yang/proteus/proteus-bgp-dump.yang
+dist_yangmodels_DATA += yang/proteus/proteus-bgp-rpki.yang
 dist_yangmodels_DATA += yang/proteus/proteus-bfd.yang
 dist_yangmodels_DATA += yang/proteus/proteus-bgp-evpn.yang
 dist_yangmodels_DATA += yang/proteus/proteus-bgp.yang

@@ -220,6 +220,7 @@ int instance_afi_safis_ipv6_labeled_unicast_nexthop_prefer_global_destroy(
 extern const struct frr_yang_module_info proteus_bgp_nb_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_info;
 extern const struct frr_yang_module_info proteus_bgp_dump_info;
+extern const struct frr_yang_module_info proteus_bgp_rpki_info;
 extern const struct frr_yang_module_info proteus_bfd_info;
 
 /* Interface-level 'mpls bgp ...' flags, on proteus-bgp's augment of
@@ -4832,6 +4833,36 @@ void dump_routes_mrt_apply_finish(struct nb_cb_apply_finish_args *args);
 int dump_routes_mrt_path_modify(struct nb_cb_modify_args *args);
 int dump_routes_mrt_interval_modify(struct nb_cb_modify_args *args);
 int dump_routes_mrt_interval_destroy(struct nb_cb_destroy_args *args);
+
+/* proteus-bgp-rpki (TODO #31 batch B1, RPKI plugin config): bodies in
+ * bgpd/proteus/bgp_nb_rpki.c. */
+int rpki_instance_create(struct nb_cb_create_args *args);
+int rpki_instance_destroy(struct nb_cb_destroy_args *args);
+void rpki_instance_apply_finish(struct nb_cb_apply_finish_args *args);
+int rpki_instance_polling_period_modify(struct nb_cb_modify_args *args);
+int rpki_instance_polling_period_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_retry_interval_modify(struct nb_cb_modify_args *args);
+int rpki_instance_retry_interval_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_expire_interval_modify(struct nb_cb_modify_args *args);
+int rpki_instance_expire_interval_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_create(struct nb_cb_create_args *args);
+int rpki_instance_cache_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_tcp_create(struct nb_cb_create_args *args);
+int rpki_instance_cache_tcp_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_tcp_host_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_tcp_port_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_tcp_source_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_tcp_source_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_ssh_create(struct nb_cb_create_args *args);
+int rpki_instance_cache_ssh_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_ssh_host_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_port_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_user_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_private_key_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_known_hosts_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_known_hosts_destroy(struct nb_cb_destroy_args *args);
+int rpki_instance_cache_ssh_source_modify(struct nb_cb_modify_args *args);
+int rpki_instance_cache_ssh_source_destroy(struct nb_cb_destroy_args *args);
 
 #ifdef __cplusplus
 }

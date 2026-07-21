@@ -18,6 +18,7 @@ extern "C" {
 extern const struct frr_yang_module_info proteus_bgp_cli_info;
 extern const struct frr_yang_module_info proteus_bgp_filter_cli_info;
 extern const struct frr_yang_module_info proteus_bgp_dump_cli_info;
+extern const struct frr_yang_module_info proteus_bgp_rpki_cli_info;
 
 extern void bgp_cli_init(void);
 
