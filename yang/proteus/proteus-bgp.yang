@@ -2791,6 +2791,16 @@ module proteus-bgp {
         "'bgp route-map delay-timer (0-600)'.";
     }
 
+    leaf agentx {
+      type boolean;
+      default "false";
+      description
+        "'agentx': connect to the SNMP master agent as an AgentX
+         subagent. Tier A default-off: the bare 'agentx' line
+         renders iff true. Once enabled, AgentX support cannot be
+         disabled again for the lifetime of the process.";
+    }
+
     container snmp-traps {
       description
         "'bgp snmp traps ...' (M8.5 B-snmp): trap-family toggles on

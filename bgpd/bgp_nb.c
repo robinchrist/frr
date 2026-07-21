@@ -51,6 +51,12 @@ const struct frr_yang_module_info proteus_bgp_nb_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/agentx",
+			.cbs = {
+				.modify = process_agentx_modify,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/snmp-traps/rfc4273",
 			.cbs = {
 				.modify = process_snmp_traps_rfc4273_modify,

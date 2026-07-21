@@ -326,6 +326,7 @@ int process_graceful_shutdown_modify(struct nb_cb_modify_args *args);
 int process_no_rib_modify(struct nb_cb_modify_args *args);
 int process_send_extra_data_zebra_modify(struct nb_cb_modify_args *args);
 int process_ipv6_auto_ra_modify(struct nb_cb_modify_args *args);
+int process_agentx_modify(struct nb_cb_modify_args *args);
 int process_snmp_traps_rfc4273_modify(struct nb_cb_modify_args *args);
 int process_snmp_traps_rfc4382_modify(struct nb_cb_modify_args *args);
 int process_snmp_traps_bgp4_mibv2_modify(struct nb_cb_modify_args *args);

@@ -1605,6 +1605,12 @@ const struct frr_yang_module_info proteus_bgp_cli_info = {
 			}
 		},
 		{
+			.xpath = "/proteus-bgp:process/agentx",
+			.cbs = {
+				.cli_show = process_agentx_cli_write,
+			}
+		},
+		{
 			.xpath = "/proteus-bgp:process/snmp-traps/rfc4273",
 			.cbs = {
 				.cli_show = process_snmp_traps_rfc4273_cli_write,

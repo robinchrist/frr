@@ -13,6 +13,7 @@
 #include "lib/log.h"
 #include "lib/yang_wrappers.h"
 #include "lib/frrevent.h"
+#include "lib/libagentx.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_vty.h"
@@ -285,6 +286,26 @@ int process_ipv6_auto_ra_modify(struct nb_cb_modify_args *args)
 		return NB_OK;
 
 	return process_ipv6_auto_ra_apply(yang_dnode_get_bool(args->dnode, NULL));
+}
+
+/* 'agentx' (TODO #31 B5): same bodies as the legacy lib DEFUN pair in
+ * lib/libagentx.c, via the shared libagentx_cli_* helpers. True enables the
+ * AgentX subagent connection (or logs the "module not loaded" info line when
+ * the snmp module is absent). False is a no-op unless AgentX is already up,
+ * in which case it cannot actually be torn down again; warn like the legacy
+ * no-form did instead of failing the whole transaction, so a replayed config
+ * without the line still applies. */
+int process_agentx_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	if (yang_dnode_get_bool(args->dnode, NULL))
+		libagentx_cli_enable();
+	else if (agentx_enabled && !libagentx_cli_disable())
+		zlog_warn("SNMP AgentX support cannot be disabled once enabled");
+
+	return NB_OK;
 }
 
 /* 'bgp snmp traps ...' (M8.5 B-snmp): bm->options flag toggles. Default

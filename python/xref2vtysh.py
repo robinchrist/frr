@@ -33,7 +33,10 @@ frr_top_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # not quite obvious...
 
 daemon_flags = {
-    "lib/libagentx.c": "VTYSH_ISISD|VTYSH_RIPD|VTYSH_OSPFD|VTYSH_OSPF6D|VTYSH_BGPD|VTYSH_ZEBRA",
+    # not VTYSH_BGPD: bgpd's agentx enablement goes through mgmtd since the
+    # proteus-bgp conversion (TODO #31 B5); the lib DEFUNs stay installed in
+    # bgpd but are unreachable via vtysh
+    "lib/libagentx.c": "VTYSH_ISISD|VTYSH_RIPD|VTYSH_OSPFD|VTYSH_OSPF6D|VTYSH_ZEBRA",
     "lib/filter.c": "VTYSH_ACL_SHOW",
     "lib/filter_cli.c": "VTYSH_ACL_CONFIG",
     "lib/host_cli.c": "VTYSH_NON_MGMTD",

@@ -35,6 +35,40 @@
  * tri-state (no YANG default, absence = inherit the process leaf), keeping
  * the enabled|disabled scheme with its own deprecated bare aliases.
  */
+/* 'agentx' (TODO #31 B5): lib-level CONFIG_NODE line (lib/libagentx.c) that
+ * mgmtd would otherwise drop when reading bgpd.conf post-flip. Modeled as a
+ * process-scope Tier A default-off boolean; grammar is byte-identical to the
+ * lib DEFUN pair so vtysh keeps one merged entry (mgmtd handles bgpd, the
+ * other daemons keep their native lib path). The no-form destroys back to
+ * the false default; note AgentX cannot actually be un-enabled at runtime,
+ * the backend only stops re-enabling it on replay. */
+DEFPY_YANG(
+	bgp_agentx, bgp_agentx_cli_cmd,
+	"agentx",
+	"SNMP AgentX protocol settings\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/agentx", NB_OP_MODIFY, "true");
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	no_bgp_agentx, no_bgp_agentx_cli_cmd,
+	"no agentx",
+	NO_STR
+	"SNMP AgentX protocol settings\n")
+{
+	nb_cli_enqueue_change(vty, "/proteus-bgp:process/agentx", NB_OP_DESTROY, NULL);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void process_agentx_cli_write(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, "agentx\n");
+	else if (show_defaults)
+		vty_out(vty, "no agentx\n");
+}
+
 /* 'bgp snmp traps <rfc4273|rfc4382|bgp4-mibv2> <enabled|disabled>' (tri-state
  * conversion). rfc4273 and rfc4382 are Tier A default-on, bgp4-mibv2 is Tier
  * A default-off, but the canonical grammar is uniform across all three
@@ -758,6 +792,9 @@ void process_graceful_restart_rib_stale_time_cli_write(struct vty *vty,
 
 void bgp_cli_process_init(void)
 {
+	install_element(CONFIG_NODE, &bgp_agentx_cli_cmd);
+	install_element(CONFIG_NODE, &no_bgp_agentx_cli_cmd);
+
 	install_element(CONFIG_NODE, &bgp_snmp_traps_cli_cmd);
 	install_element(CONFIG_NODE, &no_bgp_snmp_traps_cli_cmd);
 	install_element(CONFIG_NODE, &bgp_snmp_traps_deprecated_cli_cmd);
