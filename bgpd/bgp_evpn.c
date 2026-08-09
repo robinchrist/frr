@@ -5771,19 +5771,24 @@ void bgp_evpn_cleanup_per_vni_routes(struct bgp *bgp)
 }
 
 /*
- * Should the auto import RT be part of the effective import route
- * targets of the VRF?
+ * Indicates whether an automatic import route target should be attempted to
+ * be generated for the VRF.
+ * Note that a "true" return value does NOT guarantee that an auto route target
+ * will be generated. There may be reasons that skip the generation at a later stage,
+ * e.g. if the L3VNI is not set / live, or the enforce-as4 option is set and the
+ * VNI exceeds 16 bits
  */
 static bool bgp_evpn_vrf_should_generate_import_auto_rt(struct bgp *bgp_vrf)
 {
 	struct bgp_evpn_rt_config *rt_config = bgp_vrf->vrf_route_target_config;
 
-	/* Never add the auto route target */
+	/* Check whether configuration specifies to NEVER add the auto route target */
 	if (rt_config->autort_cfgd_import == BGP_EVPN_AUTORT_ADD_NEVER)
 		return false;
 
-	/* Always add the auto route target, even when manual route targets
-	 * are configured as well
+	/*
+	 * Check whether configuration specifies to ALWAYS add the auto route target,
+	 * even when manual route targets are configured as well
 	 */
 	if (rt_config->autort_cfgd_import == BGP_EVPN_AUTORT_ADD_ALWAYS)
 		return true;
@@ -5796,19 +5801,24 @@ static bool bgp_evpn_vrf_should_generate_import_auto_rt(struct bgp *bgp_vrf)
 }
 
 /*
- * Should the auto export RT be part of the effective export route
- * targets of the VRF?
+ * Indicates whether an automatic export route target should be attempted to
+ * be generated for the VRF.
+ * Note that a "true" return value does NOT guarantee that an auto route target
+ * will be generated. There may be reasons that skip the generation at a later stage,
+ * e.g. if the L3VNI is not set / live, or the enforce-as4 option is set and the
+ * VNI exceeds 16 bits
  */
 static bool bgp_evpn_vrf_should_generate_export_auto_rt(struct bgp *bgp_vrf)
 {
 	struct bgp_evpn_rt_config *rt_config = bgp_vrf->vrf_route_target_config;
 
-	/* Never add the auto route target */
+	/* Check whether configuration specifies to NEVER add the auto route target */
 	if (rt_config->autort_cfgd_export == BGP_EVPN_AUTORT_ADD_NEVER)
 		return false;
 
-	/* Always add the auto route target, even when manual route targets
-	 * are configured as well
+	/*
+	 * Check whether configuration specifies to ALWAYS add the auto route target,
+	 * even when manual route targets are configured as well
 	 */
 	if (rt_config->autort_cfgd_export == BGP_EVPN_AUTORT_ADD_ALWAYS)
 		return true;
@@ -5818,62 +5828,6 @@ static bool bgp_evpn_vrf_should_generate_export_auto_rt(struct bgp *bgp_vrf)
 	 * target is configured for this direction.
 	 */
 	return !bgp_evpn_vrf_has_manual_export_rt_cfgd(bgp_vrf);
-}
-
-/*
- * Create the auto export RT extended community value for the VRF, of
- * the form AS:VNI. Only the export direction uses this fully qualified
- * form; the auto import route target is a wildcard route target.
- * NOTE: We use only the lower 16 bits of the AS. This is sufficient as
- * the need is to get a RT value that will be unique across different
- * VNIs but the same across routers (in the same AS) for a particular
- * VNI.
- *
- * Returns: true if the RT was successfully derived and placed in eval,
- *          false if the generation was aborted (e.g. VNI > 16-bit limit).
- */
-enum bgp_evpn_vni_type {
-	BGP_EVPN_VNI_TYPE_L2,
-	BGP_EVPN_VNI_TYPE_L3,
-};
-
-static inline bool bgp_evpn_derive_auto_rt_export(struct bgp *bgp, vni_t vni,
-						  struct ecommunity_val *eval,
-						  enum bgp_evpn_vni_type vni_type)
-{
-	if (bgp->autort_enforce_as4_export) {
-		if (vni > 0xFFFF) {
-			zlog_warn("%s %u exceeds 16-bit limit, cannot auto-derive RT with enforce-as4",
-				  vni_type == BGP_EVPN_VNI_TYPE_L2 ? "L2VNI" : "VRF L3VNI", vni);
-			return false;
-		}
-		encode_route_target_as4(bgp->as, (uint16_t)(vni & 0xFFFF), eval, true);
-		return true;
-	}
-	if (bgp->autort_rfc8365_export)
-		SET_FLAG(vni, EVPN_AUTORT_VXLAN);
-	encode_route_target_as((bgp->as & 0xFFFF), vni, eval, true);
-	return true;
-}
-
-static inline bool bgp_evpn_derive_auto_rt_import(struct bgp *bgp, vni_t *vni,
-						  enum bgp_evpn_vni_type vni_type)
-{
-	if (bgp->autort_enforce_as4_import) {
-		if (*vni > 0xFFFF) {
-			zlog_warn("%s %u exceeds 16-bit limit, cannot auto-derive import RT with enforce-as4",
-				  vni_type == BGP_EVPN_VNI_TYPE_L2 ? "L2VNI" : "VRF L3VNI", *vni);
-			return false;
-		}
-		*vni = (*vni & 0xFFFF);
-	} else if (bgp->autort_rfc8365_import)
-		SET_FLAG(*vni, EVPN_AUTORT_VXLAN);
-	return true;
-}
-
-static bool bgp_evpn_vrf_form_auto_rt_eval(struct bgp *bgp_vrf, struct ecommunity_val *eval)
-{
-	return bgp_evpn_derive_auto_rt_export(bgp_vrf, bgp_vrf->l3vni, eval, BGP_EVPN_VNI_TYPE_L3);
 }
 
 /* Encode a fully qualified user configured route target into an
@@ -5916,14 +5870,119 @@ static void bgp_evpn_vrf_add_effective_wildcard_import_rt(struct bgp *bgp_vrf,
 }
 
 /*
+ * This function generates and adds the automatic import Route Targets to the
+ * effective import route targets of the VRF, IF they should be generated. This
+ * is the very core function to generate VRF automatic import Route Targets.
+ * Currently, there is only one automatic import Route Target generated per VRF
+ *
+ * The VRF automatic import Route Target is a Wildcard Route Target, with the
+ * VRF's local origination L3VNI as local admin, i.e. "*:<VNI>", where "*"
+ * matches any global admin (AS2, AS4, IP4).
+ * The used VNI value is changed if rfc8365-compatible is set.
+ * rfc8365-compatible is mutually exclusive with enforce-as4.
+ *
+ * "local origination L3VNI" is the "normal" L3VNI in case of FRR - however it
+ * is important to make that distinction, because in EVPN labels are generally
+ * downstream assigned (i.e. each router could allocate / use a different label /
+ * L3VNI for the same VRF). As long as the route targets match, other routers
+ * will import and process the routes properly. This is commonly called
+ * "Downstream VNI".
+ *
+ * This function will NOT generate / add automatic import Route Targets in
+ * the following cases:
+ * - Suppressed by config (see bgp_evpn_vrf_should_generate_import_auto_rt)
+ * - The VRF's L3VNI is not set ("L3VNI is not live" is guarded at calling
+ *   functions a couple of levels up - not our concern!)
+ * - enforce-as4 is set and the VRF's L3VNI exceeds 16 bits (0xFFFF / > 65535) -
+ *   in that case, a warning is logged and the automatic import Route Target is
+ *   not generated
+ */
+static void bgp_evpn_vrf_add_effective_auto_import_rts(struct bgp *bgp_vrf)
+{
+	vni_t vni = bgp_vrf->l3vni;
+
+	if (!vni || !bgp_evpn_vrf_should_generate_import_auto_rt(bgp_vrf))
+		return;
+
+	if (bgp_vrf->autort_enforce_as4_import) {
+		if (vni > 0xFFFF) {
+			zlog_warn("VRF L3VNI %u exceeds 16-bit limit, cannot auto-derive import RT with enforce-as4",
+				  vni);
+			return;
+		}
+	} else if (bgp_vrf->autort_rfc8365_import)
+		SET_FLAG(vni, EVPN_AUTORT_VXLAN);
+
+	bgp_evpn_vrf_add_effective_wildcard_import_rt(bgp_vrf, htonl(vni));
+}
+
+/*
+ * This function generates and adds the automatic export Route Targets to the
+ * effective export route targets of the VRF, IF they should be generated. This
+ * is the very core function to generate VRF automatic export Route Targets.
+ * Currently, there is only one automatic export Route Target generated per VRF
+ *
+ * The VRF automatic export Route Target is a fully qualified Route Target, with
+ * the VRF's local origination L3VNI as local admin, and the (possibly masked!)
+ * AS number as global admin, i.e.  "<AS>:<VNI>"
+ *
+ * By default (if enforce-as4 is NOT set), the generated export route target
+ * uses AS2 encoding. If the AS number exceeds 16-bit (> 65535), **ONLY THE
+ * LOWER 2 BYTES OF THE AS NUMBER ARE USED** (the AS Number is masked). For
+ * reasoning why the AS number is masked, refer to the EVPN docs.
+ * The used VNI value is changed if rfc8365-compatible is set.
+ * rfc8365-compatible is mutually exclusive with enforce-as4.
+ *
+ * If enforce-as4 is set, the generated export route target uses AS4 encoding.
+ * If in this case the VNI number exceeds 16-bit (> 65535), a warning is logged
+ * and the automatic export Route Target is not generated
+ *
+ * "local origination L3VNI" is the "normal" L3VNI in case of FRR - however it
+ * is important to make that distinction, because in EVPN labels are generally
+ * downstream assigned (i.e. each router could allocate / use a different label /
+ * L3VNI for the same VRF). As long as the route targets match, other routers
+ * will import and process the routes properly. This is commonly called
+ * "Downstream VNI".
+ *
+ * This function will NOT generate / add automatic export Route Targets in
+ * the following cases:
+ * - Suppressed by config (see bgp_evpn_vrf_should_generate_export_auto_rt)
+ * - The VRF's L3VNI is not set ("L3VNI is not live" is guarded at calling
+ *   functions a couple of levels up - not our concern!)
+ * - enforce-as4 is set and the VRF's L3VNI exceeds 16 bits (0xFFFF / > 65535) -
+ *   in that case, a warning is logged and the automatic export Route Target is
+ *   not generated
+ */
+static void bgp_evpn_vrf_add_effective_auto_export_rts(struct bgp *bgp_vrf)
+{
+	struct bgp_evpn_effective_fq_rt *fq_rt;
+	struct ecommunity_val eval;
+	vni_t vni = bgp_vrf->l3vni;
+
+	if (!vni || !bgp_evpn_vrf_should_generate_export_auto_rt(bgp_vrf))
+		return;
+
+	if (bgp_vrf->autort_enforce_as4_export) {
+		if (vni > 0xFFFF) {
+			zlog_warn("VRF L3VNI %u exceeds 16-bit limit, cannot auto-derive export RT with enforce-as4",
+				  vni);
+			return;
+		}
+		encode_route_target_as4(bgp_vrf->as, (uint16_t)vni, &eval, true);
+	} else {
+		if (bgp_vrf->autort_rfc8365_export)
+			SET_FLAG(vni, EVPN_AUTORT_VXLAN);
+		encode_route_target_as((bgp_vrf->as & 0xFFFF), vni, &eval, true);
+	}
+
+	fq_rt = bgp_evpn_effective_fq_rt_new(&eval);
+	if (bgp_evpn_effective_fq_rt_slu_add(&bgp_vrf->effective_fq_export_rts, fq_rt))
+		bgp_evpn_effective_fq_rt_free(fq_rt); /* duplicate */
+}
+
+/*
  * Recompute the effective import route targets of the VRF from its
  * route-target configuration.
- *
- * Auto route target generation is gated on l3vni != 0: the auto route
- * target encodes the VNI, so there is nothing to derive without one.
- * This matches the previous behavior where the auto route target was
- * only formed from the L3VNI add path and from configuration changes
- * guarded by is_l3vni_live().
  */
 static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf)
 {
@@ -5935,15 +5994,7 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf)
 	bgp_evpn_effective_wildcard_rt_list_flush(&bgp_vrf->effective_wildcard_import_rts);
 	bgp_evpn_effective_fq_rt_list_flush(&bgp_vrf->effective_fq_import_rts);
 
-	if (bgp_vrf->l3vni && bgp_evpn_vrf_should_generate_import_auto_rt(bgp_vrf)) {
-		vni_t vni = bgp_vrf->l3vni;
-		/* The auto import route target is a wildcard route
-		 * target: it matches any route target carrying the VNI
-		 * as local admin value, regardless of the AS.
-		 */
-		if (bgp_evpn_derive_auto_rt_import(bgp_vrf, &vni, BGP_EVPN_VNI_TYPE_L3))
-			bgp_evpn_vrf_add_effective_wildcard_import_rt(bgp_vrf, htonl(vni));
-	}
+	bgp_evpn_vrf_add_effective_auto_import_rts(bgp_vrf);
 
 	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
 		if (cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD) {
@@ -5962,9 +6013,8 @@ static void bgp_evpn_vrf_regenerate_effective_import_rts(struct bgp *bgp_vrf)
 
 /*
  * Recompute the effective export route targets of the VRF from its
- * route-target configuration. See the import variant above for the
- * l3vni gating of the auto route target. Wildcard route targets never
- * occur here (rejected for export by the CLI).
+ * route-target configuration. Wildcard route targets never occur here
+ * (rejected for export by the CLI).
  */
 static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf)
 {
@@ -5975,14 +6025,7 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf)
 
 	bgp_evpn_effective_fq_rt_list_flush(&bgp_vrf->effective_fq_export_rts);
 
-	if (bgp_vrf->l3vni && bgp_evpn_vrf_should_generate_export_auto_rt(bgp_vrf)) {
-		if (bgp_evpn_vrf_form_auto_rt_eval(bgp_vrf, &eval)) {
-			fq_rt = bgp_evpn_effective_fq_rt_new(&eval);
-			if (bgp_evpn_effective_fq_rt_slu_add(&bgp_vrf->effective_fq_export_rts,
-							     fq_rt))
-				bgp_evpn_effective_fq_rt_free(fq_rt); /* duplicate */
-		}
-	}
+	bgp_evpn_vrf_add_effective_auto_export_rts(bgp_vrf);
 
 	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
 		bgp_evpn_cfgd_rt_to_eval(cfgd_rt, &eval);
@@ -5993,19 +6036,23 @@ static void bgp_evpn_vrf_regenerate_effective_export_rts(struct bgp *bgp_vrf)
 }
 
 /*
- * Should the auto import RT be part of the effective import route
- * targets of the L2VNI?
+ * Indicates whether an automatic import route target should be attempted to
+ * be generated for the L2VNI (EVI (EVPN Instance)).
+ * Note that a "true" return value does NOT guarantee that an auto route target
+ * will be generated. There may be reasons that skip the generation at a later stage,
+ * e.g. if the enforce-as4 option is set and the VNI exceeds 16 bits
  */
 static bool bgp_evpn_l2vni_should_generate_import_auto_rt(struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
 
-	/* Never add the auto route target */
+	/* Check whether configuration specifies to NEVER add the auto route target */
 	if (rt_config->autort_cfgd_import == BGP_EVPN_AUTORT_ADD_NEVER)
 		return false;
 
-	/* Always add the auto route target, even when manual route targets
-	 * are configured as well
+	/*
+	 * Check whether configuration specifies to ALWAYS add the auto route target,
+	 * even when manual route targets are configured as well
 	 */
 	if (rt_config->autort_cfgd_import == BGP_EVPN_AUTORT_ADD_ALWAYS)
 		return true;
@@ -6018,19 +6065,23 @@ static bool bgp_evpn_l2vni_should_generate_import_auto_rt(struct bgpevpn *vpn)
 }
 
 /*
- * Should the auto export RT be part of the effective export route
- * targets of the L2VNI? See the import variant above.
+ * Indicates whether an automatic export route target should be attempted to
+ * be generated for the L2VNI (EVI (EVPN Instance)).
+ * Note that a "true" return value does NOT guarantee that an auto route target
+ * will be generated. There may be reasons that skip the generation at a later stage,
+ * e.g. if the enforce-as4 option is set and the VNI exceeds 16 bits
  */
 static bool bgp_evpn_l2vni_should_generate_export_auto_rt(struct bgpevpn *vpn)
 {
 	struct bgp_evpn_rt_config *rt_config = vpn->rt_config;
 
-	/* Never add the auto route target */
+	/* Check whether configuration specifies to NEVER add the auto route target */
 	if (rt_config->autort_cfgd_export == BGP_EVPN_AUTORT_ADD_NEVER)
 		return false;
 
-	/* Always add the auto route target, even when manual route targets
-	 * are configured as well
+	/*
+	 * Check whether configuration specifies to ALWAYS add the auto route target,
+	 * even when manual route targets are configured as well
 	 */
 	if (rt_config->autort_cfgd_export == BGP_EVPN_AUTORT_ADD_ALWAYS)
 		return true;
@@ -6040,26 +6091,6 @@ static bool bgp_evpn_l2vni_should_generate_export_auto_rt(struct bgpevpn *vpn)
 	 * target is configured for this direction.
 	 */
 	return !bgp_evpn_l2vni_has_manual_export_rt_cfgd(vpn);
-}
-
-/*
- * Create the auto export RT extended community value for the L2VNI, of
- * the form AS:VNI. The AS and the RFC 8365 export setting are taken
- * from the EVPN instance. Only the export direction uses this fully
- * qualified form; the auto import route target is a wildcard route
- * target.
- * NOTE: We use only the lower 16 bits of the AS. This is sufficient as
- * the need is to get a RT value that will be unique across different
- * VNIs but the same across routers (in the same AS) for a particular
- * VNI.
- *
- * Returns: true if the RT was successfully derived and placed in eval,
- *          false if the generation was aborted (e.g. VNI > 16-bit limit).
- */
-static bool bgp_evpn_l2vni_form_auto_rt_eval(struct bgp *bgp, struct bgpevpn *vpn,
-					     struct ecommunity_val *eval)
-{
-	return bgp_evpn_derive_auto_rt_export(bgp, vpn->vni, eval, BGP_EVPN_VNI_TYPE_L2);
 }
 
 /* Add an effective wildcard import route target to the L2VNI */
@@ -6072,6 +6103,115 @@ static void bgp_evpn_l2vni_add_effective_wildcard_import_rt(struct bgpevpn *vpn,
 	if (bgp_evpn_effective_wildcard_rt_slu_add(&vpn->effective_wildcard_import_rts,
 						   wildcard_rt))
 		bgp_evpn_effective_wildcard_rt_free(wildcard_rt); /* duplicate */
+}
+
+/*
+ * This function generates and adds the automatic import Route Targets to the
+ * effective import route targets of the L2VNI (EVI (EVPN Instance)), IF they
+ * should be generated. This is the very core function to generate L2VNI
+ * automatic import Route Targets. Currently, there is only one automatic import
+ * Route Target generated per L2VNI
+ *
+ * The L2VNI automatic import Route Target is a Wildcard Route Target, with the
+ * L2VNI's local origination L2VNI as local admin, i.e. "*:<VNI>", where "*"
+ * matches any global admin (AS2, AS4, IP4).
+ * The used VNI value is changed if rfc8365-compatible is set.
+ * rfc8365-compatible is mutually exclusive with enforce-as4.
+ *
+ * "local origination L2VNI" is the "normal" L2VNI in case of FRR - however it
+ * is important to make that distinction, because in EVPN labels are generally
+ * downstream assigned (i.e. each router could allocate / use a different label /
+ * L2VNI for the same EVI). As long as the route targets match, other routers
+ * will import and process the routes properly. This is commonly called
+ * "Downstream VNI".
+ *
+ * This function will NOT generate / add automatic import Route Targets in
+ * the following cases:
+ * - Suppressed by config (see bgp_evpn_l2vni_should_generate_import_auto_rt)
+ * - enforce-as4 is set and the EVI's L2VNI exceeds 16 bits (0xFFFF / > 65535) -
+ *   in that case, a warning is logged and the automatic import Route Target is
+ *   not generated
+ */
+static void bgp_evpn_l2vni_add_effective_auto_import_rts(struct bgp *bgp, struct bgpevpn *vpn)
+{
+	vni_t vni = vpn->vni;
+
+	if (!bgp_evpn_l2vni_should_generate_import_auto_rt(vpn))
+		return;
+
+	if (bgp->autort_enforce_as4_import) {
+		if (vni > 0xFFFF) {
+			zlog_warn("L2VNI %u exceeds 16-bit limit, cannot auto-derive import RT with enforce-as4",
+				  vni);
+			return;
+		}
+	} else if (bgp->autort_rfc8365_import)
+		SET_FLAG(vni, EVPN_AUTORT_VXLAN);
+
+	bgp_evpn_l2vni_add_effective_wildcard_import_rt(vpn, htonl(vni));
+}
+
+/*
+ * This function generates and adds the automatic export Route Targets to the
+ * effective export route targets of the L2VNI (EVI (EVPN Instance)), IF they
+ * should be generated. This is the very core function to generate L2VNI
+ * automatic export Route Targets. Currently, there is only one automatic export
+ * Route Target generated per L2VNI
+ *
+ * The L2VNI automatic export Route Target is a fully qualified Route Target, with
+ * the EVI's local origination L2VNI as local admin, and the (possibly masked!)
+ * AS number as global admin, i.e.  "<AS>:<VNI>"
+ *
+ * By default (if enforce-as4 is NOT set), the generated export route target
+ * uses AS2 encoding. If the AS number exceeds 16-bit (> 65535), **ONLY THE
+ * LOWER 2 BYTES OF THE AS NUMBER ARE USED** (the AS Number is masked). For
+ * reasoning why the AS number is masked, refer to the EVPN docs.
+ * The used VNI value is changed if rfc8365-compatible is set.
+ * rfc8365-compatible is mutually exclusive with enforce-as4.
+ *
+ * If enforce-as4 is set, the generated export route target uses AS4 encoding.
+ * If in this case the VNI number exceeds 16-bit (> 65535), a warning is logged
+ * and the automatic export Route Target is not generated
+ *
+ * "local origination L2VNI" is the "normal" L2VNI in case of FRR - however it
+ * is important to make that distinction, because in EVPN labels are generally
+ * downstream assigned (i.e. each router could allocate / use a different label /
+ * L2VNI for the same EVI). As long as the route targets match, other routers
+ * will import and process the routes properly. This is commonly called
+ * "Downstream VNI".
+ *
+ * This function will NOT generate / add automatic export Route Targets in
+ * the following cases:
+ * - Suppressed by config (see bgp_evpn_l2vni_should_generate_export_auto_rt)
+ * - enforce-as4 is set and the EVI's L2VNI exceeds 16 bits (0xFFFF / > 65535) -
+ *   in that case, a warning is logged and the automatic export Route Target is
+ *   not generated
+ */
+static void bgp_evpn_l2vni_add_effective_auto_export_rts(struct bgp *bgp, struct bgpevpn *vpn)
+{
+	struct bgp_evpn_effective_fq_rt *fq_rt;
+	struct ecommunity_val eval;
+	vni_t vni = vpn->vni;
+
+	if (!bgp_evpn_l2vni_should_generate_export_auto_rt(vpn))
+		return;
+
+	if (bgp->autort_enforce_as4_export) {
+		if (vni > 0xFFFF) {
+			zlog_warn("L2VNI %u exceeds 16-bit limit, cannot auto-derive export RT with enforce-as4",
+				  vni);
+			return;
+		}
+		encode_route_target_as4(bgp->as, (uint16_t)vni, &eval, true);
+	} else {
+		if (bgp->autort_rfc8365_export)
+			SET_FLAG(vni, EVPN_AUTORT_VXLAN);
+		encode_route_target_as((bgp->as & 0xFFFF), vni, &eval, true);
+	}
+
+	fq_rt = bgp_evpn_effective_fq_rt_new(&eval);
+	if (bgp_evpn_effective_fq_rt_slu_add(&vpn->effective_fq_export_rts, fq_rt))
+		bgp_evpn_effective_fq_rt_free(fq_rt); /* duplicate */
 }
 
 /*
@@ -6091,12 +6231,7 @@ void bgp_evpn_l2vni_regenerate_effective_import_rts(struct bgp *bgp, struct bgpe
 	bgp_evpn_effective_wildcard_rt_list_flush(&vpn->effective_wildcard_import_rts);
 	bgp_evpn_effective_fq_rt_list_flush(&vpn->effective_fq_import_rts);
 
-	if (bgp_evpn_l2vni_should_generate_import_auto_rt(vpn)) {
-		vni_t vni = vpn->vni;
-
-		if (bgp_evpn_derive_auto_rt_import(bgp, &vni, BGP_EVPN_VNI_TYPE_L2))
-			bgp_evpn_l2vni_add_effective_wildcard_import_rt(vpn, htonl(vni));
-	}
+	bgp_evpn_l2vni_add_effective_auto_import_rts(bgp, vpn);
 
 	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_import, cfgd_rt) {
 		if (cfgd_rt->type == BGP_EVPN_CFGD_RT_TYPE_WILDCARD) {
@@ -6126,13 +6261,7 @@ void bgp_evpn_l2vni_regenerate_effective_export_rts(struct bgp *bgp, struct bgpe
 
 	bgp_evpn_effective_fq_rt_list_flush(&vpn->effective_fq_export_rts);
 
-	if (bgp_evpn_l2vni_should_generate_export_auto_rt(vpn)) {
-		if (bgp_evpn_l2vni_form_auto_rt_eval(bgp, vpn, &eval)) {
-			fq_rt = bgp_evpn_effective_fq_rt_new(&eval);
-			if (bgp_evpn_effective_fq_rt_slu_add(&vpn->effective_fq_export_rts, fq_rt))
-				bgp_evpn_effective_fq_rt_free(fq_rt);
-		}
-	}
+	bgp_evpn_l2vni_add_effective_auto_export_rts(bgp, vpn);
 
 	frr_each (bgp_evpn_cfgd_rt_slu, &rt_config->cfgd_export, cfgd_rt) {
 		bgp_evpn_cfgd_rt_to_eval(cfgd_rt, &eval);
