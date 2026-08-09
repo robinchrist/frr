@@ -1026,7 +1026,7 @@ router bgp 4200000001 vrf vrf-101
         "r1: type-5 route not imported despite matching local admin in enforce-as4 encoded RT",
     )
     _expect(
-        partial(_check_vni_route_present, r1, 201, R2_IMET_PREFIX),
+        _check_vni_route_present(r1, 201, R2_IMET_PREFIX),
         "r1: type-3 route not imported despite matching local admin in enforce-as4 encoded RT",
     )
 
@@ -1050,7 +1050,7 @@ router bgp 65001 vrf vrf-101
         "r1: type-5 route not imported with matching enforce-as4 import encoding",
     )
     _expect(
-        partial(_check_vni_route_present, r1, 201, R2_IMET_PREFIX),
+        _check_vni_route_present(r1, 201, R2_IMET_PREFIX),
         "r1: type-3 route not imported with matching enforce-as4 import encoding",
     )
 
@@ -1117,7 +1117,7 @@ router bgp 4200000001 vrf vrf-101
         "r1: type-5 route not re-imported after clearing the enforce-as4 encoding",
     )
     _expect(
-        partial(_check_vni_route_present, r1, 201, R2_IMET_PREFIX),
+        _check_vni_route_present(r1, 201, R2_IMET_PREFIX),
         "r1: type-3 route not re-imported after clearing the enforce-as4 encoding",
     )
 
