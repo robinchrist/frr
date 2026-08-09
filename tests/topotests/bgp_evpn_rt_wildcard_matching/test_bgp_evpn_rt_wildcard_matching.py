@@ -1060,6 +1060,30 @@ router bgp 65001 vrf vrf-101
         "auto-route-target export enforce-as4" in running_r2
     ), "r2: 'auto-route-target export enforce-as4' not in running config"
 
+    # rfc8365-compatible and enforce-as4 are mutually exclusive: the
+    # conflicting mode is rejected instead of silently replacing the
+    # configured one.
+    conflict_out = r2.vtysh_cmd(
+        """
+configure terminal
+router bgp 4200000001 vrf vrf-101
+ address-family l2vpn evpn
+  auto-route-target export rfc8365-compatible
+"""
+    )
+    assert (
+        "Cannot configure rfc8365-compatible and enforce-as4 simultaneously"
+        in conflict_out
+    ), "r2: conflicting rfc8365-compatible mode was not rejected"
+
+    running_r2 = r2.vtysh_cmd("show running-config", isjson=False)
+    assert (
+        "auto-route-target export rfc8365-compatible" not in running_r2
+    ), "r2: rejected rfc8365-compatible mode ended up in running config"
+    assert (
+        "auto-route-target export enforce-as4" in running_r2
+    ), "r2: enforce-as4 lost after rejected rfc8365-compatible attempt"
+
     # Cleanup: back to the plain auto RTs on both sides.
     r1.vtysh_cmd(
         """
